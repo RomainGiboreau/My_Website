@@ -1,6 +1,6 @@
 site_name: Basin Modeling Notes
 site_description: Notes on petroleum systems and basin modeling
-site_url: https://USERNAME.github.io/REPONAME/
+site_url: https://github.com/RomainGiboreau/Personal_website/
 
 theme:
   name: material
