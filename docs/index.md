@@ -1,115 +1,68 @@
-# Rendering test
+# Basin modeling, end to end
 
-A throwaway page to check that everything renders properly. Nothing here means anything.
-
----
-
-## Text and emphasis
-
-Plain text looks like this. **Bold text** for emphasis, *italic text* for the mastery marker, and `inline code` for parameters or filenames.
-
-A longer paragraph to see how line length and spacing behave on a phone versus a laptop. The Material theme caps the content width, so this should stay readable rather than stretching across the whole screen.
+Notes on petroleum systems and basin modeling — written first for myself, kept public in case they're useful to someone else.
 
 ---
 
-## Lists
+## Why this exists
 
-- First item
-- Second item
-    - Nested item
-    - Another one
-- Third item
+I got tired of jumping between five sites to check one thing.
 
-1. Ordered one
-2. Ordered two
-3. Ordered three
+The wiki-level material — AAPG, EAGE, course notes — is good at definitions. Rock-Eval gives you S1, S2, S3, and stops there. The real content sits in the primary literature: Tissot & Welte, Burnham, the papers. Between the two there's a gap, and that gap is where most working questions actually live.
+
+This site sits in that gap. Enough depth to make a decision, with explicit pointers to the primary sources when you need to go further.
+
+Checked once. Sourced properly. Kept in one place.
 
 ---
 
-## Table
+## The thread
 
-| Method | Year | Notes |
-|---|---|---|
-| Alpha | 1972 | Simple, needs calibration |
-| Beta | 1995 | Handles the awkward case |
-| Gamma | 2016 | Slower but general |
+These pages follow an integrated study, from data loading through to decision.
 
----
+I'm not a specialist in every brick. I'm the one who makes them hold together, and who knows where the chain breaks. Most of the interesting failures happen at the joints between disciplines rather than inside them — a TOC log handed over without saying it's a present-day value, a facies map that never feeds back into the parameter it should be correcting.
 
-## Maths
-
-Inline maths: the relation \(y = ax + b\) should render on the same line.
-
-Display maths:
-
-\[
-\phi = \phi_0 \, e^{-cz}
-\]
-
-And something with more furniture:
-
-\[
-\lambda_{\text{bulk}} = \lambda_f^{\phi} \cdot \lambda_m^{(1-\phi)}
-\]
-
-If these show as raw text, MathJax isn't loading.
+Each section opens with what it receives from upstream and what it feeds downstream. That's where the integration lives.
 
 ---
 
-## Admonitions
+## How to read the mastery markers
 
-!!! note
-    This is a note block. Useful for side remarks.
+Not everything here sits at the same depth, and pretending otherwise would waste your time.
 
-!!! warning
-    This is a warning block. Useful for the "don't do this" cases.
+| Marker | What it means |
+|---|---|
+| Plain text | **Practised.** Geochemistry, basin modeling, pore pressure prediction. |
+| Marked *applied* | I can run it and I know the guidelines. The fine justification isn't mine yet — I can apply Archie, I can't yet tell you why the cementation exponent is 2 here and 1.8 there. |
+| *Italic* | *Things I heard about it but need practice.* Read, not done. |
 
-??? info "Click to expand"
-    Collapsible content. Good for long derivations you don't want cluttering the page.
-
----
-
-## Code
-
-```python
-import numpy as np
-
-def decay(z, phi0=0.55, c=4e-4):
-    """Nothing meaningful — just checking syntax highlighting."""
-    return phi0 * np.exp(-c * z)
-
-print(decay(np.array([0, 1000, 2000])))
-```
+The markers are there so you know what to trust and what to check.
 
 ---
 
-## Images
+## What's here
 
-Remote image, fixed width:
+!!! note "Work in progress"
+    Sections go up as they're ready. Nothing is published before I can defend it out loud.
 
-![Placeholder](https://picsum.photos/id/1015/800/400){ width="600" }
+**Available now**
 
-*Caption text sits underneath in italics.*
+- [CV](cv.md)
+- [Outside work](personal.md)
 
-Local image — put a file at `docs/images/test.png` and uncomment:
+**Coming**
 
-<!-- ![Local test](images/test.png){ width="400" } -->
-
----
-
-## Links
-
-- [External link](https://www.mkdocs.org/)
-- [Internal link to the CV page](cv.md)
+Pore pressure prediction · Calibration · Geochemistry & source rock · Data & inputs · Geological model · Migration & trapping · Uncertainty · Evaluation & decision · Unconventional reservoirs · Beyond oil & gas · Methods & computing · Data-driven methods
 
 ---
 
-## Footnotes
+## Contact
 
-Here is a claim that needs a source.[^1]
+Corrections especially welcome.
 
-[^1]: The footnote text appears at the bottom of the page.
+- Email: *[to add]*
+- LinkedIn: *[to add]*
 
 ---
 
-*If all of the above renders correctly, the pipeline works and real content can go in.*
+*These pages reflect my own understanding, built over time. Errors are mine — if you spot one, I'd like to hear about it.*
