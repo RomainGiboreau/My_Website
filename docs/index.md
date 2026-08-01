@@ -9,7 +9,7 @@ Notes on petroleum systems and basin modeling — written first for myself, kept
 
 - [CV](cv.md)
 
-Pore pressure prediction, Resources, and other sections are coming as they're ready.
+Resources section is coming as it is ready.
 
 ---
 
