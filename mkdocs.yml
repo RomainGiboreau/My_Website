@@ -1,0 +1,76 @@
+site_name: Basin Modeling Notes
+site_description: Notes on petroleum systems and basin modeling
+site_url: https://USERNAME.github.io/REPONAME/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - search.suggest
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Dark mode
+    - scheme: slate
+      primary: blue grey
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - tables
+  - footnotes
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+
+# Fichiers exclus du site publie mais visibles avec "mkdocs serve"
+draft_docs: |
+  drafts/
+
+nav:
+  - Home: index.md
+  - CV: cv.md
+  - Data & inputs:
+      - 01-data/index.md
+  - Geological model:
+      - 02-model/index.md
+  - Processes & physics:
+      - 03-physics/index.md
+      - Pore pressure prediction:
+          - 03-physics/ppp/index.md
+  - Uncertainty:
+      - 04-uncertainty/index.md
+  - Evaluation & decision:
+      - 05-decision/index.md
+  - Unconventional:
+      - 06-unconventional/index.md
+  - Beyond oil & gas:
+      - 07-beyond/index.md
+  - Methods & computing:
+      - 08-methods/index.md
+  - Data-driven methods:
+      - 09-data-driven/index.md
+  - Resources:
+      - resources/index.md
+  - Personal: personal.md
