@@ -1,17 +1,172 @@
-.md-typeset {
-  font-size: 0.75rem;
+/* ============================================================
+   Basin modeling notes — theme override
+   Palette: subsurface / well-log inspired, light mode only
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root,
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: #eeece6;
+  --md-default-fg-color: #232220;
+  --md-default-fg-color--light: #5c5a52;
+  --md-default-fg-color--lighter: #8a8778;
+  --md-code-bg-color: #e2ded3;
+  --md-code-fg-color: #232220;
+
+  --bm-bg-alt: #e2ded3;
+  --bm-accent: #4a5a4e;
+  --bm-accent2: #a8623a;
+  --bm-line: #c9c4b6;
+
+  --md-primary-fg-color: var(--bm-accent);
+  --md-typeset-a-color: var(--bm-accent);
 }
 
-.md-typeset table:not([class]) {
-  font-size: 0.7rem;
+/* Force light scheme even if a device tries to override */
+html {
+  color-scheme: light only;
 }
 
-.md-typeset .admonition.warning {
-  border-left-color: #ff9800;
+/* ---------- Header ---------- */
+.md-header {
+  background-color: var(--bm-accent);
 }
 
+.md-tabs {
+  background-color: var(--bm-accent);
+  opacity: 0.95;
+}
+
+/* ---------- Content width & body copy ---------- */
 .md-content {
-  max-width: 45rem;
+  max-width: 46rem;
   margin: 0 auto;
 }
 
+.md-typeset {
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+
+/* ---------- Headings ---------- */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+  font-size: 1.8rem;
+  margin-bottom: 1.2rem;
+}
+
+.md-typeset h2 {
+  font-size: 1.2rem;
+  margin-top: 2.2rem;
+  border-bottom: 1px solid var(--bm-line);
+  padding-bottom: 0.35rem;
+}
+
+.md-typeset h3 {
+  font-size: 1rem;
+  color: var(--bm-accent);
+}
+
+/* ---------- Well-log rail: decorative left border on article content ---------- */
+.md-content__inner {
+  padding-left: 1.2rem;
+  border-left: 2px solid var(--bm-line);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--md-default-fg-color) 0px,
+    var(--md-default-fg-color) 2px,
+    transparent 2px,
+    transparent 34px
+  );
+  background-size: 8px 34px;
+  background-position: -1.2rem 0.4rem;
+  background-repeat: repeat-y;
+}
+
+/* Hide the rail on narrow screens where it crowds the text */
+@media screen and (max-width: 44.9375em) {
+  .md-content__inner {
+    border-left: none;
+    background-image: none;
+    padding-left: 0;
+  }
+}
+
+/* ---------- Tables ---------- */
+.md-typeset table:not([class]) {
+  font-size: 0.7rem;
+  background-color: var(--bm-bg-alt);
+  border: none;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: #d6d1c2;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th {
+  padding: 0.5rem 0.7rem;
+}
+
+.md-typeset table:not([class]) tr {
+  border-top: 1px solid var(--bm-line);
+}
+
+/* Category color rail for the Resources table — add class="cat-tools" etc.
+   on a row via attr_list if/when needed: { .cat-tools } */
+.md-typeset table:not([class]) tr.cat-tools td:first-child {
+  border-left: 3px solid var(--bm-accent);
+}
+
+.md-typeset table:not([class]) tr.cat-papers td:first-child {
+  border-left: 3px solid var(--bm-accent2);
+}
+
+/* ---------- Admonitions ---------- */
+.md-typeset .admonition {
+  border-radius: 4px;
+  font-size: 0.7rem;
+  background-color: var(--bm-bg-alt);
+  border-color: var(--bm-accent2);
+}
+
+.md-typeset .admonition-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  background-color: var(--bm-bg-alt);
+}
+
+.md-typeset .warning > .admonition-title {
+  border-left-color: var(--bm-accent2);
+}
+
+.md-typeset .warning > .admonition-title::before {
+  background-color: var(--bm-accent2);
+}
+
+/* ---------- Code ---------- */
+.md-typeset code {
+  border-radius: 3px;
+}
+
+/* ---------- Links ---------- */
+.md-typeset a {
+  text-decoration: none;
+  border-bottom: 1px solid var(--bm-line);
+}
+
+.md-typeset a:hover {
+  border-bottom-color: var(--bm-accent);
+}
