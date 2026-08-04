@@ -55,7 +55,3 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [South Australia Energy & Mining Data Centre](https://www.energymining.sa.gov.au/industry/energy-resources/data-centre) — South Australia · wells, seismic, basin data (Cooper, Otway)
 - [U.S. Energy Information Administration (EIA)](https://www.eia.gov/) — United States · energy statistics, open data API
 - [USGS Science Data Catalog](https://data.usgs.gov/datacatalog/) — United States · earth science data catalog · public dataset
-
----
-
-*PPP references handled separately.*
