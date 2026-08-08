@@ -51,5 +51,6 @@ plugins:
 nav:
   - Home: index.md
   - CV: cv.md
-  - Outside work: personal.md
   - Resources: resources/index.md
+  - Tags: tags.md
+
