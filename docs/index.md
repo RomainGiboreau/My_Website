@@ -1,23 +1,20 @@
-# Basin modeling, end to end
+# Basin Modeling & Petroleum Systems Analysis
 
 Notes on petroleum systems and basin modeling — written first for myself, kept public in case they're useful.
 
-| Marker | What it means |
-|---|---|
-| Plain text | Practised. |
-| *Italic* | Read, not done. |
+Each note stands on its own: a position on a method, a case with its real constraint, or something I'm still working through.
 
 - [CV](cv.md)
+- [Resources](resources/index.md)
 
-Resources section is coming as it is ready.
+Notes are coming as they're written.
 
 ---
 
 ## Contact
 
-- Email: *[to add]*
-- LinkedIn: *[to add]*
+- LinkedIn — search my name
 
 ---
 
-*Errors are mine — if you spot one, I'd like to hear about it.*
+*These pages reflect my own understanding, built over time. Errors are mine — if you spot one, I'd like to hear about it.*
