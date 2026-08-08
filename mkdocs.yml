@@ -45,6 +45,8 @@ extra_css:
   
 plugins:
   - search
+  - tags:
+      tags_file: tags.md
 
 nav:
   - Home: index.md
