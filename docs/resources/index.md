@@ -8,6 +8,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 
 - [Ollama](https://ollama.com/) — local LLM runtime
 - [BasinVis](https://github.com/jonovotny/BasinVis) — MATLAB · stratigraphic & subsidence modelling
+- [Badlands](https://github.com/badlands-model/badlands) — landscape evolution model · sediment transport · basin formation
 
 ---
 
@@ -21,6 +22,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [pyDecision](https://github.com/Valdecy/pyDecision) — multi-criteria decision analysis (AHP, PROMETHEE)
 - [PyKrige](https://github.com/GeoStat-Framework/PyKrige) — kriging · geostatistics
 - [SciPy](https://scipy.org/) — scientific computing
+- [GeoPolars](https://github.com/pola-rs/geopolars) — geospatial extension for Polars · prototype, not production-ready
 
 ---
 
@@ -30,6 +32,12 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [New Insights Into the Crust and Lithospheric Mantle Structure of Africa (Globig et al., 2016)](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB012972) — Africa · crustal & lithospheric structure · thermal modeling
 - [Petroleum Geochemistry (Mei & Katz, 2022)](https://www.intechopen.com/chapters/81757) — Global · source rocks, generation, migration · open access
 - [Global Chemical Kinetics of Fossil Fuels (Burnham, 2017)](https://link.springer.com/book/10.1007/978-3-319-49634-4) — Global · kerogen kinetics · maturation & pyrolysis
+- [Petroleum Formation and Occurrence (Tissot & Welte, 1984)](https://link.springer.com/book/10.1007/978-3-642-87813-8) — Global · petroleum geochemistry · foundational text
+- [The Biomarker Guide, Vol. 1: Biomarkers and Isotopes in the Environment and Human History (Peters, Walters & Moldowan, 2005)](https://www.cambridge.org/us/universitypress/subjects/earth-and-environmental-science/sedimentology-and-stratigraphy/biomarker-guide-volume-1-2nd-edition) — Global · biomarkers · organic geochemistry
+- [The Biomarker Guide, Vol. 2: Biomarkers and Isotopes in Petroleum Systems and Earth History (Peters, Walters & Moldowan, 2005)](https://www.cambridge.org/kh/universitypress/subjects/earth-and-environmental-science/sedimentology-and-stratigraphy/biomarker-guide-volume-2-2nd-edition) — Global · biomarkers · petroleum systems
+- [Basin Analysis: Principles and Application to Petroleum Play Assessment (Allen & Allen, 2013)](https://www.wiley.com/en-us/Basin+Analysis:+Principles+and+Application+to+Petroleum+Play+Assessment,+3rd+Edition-p-9780470673775) — Global · basin analysis · foundational text
+- [Physical Principles of Sedimentary Basin Analysis (Wangen, 2010)](https://www.cambridge.org/9780521761253) — Global · basin modeling · porous media, heat & fluid flow
+- [Structural Geology (Fossen, 2016)](https://www.cambridge.org/9781107057647) — Global · structural geology · petroleum & groundwater applications
 
 ---
 
@@ -55,3 +63,5 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [South Australia Energy & Mining Data Centre](https://www.energymining.sa.gov.au/industry/energy-resources/data-centre) — South Australia · wells, seismic, basin data (Cooper, Otway)
 - [U.S. Energy Information Administration (EIA)](https://www.eia.gov/) — United States · energy statistics, open data API
 - [USGS Science Data Catalog](https://data.usgs.gov/datacatalog/) — United States · earth science data catalog · public dataset
+- [Petroleum & Energy Insights](https://www.petroleumenergyinsights.com) — Guyana-Suriname Basin, Caribbean · petroleum systems analysis blog
+- [The Petroleum System Blog](https://petroleumsystem.blogspot.com/) — Global · petroleum systems, migration & seal analysis blog
