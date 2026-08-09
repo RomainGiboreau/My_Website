@@ -52,7 +52,8 @@ nav:
   - Home: index.md
   - CV: cv.md
   - Notes:
-      - pandas, GeoPandas, Polars: notes/pandas_polars.md
+      - notes/index.md
+      - notes/pandas_polars.md
   - Resources: resources/index.md
   - Tags: tags.md
 
