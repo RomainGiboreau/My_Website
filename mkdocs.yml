@@ -52,6 +52,6 @@ nav:
   - Home: index.md
   - CV: cv.md
   - Resources: resources/index.md
-  - Python: python/Pandas_Polars.md
+  - Notes: notes/pandas_polars.md
   - Tags: tags.md
 
