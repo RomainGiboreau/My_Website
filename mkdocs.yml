@@ -4,24 +4,14 @@ site_url: https://RomainGiboreau.github.io/My_Website/
 
 theme:
   name: material
+  font:
+    text: Inter
+    code: JetBrains Mono
   features:
     - navigation.top
     - navigation.indexes
     - content.code.copy
     - search.suggest
-  palette:
-    - scheme: default
-      primary: blue grey
-      accent: teal
-      toggle:
-        icon: material/brightness-7
-        name: Dark mode
-    - scheme: slate
-      primary: blue grey
-      accent: teal
-      toggle:
-        icon: material/brightness-4
-        name: Light mode
 
 markdown_extensions:
   - admonition
