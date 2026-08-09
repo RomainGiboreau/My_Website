@@ -8,7 +8,7 @@ Browse by [tag](../tags.md) to find related notes.
 
 ## Computing
 
-**[Pandas, Polars, and the GeoPandas gap] (pandas_polars.md)**
+**[Pandas, Polars, and the GeoPandas gap](pandas_polars.md)**
 Why the geometry column is what keeps me on pandas, and what `polars-st` does and doesn't solve.
 
 ---
