@@ -44,6 +44,7 @@ nav:
   - Notes:
       - notes/index.md
       - notes/pandas_polars.md
+      - notes/mcda_promethee_ahp.md
   - Resources: resources/index.md
   - Tags: tags.md
 
