@@ -48,7 +48,7 @@ nav:
   - Resources: 
       - resources/index.md
       - resources/bibliography.md
-      - resources/company-announcements.md
+      - resources/company_announcements.md
   - Tags: tags.md
 
 
