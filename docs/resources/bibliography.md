@@ -1,161 +1,161 @@
-# Bibliographie vérifiée — analyse de systèmes pétroliers et modélisation de bassin
+# Verified bibliography — petroleum systems analysis and basin modeling
 
-v3 — 2026-08-13 — remplace la v2 du même jour ; ajout de la section 3 sur la géochimie organique et la corrélation huile–roche mère
+v3 — 2026-08-13 — supersedes the same-day v2; adds section 3 on organic geochemistry and oil-source rock correlation
 
-Toutes les entrées ci-dessous ont été contrôlées par recherche web : auteurs, titre, année, journal, volume, pagination, DOI ou ISBN. Les entrées de la v1 qui n'ont pas pu être vérifiées ont été retirées, pas déplacées en annexe.
+Every entry below has been checked by web search: authors, title, year, journal, volume, pagination, DOI or ISBN. Entries from v1 that could not be verified were removed, not moved to an appendix.
 
-Les liens industriels sont signalés quand ils conditionnent la lecture.
+Industry affiliations are flagged when they condition how a source should be read.
 
 ---
 
-## 1. Socle
+## 1. Foundations
 
 **Wangen, M. (2010).** *Physical Principles of Sedimentary Basin Analysis.* Cambridge University Press, 527 p. ISBN 978-0-521-76125-3.
-Auteur à l'Institute for Energy Technology, Norvège ; aucun logiciel commercial à défendre. Dérivations depuis les premiers principes, illustrations Matlab/Octave. Le ch. 12 (surpression et compaction, solutions exactes) fournit des cas-tests analytiques pour vérifier un solveur. Sommaire : milieux poreux, élasticité linéaire, compressibilité, histoires d'enfouissement, flux de chaleur, subsidence, rhéologie, flexure, gravité, cimentation quartzeuse, surpression, écoulement, puits.
+Author at the Institute for Energy Technology, Norway — no commercial software to defend. Derivations from first principles, Matlab/Octave illustrations. Ch. 12 (overpressure and compaction, exact solutions) provides analytical test cases for checking a solver. Contents: porous media, linear elasticity, compressibility, burial histories, heat flow, subsidence, rheology, flexure, gravity, quartz cementation, overpressure, flow, wells.
 
-**Allen, P.A. & Allen, J.R. (2013).** *Basin Analysis: Principles and Application to Petroleum Play Assessment*, 3e éd. Wiley-Blackwell, 632 p. ISBN 978-0-470-67377-5.
-Versant géodynamique. Annexes avec dérivations mathématiques et exercices pratiques — c'est la partie utile.
+**Allen, P.A. & Allen, J.R. (2013).** *Basin Analysis: Principles and Application to Petroleum Play Assessment*, 3rd ed. Wiley-Blackwell, 632 p. ISBN 978-0-470-67377-5.
+Geodynamic side of the field. Appendices with mathematical derivations and worked exercises — that's the useful part.
 
 **Hantschel, T. & Kauerauf, A.I. (2009).** *Fundamentals of Basin and Petroleum Systems Modeling.* Springer, 476 p. ISBN 978-3-540-72317-2, DOI 10.1007/978-3-540-72318-9.
-Lien industriel : les deux auteurs étaient chez Integrated Exploration Systems (Aachen), société Schlumberger. À lire comme la documentation théorique de PetroMod. Valeur principale : les tables de propriétés de roches et fluides et les paramètres cinétiques.
+Industry link: both authors were at Integrated Exploration Systems (Aachen), a Schlumberger company. Read this as the theoretical documentation of PetroMod. Main value: the rock and fluid property tables and the kinetic parameters.
 
-**Magoon, L.B. & Dow, W.G. (éds, 1994).** *The Petroleum System — From Source to Trap.* AAPG Memoir 60. ISBN 0-89181-338-1.
-19 chapitres de fond et 18 études de cas. Pour la discipline de nommage et la distinction système / play / prospect.
+**Magoon, L.B. & Dow, W.G. (eds, 1994).** *The Petroleum System — From Source to Trap.* AAPG Memoir 60. ISBN 0-89181-338-1.
+19 foundational chapters plus 18 case studies. Reference for naming discipline and for the system / play / prospect distinction.
 
 ---
 
-## 2. Contrepoids critique
+## 2. Critical counterweight
 
-**Düppenbecker, S.J. & Iliffe, J.E. (éds, 1998).** *Basin Modelling: Practice and Progress.* Geological Society, London, Special Publication 141, 256 p. ISBN 978-1-86239-008-9.
-Édité par BP Exploration et PGS Tigress, extérieur aux lignées IFP et IES. Deux chapitres :
+**Düppenbecker, S.J. & Iliffe, J.E. (eds, 1998).** *Basin Modelling: Practice and Progress.* Geological Society, London, Special Publication 141, 256 p. ISBN 978-1-86239-008-9.
+Edited by BP Exploration and PGS Tigress, outside the IFP and IES lineages. Two chapters:
 - **Giles, M.R., Indrelid, L. & James, D.M.D.** — *Compaction — the great unknown in basin modelling*, p. 15–43.
 - **Thomsen, R.O.** — *Aspects of applied basin modelling: sensitivity analysis and scientific risk*, p. 209–221. DOI 10.1144/GSL.SP.1998.141.01.13.
 
-**Peters, K.E., Curry, D.J. & Kacewicz, M. (éds, 2012).** *Basin Modeling: New Horizons in Research and Applications.* AAPG Hedberg Series 4, viii + 338 p. ISBN 0-89181-903-7.
-18 contributions issues de la conférence Hedberg de Napa, mai 2009. Chapitre introductif p. 1–16.
+**Peters, K.E., Curry, D.J. & Kacewicz, M. (eds, 2012).** *Basin Modeling: New Horizons in Research and Applications.* AAPG Hedberg Series 4, viii + 338 p. ISBN 0-89181-903-7.
+18 contributions from the Hedberg Conference in Napa, May 2009. Introductory chapter p. 1–16.
 
 ---
 
-## 3. Géochimie organique et corrélation huile–roche mère
+## 3. Organic geochemistry and oil-source rock correlation
 
-### 3.1 Cadre général
+### 3.1 General framework
 
-**Tissot, B.P. & Welte, D.H. (1984).** *Petroleum Formation and Occurrence*, 2e éd. Springer. DOI 10.1007/978-3-642-87813-8.
+**Tissot, B.P. & Welte, D.H. (1984).** *Petroleum Formation and Occurrence*, 2nd ed. Springer. DOI 10.1007/978-3-642-87813-8.
 
-**Dembicki, H. (2022).** *Practical Petroleum Geochemistry for Exploration and Production*, 2e éd. Elsevier, 424 p. ISBN 978-0-323-95924-7.
-Chapitres 8 (modélisation de bassin) et 9 (concepts de système pétrolier).
+**Dembicki, H. (2022).** *Practical Petroleum Geochemistry for Exploration and Production*, 2nd ed. Elsevier, 424 p. ISBN 978-0-323-95924-7.
+Chapters 8 (basin modeling) and 9 (petroleum system concepts).
 
-**Peters, K.E., Walters, C.C. & Moldowan, J.M. (2005).** *The Biomarker Guide*, 2e éd., 2 vol., 1132 p. Cambridge University Press. Vol. 1 ISBN 0-521-78158-2 ; vol. 2 ISBN 0-521-83762-6.
-Vol. 2 (*Biomarkers and Isotopes in Petroleum Exploration and Earth History*) est le volume utile ici. Ouvrage de consultation.
+**Peters, K.E., Walters, C.C. & Moldowan, J.M. (2005).** *The Biomarker Guide*, 2nd ed., 2 vols., 1132 p. Cambridge University Press. Vol. 1 ISBN 0-521-78158-2; vol. 2 ISBN 0-521-83762-6.
+Vol. 2 (*Biomarkers and Isotopes in Petroleum Exploration and Earth History*) is the volume relevant here. A reference work, consulted rather than read cover to cover.
 
-### 3.2 Corrélation huile–roche mère — à lire en premier
+### 3.2 Oil-source rock correlation — read this one first
 
 **Curiale, J.A. (2008).** Oil–source rock correlations — limitations and recommendations. *Organic Geochemistry* 39(8), 1150–1161. DOI 10.1016/j.orggeochem.2008.02.001.
-Thèse centrale : la corrélation chimique est devenue facile, quasi automatique dès qu'on emploie des approches statistiques, et c'est là le problème. Le facteur limitant n'est pas analytique mais la connaissance de la variabilité naturelle — latérale et verticale — du dépôt de matière organique dans la roche mère candidate. Une corrélation défendable relie un échantillon de roche à une huile individuelle par des paramètres génétiques mutuellement cohérents, pas par un score de similarité. Recommandation opérationnelle : travailler sur des profils isotopiques composites de la roche mère plutôt que sur un échantillon unique. Il subsiste par ailleurs une incertitude analytique liée à la méthode d'extraction de la roche.
+Central thesis: chemical correlation has become easy, almost automatic once statistical approaches are used, and that is precisely the problem. The limiting factor is not analytical but the state of knowledge of the natural variability — lateral and vertical — of organic matter deposition in the candidate source rock. A defensible correlation ties a rock sample to an individual oil through mutually consistent genetic parameters, not through a similarity score. Operational recommendation: work from composite isotopic profiles of the source rock rather than a single sample. An analytical uncertainty tied to the rock extraction method also remains.
 
-Le point que les manuels escamotent : on compare un extrait de roche à une huile expulsée, deux objets déjà séparés par le fractionnement à l'expulsion, les mélanges de charges et l'empreinte de maturité, avant toute mesure.
+The point most textbooks skip: what gets compared is a rock extract against an expelled oil — two objects already separated by expulsion fractionation, charge mixing, and the maturity overprint, before any measurement is even made.
 
-### 3.3 Screening et pyrolyse
+### 3.3 Screening and pyrolysis
 
 **Peters, K.E. (1986).** Guidelines for evaluating petroleum source rock using programmed pyrolysis. *AAPG Bulletin* 70(3), 318–329. DOI 10.1306/94885688-1704-11D7-8645000102C1865D.
-Court, et toujours la référence sur les pièges d'interprétation. Effet de matrice minérale : les roches pauvres en organique et riches en argile sont dégradées par adsorption du pyrolysat, d'où HI plus bas et Tmax plus haut que sur kérogène isolé. Le potentiel des charbons est systématiquement surestimé par pyrolyse (S2/S3 > 5 et HI < 300 mg HC/g COT typiques) et se détermine mieux par analyse élémentaire et pétrographie organique. Diagnostics de contamination sur échantillon immature : S2 bimodal, PI supérieur à 0,2. Densité d'échantillonnage recommandée : un pyrogramme tous les 9 à 18 m.
+Short, and still the reference on interpretation pitfalls. Mineral matrix effect: organic-lean, clay-rich rocks degrade pyrolysate through adsorption, giving a lower HI and a higher Tmax than on isolated kerogen. Coal potential is systematically overestimated by pyrolysis (S2/S3 > 5 and HI < 300 mg HC/g TOC are typical) and is better determined by elemental analysis and organic petrography. Contamination diagnostics on an immature sample: bimodal S2, PI above 0.2. Recommended sampling density: one pyrogram every 9 to 18 m.
 
 **Behar, F., Beaumont, V. & De B. Penteado, H.L. (2001).** Rock-Eval 6 technology: performances and developments. *Oil & Gas Science and Technology — Revue de l'IFP* 56(2), 111–134. DOI 10.2516/ogst:2001013.
-Lien industriel double : travaux IFP, appareil commercialisé par Vinci Technologies depuis 1996. Jeu de 147 roches mères. Point pratique quand on fusionne des données d'époques différentes : les Tmax obtenus au Rock-Eval 6 sont plus élevés que ceux du Rock-Eval 2, avec un écart croissant avec le Tmax, parce que la sonde de température est au contact du creuset au lieu d'être logée dans la paroi du four. Le gaz vecteur change également (azote au lieu d'hélium), ce qui décale les carbones mesurés de 5 à 10 % relatifs sur la plupart des échantillons. Le four monte à 800 °C au lieu de 600 °C.
+Double industry link: IFP research, instrument marketed by Vinci Technologies since 1996. Dataset of 147 source rocks. Practical point when merging data from different eras: Tmax values from Rock-Eval 6 run higher than Rock-Eval 2, with a growing offset at higher Tmax, because the temperature probe sits in contact with the crucible instead of being embedded in the furnace wall. The carrier gas also changes (nitrogen instead of helium), which shifts measured carbon values by 5 to 10% relative on most samples. The furnace reaches 800 °C instead of 600 °C.
 
 ### 3.4 Isotopes
 
 **Sofer, Z. (1984).** Stable carbon isotope compositions of crude oils: application to source depositional environments and petroleum alteration. *AAPG Bulletin* 68(1), 31–49. DOI 10.1306/AD460963-16F7-11D7-8645000102C1865D.
-339 huiles. Résultat régulièrement mal cité : la valeur absolue de δ¹³C d'une fraction ne discrimine pas marin de terrigène. Les aromatiques C15+ des deux familles sont isotopiquement identiques ; les saturés des huiles terrigènes ne sont que 0,9 ‰ plus négatifs en moyenne, écart insuffisant pour servir d'indicateur. Le signal est dans la relation entre saturés et aromatiques, d'où la variable canonique. Toute conclusion « marin » tirée d'un δ¹³C global est une erreur de lecture. Les isotopes stables permettent aussi, dans certains cas, de corréler une huile biodégradée à son équivalent non dégradé.
+339 oils. A result routinely miscited: the absolute δ¹³C value of a fraction does not discriminate marine from terrigenous source. C15+ aromatics from the two families are isotopically identical; saturates from terrigenous oils average only 0.9‰ more negative — too small a gap to serve as an indicator on its own. The signal lies in the relationship between saturates and aromatics, hence the canonical variable. Any "marine" conclusion drawn from a single global δ¹³C value is a misreading. Stable isotopes can also, in some cases, correlate a biodegraded oil to its non-degraded equivalent.
 
-### 3.5 Maturité et composition des fluides
+### 3.5 Maturity and fluid composition
 
 **Sweeney, J.J. & Burnham, A.K. (1990).** Evaluation of a simple model of vitrinite reflectance based on chemical kinetics. *AAPG Bulletin* 74(10), 1559–1570. DOI 10.1306/0C9B251F-1710-11D7-8645000102C1865D.
-EASY%Ro : réactions parallèles du premier ordre, distribution d'énergies d'activation. Domaine de validité annoncé : Ro de 0,3 à 4,5 % ; vitesses de chauffe de 1 °C/semaine (laboratoire) à 1 °C/10 Ma (bassin lentement subsident).
+EASY%Ro: parallel first-order reactions, distribution of activation energies. Stated range of validity: Ro from 0.3 to 4.5%; heating rates from 1 °C/week (laboratory) to 1 °C/10 Ma (slowly subsiding basin).
 
 **di Primio, R. & Horsfield, B. (2006).** From petroleum-type organofacies to hydrocarbon phase prediction. *AAPG Bulletin* 90(7), 1031–1058. DOI 10.1306/02140605129.
-Pôle GFZ Potsdam. L'approche PhaseKinetics combine pyrolyse en système ouvert et fermé, avec correction de la composition des gaz. L'argument central est que les cinétiques compositionnelles fondées sur la seule pyrolyse en système ouvert ne reproduisent pas la composition gazeuse naturelle, donc ne prédisent pas le comportement de phase.
+GFZ Potsdam group. The PhaseKinetics approach combines open- and closed-system pyrolysis, with a gas composition correction. Central argument: compositional kinetics built solely on open-system pyrolysis do not reproduce natural gas composition, and therefore do not predict phase behavior correctly.
 
 ---
 
-## 4. Thermique
+## 4. Thermal
 
-**Beardsmore, G.R. & Cull, J.P. (2001).** *Crustal Heat Flow: A Guide to Measurement and Modelling.* Cambridge University Press, 324 p. ISBN 0-521-79289-4 (relié), 0-521-79703-9 (broché).
-Sources de chaleur crustales, exactitude des données de température, mesure des propriétés thermiques des roches, indicateurs de maturité, puis modèles thermodynamiques de la lithosphère. Indépendant de tout simulateur.
+**Beardsmore, G.R. & Cull, J.P. (2001).** *Crustal Heat Flow: A Guide to Measurement and Modelling.* Cambridge University Press, 324 p. ISBN 0-521-79289-4 (hardback), 0-521-79703-9 (paperback).
+Crustal heat sources, accuracy of temperature data, measurement of rock thermal properties, maturity indicators, then thermodynamic models of the lithosphere. Independent of any simulator.
 
 ---
 
-## 5. Compaction et surpression
+## 5. Compaction and overpressure
 
 **Athy, L.F. (1930).** Density, porosity, and compaction of sedimentary rocks. *AAPG Bulletin* 14(1), 1–24. DOI 10.1306/3D93289E-16B1-11D7-8645000102C1865D.
-La relation est établie entre la profondeur d'enfouissement et la porosité, pas entre la contrainte effective et la porosité. Données du centre-nord de l'Oklahoma.
+The relationship is established between burial depth and porosity, not between effective stress and porosity. Data from north-central Oklahoma.
 
 **Schneider, F., Potdevin, J.L., Wolf, S. & Faille, I. (1996).** Mechanical and chemical compaction model for sedimentary basin simulators. *Tectonophysics* 263(1–4), 307–317. DOI 10.1016/S0040-1951(96)00027-3.
-Lien industriel : IFP. Modèle élastoplastique à écrouissage, limite plastique fixée par la contrainte effective verticale maximale atteinte, plus un terme viscoplastique. Déformation uniaxiale supposée. La partie compaction chimique est contestée — voir section 8.
+Industry link: IFP. Elastoplastic hardening model, plastic limit set by the maximum vertical effective stress reached, plus a viscoplastic term. Uniaxial strain assumed. The chemical compaction component is contested — see section 8.
 
 **Osborne, M.J. & Swarbrick, R.E. (1997).** Mechanisms for generating overpressure in sedimentary basins: a reevaluation. *AAPG Bulletin* 81(6), 1023–1041. DOI 10.1306/522B49C9-1727-11D7-8645000102C1865D.
-Trois familles de mécanismes : augmentation de la contrainte, variation de volume du fluide ou de la matrice, mouvement du fluide ou flottabilité. Conclusion : les mécanismes liés à la contrainte dominent dans beaucoup de bassins ; expansion aquathermale et déshydratation des argiles sont insuffisantes sauf scellement parfait ; flottabilité des hydrocarbures et osmose ne produisent que des surpressions locales faibles. Débat ouvert dans le Bulletin, avec une réponse des auteurs en 1999 et une discussion de Waples en 2001 (v. 85, n° 12).
+Three mechanism families: stress increase, fluid or matrix volume change, fluid movement or buoyancy. Conclusion: stress-related mechanisms dominate in many basins; aquathermal expansion and clay dehydration are insufficient except under near-perfect sealing; hydrocarbon buoyancy and osmosis produce only small, local overpressures. Open debate in the Bulletin, with an authors' reply in 1999 and a discussion by Waples in 2001 (v. 85, no. 12).
 
 **Bjørlykke, K. & Høeg, K. (1997).** Effects of burial diagenesis on stresses, compaction and fluid flow in sedimentary basins. *Marine and Petroleum Geology* 14(3), 267–276. DOI 10.1016/S0264-8172(96)00051-7.
-Sous 2–3 km, la compaction devient principalement chimique. Les contraintes effectives motrices de la compaction mécanique sont alors faibles, et l'expulsion rapide de l'eau porale des argilites est impossible compte tenu des perméabilités.
+Below 2–3 km, compaction becomes primarily chemical. The effective stresses driving mechanical compaction are then small, and rapid expulsion of pore water from mudstones is impossible given the permeabilities involved.
 
 ---
 
-## 6. Écoulement régional — l'école hydrogéologique
+## 6. Regional flow — the hydrogeological school
 
 **Bethke, C.M. (1985).** A numerical model of compaction-driven groundwater flow and heat transfer and its application to the paleohydrology of intracratonic sedimentary basins. *Journal of Geophysical Research* 90(B8), 6817–6828. DOI 10.1029/JB090iB08p06817.
-Formulation lagrangienne, domaine accrétant hétérogène et anisotrope, continuité du milieu déformable et pressurisation aquathermale explicitées. Résultat : mouvement lent sur de longues durées, avec des conclusions défavorables au rôle de l'écoulement de compaction dans la migration secondaire au sein des bassins intracratoniques.
+Lagrangian formulation, heterogeneous and anisotropic accreting domain, deformable-medium continuity and aquathermal pressuring made explicit. Result: slow movement over long durations, with conclusions unfavorable to compaction-driven flow as a driver of secondary migration within intracratonic basins.
 
 **Person, M., Raffensperger, J.P., Ge, S. & Garven, G. (1996).** Basin-scale hydrogeologic modeling. *Reviews of Geophysics* 34(1), 61–87. DOI 10.1029/95RG03286.
-Synthèse du couplage écoulement / chaleur / transport chimique à l'échelle du bassin : formulations mathématiques, méthodes de résolution, applications. Le pendant hydrogéologique de ce que Hantschel & Kauerauf fait pour le versant pétrolier.
+Synthesis of coupled flow / heat / chemical transport at basin scale: mathematical formulations, solution methods, applications. The hydrogeological counterpart to what Hantschel & Kauerauf provides on the petroleum side.
 
 ---
 
 ## 7. Migration
 
 **England, W.A., Mackenzie, A.S., Mann, D.M. & Quigley, T.M. (1987).** The movement and entrapment of petroleum fluids in the subsurface. *Journal of the Geological Society* 144(2), 327–347. DOI 10.1144/gsjgs.144.2.0327.
-Lien industriel : BP Research Centre, Sunbury-on-Thames. Comportement de phase en conditions de subsurface, corrélations d'ingénierie pour les propriétés des fluides, forces combinées flottabilité + écoulement d'eau exprimées en potentiel de fluide, distinction carrier lateral / vertical. Indépendant de tout simulateur.
+Industry link: BP Research Centre, Sunbury-on-Thames. Subsurface fluid phase behavior, engineering correlations for fluid properties, combined buoyancy + water-flow forces expressed as fluid potential, lateral vs. vertical carrier distinction. Independent of any simulator.
 
 **Ungerer, P., Burrus, J., Doligez, B., Chenet, P.Y. & Bessis, F. (1990).** Basin evaluation by integrated two-dimensional modeling of heat transfer, fluid flow, hydrocarbon generation, and migration. *AAPG Bulletin* 74(3), 309–335. DOI 10.1306/0C9B22DB-1710-11D7-8645000102C1865D.
-Lien industriel : IFP, Beicip, CILIA. Couplage loi de compaction / loi de Darcy / critère de fracturation hydraulique naturelle, migration diphasique. Applications au delta de la Mahakam et à la mer du Nord. Document historique d'une lignée (ancêtre de Temis).
+Industry link: IFP, Beicip, CILIA. Coupling of compaction law / Darcy's law / natural hydraulic fracturing criterion, two-phase migration. Applications to the Mahakam delta and the North Sea. A historical document of one lineage (ancestor of Temis).
 
 ---
 
-## 8. Diagenèse — controverse ouverte
+## 8. Diagenesis — an open controversy
 
-Le désaccord porte sur le moteur de la dissolution du quartz : contrainte effective, ou température et présence d'argile aux interfaces. Il change la porosité prédite en profondeur.
+The disagreement concerns what drives quartz dissolution: effective stress, or temperature and the presence of clay at grain interfaces. It changes the porosity predicted at depth.
 
 **Bjørkum, P.A. (1996).** How important is pressure in causing dissolution of quartz in sandstones? *Journal of Sedimentary Research* 66(1), 147–154. DOI 10.1306/D42682DE-2B26-11D7-8648000102C1865D.
-Les micas pénètrent les grains de quartz sans déformation significative sur le plateau norvégien ; le calcul de leurs propriétés mécaniques implique une dissolution sous moins de 10 bar, soit une fraction de la charge lithostatique.
+Micas penetrate quartz grains with negligible deformation on the Norwegian shelf; calculating their mechanical properties implies dissolution under less than 10 bar, a small fraction of the lithostatic load.
 
 **Walderhaug, O. (1996).** Kinetic modeling of quartz cementation and porosity loss in deeply buried sandstone reservoirs. *AAPG Bulletin* 80(5), 731–745. DOI 10.1306/64ED88A4-1724-11D7-8645000102C1865D.
-Silice issue de la dissolution aux stylolites et aux contacts argileux, diffusion courte, précipitation sur surfaces de quartz propres. Vitesse de précipitation exprimée comme fonction logarithmique empirique de la température. Surface disponible réajustée à chaque pas de temps.
+Silica sourced from dissolution at stylolites and clay contacts, short diffusion distance, precipitation onto clean quartz surfaces. Precipitation rate expressed as an empirical logarithmic function of temperature. Available surface area is recalculated at every time step.
 
 **Lander, R.H. & Walderhaug, O. (1999).** Predicting porosity through simulating sandstone compaction and quartz cementation. *AAPG Bulletin* 83(3), 433–449. DOI 10.1306/00AA9BC4-1730-11D7-8645000102C1865D.
-Modèle *Exemplar*. Compaction en décroissance exponentielle du volume intergranulaire avec la contrainte effective ; cimentation quartzeuse selon Walderhaug (1996). Entrées : histoires de contrainte effective et de température issues d'un modèle de bassin, plus composition et texture au dépôt via comptage de points. Validé sur le Golfe du Mexique, le plateau norvégien, l'Illinois et la Baltique.
+The *Exemplar* model. Compaction as exponential decay of intergranular volume with effective stress; quartz cementation follows Walderhaug (1996). Inputs: effective-stress and temperature histories from a basin model, plus depositional composition and texture from point counting. Validated on the Gulf of Mexico, the Norwegian shelf, Illinois, and the Baltic.
 
 ---
 
 ## 9. Subsidence
 
 **McKenzie, D. (1978).** Some remarks on the development of sedimentary basins. *Earth and Planetary Science Letters* 40(1), 25–32. DOI 10.1016/0012-821X(78)90071-7.
-Modèle en deux temps : étirement rapide et remontée passive de l'asthénosphère, puis subsidence lente par conduction. La subsidence lente et le flux de chaleur ne dépendent que du facteur d'étirement, ce qui rend le modèle testable.
+Two-stage model: rapid stretching with passive asthenosphere upwelling, followed by slow conductive subsidence. Slow subsidence and heat flow depend only on the stretching factor, which makes the model testable.
 
 **Sclater, J.G. & Christie, P.A.F. (1980).** Continental stretching: an explanation of the post-mid-Cretaceous subsidence of the central North Sea basin. *Journal of Geophysical Research* 85(B7), 3711–3739. DOI 10.1029/JB085iB07p03711.
 
 ---
 
-## 10. Lacunes
+## 10. Gaps
 
-Énoncées sans référence, faute de sources vérifiées à proposer.
+Stated without a reference, for lack of a verified source to offer.
 
-- Calibration thermique indépendante de la réflectance de la vitrinite. Les traces de fission sur apatite constituent la contrainte complémentaire habituelle, en particulier pour les phases d'exhumation ; je n'ai pas de référence contrôlée à donner.
-- Révisions du modèle vitrinite postérieures à EASY%Ro. Elles existent, je ne les ai pas retrouvées avec des coordonnées bibliographiques fiables.
-- Quantification d'incertitude et calibration inverse. Le corpus est du forward déterministe ; je ne connais pas de synthèse convenable.
-- Réseaux informés par la physique appliqués à la modélisation de bassin. Rien de convaincant à ma connaissance.
+- Thermal calibration independent of vitrinite reflectance. Apatite fission tracks are the usual complementary constraint, particularly for exhumation phases; I don't have a checked reference to give.
+- Revisions to the vitrinite model postdating EASY%Ro. They exist; I have not been able to retrieve them with reliable bibliographic details.
+- Uncertainty quantification and inverse calibration. The corpus is deterministic forward modeling; I don't know of a satisfactory synthesis.
+- Physics-informed neural networks applied to basin modeling. Nothing convincing that I'm aware of.
 
 ---
 
-## Note logiciel
+## Software note
 
-Basin2 (Bethke, Lee & Park, Université de l'Illinois) n'est plus distribué. Le paquet était gratuit mais fourni en binaire, jamais en source ouverte, et n'a pas été maintenu au-delà de l'environnement Windows antérieur à Vista ; le programme d'hydrogéologie l'a retiré.
+Basin2 (Bethke, Lee & Park, University of Illinois) is no longer distributed. The package was free but binary-only, never released as open source, and was not maintained past the pre-Vista Windows environment; the hydrogeology program has withdrawn it.
