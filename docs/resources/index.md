@@ -114,7 +114,3 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [AAPG Wiki](https://wiki.aapg.org/Main_Page) — Global · petroleum geoscience reference
 - [SEG Wiki](https://wiki.seg.org/wiki/Main_Page) — Global · geophysics reference
 - [dGB Earth Sciences — Library](https://dgbes.com/library/) — Global · OpendTect documentation, ML in seismic interpretation, tutorials
-
----
-
-*PPP references handled separately.*
