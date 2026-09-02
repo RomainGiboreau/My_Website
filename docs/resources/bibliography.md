@@ -142,20 +142,3 @@ The *Exemplar* model. Compaction as exponential decay of intergranular volume wi
 Two-stage model: rapid stretching with passive asthenosphere upwelling, followed by slow conductive subsidence. Slow subsidence and heat flow depend only on the stretching factor, which makes the model testable.
 
 **Sclater, J.G. & Christie, P.A.F. (1980).** Continental stretching: an explanation of the post-mid-Cretaceous subsidence of the central North Sea basin. *Journal of Geophysical Research* 85(B7), 3711–3739. DOI 10.1029/JB085iB07p03711.
-
----
-
-## 10. Gaps
-
-Stated without a reference, for lack of a verified source to offer.
-
-- Thermal calibration independent of vitrinite reflectance. Apatite fission tracks are the usual complementary constraint, particularly for exhumation phases; I don't have a checked reference to give.
-- Revisions to the vitrinite model postdating EASY%Ro. They exist; I have not been able to retrieve them with reliable bibliographic details.
-- Uncertainty quantification and inverse calibration. The corpus is deterministic forward modeling; I don't know of a satisfactory synthesis.
-- Physics-informed neural networks applied to basin modeling. Nothing convincing that I'm aware of.
-
----
-
-## Software note
-
-Basin2 (Bethke, Lee & Park, University of Illinois) is no longer distributed. The package was free but binary-only, never released as open source, and was not maintained past the pre-Vista Windows environment; the hydrogeology program has withdrawn it.
