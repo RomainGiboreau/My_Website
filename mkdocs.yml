@@ -46,9 +46,9 @@ nav:
       - notes/pandas_polars.md
       - notes/mcda_promethee_ahp.md
   - Resources: 
-      - Tools & Data: resources/index.md
-      - Bibliography: resources/bibliography.md
-      - Company Announcements: resources/company-announcements.md
+      - resources/index.md
+      - resources/bibliography.md
+      - resources/company-announcements.md
   - Tags: tags.md
 
 
