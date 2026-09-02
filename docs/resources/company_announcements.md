@@ -108,13 +108,3 @@ Note: these pages mix discoveries with financial results, ESG, and corporate new
 | TPDC (Tanzania Petroleum Development Corporation) | NOC | Tanzania (Rovuma, Songo Songo) | https://www.tpdc.co.tz/news |
 | UNOC (Uganda National Oil Company) | NOC | Uganda (Lake Albert, EACOP) | https://www.unoc.co.ug/category/news/ |
 | NOCK (National Oil Corporation of Kenya) | NOC | Kenya — mostly downstream/retail; upstream discoveries (Turkana) driven by Tullow Oil (already listed) | https://nationaloil.co.ke/category/news/ |
-
----
-
-*PQPOC (Phu Quoc Petroleum Operating Company, Vietnam) is a PetroVietnam subsidiary — no distinct press feed confirmed; tracked via the PetroVietnam entry above.*
-
-*Neptune Energy no longer exists as an independent company — absorbed by Eni (global portfolio) and Vår Energi (Norway assets) in January 2024, Germany carved out separately. Tracked via the Eni and Vår Energi entries above.*
-
-*SIPEX (Sonatrach International Petroleum Exploration & Production) is Sonatrach's international upstream subsidiary, active in Libya, Egypt, Mali, Niger, Mauritania, Tunisia, Peru. No dedicated press feed found — its discoveries are announced via the host-country NOC (e.g. Libya NOC above) or via Sonatrach itself.*
-
-*Last verified: September 2026. Corrections/updates as sources are checked.*
