@@ -351,8 +351,10 @@ function draw(){
   const isMap=D===S.map;
   if(isMap&&uC&&$('showU').checked){ctx.imageSmoothingEnabled=false;ctx.drawImage(uC,0,0)}
   if(isMap&&S.R&&$('showR').checked&&S.R.canvas){const R=S.R,G=GEO(),o=G.inv(R.x0,R.y0),a=G.inv(R.x0+R.dx,R.y0),b=G.inv(R.x0,R.y0+R.dy);
-    const ax=[a[0]-o[0],a[1]-o[1]],ay=[b[0]-o[0],b[1]-o[1]];ctx.imageSmoothingEnabled=false;ctx.globalAlpha=.8;
-    ctx.transform(ax[0],ax[1],ay[0],ay[1],o[0]-.5*ax[0]-.5*ay[0],o[1]-.5*ax[1]-.5*ay[1]);ctx.drawImage(R.canvas,0,0);ctx.globalAlpha=1}
+    const ax=[a[0]-o[0],a[1]-o[1]],ay=[b[0]-o[0],b[1]-o[1]];ctx.imageSmoothingEnabled=false;ctx.globalAlpha=.65;
+    const xe=R.x0+(R.nx-1)*R.dx,ye=R.y0+(R.ny-1)*R.dy,cs=[G.inv(R.x0,R.y0),G.inv(xe,R.y0),G.inv(xe,ye),G.inv(R.x0,ye)];
+    ctx.save();ctx.beginPath();cs.forEach((c,i)=>i?ctx.lineTo(c[0],c[1]):ctx.moveTo(c[0],c[1]));ctx.closePath();ctx.clip();   // no half-cell bleed outside the grid bounds
+    ctx.transform(ax[0],ax[1],ay[0],ay[1],o[0]-.5*ax[0]-.5*ay[0],o[1]-.5*ax[1]-.5*ay[1]);ctx.drawImage(R.canvas,0,0);ctx.restore();ctx.globalAlpha=1}
   ctx.setTransform(dpr,0,0,dpr,0,0);
   if(isMap&&S.region){const r=S.region,[a,b]=toScr(r.x0,r.y0),[c,d]=toScr(r.x1,r.y1);ctx.strokeStyle='#a8623a';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.strokeRect(a,b,c-a,d-b);ctx.setLineDash([])}
   if(isMap&&S.R&&$('showN').checked){const R=S.R,G=GEO();ctx.lineWidth=1;
