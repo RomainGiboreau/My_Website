@@ -42,6 +42,9 @@ canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
 .msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
 .msg.err{color:var(--acc2)}
 .dpanel{margin-top:12px}
+.stage{position:sticky;top:8px}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
 .tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
 table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
 th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
@@ -72,12 +75,13 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
 @media (max-width:900px){.layout{grid-template-columns:1fr}}
 
 .lut{display:block;width:100%;height:14px;border:1px solid var(--line);border-radius:3px;margin:4px 0 2px;background:var(--alt)}
-.tick{display:grid;grid-template-columns:22px 1fr 78px 20px;gap:4px;align-items:center;font-size:.8rem;margin:3px 0}
-.tick input{width:100%}.tick button{padding:0 4px;line-height:1.2}
+.tick{display:grid;grid-template-columns:34px 1fr 90px 22px;gap:4px;align-items:center;font-size:.8rem;margin:3px 0}
+.tick input{width:100%}.tick .sw{width:22px;height:22px}.tick button{padding:0 4px;line-height:1.2}
 .grid3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}
 .grid3 input{width:100%}
 .tools .sep{width:1px;background:var(--line);margin:0 2px}
 .dpanel{margin-top:12px}
+.stage{position:sticky;top:8px}
 </style></head><body>
 <div class="top"><h1>Map digitizer</h1>
  <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
@@ -97,11 +101,13 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <input type="file" id="file" accept="image/*" hidden><input type="file" id="fileLeg" accept="image/*" hidden>
   </div>
  </section>
- <section class="panel"><h2><span class="n">2</span>Legend<span class="tt" tabindex="0" data-tip="The colour bar is read along the line joining your first and last tick. Click ticks along the bar, from one end to the other, at least 2 (ideally the two ends); type the value of each. Intermediate ticks are optional and handle non-linear bars. The legend can be in the map image or in a separate image.">?</span><i class="chev"></i></h2>
+ <section class="panel"><h2><span class="n">2</span>Legend<span class="tt" tabindex="0" data-tip="Only the two ends of the colour bar are needed: click its minimum end, type its value, then click its maximum end and type its value. The colours in between are read from the bar pixels along the line joining the two ends, and the values in between are interpolated (linear or log). Add an intermediate tick only if the bar is not linear. The legend can be inside the map image or in a separate image.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="row"><label class="inl">Legend in <select id="legSrc"><option value="same">the map image</option><option value="sep">a separate image</option></select></label><button id="bOpenLeg" hidden>Open legend…</button></div>
   <div class="row"><label class="inl">Value scale <select id="vs"><option value="lin">linear</option><option value="log">log</option></select></label></div>
-  <div class="row"><button id="bTick">Click ticks on the bar</button><button id="bTickClear">Clear</button></div>
+  <div class="tick"><span>Min</span><button id="bMin">Click end</button><input type="text" id="vMin" placeholder="value" aria-label="Minimum value"><span class="sw" id="swMin"></span></div>
+  <div class="tick"><span>Max</span><button id="bMax">Click end</button><input type="text" id="vMax" placeholder="value" aria-label="Maximum value"><span class="sw" id="swMax"></span></div>
   <div id="tickList"></div>
+  <div class="row"><button id="bMid">+ intermediate tick</button><button id="bTickClear">Reset legend</button></div>
   <canvas class="lut" id="lutC" width="300" height="14"></canvas>
   <div class="msg" id="lutMsg"></div>
   </div>
@@ -118,12 +124,12 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
    <span>dx</span><input type="text" id="gdx"><span>dy</span><input type="text" id="gdy"></div>
   <div class="msg" id="gMsg"></div></div>
  </section>
- <section class="panel"><h2><span class="n">5</span>Extract<span class="tt" tabindex="0" data-tip="Colour tolerance: maximum CIE Lab distance between a pixel and its closest legend colour (about 2 is barely visible, 10 is clearly different). Window: half-size in pixels of the square around each node whose matching pixels are median-filtered; it removes isolines and labels. Min. matching: share of window pixels that must match the legend, otherwise the node stays empty.">?</span><i class="chev"></i></h2>
+ <section class="panel"><h2><span class="n">5</span>Extract<span class="tt" tabindex="0" data-tip="Colour tolerance: maximum CIE Lab distance between a pixel and its closest legend colour (about 2 is barely visible, 10 is clearly different). Window: half-size in pixels of the square around each node whose matching pixels are median-filtered; it removes isolines and labels. Min. matching: share of window pixels that must match the legend, otherwise the node stays empty. “Unmatched pixels” tints in red every pixel of the map whose colour is not in the legend at the current tolerance.">?</span><i class="chev"></i></h2>
   <div class="body"><label class="inl">Colour tolerance <input type="range" id="tol" min="2" max="40" value="12"><span id="tolV" style="width:28px;text-align:right">12</span></label>
   <div class="row"><label class="inl">Window ± <input type="number" id="win" min="0" max="15" value="2" style="width:52px">px</label>
    <label class="inl">Min. matching <input type="number" id="minf" min="1" max="100" value="30" style="width:56px">%</label></div>
   <div class="row"><button class="pri" id="bExtract">Extract grid</button></div>
-  <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label><label class="inl"><input type="checkbox" id="showU">Unmatched pixels</label></div>
   <div class="msg" id="exMsg"></div></div>
  </section>
 </aside>
@@ -133,6 +139,7 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <canvas id="cv"></canvas>
   <div class="tools"><button id="zIn" title="Zoom in">+</button><button id="zOut" title="Zoom out">−</button><button id="zFit" title="Fit to window">Fit</button><button id="z11" title="Actual size">1:1</button>
    <span class="sep" id="vsep" hidden></span><button id="vMap" class="on" hidden>Map</button><button id="vLeg" hidden>Legend</button></div>
+  <div class="banner" id="banner" hidden></div>
   <canvas id="loupe" width="150" height="150"></canvas>
   <div class="ro" id="ro">—</div>
  </div>
@@ -144,13 +151,14 @@ const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
 const newDoc=()=>({img:null,imgC:null,imgData:null,w:0,h:0,s:1,tx:0,ty:0});
 const S={map:newDoc(),leg:newDoc(),sep:false,view:'map',tool:null,space:false,
-  cal:{pts:[null,null,null,null],vals:['','','',''],step:-1},ticks:[],R:null};
+  cal:{pts:[null,null,null,null],vals:['','','',''],step:-1},T:{min:{p:null,v:''},max:{p:null,v:''},mid:[]},R:null,tickTarget:null};
 const LD=()=>S.sep?S.leg:S.map;           // document holding the legend
 const CUR=()=>(S.view==='leg'&&S.sep)?S.leg:S.map;
 const LABELS=['X1','X2','Y1','Y2'];
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
 let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2500)}
+let banT=null;function banner(m,err){const b=$('banner');b.textContent=m;b.className='banner'+(err?' err':'');b.hidden=false;clearTimeout(banT);banT=setTimeout(()=>{b.hidden=true},err?9000:6000)}
 function fmt(v){if(!isFinite(v))return'—';const a=Math.abs(v);return(a!==0&&(a<1e-3||a>=1e7))?v.toExponential(5):String(+v.toPrecision(7))}
 const num=t=>parseFloat(String(t).replace(',','.'));
 
@@ -199,7 +207,7 @@ function setImage(doc,img){
 }
 function afterLoad(doc){
   if(doc===S.map){S.R=null;S.region=null;$('drop').style.display='none'}
-  if(doc===LD()||!S.sep){S.ticks=doc===LD()?[]:S.ticks;renderTicks()}
+  if(doc===LD())resetTicks();
   fit();recal();buildLUT();renderTable();$('exMsg').textContent=''}
 function loadFile(f,target){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();
   i.onload=()=>{const doc=target==='leg'&&S.sep?S.leg:S.map;setImage(doc,i);URL.revokeObjectURL(u);afterLoad(doc)};i.src=u}
@@ -213,7 +221,7 @@ $('stage').addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfe
 document.addEventListener('paste',e=>{if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type==='text')return;
   for(const it of e.clipboardData.items)if(it.type.startsWith('image/')){loadFile(it.getAsFile(),curTarget());e.preventDefault();return}});
 $('legSrc').onchange=e=>{S.sep=e.target.value==='sep';$('bOpenLeg').hidden=!S.sep;['vsep','vMap','vLeg'].forEach(i=>$(i).hidden=!S.sep);
-  S.ticks=[];renderTicks();setView('map');buildLUT();draw()};
+  resetTicks();setView('map');buildLUT();draw()};
 function setView(v){if(v==='leg'&&!S.sep)v='map';S.view=v;$('vMap').classList.toggle('on',v==='map');$('vLeg').classList.toggle('on',v==='leg');fit()}
 $('vMap').onclick=()=>setView('map');$('vLeg').onclick=()=>setView('leg');
 
@@ -256,25 +264,36 @@ const evPos=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.cli
 
 // ---------- legend ----------
 let LUT=null,lutCache=new Map();
+const allTicks=()=>[S.T.min,S.T.max,...S.T.mid].filter(t=>t.p);
+function resetTicks(){S.T={min:{p:null,v:''},max:{p:null,v:''},mid:[]};$('vMin').value='';$('vMax').value='';renderTicks();buildLUT()}
+function swatch(el,t){const D=LD();if(!t||!t.p||!D.img){el.style.background='';return}
+  const x=Math.round(t.p[0]),y=Math.round(t.p[1]);if(x<0||y<0||x>=D.w||y>=D.h){el.style.background='';return}
+  const o=(y*D.w+x)*4,d=D.imgData.data;el.style.background=`rgb(${d[o]},${d[o+1]},${d[o+2]})`}
 function renderTicks(){
-  $('tickList').innerHTML=S.ticks.map((t,i)=>`<div class="tick"><span>T${i+1}</span><span class="px" style="color:var(--mut);font-size:.74rem">${t.p[0].toFixed(0)}, ${t.p[1].toFixed(0)}</span><input type="text" data-i="${i}" value="${esc(t.v)}" placeholder="value" aria-label="Tick ${i+1} value"><button data-d="${i}" title="Remove">×</button></div>`).join('')}
-$('tickList').addEventListener('input',e=>{const i=e.target.dataset.i;if(i==null)return;S.ticks[+i].v=e.target.value;clearTimeout(lutT);lutT=setTimeout(buildLUT,150)});
-$('tickList').addEventListener('click',e=>{const d=e.target.dataset.d;if(d==null)return;S.ticks.splice(+d,1);renderTicks();buildLUT()});
-let lutT=null;
-$('bTick').onclick=()=>{if(!LD().img)return;setView(S.sep?'leg':'map');setTool('tick')};
-$('bTickClear').onclick=()=>{S.ticks=[];renderTicks();buildLUT();if(S.tool==='tick')setTool(null)};
+  $('bMin').textContent=S.T.min.p?'✓ placed':'Click end';$('bMax').textContent=S.T.max.p?'✓ placed':'Click end';
+  swatch($('swMin'),S.T.min);swatch($('swMax'),S.T.max);
+  $('tickList').innerHTML=S.T.mid.map((t,i)=>`<div class="tick"><span>T${i+1}</span><span class="px" style="color:var(--mut);font-size:.74rem">${t.p?t.p[0].toFixed(0)+', '+t.p[1].toFixed(0):'click on the bar'}</span><input type="text" data-i="${i}" value="${esc(t.v)}" placeholder="value" aria-label="Tick ${i+1} value"><button data-d="${i}" title="Remove">×</button></div>`).join('')}
+$('tickList').addEventListener('input',e=>{const i=e.target.dataset.i;if(i==null)return;S.T.mid[+i].v=e.target.value;lutLater()});
+$('tickList').addEventListener('click',e=>{const d=e.target.dataset.d;if(d==null)return;S.T.mid.splice(+d,1);renderTicks();buildLUT()});
+let lutT=null;const lutLater=()=>{clearTimeout(lutT);lutT=setTimeout(buildLUT,150)};
+$('vMin').oninput=e=>{S.T.min.v=e.target.value;lutLater()};$('vMax').oninput=e=>{S.T.max.v=e.target.value;lutLater()};
+function armTick(k){if(!LD().img)return;setView(S.sep?'leg':'map');S.tickTarget=k;setTool('tick')}
+$('bMin').onclick=()=>armTick('min');$('bMax').onclick=()=>armTick('max');
+$('bMid').onclick=()=>{S.T.mid.push({p:null,v:''});renderTicks();armTick('m'+(S.T.mid.length-1))};
+$('bTickClear').onclick=()=>{if(S.tool==='tick')setTool(null);resetTicks()};
 $('vs').onchange=buildLUT;
 function median(a,n){a=a.subarray(0,n).sort();return a[n>>1]}
 function buildLUT(){
   LUT=null;lutCache=new Map();const m=$('lutMsg'),lc=$('lutC'),lx=lc.getContext('2d');lx.clearRect(0,0,lc.width,lc.height);
   m.className='msg';
-  const T=S.ticks.map(t=>({p:t.p,v:num(t.v)}));
-  if(T.length<2){m.textContent='Click at least 2 ticks on the colour bar.';draw();return}
-  if(T.some(t=>!isFinite(t.v))){m.textContent='Enter the value of every tick.';draw();return}
+  swatch($('swMin'),S.T.min);swatch($('swMax'),S.T.max);
+  if(!S.T.min.p||!S.T.max.p){m.textContent='Click the minimum end and the maximum end of the colour bar.';draw();return}
+  const T=[S.T.min,...S.T.mid.filter(t=>t.p),S.T.max].map(t=>({p:t.p,v:num(t.v)}));
+  if(T.some(t=>!isFinite(t.v))){m.textContent='Type the value of the min end, the max end and each intermediate tick.';draw();return}
   const log=$('vs').value==='log';if(log&&T.some(t=>t.v<=0)){m.textContent='Log scale needs positive values.';m.className='msg err';draw();return}
   const D=LD();if(!D.img){draw();return}
-  const p0=T[0].p,pL=T[T.length-1].p,L=Math.hypot(pL[0]-p0[0],pL[1]-p0[1]);
-  if(L<5){m.textContent='The first and last ticks are too close.';m.className='msg err';draw();return}
+  const p0=S.T.min.p,pL=S.T.max.p,L=Math.hypot(pL[0]-p0[0],pL[1]-p0[1]);
+  if(L<5){m.textContent='Min and max ends are too close.';m.className='msg err';draw();return}
   const dir=[(pL[0]-p0[0])/L,(pL[1]-p0[1])/L],nrm=[-dir[1],dir[0]];
   const Ts=T.map(t=>({s:(t.p[0]-p0[0])*dir[0]+(t.p[1]-p0[1])*dir[1],v:log?Math.log10(t.v):t.v})).sort((a,b)=>a.s-b.s);
   for(let i=1;i<Ts.length;i++)if(Ts[i].s-Ts[i-1].s<1){m.textContent='Two ticks are at the same place on the bar.';m.className='msg err';draw();return}
@@ -289,12 +308,20 @@ function buildLUT(){
     const r=median(bufR,n),g=median(bufG,n),b=median(bufB,n);rgb[3*k]=r;rgb[3*k+1]=g;rgb[3*k+2]=b;const l=rgb2lab(r,g,b);lab[3*k]=l[0];lab[3*k+1]=l[1];lab[3*k+2]=l[2]}
   LUT={N,val,lab,rgb,vmin:Math.min(val[0],val[N-1]),vmax:Math.max(val[0],val[N-1])};
   for(let k=0;k<lc.width;k++){const i=Math.round(k/(lc.width-1)*(N-1));lx.fillStyle=`rgb(${rgb[3*i]},${rgb[3*i+1]},${rgb[3*i+2]})`;lx.fillRect(k,0,1,lc.height)}
-  m.textContent=`Colour scale read: ${fmt(val[0])} → ${fmt(val[N-1])}`;draw()}
+  m.textContent=`Colour scale read: ${fmt(val[0])} → ${fmt(val[N-1])}`;draw();updU()}
 function match(r,g,b,tol2){const key=(r<<16)|(g<<8)|b;let c=lutCache.get(key);
   if(c===undefined){const l=rgb2lab(r,g,b),L=LUT.lab;let best=1e18,bi=-1;for(let k=0;k<LUT.N;k++){const a=l[0]-L[3*k],bb=l[1]-L[3*k+1],cc=l[2]-L[3*k+2],dd=a*a+bb*bb+cc*cc;if(dd<best){best=dd;bi=k}}
     c=[bi,best];lutCache.set(key,c)}
   return c[1]<=tol2?c[0]:-1}
 
+// ---------- unmatched-pixel overlay ----------
+let uC=null,uT=null;
+function updU(){clearTimeout(uT);uT=setTimeout(computeU,120)}
+function computeU(){uC=null;if(!$('showU').checked||!LUT||!S.map.img){draw();return}
+  const D=S.map,d=D.imgData.data,tol2=(+$('tol').value)**2,c=document.createElement('canvas');c.width=D.w;c.height=D.h;
+  const x=c.getContext('2d'),im=x.createImageData(D.w,D.h);
+  for(let k=0;k<D.w*D.h;k++){const o=4*k;if(match(d[o],d[o+1],d[o+2],tol2)<0){im.data[o]=214;im.data[o+1]=59;im.data[o+2]=50;im.data[o+3]=150}}
+  x.putImageData(im,0,0);uC=c;draw()}
 // ---------- drawing ----------
 function marker(g,x,y,col,lab,r=7){g.strokeStyle=col;g.lineWidth=2;g.beginPath();g.moveTo(x-r,y);g.lineTo(x+r,y);g.moveTo(x,y-r);g.lineTo(x,y+r);g.stroke();
   if(lab){g.fillStyle=col;g.font='600 11px Inter,sans-serif';g.fillText(lab,x+r+2,y-r)}}
@@ -310,6 +337,7 @@ function draw(){
   ctx.imageSmoothingEnabled=D.s<3;
   ctx.setTransform(dpr*D.s,0,0,dpr*D.s,dpr*D.tx,dpr*D.ty);ctx.drawImage(D.img,0,0);
   const isMap=D===S.map;
+  if(isMap&&uC&&$('showU').checked){ctx.imageSmoothingEnabled=false;ctx.drawImage(uC,0,0)}
   if(isMap&&S.R&&$('showR').checked&&S.R.canvas){const R=S.R,G=GEO(),o=G.inv(R.x0,R.y0),a=G.inv(R.x0+R.dx,R.y0),b=G.inv(R.x0,R.y0+R.dy);
     const ax=[a[0]-o[0],a[1]-o[1]],ay=[b[0]-o[0],b[1]-o[1]];ctx.imageSmoothingEnabled=false;ctx.globalAlpha=.8;
     ctx.transform(ax[0],ax[1],ay[0],ay[1],o[0]-.5*ax[0]-.5*ay[0],o[1]-.5*ax[1]-.5*ay[1]);ctx.drawImage(R.canvas,0,0);ctx.globalAlpha=1}
@@ -321,9 +349,9 @@ function draw(){
       const id=R.idx[k];ctx.beginPath();ctx.arc(x,y,rad,0,7);
       if(id<0){ctx.strokeStyle='#d63b32';ctx.stroke()}else{ctx.fillStyle=`rgb(${R.lut.rgb[3*id]},${R.lut.rgb[3*id+1]},${R.lut.rgb[3*id+2]})`;ctx.fill();ctx.strokeStyle='#232220';ctx.stroke()}}}
   if(isMap)S.cal.pts.forEach((p,i)=>{if(p){const [x,y]=toScr(p[0],p[1]);marker(ctx,x,y,i<2?'#1f5fbf':'#2f8f83',LABELS[i],9)}});
-  if(D===LD()&&S.ticks.length){
-    if(S.ticks.length>1){const a=toScr(...S.ticks[0].p),b=toScr(...S.ticks[S.ticks.length-1].p);ctx.strokeStyle='rgba(168,98,58,.9)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([])}
-    S.ticks.forEach((t,i)=>{const [x,y]=toScr(t.p[0],t.p[1]);marker(ctx,x,y,'#a8623a','T'+(i+1)+(t.v!==''?' = '+t.v:''),7)})}
+  if(D===LD()){const mn=S.T.min.p,mx=S.T.max.p;
+    if(mn&&mx){const a=toScr(...mn),b=toScr(...mx);ctx.strokeStyle='rgba(168,98,58,.9)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([])}
+    tickList().forEach(([k,t])=>{const [x,y]=toScr(t.p[0],t.p[1]);marker(ctx,x,y,'#a8623a',(k==='min'?'min':k==='max'?'max':'T'+(+k.slice(1)+1))+(t.v!==''?' = '+t.v:''),7)})}
 }
 function drawLoupe(ix,iy){const D=CUR();
   if(!D.img){loupe.style.display='none';return}
@@ -336,20 +364,25 @@ function drawLoupe(ix,iy){const D=CUR();
   lg.strokeStyle='#fff';lg.beginPath();lg.arc(cx,cy,4,0,7);lg.stroke()}
 
 // ---------- tools & pointer ----------
-function setTool(t){S.tool=t;[['bCal','cal'],['bTick','tick'],['tRegion','region']].forEach(([id,n])=>$(id).classList.toggle('on',n===t));cv.style.cursor=t?'crosshair':'grab'}
+function setTool(t){S.tool=t;$('bMin').classList.toggle('on',t==='tick'&&S.tickTarget==='min');$('bMax').classList.toggle('on',t==='tick'&&S.tickTarget==='max');[['bCal','cal'],['tRegion','region']].forEach(([id,n])=>$(id).classList.toggle('on',n===t));cv.style.cursor=t?'crosshair':'grab'}
 $('tRegion').onclick=()=>{if(!S.map.img)return;setView('map');setTool('region')};
 function hitCal(sx,sy){if(CUR()!==S.map)return -1;for(let i=0;i<4;i++){const p=S.cal.pts[i];if(!p)continue;const [x,y]=toScr(p[0],p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
-function hitTick(sx,sy){if(CUR()!==LD())return -1;for(let i=0;i<S.ticks.length;i++){const [x,y]=toScr(S.ticks[i].p[0],S.ticks[i].p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
+function tickList(){return[['min',S.T.min],['max',S.T.max],...S.T.mid.map((t,i)=>['m'+i,t])].filter(a=>a[1].p)}
+function hitTick(sx,sy){if(CUR()!==LD())return null;for(const [k,t] of tickList()){const [x,y]=toScr(t.p[0],t.p[1]);if(Math.hypot(x-sx,y-sy)<=10)return t}return null}
 let drag=null;
 cv.addEventListener('pointerdown',e=>{
   const D=CUR();if(!D.img)return;cv.setPointerCapture(e.pointerId);const [sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
   if(e.button===1||S.space){drag={k:'pan',sx,sy,tx:D.tx,ty:D.ty};cv.style.cursor='grabbing';return}
   if(e.button===2)return;
   if(S.tool==='cal'){if(S.cal.step>=0&&S.cal.step<4){S.cal.pts[S.cal.step]=[ix,iy];S.cal.step++;updCalPx();if(S.cal.step>=4){setTool(null);S.cal.step=-1;$('cv0').focus()}recal()}return}
-  if(S.tool==='tick'){if(S.ticks.length<12){S.ticks.push({p:[ix,iy],v:''});renderTicks();buildLUT();const inp=$('tickList').querySelector(`input[data-i="${S.ticks.length-1}"]`);if(inp)inp.focus()}return}
+  if(S.tool==='tick'){const k=S.tickTarget,p=[ix,iy];
+    if(k==='min'){S.T.min.p=p;S.tickTarget='max';$('bMin').classList.remove('on');$('bMax').classList.add('on');renderTicks();buildLUT();$('vMin').focus()}
+    else if(k==='max'){S.T.max.p=p;setTool(null);renderTicks();buildLUT();$('vMax').focus()}
+    else if(k&&k[0]==='m'){const t=S.T.mid[+k.slice(1)];if(t){t.p=p;setTool(null);renderTicks();buildLUT();const inp=$('tickList').querySelector(`input[data-i="${k.slice(1)}"]`);if(inp)inp.focus()}}
+    return}
   if(S.tool==='region'){drag={k:'region',x:ix,y:iy};S.region={x0:ix,y0:iy,x1:ix,y1:iy};return}
   const c=hitCal(sx,sy);if(c>=0){drag={k:'cal',i:c};return}
-  const t=hitTick(sx,sy);if(t>=0){drag={k:'tick',i:t};return}
+  const t=hitTick(sx,sy);if(t){drag={k:'tick',t};return}
   drag={k:'pan',sx,sy,tx:D.tx,ty:D.ty};cv.style.cursor='grabbing'});
 cv.addEventListener('pointermove',e=>{
   const D=CUR();if(!D.img)return;const [sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
@@ -357,7 +390,7 @@ cv.addEventListener('pointermove',e=>{
     if(drag.k==='pan'){D.tx=drag.tx+sx-drag.sx;D.ty=drag.ty+sy-drag.sy}
     else if(drag.k==='region')S.region={x0:Math.min(drag.x,ix),y0:Math.min(drag.y,iy),x1:Math.max(drag.x,ix),y1:Math.max(drag.y,iy)};
     else if(drag.k==='cal'){S.cal.pts[drag.i]=[ix,iy];updCalPx();CAL=buildCal()}
-    else if(drag.k==='tick'){S.ticks[drag.i].p=[ix,iy]}
+    else if(drag.k==='tick'){drag.t.p=[ix,iy]}
     draw()}
   readout(ix,iy);drawLoupe(ix,iy)});
 cv.addEventListener('pointerup',()=>{
@@ -383,16 +416,21 @@ function setBounds(x0,x1,y0,y1){const f=v=>String(+v.toPrecision(8));$('gx0').va
 function regionToBounds(){const r=S.region;if(!r)return;const G=GEO(),c=[[r.x0,r.y0],[r.x1,r.y0],[r.x0,r.y1],[r.x1,r.y1]].map(p=>G.f(p));
   const xs=c.map(p=>p[0]),ys=c.map(p=>p[1]);setBounds(Math.min(...xs),Math.max(...xs),Math.min(...ys),Math.max(...ys))}
 $('bExtent').onclick=()=>{if(!CAL||CAL.err){$('gMsg').textContent='Calibrate the map first.';$('gMsg').className='msg err';return}setBounds(Math.min(CAL.x1,CAL.x2),Math.max(CAL.x1,CAL.x2),Math.min(CAL.y1,CAL.y2),Math.max(CAL.y1,CAL.y2))};
+function autoGrid(){const D=S.map;
+  if(S.region){regionToBounds();return}
+  if(CAL&&!CAL.err){setBounds(Math.min(CAL.x1,CAL.x2),Math.max(CAL.x1,CAL.x2),Math.min(CAL.y1,CAL.y2),Math.max(CAL.y1,CAL.y2));return}
+  setBounds(0,D.w,0,D.h)}
 function gUpd(){const g=gridSpec(),m=$('gMsg');m.className='msg'+(g.err?' err':'');m.textContent=g.err||`${g.nx} × ${g.ny} = ${g.nx*g.ny} nodes`;return g}
 ['gx0','gx1','gy0','gy1','gdx','gdy'].forEach(i=>$(i).addEventListener('input',gUpd));
-$('tol').oninput=e=>{$('tolV').textContent=e.target.value};
+$('tol').oninput=e=>{$('tolV').textContent=e.target.value;updU()};
 
 // ---------- extraction ----------
 $('bExtract').onclick=()=>{
   const m=$('exMsg');m.className='msg';
-  if(!S.map.img){m.textContent='Open a map first.';m.className='msg err';return}
-  if(!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';return}
-  const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';$('gMsg').textContent=g.err;return}
+  if(!S.map.img){m.textContent='Open a map first.';m.className='msg err';banner('Open a map first.',true);return}
+  if(!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';banner('Define the colour legend first (section 2): click the min and max ends of the colour bar and type their values.',true);return}
+  if(['gx0','gx1','gy0','gy1','gdx','gdy'].some(i=>$(i).value.trim()===''))autoGrid();
+  const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';$('gMsg').textContent=g.err;banner(g.err,true);return}
   const D=S.map,d=D.imgData.data,G=GEO(),tol2=(+$('tol').value)**2,w=Math.max(0,Math.min(15,Math.round(+$('win').value||0))),minN=Math.max(1,Math.ceil((+$('minf').value||30)/100*(2*w+1)**2));
   const idx=new Int16Array(g.nx*g.ny).fill(-1),buf=new Int16Array((2*w+1)**2);let ok=0,vmin=Infinity,vmax=-Infinity,sum=0;
   for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){
@@ -405,7 +443,10 @@ $('bExtract').onclick=()=>{
   rx.putImageData(im,0,0);
   S.R={...g,idx,lut:LUT,canvas:rc,ok,vmin,vmax,px:!!G.px};
   m.textContent=ok?`${ok} / ${idx.length} nodes valid · min ${fmt(vmin)} · max ${fmt(vmax)} · mean ${fmt(sum/ok)}`:'No node matched the legend: increase the tolerance or check the ticks.';
-  if(!ok)m.className='msg err';
+  const share=ok/idx.length;
+  if(!ok){m.className='msg err';banner('No node matched the colour legend. Raise the colour tolerance, or check that the min/max ends were clicked on the colour bar.',true)}
+  else if(share<.5){m.className='msg err';banner(`Only ${Math.round(share*100)} % of the nodes matched the legend. Raise the colour tolerance, tick “Unmatched pixels” to see what is rejected, or keep the grid inside the coloured area.`,true)}
+  else banner(`${ok} of ${idx.length} nodes extracted (${fmt(vmin)} → ${fmt(vmax)}). Check the Raster / Nodes overlays, then export from the top bar.`);
   renderTable();draw()};
 function zOf(k){const R=S.R,id=R.idx[k];return id<0?NaN:R.lut.val[id]}
 function renderTable(){const R=S.R;$('thX').textContent=R&&R.px?'X (px)':'X';$('thY').textContent=R&&R.px?'Y (px)':'Y';
@@ -427,7 +468,7 @@ $('bCopy').onclick=async()=>{if(!need())return;const t=xyz('\t');try{await navig
 $('bCsv').onclick=()=>{if(need())dl(xyz(','),'map_xyz.csv','text/csv')};
 $('bMat').onclick=()=>{if(need())dl(matrix(),'map_matrix.csv','text/csv')};
 $('bGrd').onclick=()=>{if(need())dl(grd(),'map_grid.grd','text/plain')};
-$('showR').onchange=$('showN').onchange=draw;
+$('showR').onchange=$('showN').onchange=draw;$('showU').onchange=computeU;
 window.DG={S,get LUT(){return LUT},get CAL(){return CAL},imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
 recal();size();draw();
 </script></body></html>
