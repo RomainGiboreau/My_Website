@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plot digitizer</title>
+<meta name="description" content="Extract numerical data from a chart image: calibrate the axes, click or auto-extract points, export CSV. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.dpanel{grid-template-columns:1fr}}
+</style></head><body>
+<div class="top"><h1>Plot digitizer</h1><a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Image</h2>
+  <div class="row"><button class="pri" id="bOpen">Open image…</button><button id="bExample">Try an example</button></div>
+  <input type="file" id="file" accept="image/*" hidden>
+  <p class="hint">Open a file, drop it on the canvas, or paste a screenshot with Ctrl+V. The image never leaves your browser.</p>
+ </section>
+ <section class="panel"><h2><span class="n">2</span>Axes</h2>
+  <div class="row"><label class="inl">X scale <select id="xs"><option value="lin">linear</option><option value="log">log</option></select></label>
+   <label class="inl">Y scale <select id="ys"><option value="lin">linear</option><option value="log">log</option></select></label></div>
+  <div class="row"><button id="bCal">Calibrate axes</button><button id="bCalReset">Reset</button></div>
+  <div class="grid2" id="calGrid"></div>
+  <div class="msg" id="calMsg"></div>
+  <p class="hint">Click two points on the X axis, then two on the Y axis (ticks or grid lines), then type their values. Axes may be slightly rotated.</p>
+ </section>
+ <section class="panel"><h2><span class="n">3</span>Points</h2>
+  <div class="row"><select id="dsSel" style="flex:1"></select><button id="dsNew">New</button><button id="dsDel">Delete</button></div>
+  <div class="row"><input type="text" id="dsName" style="flex:1" aria-label="Dataset name"><input type="color" id="dsColor" aria-label="Dataset color" style="width:38px;height:28px;padding:1px"></div>
+  <div class="row"><button id="tEdit" class="on">Add / move</button><button id="tPan">Pan</button><button id="tRegion">Region</button><button id="bClear">Clear dataset</button></div>
+  <p class="hint">Click to add a point (drag to fine-tune before releasing). Drag an existing point to move it. Delete removes the selected point, arrows nudge it (Shift = 10 px), Ctrl+Z undoes. Hold Space or use the middle button to pan; the wheel zooms.</p>
+ </section>
+ <section class="panel"><h2><span class="n">4</span>Auto-extract</h2>
+  <div class="row"><button id="bPick">Pick curve colour</button><span class="sw" id="sw"></span><span id="swTxt" class="hint" style="margin:0">no colour</span></div>
+  <label class="inl" style="margin-top:6px">Tolerance <input type="range" id="tol" min="5" max="200" value="60"><span id="tolV" style="width:28px;text-align:right">60</span></label>
+  <div class="row"><label class="inl">Mode <select id="mode"><option value="curve">Curve (one point per column)</option><option value="blobs">Scatter (blob centres)</option></select></label></div>
+  <div class="row"><label class="inl">Step <input type="number" id="step" min="1" max="100" value="2" style="width:56px">px</label>
+   <label class="inl">Min area <input type="number" id="minA" min="1" max="10000" value="6" style="width:60px">px</label></div>
+  <label class="inl"><input type="checkbox" id="showMask" checked>Show matching pixels</label>
+  <div class="row"><button class="pri" id="bExtract">Extract into dataset</button><button id="bRegionClear">Clear region</button></div>
+  <div class="msg" id="exMsg"></div>
+  <p class="hint">Pick the colour on the curve, adjust the tolerance until only the curve is highlighted, optionally draw a Region around the plot area, then extract.</p>
+ </section>
+</aside>
+<main>
+ <div class="stage" id="stage">
+  <div class="drop" id="drop"><div><b>Drop a chart image here</b><br>or use “Open image…”, paste with Ctrl+V, or try the example</div></div>
+  <canvas id="cv"></canvas>
+  <div class="tools"><button id="zIn" title="Zoom in">+</button><button id="zOut" title="Zoom out">−</button><button id="zFit" title="Fit to window">Fit</button><button id="z11" title="Actual size">1:1</button></div>
+  <canvas id="loupe" width="150" height="150"></canvas>
+  <div class="ro" id="ro">—</div>
+ </div>
+ <div class="dpanel">
+  <div class="tw"><table><thead><tr><th>#</th><th id="thX">X</th><th id="thY">Y</th></tr></thead><tbody id="tb"></tbody></table></div>
+  <div class="panel">
+   <h2>Export</h2>
+   <div class="row"><select id="exWhich"><option value="active">Active dataset</option><option value="all">All datasets</option></select></div>
+   <label class="inl"><input type="checkbox" id="sortX">Sort by X</label>
+   <div class="row"><button class="pri" id="bCopy">Copy (paste into Excel)</button></div>
+   <div class="row"><button id="bCsv">Download CSV</button></div>
+   <div class="msg" id="exportMsg"></div>
+  </div>
+ </div>
+ <p class="note">Everything runs locally in your browser: the image is never uploaded. Points are stored in image pixels, so re-calibrating the axes updates every value. Without calibration the table shows pixel coordinates.</p>
+</main>
+</div>
+<script>
+const EXAMPLE='data:image/png;base64,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';
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
+const COLORS=['#a8623a','#4a5a4e','#1f5fbf','#8a5fa8','#c29a1f','#2f8f83'];
+const S={img:null,imgC:null,imgData:null,w:0,h:0,s:1,tx:0,ty:0,tool:'edit',
+  cal:{pts:[null,null,null,null],vals:['','','',''],step:-1},
+  sets:[{name:'Dataset 1',color:COLORS[0],pts:[]}],active:0,sel:null,
+  color:null,mask:null,maskC:null,region:null,undo:[],space:false,hover:null};
+const LABELS=['X1','X2','Y1','Y2'];
+
+// ---------- calibration ----------
+function buildCal(){
+  const c=S.cal;if(c.pts.some(p=>!p))return null;
+  const v=c.vals.map(t=>parseFloat(String(t).replace(',','.')));if(v.some(x=>!isFinite(x)))return null;
+  const xl=$('xs').value==='log',yl=$('ys').value==='log';
+  let [x1,x2,y1,y2]=v;
+  if(xl){if(x1<=0||x2<=0)return{err:'X log scale needs positive values'};x1=Math.log10(x1);x2=Math.log10(x2)}
+  if(yl){if(y1<=0||y2<=0)return{err:'Y log scale needs positive values'};y1=Math.log10(y1);y2=Math.log10(y2)}
+  if(x1===x2||y1===y2)return{err:'The two values of an axis must differ'};
+  const [X1,X2,Y1,Y2]=c.pts,dx=[X2[0]-X1[0],X2[1]-X1[1]],dy=[Y2[0]-Y1[0],Y2[1]-Y1[1]];
+  const det=dy[0]*dx[1]-dx[0]*dy[1];                         // intersection of the two axis lines
+  if(Math.abs(det)<1e-9)return{err:'The X and Y axes are parallel'};
+  const d=[Y1[0]-X1[0],Y1[1]-X1[1]],a=(d[0]*(-dy[1])+dy[0]*d[1])/det,b=(dx[0]*d[1]-dx[1]*d[0])/det;
+  const O=[X1[0]+a*dx[0],X1[1]+a*dx[1]],det2=dx[0]*dy[1]-dx[1]*dy[0];
+  // P-O = u*dx + v*dy ; u(X1)=-a, u(X2)=1-a ; v(Y1)=-b, v(Y2)=1-b
+  return{xl,yl,f(p){const q=[p[0]-O[0],p[1]-O[1]],u=(q[0]*dy[1]-dy[0]*q[1])/det2,w=(dx[0]*q[1]-dx[1]*q[0])/det2;
+    let X=x1+(u+a)*(x2-x1),Y=y1+(w+b)*(y2-y1);return[xl?Math.pow(10,X):X,yl?Math.pow(10,Y):Y]}};
+}
+let CAL=null;
+function recal(){CAL=buildCal();const ok=CAL&&!CAL.err;
+  $('calMsg').textContent=CAL&&CAL.err?CAL.err:ok?'Calibrated ✓':(S.cal.step>=0&&S.cal.step<4?`Click the position of ${LABELS[S.cal.step]} on the image`:'Place the 4 points and enter their values');
+  $('calMsg').className='msg'+(CAL&&CAL.err?' err':'');
+  $('thX').textContent=ok?'X':'X (px)';$('thY').textContent=ok?'Y':'Y (px)';
+  document.querySelectorAll('#calGrid .dot').forEach((d,i)=>d.classList.toggle('ok',!!S.cal.pts[i]));
+  renderTable();draw()}
+(function(){const g=$('calGrid');LABELS.forEach((l,i)=>{g.insertAdjacentHTML('beforeend',`<span>${l}</span><span><span class="dot"></span> <span class="px" id="px${i}">not set</span></span><input type="text" id="cv${i}" placeholder="value" aria-label="${l} value">`);
+  $('cv'+i).addEventListener('input',e=>{S.cal.vals[i]=e.target.value;recal()})})})();
+function updCalPx(){S.cal.pts.forEach((p,i)=>$('px'+i).textContent=p?`${p[0].toFixed(1)}, ${p[1].toFixed(1)}`:'not set')}
+$('xs').onchange=$('ys').onchange=recal;
+$('bCal').onclick=()=>{if(!S.img)return;S.cal.pts=[null,null,null,null];S.cal.step=0;setTool('cal');updCalPx();recal()};
+$('bCalReset').onclick=()=>{S.cal.pts=[null,null,null,null];S.cal.step=-1;S.cal.vals=['','','',''];[0,1,2,3].forEach(i=>$('cv'+i).value='');if(S.tool==='cal')setTool('edit');updCalPx();recal()};
+
+// ---------- image ----------
+function setImage(img){
+  const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+  const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0);
+  S.img=img;S.imgC=c;S.w=c.width;S.h=c.height;S.imgData=g.getImageData(0,0,S.w,S.h);
+  S.mask=null;S.maskC=null;S.region=null;S.color=null;$('swTxt').textContent='no colour';$('sw').style.background='';
+  S.sets.forEach(d=>d.pts=[]);S.sel=null;S.undo=[];
+  $('drop').style.display='none';fit();recal();updMask();
+}
+function loadFile(f){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();i.onload=()=>{setImage(i);URL.revokeObjectURL(u)};i.src=u}
+$('bOpen').onclick=()=>$('file').click();$('file').onchange=e=>loadFile(e.target.files[0]);
+$('bExample').onclick=()=>{const i=new Image();i.onload=()=>setImage(i);i.src=EXAMPLE};
+['dragover','dragenter'].forEach(ev=>$('stage').addEventListener(ev,e=>{e.preventDefault()}));
+$('stage').addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfer.files[0])});
+document.addEventListener('paste',e=>{if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type==='text')return;
+  for(const it of e.clipboardData.items)if(it.type.startsWith('image/')){loadFile(it.getAsFile());e.preventDefault();return}});
+
+// ---------- view ----------
+function size(){const r=$('stage').getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);return{w:r.width,h:r.height,dpr}}
+function fit(){const {w,h}=size();if(!S.img)return;S.s=Math.min(w/S.w,h/S.h)*.96;S.tx=(w-S.w*S.s)/2;S.ty=(h-S.h*S.s)/2;draw()}
+function zoomAt(f,cx,cy){const {w,h}=size();cx=cx??w/2;cy=cy??h/2;const ns=Math.min(60,Math.max(.05,S.s*f));
+  S.tx=cx-(cx-S.tx)*ns/S.s;S.ty=cy-(cy-S.ty)*ns/S.s;S.s=ns;draw()}
+$('zIn').onclick=()=>zoomAt(1.4);$('zOut').onclick=()=>zoomAt(1/1.4);$('zFit').onclick=fit;
+$('z11').onclick=()=>{const {w,h}=size();S.s=1;S.tx=(w-S.w)/2;S.ty=(h-S.h)/2;draw()};
+window.addEventListener('resize',()=>{fit()});
+const toImg=(sx,sy)=>[(sx-S.tx)/S.s,(sy-S.ty)/S.s],toScr=(x,y)=>[x*S.s+S.tx,y*S.s+S.ty];
+const evPos=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+
+// ---------- drawing ----------
+function marker(g,x,y,col,lab,r=7){g.strokeStyle=col;g.lineWidth=2;g.beginPath();g.moveTo(x-r,y);g.lineTo(x+r,y);g.moveTo(x,y-r);g.lineTo(x,y+r);g.stroke();
+  if(lab){g.fillStyle=col;g.font='600 11px Inter,sans-serif';g.fillText(lab,x+r+2,y-r)}}
+function draw(){
+  const dpr=window.devicePixelRatio||1,W=cv.width/dpr,H=cv.height/dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  if(!S.img)return;
+  ctx.imageSmoothingEnabled=S.s<3;
+  ctx.setTransform(dpr*S.s,0,0,dpr*S.s,dpr*S.tx,dpr*S.ty);ctx.drawImage(S.img,0,0);
+  if(S.maskC&&$('showMask').checked){ctx.imageSmoothingEnabled=false;ctx.drawImage(S.maskC,0,0)}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(S.region){const r=S.region,[a,b]=toScr(r.x0,r.y0),[c,d]=toScr(r.x1,r.y1);ctx.strokeStyle='#a8623a';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.strokeRect(a,b,c-a,d-b);ctx.setLineDash([])}
+  S.cal.pts.forEach((p,i)=>{if(p){const [x,y]=toScr(p[0],p[1]);marker(ctx,x,y,i<2?'#1f5fbf':'#2f8f83',LABELS[i],9)}});
+  S.sets.forEach((ds,k)=>{ds.pts.forEach((p,i)=>{const [x,y]=toScr(p[0],p[1]),sel=S.sel&&S.sel.set===k&&S.sel.idx===i;
+    ctx.beginPath();ctx.arc(x,y,sel?5.5:3.5,0,7);ctx.fillStyle=ds.color;ctx.globalAlpha=k===S.active?1:.55;ctx.fill();
+    ctx.lineWidth=sel?2:1;ctx.strokeStyle=sel?'#232220':'#fff';ctx.stroke();ctx.globalAlpha=1})});
+}
+function drawLoupe(ix,iy){
+  if(!S.img){loupe.style.display='none';return}
+  loupe.style.display='block';const R=15,N=loupe.width;lg.imageSmoothingEnabled=false;lg.fillStyle='#fff';lg.fillRect(0,0,N,N);
+  const sx=Math.floor(ix)-R,sy=Math.floor(iy)-R,k=N/(2*R);
+  const x0=Math.max(0,sx),y0=Math.max(0,sy),x1=Math.min(S.w,sx+2*R),y1=Math.min(S.h,sy+2*R);
+  if(x1>x0&&y1>y0)lg.drawImage(S.imgC,x0,y0,x1-x0,y1-y0,(x0-sx)*k,(y0-sy)*k,(x1-x0)*k,(y1-y0)*k);
+  const cx=(ix-Math.floor(ix)+R)*k,cy=(iy-Math.floor(iy)+R)*k;
+  lg.strokeStyle='#a8623a';lg.lineWidth=1;lg.beginPath();lg.moveTo(cx,0);lg.lineTo(cx,N);lg.moveTo(0,cy);lg.lineTo(N,cy);lg.stroke();
+  lg.strokeStyle='#fff';lg.beginPath();lg.arc(cx,cy,4,0,7);lg.stroke();
+}
+
+// ---------- datasets, undo ----------
+const A=()=>S.sets[S.active];
+function pushUndo(){S.undo.push(JSON.stringify(S.sets.map(d=>d.pts)));if(S.undo.length>60)S.undo.shift()}
+function doUndo(){const t=S.undo.pop();if(!t)return;JSON.parse(t).forEach((p,i)=>{if(S.sets[i])S.sets[i].pts=p});S.sel=null;renderTable();draw()}
+function renderDs(){$('dsSel').innerHTML=S.sets.map((d,i)=>`<option value="${i}"${i===S.active?' selected':''}>${esc(d.name)} (${d.pts.length})</option>`).join('');
+  $('dsName').value=A().name;$('dsColor').value=A().color}
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+$('dsSel').onchange=e=>{S.active=+e.target.value;S.sel=null;renderDs();renderTable();draw()};
+$('dsNew').onclick=()=>{S.sets.push({name:'Dataset '+(S.sets.length+1),color:COLORS[S.sets.length%COLORS.length],pts:[]});S.active=S.sets.length-1;S.sel=null;renderDs();renderTable();draw()};
+$('dsDel').onclick=()=>{if(S.sets.length===1){pushUndo();A().pts=[]}else{S.sets.splice(S.active,1);S.active=0}S.sel=null;renderDs();renderTable();draw()};
+$('dsName').oninput=e=>{A().name=e.target.value||'Dataset';const o=$('dsSel').options[S.active];if(o)o.textContent=`${A().name} (${A().pts.length})`};
+$('dsColor').oninput=e=>{A().color=e.target.value;draw()};
+$('bClear').onclick=()=>{pushUndo();A().pts=[];S.sel=null;renderDs();renderTable();draw()};
+
+// ---------- tools ----------
+function setTool(t){S.tool=t;[['tEdit','edit'],['tPan','pan'],['tRegion','region'],['bPick','pick'],['bCal','cal']].forEach(([id,n])=>$(id).classList.toggle('on',n===t));
+  cv.style.cursor=t==='pan'?'grab':'crosshair'}
+$('tEdit').onclick=()=>setTool('edit');$('tPan').onclick=()=>setTool('pan');$('tRegion').onclick=()=>setTool('region');
+$('bPick').onclick=()=>{if(S.img)setTool('pick')};
+$('bRegionClear').onclick=()=>{S.region=null;updMask();draw()};
+
+function hit(sx,sy){for(let k=0;k<S.sets.length;k++){const ds=S.sets[k];if(k!==S.active)continue;
+  for(let i=ds.pts.length-1;i>=0;i--){const [x,y]=toScr(ds.pts[i][0],ds.pts[i][1]);if(Math.hypot(x-sx,y-sy)<=8)return{set:k,idx:i}}}return null}
+function hitCal(sx,sy){for(let i=0;i<4;i++){const p=S.cal.pts[i];if(!p)continue;const [x,y]=toScr(p[0],p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
+let drag=null;
+cv.addEventListener('pointerdown',e=>{
+  if(!S.img)return;cv.setPointerCapture(e.pointerId);const [sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
+  if(e.button===1||S.space||S.tool==='pan'){drag={k:'pan',sx,sy,tx:S.tx,ty:S.ty};cv.style.cursor='grabbing';return}
+  if(e.button===2)return;
+  if(S.tool==='cal'){if(S.cal.step>=0&&S.cal.step<4){S.cal.pts[S.cal.step]=[ix,iy];S.cal.step++;updCalPx();if(S.cal.step>=4){setTool('edit');S.cal.step=-1;$('cv0').focus()}recal()}return}
+  if(S.tool==='pick'){pick(ix,iy);setTool('edit');return}
+  if(S.tool==='region'){drag={k:'region',x:ix,y:iy};S.region={x0:ix,y0:iy,x1:ix,y1:iy};return}
+  const c=hitCal(sx,sy);if(c>=0){drag={k:'cal',i:c};return}
+  const h=hit(sx,sy);
+  if(h){S.sel=h;pushUndo();drag={k:'pt',h,moved:false}}
+  else{pushUndo();A().pts.push([ix,iy]);S.sel={set:S.active,idx:A().pts.length-1};drag={k:'pt',h:S.sel,moved:true};renderTable()}
+  draw();
+});
+cv.addEventListener('pointermove',e=>{
+  if(!S.img)return;const [sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
+  if(drag){
+    if(drag.k==='pan'){S.tx=drag.tx+sx-drag.sx;S.ty=drag.ty+sy-drag.sy}
+    else if(drag.k==='region'){S.region={x0:Math.min(drag.x,ix),y0:Math.min(drag.y,iy),x1:Math.max(drag.x,ix),y1:Math.max(drag.y,iy)}}
+    else if(drag.k==='cal'){S.cal.pts[drag.i]=[ix,iy];updCalPx();CAL=buildCal()}
+    else if(drag.k==='pt'){const p=S.sets[drag.h.set].pts[drag.h.idx];p[0]=ix;p[1]=iy;drag.moved=true}
+    draw();
+  }
+  readout(ix,iy);drawLoupe(ix,iy);
+});
+cv.addEventListener('pointerup',e=>{
+  if(drag&&drag.k==='region'){const r=S.region;if(r&&(r.x1-r.x0<3||r.y1-r.y0<3))S.region=null;updMask();setTool('edit')}
+  if(drag&&(drag.k==='pt'||drag.k==='cal'))recal();
+  if(drag&&drag.k==='pt')renderDs();
+  drag=null;cv.style.cursor=S.tool==='pan'||S.space?'grab':'crosshair';draw();
+});
+cv.addEventListener('pointerleave',()=>{if(!drag)loupe.style.display='none'});
+cv.addEventListener('wheel',e=>{if(!S.img)return;e.preventDefault();const [sx,sy]=evPos(e);zoomAt(e.deltaY<0?1.2:1/1.2,sx,sy)},{passive:false});
+cv.addEventListener('contextmenu',e=>{e.preventDefault();const [sx,sy]=evPos(e),h=hit(sx,sy);if(h){pushUndo();S.sets[h.set].pts.splice(h.idx,1);S.sel=null;renderDs();renderTable();draw()}});
+function readout(ix,iy){let t=`px ${ix.toFixed(1)}, ${iy.toFixed(1)}`;if(CAL&&!CAL.err){const [x,y]=CAL.f([ix,iy]);t+=`  →  x ${fmt(x)}, y ${fmt(y)}`}$('ro').textContent=t}
+document.addEventListener('keydown',e=>{
+  const tag=document.activeElement.tagName;if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return;
+  if(e.code==='Space'){S.space=true;cv.style.cursor='grab';e.preventDefault();return}
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){doUndo();e.preventDefault();return}
+  if(e.key==='Escape'){setTool('edit');return}
+  if(S.sel){const p=S.sets[S.sel.set].pts[S.sel.idx];if(!p)return;
+    if(e.key==='Delete'||e.key==='Backspace'){pushUndo();S.sets[S.sel.set].pts.splice(S.sel.idx,1);S.sel=null;renderDs();renderTable();draw();e.preventDefault();return}
+    const st=(e.shiftKey?10:1)/Math.max(1,S.s>1?1:1),d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+    if(d){pushUndo();p[0]+=d[0]*st;p[1]+=d[1]*st;renderTable();draw();e.preventDefault()}}
+});
+document.addEventListener('keyup',e=>{if(e.code==='Space'){S.space=false;cv.style.cursor=S.tool==='pan'?'grab':'crosshair'}});
+
+// ---------- table & export ----------
+function fmt(v){if(!isFinite(v))return'—';const a=Math.abs(v);return(a!==0&&(a<1e-3||a>=1e7))?v.toExponential(5):String(+v.toPrecision(7))}
+function valuesOf(ds){const ok=CAL&&!CAL.err;return ds.pts.map(p=>ok?CAL.f(p):[p[0],p[1]])}
+function renderTable(){
+  const ds=A(),v=valuesOf(ds),n=Math.min(v.length,2000);let h='';
+  for(let i=0;i<n;i++)h+=`<tr data-i="${i}"${S.sel&&S.sel.set===S.active&&S.sel.idx===i?' class="sel"':''}><td>${i+1}</td><td>${fmt(v[i][0])}</td><td>${fmt(v[i][1])}</td></tr>`;
+  if(v.length>n)h+=`<tr><td colspan="3">… ${v.length-n} more rows (all are exported)</td></tr>`;
+  $('tb').innerHTML=h;renderDs();}
+$('tb').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr||tr.dataset.i==null)return;S.sel={set:S.active,idx:+tr.dataset.i};renderTable();draw()});
+function exportText(sep){
+  const all=$('exWhich').value==='all',sets=all?S.sets:[A()],lines=[];
+  const ok=CAL&&!CAL.err,hx=ok?'x':'x_px',hy=ok?'y':'y_px';
+  lines.push((all?['dataset',hx,hy]:[hx,hy]).join(sep));
+  sets.forEach(ds=>{let v=valuesOf(ds);if($('sortX').checked)v=v.slice().sort((a,b)=>a[0]-b[0]);
+    v.forEach(r=>lines.push((all?[ds.name.replace(/[\t,]/g,' '),r[0],r[1]]:[r[0],r[1]]).join(sep)))});
+  return lines.join('\n');}
+$('bCopy').onclick=async()=>{const t=exportText('\t');try{await navigator.clipboard.writeText(t);$('exportMsg').textContent='Copied — paste into Excel.'}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();$('exportMsg').textContent='Copied — paste into Excel.'}};
+$('bCsv').onclick=()=>{const b=new Blob([exportText(',')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='digitized.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);$('exportMsg').textContent='CSV downloaded.'};
+
+// ---------- auto-extraction ----------
+function pick(ix,iy){const x=Math.min(S.w-1,Math.max(0,Math.floor(ix))),y=Math.min(S.h-1,Math.max(0,Math.floor(iy))),d=S.imgData.data;
+  let r=0,g=0,b=0,n=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++){const xx=x+i,yy=y+j;if(xx<0||yy<0||xx>=S.w||yy>=S.h)continue;const o=(yy*S.w+xx)*4;r+=d[o];g+=d[o+1];b+=d[o+2];n++}
+  S.color=[r/n,g/n,b/n];const hex='#'+S.color.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');$('sw').style.background=hex;$('swTxt').textContent=hex;updMask()}
+let maskT=null;function updMask(){clearTimeout(maskT);maskT=setTimeout(computeMask,60)}
+function regionBox(){const r=S.region;return r?{x0:Math.max(0,Math.floor(r.x0)),y0:Math.max(0,Math.floor(r.y0)),x1:Math.min(S.w,Math.ceil(r.x1)),y1:Math.min(S.h,Math.ceil(r.y1))}:{x0:0,y0:0,x1:S.w,y1:S.h}}
+function computeMask(){
+  if(!S.img||!S.color){S.mask=null;S.maskC=null;draw();return}
+  const {w,h}=S,d=S.imgData.data,t2=(+$('tol').value)**2,[cr,cg,cb]=S.color,box=regionBox(),m=new Uint8Array(w*h);
+  const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d'),im=g.createImageData(w,h),o=im.data;
+  for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const i=y*w+x,p=i*4;
+    if((d[p]-cr)**2+(d[p+1]-cg)**2+(d[p+2]-cb)**2<=t2){m[i]=1;o[p]=255;o[p+1]=43;o[p+2]=214;o[p+3]=170}}
+  g.putImageData(im,0,0);S.mask=m;S.maskC=c;draw()}
+$('tol').oninput=e=>{$('tolV').textContent=e.target.value;updMask()};$('showMask').onchange=draw;
+$('bExtract').onclick=()=>{
+  clearTimeout(maskT);computeMask();                // make sure the mask matches the current colour/tolerance/region
+  if(!S.mask){$('exMsg').textContent='Pick the curve colour first.';return}
+  const {w,h}=S,m=S.mask,box=regionBox(),mode=$('mode').value,out=[];
+  if(mode==='curve'){
+    const st=Math.max(1,+$('step').value|0);let prev=null;
+    for(let x=box.x0;x<box.x1;x+=st){const runs=[];let y=box.y0;
+      while(y<box.y1){if(m[y*w+x]){let y2=y;while(y2+1<box.y1&&m[(y2+1)*w+x])y2++;runs.push({c:(y+y2+1)/2,n:y2-y+1});y=y2+1}else y++}
+      if(!runs.length)continue;
+      const r=prev==null?runs.reduce((a,b)=>b.n>a.n?b:a):runs.reduce((a,b)=>Math.abs(b.c-prev)<Math.abs(a.c-prev)?b:a);
+      prev=r.c;out.push([x+.5,r.c])}
+  }else{
+    const minA=Math.max(1,+$('minA').value|0),seen=new Uint8Array(w*h),stack=new Int32Array(w*h);
+    for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const i=y*w+x;if(!m[i]||seen[i])continue;
+      let sp=0,n=0,sx=0,sy=0;stack[sp++]=i;seen[i]=1;
+      while(sp){const j=stack[--sp],jx=j%w,jy=(j/w)|0;n++;sx+=jx+.5;sy+=jy+.5;
+        if(jx>box.x0){const k=j-1;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
+        if(jx<box.x1-1){const k=j+1;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
+        if(jy>box.y0){const k=j-w;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
+        if(jy<box.y1-1){const k=j+w;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}}
+      if(n>=minA)out.push([sx/n,sy/n])}
+  }
+  if(!out.length){$('exMsg').textContent='No matching pixels in the region. Increase the tolerance or check the colour.';return}
+  pushUndo();A().pts.push(...out);renderTable();draw();
+  $('exMsg').textContent=`${out.length} point${out.length>1?'s':''} added to “${A().name}”.`;
+};
+
+// test/debug hook
+window.DG={S,toScr,buildCal:()=>CAL,exportText,imgToScreen:(x,y)=>{const r=cv.getBoundingClientRect(),p=toScr(x,y);return[r.left+p[0],r.top+p[1]]}};
+setTool('edit');recal();renderDs();draw();
+</script></body></html>
