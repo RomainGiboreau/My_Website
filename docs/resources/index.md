@@ -220,7 +220,6 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [OilPrice — World News](https://oilprice.com/Latest-Energy-News/World-News/) — Global · energy market news
 - [Upstream Online](https://www.upstreamonline.com/) — Global · upstream oil & gas news (Oslo, since 1996)
 
-*Official [company press releases](company-announcements.md) — exploration & discovery announcements — are tracked on a dedicated page.*
 - [Petroleum & Energy Insights](https://www.petroleumenergyinsights.com) — Guyana-Suriname Basin, Caribbean · petroleum systems analysis blog
 - [The Petroleum System Blog](https://petroleumsystem.blogspot.com/) — Global · petroleum systems, migration & seal analysis blog
 - [lhjelm-dk — Streamlit apps](https://share.streamlit.io/user/lhjelm-dk) — personal projects · to watch
