@@ -311,6 +311,7 @@ function renderTable(){
   if(v.length>n)h+=`<tr><td colspan="3">… ${v.length-n} more rows (all are exported)</td></tr>`;
   $('tb').innerHTML=h;renderDs();}
 $('tb').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr||tr.dataset.i==null)return;S.sel={set:S.active,idx:+tr.dataset.i};renderTable();draw()});
+let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2500)}
 function exportText(sep){
   const all=$('exWhich').value==='all',sets=all?S.sets:[A()],lines=[];
   const ok=CAL&&!CAL.err,hx=ok?'x':'x_px',hy=ok?'y':'y_px';
@@ -318,8 +319,8 @@ function exportText(sep){
   sets.forEach(ds=>{let v=valuesOf(ds);if($('sortX').checked)v=v.slice().sort((a,b)=>a[0]-b[0]);
     v.forEach(r=>lines.push((all?[ds.name.replace(/[\t,]/g,' '),r[0],r[1]]:[r[0],r[1]]).join(sep)))});
   return lines.join('\n');}
-$('bCopy').onclick=async()=>{const t=exportText('\t');try{await navigator.clipboard.writeText(t);$('exportMsg').textContent='Copied — paste into Excel.'}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();$('exportMsg').textContent='Copied — paste into Excel.'}};
-$('bCsv').onclick=()=>{const b=new Blob([exportText(',')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='digitized.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);$('exportMsg').textContent='CSV downloaded.'};
+$('bCopy').onclick=async()=>{const t=exportText('\t');try{await navigator.clipboard.writeText(t);toast('Copied — paste into Excel.')}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Copied — paste into Excel.')}};
+$('bCsv').onclick=()=>{if(!A().pts.length&&$('exWhich').value!=='all'){toast('Nothing to export: the active dataset is empty.');return}const b=new Blob([exportText(',')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='digitized.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('CSV downloaded.')};
 
 // ---------- auto-extraction ----------
 function pick(ix,iy){const x=Math.min(S.w-1,Math.max(0,Math.floor(ix))),y=Math.min(S.h-1,Math.max(0,Math.floor(iy))),d=S.imgData.data;

@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Map digitizer</title>
+<meta name="description" content="Extract a regular XY grid of values from a map image with a continuous property (e.g. a depth map) using its colour legend. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.lut{display:block;width:100%;height:14px;border:1px solid var(--line);border-radius:3px;margin:4px 0 2px;background:var(--alt)}
+.tick{display:grid;grid-template-columns:22px 1fr 78px 20px;gap:4px;align-items:center;font-size:.8rem;margin:3px 0}
+.tick input{width:100%}.tick button{padding:0 4px;line-height:1.2}
+.grid3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid3 input{width:100%}
+.tools .sep{width:1px;background:var(--line);margin:0 2px}
+.dpanel{margin-top:12px}
+</style></head><body>
+<div class="top"><h1>Map digitizer</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <label><input type="checkbox" id="skipNaN" checked>Skip empty nodes</label>
+  <button class="pri" id="bCopy" title="Copy x, y, value as tab-separated text, ready to paste into Excel">Copy XYZ</button>
+  <button id="bCsv">XYZ CSV</button>
+  <button id="bMat" title="Matrix CSV: one row per y (top = ymax), one column per x">Matrix CSV</button>
+  <button id="bGrd" title="Surfer ASCII grid (DSAA), empty nodes = 1.70141e38">Surfer .grd</button>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the images are never uploaded. The value of each grid node is read from its colour by matching it to the colour legend (CIE Lab distance), then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes.">?</span>
+ </div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Map image<span class="tt" tabindex="0" data-tip="Open a file, drop it on the canvas, or paste a screenshot with Ctrl+V. The map should be a flat colour-filled map (no perspective). The image never leaves your browser.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button class="pri" id="bOpen">Open map…</button><button id="bExample">Try an example</button></div>
+  <input type="file" id="file" accept="image/*" hidden><input type="file" id="fileLeg" accept="image/*" hidden>
+  </div>
+ </section>
+ <section class="panel"><h2><span class="n">2</span>Legend<span class="tt" tabindex="0" data-tip="The colour bar is read along the line joining your first and last tick. Click ticks along the bar, from one end to the other, at least 2 (ideally the two ends); type the value of each. Intermediate ticks are optional and handle non-linear bars. The legend can be in the map image or in a separate image.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><label class="inl">Legend in <select id="legSrc"><option value="same">the map image</option><option value="sep">a separate image</option></select></label><button id="bOpenLeg" hidden>Open legend…</button></div>
+  <div class="row"><label class="inl">Value scale <select id="vs"><option value="lin">linear</option><option value="log">log</option></select></label></div>
+  <div class="row"><button id="bTick">Click ticks on the bar</button><button id="bTickClear">Clear</button></div>
+  <div id="tickList"></div>
+  <canvas class="lut" id="lutC" width="300" height="14"></canvas>
+  <div class="msg" id="lutMsg"></div>
+  </div>
+ </section>
+ <section class="panel"><h2><span class="n">3</span>Map coordinates<span class="tt" tabindex="0" data-tip="Click two points on a horizontal graticule line or axis (X1, X2), then two on a vertical one (Y1, Y2), and type their coordinates as printed on the map. Axes may be slightly rotated. Without calibration, the grid is defined in image pixels (y downward).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button id="bCal">Calibrate</button><button id="bCalReset">Reset</button></div>
+  <div class="grid2" id="calGrid"></div>
+  <div class="msg" id="calMsg"></div></div>
+ </section>
+ <section class="panel"><h2><span class="n">4</span>Grid<span class="tt" tabindex="0" data-tip="Regular grid in map coordinates. Draw a region on the map to set the bounds, or use the calibration extent. Nodes are xmin, xmin+dx, … up to xmax (same for y).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button id="tRegion">Draw region</button><button id="bExtent">Calibration extent</button></div>
+  <div class="grid3"><span>xmin</span><input type="text" id="gx0"><span>xmax</span><input type="text" id="gx1">
+   <span>ymin</span><input type="text" id="gy0"><span>ymax</span><input type="text" id="gy1">
+   <span>dx</span><input type="text" id="gdx"><span>dy</span><input type="text" id="gdy"></div>
+  <div class="msg" id="gMsg"></div></div>
+ </section>
+ <section class="panel"><h2><span class="n">5</span>Extract<span class="tt" tabindex="0" data-tip="Colour tolerance: maximum CIE Lab distance between a pixel and its closest legend colour (about 2 is barely visible, 10 is clearly different). Window: half-size in pixels of the square around each node whose matching pixels are median-filtered; it removes isolines and labels. Min. matching: share of window pixels that must match the legend, otherwise the node stays empty.">?</span><i class="chev"></i></h2>
+  <div class="body"><label class="inl">Colour tolerance <input type="range" id="tol" min="2" max="40" value="12"><span id="tolV" style="width:28px;text-align:right">12</span></label>
+  <div class="row"><label class="inl">Window ± <input type="number" id="win" min="0" max="15" value="2" style="width:52px">px</label>
+   <label class="inl">Min. matching <input type="number" id="minf" min="1" max="100" value="30" style="width:56px">%</label></div>
+  <div class="row"><button class="pri" id="bExtract">Extract grid</button></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label></div>
+  <div class="msg" id="exMsg"></div></div>
+ </section>
+</aside>
+<main>
+ <div class="stage" id="stage">
+  <div class="drop" id="drop"><div><b>Drop a map image here</b><br>or use “Open map…”, paste with Ctrl+V, or try the example</div></div>
+  <canvas id="cv"></canvas>
+  <div class="tools"><button id="zIn" title="Zoom in">+</button><button id="zOut" title="Zoom out">−</button><button id="zFit" title="Fit to window">Fit</button><button id="z11" title="Actual size">1:1</button>
+   <span class="sep" id="vsep" hidden></span><button id="vMap" class="on" hidden>Map</button><button id="vLeg" hidden>Legend</button></div>
+  <canvas id="loupe" width="150" height="150"></canvas>
+  <div class="ro" id="ro">—</div>
+ </div>
+ <div class="dpanel"><div class="tw"><table><thead><tr><th>#</th><th id="thX">X</th><th id="thY">Y</th><th>Value</th></tr></thead><tbody id="tb"></tbody></table></div></div>
+</main>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
+const newDoc=()=>({img:null,imgC:null,imgData:null,w:0,h:0,s:1,tx:0,ty:0});
+const S={map:newDoc(),leg:newDoc(),sep:false,view:'map',tool:null,space:false,
+  cal:{pts:[null,null,null,null],vals:['','','',''],step:-1},ticks:[],R:null};
+const LD=()=>S.sep?S.leg:S.map;           // document holding the legend
+const CUR=()=>(S.view==='leg'&&S.sep)?S.leg:S.map;
+const LABELS=['X1','X2','Y1','Y2'];
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2500)}
+function fmt(v){if(!isFinite(v))return'—';const a=Math.abs(v);return(a!==0&&(a<1e-3||a>=1e7))?v.toExponential(5):String(+v.toPrecision(7))}
+const num=t=>parseFloat(String(t).replace(',','.'));
+
+// ---------- colour ----------
+function rgb2lab(r,g,b){const f=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)};
+  const R=f(r),G=f(g),B=f(b);
+  let X=(R*.4124564+G*.3575761+B*.1804375)/.95047,Y=(R*.2126729+G*.7151522+B*.072175),Z=(R*.0193339+G*.119192+B*.9503041)/1.08883;
+  const h=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;X=h(X);Y=h(Y);Z=h(Z);return[116*Y-16,500*(X-Y),200*(Y-Z)]}
+
+// ---------- map calibration (linear axes, possibly rotated) ----------
+function buildCal(){
+  const c=S.cal;if(c.pts.some(p=>!p))return null;
+  const v=c.vals.map(num);if(v.some(x=>!isFinite(x)))return null;
+  const [x1,x2,y1,y2]=v;
+  if(x1===x2||y1===y2)return{err:'The two values of an axis must differ'};
+  const [X1,X2,Y1,Y2]=c.pts,dx=[X2[0]-X1[0],X2[1]-X1[1]],dy=[Y2[0]-Y1[0],Y2[1]-Y1[1]];
+  const det=dy[0]*dx[1]-dx[0]*dy[1];
+  if(Math.abs(det)<1e-9)return{err:'The X and Y axes are parallel'};
+  const d=[Y1[0]-X1[0],Y1[1]-X1[1]],a=(d[0]*(-dy[1])+dy[0]*d[1])/det,b=(dx[0]*d[1]-dx[1]*d[0])/det;
+  const O=[X1[0]+a*dx[0],X1[1]+a*dx[1]],det2=dx[0]*dy[1]-dx[1]*dy[0];
+  return{x1,x2,y1,y2,
+    f(p){const q=[p[0]-O[0],p[1]-O[1]],u=(q[0]*dy[1]-dy[0]*q[1])/det2,w=(dx[0]*q[1]-dx[1]*q[0])/det2;
+      return[x1+(u+a)*(x2-x1),y1+(w+b)*(y2-y1)]},
+    inv(X,Y){const u=(X-x1)/(x2-x1)-a,w=(Y-y1)/(y2-y1)-b;return[O[0]+u*dx[0]+w*dy[0],O[1]+u*dx[1]+w*dy[1]]}};
+}
+const PXCAL={f:p=>[p[0],p[1]],inv:(X,Y)=>[X,Y],px:true};
+let CAL=null;
+const GEO=()=>(CAL&&!CAL.err)?CAL:PXCAL;
+function recal(){CAL=buildCal();const ok=CAL&&!CAL.err;
+  $('calMsg').textContent=CAL&&CAL.err?CAL.err:ok?'Calibrated ✓':(S.cal.step>=0&&S.cal.step<4?`Click the position of ${LABELS[S.cal.step]} on the map`:'Place the 4 points and enter their coordinates');
+  $('calMsg').className='msg'+(CAL&&CAL.err?' err':'');
+  $('thX').textContent=ok?'X':'X (px)';$('thY').textContent=ok?'Y':'Y (px)';
+  document.querySelectorAll('#calGrid .dot').forEach((d,i)=>d.classList.toggle('ok',!!S.cal.pts[i]));
+  draw()}
+(function(){const g=$('calGrid');LABELS.forEach((l,i)=>{g.insertAdjacentHTML('beforeend',`<span>${l}</span><span><span class="dot"></span> <span class="px" id="px${i}">not set</span></span><input type="text" id="cv${i}" placeholder="value" aria-label="${l} value">`);
+  $('cv'+i).addEventListener('input',e=>{S.cal.vals[i]=e.target.value;recal()})})})();
+function updCalPx(){S.cal.pts.forEach((p,i)=>$('px'+i).textContent=p?`${p[0].toFixed(1)}, ${p[1].toFixed(1)}`:'not set')}
+$('bCal').onclick=()=>{if(!S.map.img)return;S.cal.pts=[null,null,null,null];S.cal.step=0;setView('map');setTool('cal');updCalPx();recal()};
+$('bCalReset').onclick=()=>{S.cal.pts=[null,null,null,null];S.cal.step=-1;S.cal.vals=['','','',''];[0,1,2,3].forEach(i=>$('cv'+i).value='');if(S.tool==='cal')setTool(null);updCalPx();recal()};
+
+// ---------- images ----------
+function setImage(doc,img){
+  const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+  const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0);
+  doc.img=img;doc.imgC=c;doc.w=c.width;doc.h=c.height;doc.imgData=g.getImageData(0,0,doc.w,doc.h);
+}
+function afterLoad(doc){
+  if(doc===S.map){S.R=null;S.region=null;$('drop').style.display='none'}
+  if(doc===LD()||!S.sep){S.ticks=doc===LD()?[]:S.ticks;renderTicks()}
+  fit();recal();buildLUT();renderTable();$('exMsg').textContent=''}
+function loadFile(f,target){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();
+  i.onload=()=>{const doc=target==='leg'&&S.sep?S.leg:S.map;setImage(doc,i);URL.revokeObjectURL(u);afterLoad(doc)};i.src=u}
+const curTarget=()=>(S.view==='leg'&&S.sep)?'leg':'map';
+$('bOpen').onclick=()=>{$('file').dataset.t='map';$('file').click()};
+$('file').onchange=e=>{loadFile(e.target.files[0],'map');e.target.value=''};
+$('bOpenLeg').onclick=()=>$('fileLeg').click();
+$('fileLeg').onchange=e=>{loadFile(e.target.files[0],'leg');setView('leg');e.target.value=''};
+['dragover','dragenter'].forEach(ev=>$('stage').addEventListener(ev,e=>e.preventDefault()));
+$('stage').addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfer.files[0],curTarget())});
+document.addEventListener('paste',e=>{if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type==='text')return;
+  for(const it of e.clipboardData.items)if(it.type.startsWith('image/')){loadFile(it.getAsFile(),curTarget());e.preventDefault();return}});
+$('legSrc').onchange=e=>{S.sep=e.target.value==='sep';$('bOpenLeg').hidden=!S.sep;['vsep','vMap','vLeg'].forEach(i=>$(i).hidden=!S.sep);
+  S.ticks=[];renderTicks();setView('map');buildLUT();draw()};
+function setView(v){if(v==='leg'&&!S.sep)v='map';S.view=v;$('vMap').classList.toggle('on',v==='map');$('vLeg').classList.toggle('on',v==='leg');fit()}
+$('vMap').onclick=()=>setView('map');$('vLeg').onclick=()=>setView('leg');
+
+// ---------- example (drawn procedurally) ----------
+const EXZ=(x,y)=>1800+520*Math.sin(x/17)*Math.cos(y/13)+7*x-4*y;   // synthetic depth, m
+const VIR=[[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
+function vir(t){t=Math.min(1,Math.max(0,t))*4;const i=Math.min(3,Math.floor(t)),f=t-i;return VIR[i].map((c,k)=>Math.round(c+(VIR[i+1][k]-c)*f))}
+function makeExample(){
+  const W=720,H=420,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);
+  const px0=60,py0=30,pw=500,ph=300,X0=0,X1=100,Y0=0,Y1=60,zmin=1000,zmax=2600;
+  const im=g.createImageData(pw,ph);
+  for(let j=0;j<ph;j++)for(let i=0;i<pw;i++){const x=X0+(i+.5)/pw*(X1-X0),y=Y1-(j+.5)/ph*(Y1-Y0),z=EXZ(x,y),[r,gg,b]=vir((z-zmin)/(zmax-zmin)),o=(j*pw+i)*4;im.data[o]=r;im.data[o+1]=gg;im.data[o+2]=b;im.data[o+3]=255}
+  g.putImageData(im,px0,py0);
+  g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1;     // graticule + a few isolines to test robustness
+  for(let x=0;x<=100;x+=20){g.beginPath();g.moveTo(px0+x/100*pw+.5,py0);g.lineTo(px0+x/100*pw+.5,py0+ph);g.stroke()}
+  for(let y=0;y<=60;y+=20){const yy=py0+ph-y/60*ph;g.beginPath();g.moveTo(px0,yy+.5);g.lineTo(px0+pw,yy+.5);g.stroke()}
+  g.strokeStyle='#000';g.strokeRect(px0+.5,py0+.5,pw,ph);g.fillStyle='#000';g.font='12px sans-serif';
+  for(let x=0;x<=100;x+=20)g.fillText(x,px0+x/100*pw-8,py0+ph+16);
+  for(let y=0;y<=60;y+=20)g.fillText(y,px0-24,py0+ph-y/60*ph+4);
+  g.fillText('X (km)',px0+pw/2-20,py0+ph+34);g.fillText('Depth (m)',px0+pw+20,py0-8);
+  const bx=px0+pw+20,bw=22;
+  for(let j=0;j<ph;j++){const [r,gg,b]=vir(1-j/(ph-1));g.fillStyle=`rgb(${r},${gg},${b})`;g.fillRect(bx,py0+j,bw,1)}
+  g.strokeStyle='#000';g.strokeRect(bx+.5,py0+.5,bw,ph-1);g.fillStyle='#000';
+  for(let k=0;k<=4;k++){const z=zmin+k*400,yy=py0+ph-1-k/4*(ph-1);g.beginPath();g.moveTo(bx+bw,yy+.5);g.lineTo(bx+bw+5,yy+.5);g.stroke();g.fillText(z,bx+bw+8,yy+4)}
+  return{canvas:c,geo:{px0,py0,pw,ph,bx,bw,zmin,zmax}}}
+$('bExample').onclick=()=>{const e=makeExample();const i=new Image();i.onload=()=>{S.sep=false;$('legSrc').value='same';$('bOpenLeg').hidden=true;['vsep','vMap','vLeg'].forEach(k=>$(k).hidden=true);setView('map');
+  setImage(S.map,i);window.EXGEO=e.geo;afterLoad(S.map)};i.src=e.canvas.toDataURL('image/png')};
+
+// ---------- view ----------
+function size(){const r=$('stage').getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);return{w:r.width,h:r.height,dpr}}
+function fit(){const {w,h}=size(),D=CUR();if(!D.img){draw();return}D.s=Math.min(w/D.w,h/D.h)*.96;D.tx=(w-D.w*D.s)/2;D.ty=(h-D.h*D.s)/2;draw()}
+function zoomAt(f,cx,cy){const {w,h}=size(),D=CUR();cx=cx??w/2;cy=cy??h/2;const ns=Math.min(60,Math.max(.05,D.s*f));
+  D.tx=cx-(cx-D.tx)*ns/D.s;D.ty=cy-(cy-D.ty)*ns/D.s;D.s=ns;draw()}
+$('zIn').onclick=()=>zoomAt(1.4);$('zOut').onclick=()=>zoomAt(1/1.4);$('zFit').onclick=fit;
+$('z11').onclick=()=>{const {w,h}=size(),D=CUR();D.s=1;D.tx=(w-D.w)/2;D.ty=(h-D.h)/2;draw()};
+window.addEventListener('resize',fit);
+const toImg=(sx,sy)=>{const D=CUR();return[(sx-D.tx)/D.s,(sy-D.ty)/D.s]},toScr=(x,y)=>{const D=CUR();return[x*D.s+D.tx,y*D.s+D.ty]};
+const evPos=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+
+// ---------- legend ----------
+let LUT=null,lutCache=new Map();
+function renderTicks(){
+  $('tickList').innerHTML=S.ticks.map((t,i)=>`<div class="tick"><span>T${i+1}</span><span class="px" style="color:var(--mut);font-size:.74rem">${t.p[0].toFixed(0)}, ${t.p[1].toFixed(0)}</span><input type="text" data-i="${i}" value="${esc(t.v)}" placeholder="value" aria-label="Tick ${i+1} value"><button data-d="${i}" title="Remove">×</button></div>`).join('')}
+$('tickList').addEventListener('input',e=>{const i=e.target.dataset.i;if(i==null)return;S.ticks[+i].v=e.target.value;clearTimeout(lutT);lutT=setTimeout(buildLUT,150)});
+$('tickList').addEventListener('click',e=>{const d=e.target.dataset.d;if(d==null)return;S.ticks.splice(+d,1);renderTicks();buildLUT()});
+let lutT=null;
+$('bTick').onclick=()=>{if(!LD().img)return;setView(S.sep?'leg':'map');setTool('tick')};
+$('bTickClear').onclick=()=>{S.ticks=[];renderTicks();buildLUT();if(S.tool==='tick')setTool(null)};
+$('vs').onchange=buildLUT;
+function median(a,n){a=a.subarray(0,n).sort();return a[n>>1]}
+function buildLUT(){
+  LUT=null;lutCache=new Map();const m=$('lutMsg'),lc=$('lutC'),lx=lc.getContext('2d');lx.clearRect(0,0,lc.width,lc.height);
+  m.className='msg';
+  const T=S.ticks.map(t=>({p:t.p,v:num(t.v)}));
+  if(T.length<2){m.textContent='Click at least 2 ticks on the colour bar.';draw();return}
+  if(T.some(t=>!isFinite(t.v))){m.textContent='Enter the value of every tick.';draw();return}
+  const log=$('vs').value==='log';if(log&&T.some(t=>t.v<=0)){m.textContent='Log scale needs positive values.';m.className='msg err';draw();return}
+  const D=LD();if(!D.img){draw();return}
+  const p0=T[0].p,pL=T[T.length-1].p,L=Math.hypot(pL[0]-p0[0],pL[1]-p0[1]);
+  if(L<5){m.textContent='The first and last ticks are too close.';m.className='msg err';draw();return}
+  const dir=[(pL[0]-p0[0])/L,(pL[1]-p0[1])/L],nrm=[-dir[1],dir[0]];
+  const Ts=T.map(t=>({s:(t.p[0]-p0[0])*dir[0]+(t.p[1]-p0[1])*dir[1],v:log?Math.log10(t.v):t.v})).sort((a,b)=>a.s-b.s);
+  for(let i=1;i<Ts.length;i++)if(Ts[i].s-Ts[i-1].s<1){m.textContent='Two ticks are at the same place on the bar.';m.className='msg err';draw();return}
+  const N=512,val=new Float64Array(N),lab=new Float32Array(3*N),rgb=new Uint8Array(3*N),sMin=Ts[0].s,sMax=Ts[Ts.length-1].s,d=D.imgData.data;
+  const bufR=new Uint8Array(15),bufG=new Uint8Array(15),bufB=new Uint8Array(15);let seg=0;
+  for(let k=0;k<N;k++){
+    const s=sMin+(sMax-sMin)*k/(N-1);while(seg<Ts.length-2&&s>Ts[seg+1].s)seg++;
+    const f=(s-Ts[seg].s)/(Ts[seg+1].s-Ts[seg].s);let v=Ts[seg].v+f*(Ts[seg+1].v-Ts[seg].v);val[k]=log?Math.pow(10,v):v;
+    let n=0;for(let q=-3;q<=3;q++){const x=Math.round(p0[0]+dir[0]*s+nrm[0]*q),y=Math.round(p0[1]+dir[1]*s+nrm[1]*q);
+      if(x<0||y<0||x>=D.w||y>=D.h)continue;const o=(y*D.w+x)*4;bufR[n]=d[o];bufG[n]=d[o+1];bufB[n]=d[o+2];n++}
+    if(!n){m.textContent='The tick line leaves the legend image.';m.className='msg err';draw();return}
+    const r=median(bufR,n),g=median(bufG,n),b=median(bufB,n);rgb[3*k]=r;rgb[3*k+1]=g;rgb[3*k+2]=b;const l=rgb2lab(r,g,b);lab[3*k]=l[0];lab[3*k+1]=l[1];lab[3*k+2]=l[2]}
+  LUT={N,val,lab,rgb,vmin:Math.min(val[0],val[N-1]),vmax:Math.max(val[0],val[N-1])};
+  for(let k=0;k<lc.width;k++){const i=Math.round(k/(lc.width-1)*(N-1));lx.fillStyle=`rgb(${rgb[3*i]},${rgb[3*i+1]},${rgb[3*i+2]})`;lx.fillRect(k,0,1,lc.height)}
+  m.textContent=`Colour scale read: ${fmt(val[0])} → ${fmt(val[N-1])}`;draw()}
+function match(r,g,b,tol2){const key=(r<<16)|(g<<8)|b;let c=lutCache.get(key);
+  if(c===undefined){const l=rgb2lab(r,g,b),L=LUT.lab;let best=1e18,bi=-1;for(let k=0;k<LUT.N;k++){const a=l[0]-L[3*k],bb=l[1]-L[3*k+1],cc=l[2]-L[3*k+2],dd=a*a+bb*bb+cc*cc;if(dd<best){best=dd;bi=k}}
+    c=[bi,best];lutCache.set(key,c)}
+  return c[1]<=tol2?c[0]:-1}
+
+// ---------- drawing ----------
+function marker(g,x,y,col,lab,r=7){g.strokeStyle=col;g.lineWidth=2;g.beginPath();g.moveTo(x-r,y);g.lineTo(x+r,y);g.moveTo(x,y-r);g.lineTo(x,y+r);g.stroke();
+  if(lab){g.fillStyle=col;g.font='600 11px Inter,sans-serif';g.fillText(lab,x+r+2,y-r)}}
+function gridSpec(){const v=['gx0','gx1','gy0','gy1','gdx','gdy'].map(i=>num($(i).value));
+  if(v.some(x=>!isFinite(x)))return{err:'Fill in xmin, xmax, ymin, ymax, dx, dy.'};
+  const [x0,x1,y0,y1,dx,dy]=v;if(dx<=0||dy<=0)return{err:'dx and dy must be positive.'};if(x1<x0||y1<y0)return{err:'max must be ≥ min.'};
+  const nx=Math.floor((x1-x0)/dx+1e-9)+1,ny=Math.floor((y1-y0)/dy+1e-9)+1;
+  if(nx*ny>300000)return{err:`Too many nodes (${nx}×${ny}); increase dx, dy.`};return{x0,y0,dx,dy,nx,ny}}
+function draw(){
+  const dpr=window.devicePixelRatio||1,W=cv.width/dpr,H=cv.height/dpr,D=CUR();
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  if(!D.img)return;
+  ctx.imageSmoothingEnabled=D.s<3;
+  ctx.setTransform(dpr*D.s,0,0,dpr*D.s,dpr*D.tx,dpr*D.ty);ctx.drawImage(D.img,0,0);
+  const isMap=D===S.map;
+  if(isMap&&S.R&&$('showR').checked&&S.R.canvas){const R=S.R,G=GEO(),o=G.inv(R.x0,R.y0),a=G.inv(R.x0+R.dx,R.y0),b=G.inv(R.x0,R.y0+R.dy);
+    const ax=[a[0]-o[0],a[1]-o[1]],ay=[b[0]-o[0],b[1]-o[1]];ctx.imageSmoothingEnabled=false;ctx.globalAlpha=.8;
+    ctx.transform(ax[0],ax[1],ay[0],ay[1],o[0]-.5*ax[0]-.5*ay[0],o[1]-.5*ax[1]-.5*ay[1]);ctx.drawImage(R.canvas,0,0);ctx.globalAlpha=1}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(isMap&&S.region){const r=S.region,[a,b]=toScr(r.x0,r.y0),[c,d]=toScr(r.x1,r.y1);ctx.strokeStyle='#a8623a';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.strokeRect(a,b,c-a,d-b);ctx.setLineDash([])}
+  if(isMap&&S.R&&$('showN').checked){const R=S.R,G=GEO();ctx.lineWidth=1;
+    const rad=Math.max(1.5,Math.min(5,Math.min(R.dx,R.dy)*0+3));
+    for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const k=j*R.nx+i,p=G.inv(R.x0+i*R.dx,R.y0+j*R.dy),[x,y]=toScr(p[0],p[1]);if(x<-5||y<-5||x>W+5||y>H+5)continue;
+      const id=R.idx[k];ctx.beginPath();ctx.arc(x,y,rad,0,7);
+      if(id<0){ctx.strokeStyle='#d63b32';ctx.stroke()}else{ctx.fillStyle=`rgb(${R.lut.rgb[3*id]},${R.lut.rgb[3*id+1]},${R.lut.rgb[3*id+2]})`;ctx.fill();ctx.strokeStyle='#232220';ctx.stroke()}}}
+  if(isMap)S.cal.pts.forEach((p,i)=>{if(p){const [x,y]=toScr(p[0],p[1]);marker(ctx,x,y,i<2?'#1f5fbf':'#2f8f83',LABELS[i],9)}});
+  if(D===LD()&&S.ticks.length){
+    if(S.ticks.length>1){const a=toScr(...S.ticks[0].p),b=toScr(...S.ticks[S.ticks.length-1].p);ctx.strokeStyle='rgba(168,98,58,.9)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([])}
+    S.ticks.forEach((t,i)=>{const [x,y]=toScr(t.p[0],t.p[1]);marker(ctx,x,y,'#a8623a','T'+(i+1)+(t.v!==''?' = '+t.v:''),7)})}
+}
+function drawLoupe(ix,iy){const D=CUR();
+  if(!D.img){loupe.style.display='none';return}
+  loupe.style.display='block';const R=15,N=loupe.width;lg.imageSmoothingEnabled=false;lg.fillStyle='#fff';lg.fillRect(0,0,N,N);
+  const sx=Math.floor(ix)-R,sy=Math.floor(iy)-R,k=N/(2*R);
+  const x0=Math.max(0,sx),y0=Math.max(0,sy),x1=Math.min(D.w,sx+2*R),y1=Math.min(D.h,sy+2*R);
+  if(x1>x0&&y1>y0)lg.drawImage(D.imgC,x0,y0,x1-x0,y1-y0,(x0-sx)*k,(y0-sy)*k,(x1-x0)*k,(y1-y0)*k);
+  const cx=(ix-Math.floor(ix)+R)*k,cy=(iy-Math.floor(iy)+R)*k;
+  lg.strokeStyle='#a8623a';lg.lineWidth=1;lg.beginPath();lg.moveTo(cx,0);lg.lineTo(cx,N);lg.moveTo(0,cy);lg.lineTo(N,cy);lg.stroke();
+  lg.strokeStyle='#fff';lg.beginPath();lg.arc(cx,cy,4,0,7);lg.stroke()}
+
+// ---------- tools & pointer ----------
+function setTool(t){S.tool=t;[['bCal','cal'],['bTick','tick'],['tRegion','region']].forEach(([id,n])=>$(id).classList.toggle('on',n===t));cv.style.cursor=t?'crosshair':'grab'}
+$('tRegion').onclick=()=>{if(!S.map.img)return;setView('map');setTool('region')};
+function hitCal(sx,sy){if(CUR()!==S.map)return -1;for(let i=0;i<4;i++){const p=S.cal.pts[i];if(!p)continue;const [x,y]=toScr(p[0],p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
+function hitTick(sx,sy){if(CUR()!==LD())return -1;for(let i=0;i<S.ticks.length;i++){const [x,y]=toScr(S.ticks[i].p[0],S.ticks[i].p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
+let drag=null;
+cv.addEventListener('pointerdown',e=>{
+  const D=CUR();if(!D.img)return;cv.setPointerCapture(e.pointerId);const [sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
+  if(e.button===1||S.space){drag={k:'pan',sx,sy,tx:D.tx,ty:D.ty};cv.style.cursor='grabbing';return}
+  if(e.button===2)return;
+  if(S.tool==='cal'){if(S.cal.step>=0&&S.cal.step<4){S.cal.pts[S.cal.step]=[ix,iy];S.cal.step++;updCalPx();if(S.cal.step>=4){setTool(null);S.cal.step=-1;$('cv0').focus()}recal()}return}
+  if(S.tool==='tick'){if(S.ticks.length<12){S.ticks.push({p:[ix,iy],v:''});renderTicks();buildLUT();const inp=$('tickList').querySelector(`input[data-i="${S.ticks.length-1}"]`);if(inp)inp.focus()}return}
+  if(S.tool==='region'){drag={k:'region',x:ix,y:iy};S.region={x0:ix,y0:iy,x1:ix,y1:iy};return}
+  const c=hitCal(sx,sy);if(c>=0){drag={k:'cal',i:c};return}
+  const t=hitTick(sx,sy);if(t>=0){drag={k:'tick',i:t};return}
+  drag={k:'pan',sx,sy,tx:D.tx,ty:D.ty};cv.style.cursor='grabbing'});
+cv.addEventListener('pointermove',e=>{
+  const D=CUR();if(!D.img)return;const [sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
+  if(drag){
+    if(drag.k==='pan'){D.tx=drag.tx+sx-drag.sx;D.ty=drag.ty+sy-drag.sy}
+    else if(drag.k==='region')S.region={x0:Math.min(drag.x,ix),y0:Math.min(drag.y,iy),x1:Math.max(drag.x,ix),y1:Math.max(drag.y,iy)};
+    else if(drag.k==='cal'){S.cal.pts[drag.i]=[ix,iy];updCalPx();CAL=buildCal()}
+    else if(drag.k==='tick'){S.ticks[drag.i].p=[ix,iy]}
+    draw()}
+  readout(ix,iy);drawLoupe(ix,iy)});
+cv.addEventListener('pointerup',()=>{
+  if(drag&&drag.k==='region'){const r=S.region;if(r&&(r.x1-r.x0<3||r.y1-r.y0<3))S.region=null;else regionToBounds();setTool(null)}
+  if(drag&&drag.k==='cal')recal();
+  if(drag&&drag.k==='tick'){renderTicks();buildLUT()}
+  drag=null;cv.style.cursor=S.tool?'crosshair':'grab';draw()});
+cv.addEventListener('pointerleave',()=>{if(!drag)loupe.style.display='none'});
+cv.addEventListener('wheel',e=>{if(!CUR().img)return;e.preventDefault();const [sx,sy]=evPos(e);zoomAt(e.deltaY<0?1.2:1/1.2,sx,sy)},{passive:false});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('keydown',e=>{const tag=document.activeElement.tagName;if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return;
+  if(e.code==='Space'){S.space=true;cv.style.cursor='grab';e.preventDefault()}if(e.key==='Escape')setTool(null)});
+document.addEventListener('keyup',e=>{if(e.code==='Space')S.space=false});
+function readout(ix,iy){const D=CUR();let t=`px ${ix.toFixed(1)}, ${iy.toFixed(1)}`;
+  if(D===S.map&&CAL&&!CAL.err){const [x,y]=CAL.f([ix,iy]);t+=`  →  x ${fmt(x)}, y ${fmt(y)}`}
+  if(D===S.map&&LUT&&ix>=0&&iy>=0&&ix<D.w&&iy<D.h){const o=(Math.floor(iy)*D.w+Math.floor(ix))*4,id=match(D.imgData.data[o],D.imgData.data[o+1],D.imgData.data[o+2],(+$('tol').value)**2);if(id>=0)t+=`  ·  value ≈ ${fmt(LUT.val[id])}`}
+  $('ro').textContent=t}
+
+// ---------- grid bounds ----------
+function setBounds(x0,x1,y0,y1){const f=v=>String(+v.toPrecision(8));$('gx0').value=f(x0);$('gx1').value=f(x1);$('gy0').value=f(y0);$('gy1').value=f(y1);
+  const nice=r=>{const t=r/50,p=Math.pow(10,Math.floor(Math.log10(t))),m=t/p;return(m<1.5?1:m<3.5?2:m<7.5?5:10)*p};
+  $('gdx').value=f(nice(x1-x0));$('gdy').value=f(nice(y1-y0));gUpd()}
+function regionToBounds(){const r=S.region;if(!r)return;const G=GEO(),c=[[r.x0,r.y0],[r.x1,r.y0],[r.x0,r.y1],[r.x1,r.y1]].map(p=>G.f(p));
+  const xs=c.map(p=>p[0]),ys=c.map(p=>p[1]);setBounds(Math.min(...xs),Math.max(...xs),Math.min(...ys),Math.max(...ys))}
+$('bExtent').onclick=()=>{if(!CAL||CAL.err){$('gMsg').textContent='Calibrate the map first.';$('gMsg').className='msg err';return}setBounds(Math.min(CAL.x1,CAL.x2),Math.max(CAL.x1,CAL.x2),Math.min(CAL.y1,CAL.y2),Math.max(CAL.y1,CAL.y2))};
+function gUpd(){const g=gridSpec(),m=$('gMsg');m.className='msg'+(g.err?' err':'');m.textContent=g.err||`${g.nx} × ${g.ny} = ${g.nx*g.ny} nodes`;return g}
+['gx0','gx1','gy0','gy1','gdx','gdy'].forEach(i=>$(i).addEventListener('input',gUpd));
+$('tol').oninput=e=>{$('tolV').textContent=e.target.value};
+
+// ---------- extraction ----------
+$('bExtract').onclick=()=>{
+  const m=$('exMsg');m.className='msg';
+  if(!S.map.img){m.textContent='Open a map first.';m.className='msg err';return}
+  if(!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';return}
+  const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';$('gMsg').textContent=g.err;return}
+  const D=S.map,d=D.imgData.data,G=GEO(),tol2=(+$('tol').value)**2,w=Math.max(0,Math.min(15,Math.round(+$('win').value||0))),minN=Math.max(1,Math.ceil((+$('minf').value||30)/100*(2*w+1)**2));
+  const idx=new Int16Array(g.nx*g.ny).fill(-1),buf=new Int16Array((2*w+1)**2);let ok=0,vmin=Infinity,vmax=-Infinity,sum=0;
+  for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){
+    const p=G.inv(g.x0+i*g.dx,g.y0+j*g.dy),cx=Math.round(p[0]-.5),cy=Math.round(p[1]-.5);let n=0;
+    for(let v=-w;v<=w;v++){const y=cy+v;if(y<0||y>=D.h)continue;for(let u=-w;u<=w;u++){const x=cx+u;if(x<0||x>=D.w)continue;const o=(y*D.w+x)*4;if(d[o+3]<200)continue;
+      const id=match(d[o],d[o+1],d[o+2],tol2);if(id>=0)buf[n++]=id}}
+    if(n>=minN){const id=median(buf,n);idx[j*g.nx+i]=id;const z=LUT.val[id];ok++;sum+=z;if(z<vmin)vmin=z;if(z>vmax)vmax=z}}
+  const rc=document.createElement('canvas');rc.width=g.nx;rc.height=g.ny;const rx=rc.getContext('2d'),im=rx.createImageData(g.nx,g.ny);
+  for(let k=0;k<idx.length;k++){const id=idx[k];if(id>=0){im.data[4*k]=LUT.rgb[3*id];im.data[4*k+1]=LUT.rgb[3*id+1];im.data[4*k+2]=LUT.rgb[3*id+2];im.data[4*k+3]=255}}
+  rx.putImageData(im,0,0);
+  S.R={...g,idx,lut:LUT,canvas:rc,ok,vmin,vmax,px:!!G.px};
+  m.textContent=ok?`${ok} / ${idx.length} nodes valid · min ${fmt(vmin)} · max ${fmt(vmax)} · mean ${fmt(sum/ok)}`:'No node matched the legend: increase the tolerance or check the ticks.';
+  if(!ok)m.className='msg err';
+  renderTable();draw()};
+function zOf(k){const R=S.R,id=R.idx[k];return id<0?NaN:R.lut.val[id]}
+function renderTable(){const R=S.R;$('thX').textContent=R&&R.px?'X (px)':'X';$('thY').textContent=R&&R.px?'Y (px)':'Y';
+  if(!R){$('tb').innerHTML='';return}
+  let h='',n=0;for(let j=0;j<R.ny&&n<400;j++)for(let i=0;i<R.nx&&n<400;i++,n++){const k=j*R.nx+i;h+=`<tr><td>${k+1}</td><td>${fmt(R.x0+i*R.dx)}</td><td>${fmt(R.y0+j*R.dy)}</td><td>${fmt(zOf(k))}</td></tr>`}
+  if(R.nx*R.ny>n)h+=`<tr><td colspan="4">… ${R.nx*R.ny-n} more nodes (all are exported)</td></tr>`;$('tb').innerHTML=h}
+
+// ---------- export ----------
+function xyz(sep){const R=S.R,skip=$('skipNaN').checked,L=[['x','y','value'].join(sep)];
+  for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);if(skip&&!isFinite(z))continue;L.push([+(R.x0+i*R.dx).toPrecision(10),+(R.y0+j*R.dy).toPrecision(10),isFinite(z)?+z.toPrecision(8):''].join(sep))}
+  return L.join('\n')}
+function matrix(){const R=S.R,L=['y\\x,'+Array.from({length:R.nx},(_,i)=>+(R.x0+i*R.dx).toPrecision(10)).join(',')];
+  for(let j=R.ny-1;j>=0;j--){const r=[+(R.y0+j*R.dy).toPrecision(10)];for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);r.push(isFinite(z)?+z.toPrecision(8):'')}L.push(r.join(','))}return L.join('\n')}
+function grd(){const R=S.R,L=['DSAA',`${R.nx} ${R.ny}`,`${+R.x0.toPrecision(10)} ${+(R.x0+(R.nx-1)*R.dx).toPrecision(10)}`,`${+R.y0.toPrecision(10)} ${+(R.y0+(R.ny-1)*R.dy).toPrecision(10)}`,`${R.vmin} ${R.vmax}`];
+  for(let j=0;j<R.ny;j++){const r=[];for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);r.push(isFinite(z)?+z.toPrecision(8):'1.70141e+38')}L.push(r.join(' '))}return L.join('\n')}
+function dl(text,name,type){const b=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast(name+' downloaded.')}
+const need=()=>{if(!S.R||!S.R.ok){toast('Nothing to export: extract the grid first.');return false}return true};
+$('bCopy').onclick=async()=>{if(!need())return;const t=xyz('\t');try{await navigator.clipboard.writeText(t);}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}toast('Copied — paste into Excel.')};
+$('bCsv').onclick=()=>{if(need())dl(xyz(','),'map_xyz.csv','text/csv')};
+$('bMat').onclick=()=>{if(need())dl(matrix(),'map_matrix.csv','text/csv')};
+$('bGrd').onclick=()=>{if(need())dl(grd(),'map_grid.grd','text/plain')};
+$('showR').onchange=$('showN').onchange=draw;
+window.DG={S,get LUT(){return LUT},get CAL(){return CAL},imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
+recal();size();draw();
+</script></body></html>
