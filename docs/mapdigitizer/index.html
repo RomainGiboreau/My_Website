@@ -42,7 +42,7 @@ canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
 .msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
 .msg.err{color:var(--acc2)}
 .dpanel{margin-top:12px}
-.stage{position:sticky;top:8px}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
 .banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .banner.err{background:var(--acc2)}
 .tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
@@ -75,6 +75,7 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
 @media (max-width:900px){.layout{grid-template-columns:1fr}}
 
 .lut{display:block;width:100%;height:14px;border:1px solid var(--line);border-radius:3px;margin:4px 0 2px;background:var(--alt)}
+.crow{display:grid;grid-template-columns:30px 1fr 1fr 22px;gap:4px;align-items:center;font-size:.8rem;margin:3px 0}.crow input{width:100%}.crow button{padding:0 4px}
 .tick{display:grid;grid-template-columns:34px 1fr 90px 22px;gap:4px;align-items:center;font-size:.8rem;margin:3px 0}
 .tick input{width:100%}.tick .sw{width:22px;height:22px}.tick button{padding:0 4px;line-height:1.2}
 .grid3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}
@@ -112,9 +113,9 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <div class="msg" id="lutMsg"></div>
   </div>
  </section>
- <section class="panel"><h2><span class="n">3</span>Map coordinates<span class="tt" tabindex="0" data-tip="Click two points on a horizontal graticule line or axis (X1, X2), then two on a vertical one (Y1, Y2), and type their coordinates as printed on the map. Axes may be slightly rotated. Without calibration, the grid is defined in image pixels (y downward).">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="row"><button id="bCal">Calibrate</button><button id="bCalReset">Reset</button></div>
-  <div class="grid2" id="calGrid"></div>
+ <section class="panel"><h2><span class="n">3</span>Map coordinates<span class="tt" tabindex="0" data-tip="Add control points: click a spot of the map whose coordinates you know (a corner, a graticule crossing, a labelled tick), then type its X and Y in the two boxes. 2 points are enough if the map is not rotated (they must differ in both X and Y); 3 or more points fit a full affine transform by least squares and handle rotation. Without any control point, the grid is defined in image pixels (y downward).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button id="bCal">+ Add control point</button><button id="bCalReset">Reset</button></div>
+  <div id="calList"></div>
   <div class="msg" id="calMsg"></div></div>
  </section>
  <section class="panel"><h2><span class="n">4</span>Grid<span class="tt" tabindex="0" data-tip="Regular grid in map coordinates. Draw a region on the map to set the bounds, or use the calibration extent. Nodes are xmin, xmin+dx, … up to xmax (same for y).">?</span><i class="chev"></i></h2>
@@ -151,10 +152,9 @@ const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
 const newDoc=()=>({img:null,imgC:null,imgData:null,w:0,h:0,s:1,tx:0,ty:0});
 const S={map:newDoc(),leg:newDoc(),sep:false,view:'map',tool:null,space:false,
-  cal:{pts:[null,null,null,null],vals:['','','',''],step:-1},T:{min:{p:null,v:''},max:{p:null,v:''},mid:[]},R:null,tickTarget:null};
+  cal:{pts:[]},T:{min:{p:null,v:''},max:{p:null,v:''},mid:[]},R:null,tickTarget:null};
 const LD=()=>S.sep?S.leg:S.map;           // document holding the legend
 const CUR=()=>(S.view==='leg'&&S.sep)?S.leg:S.map;
-const LABELS=['X1','X2','Y1','Y2'];
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
 let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2500)}
@@ -168,36 +168,48 @@ function rgb2lab(r,g,b){const f=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+
   let X=(R*.4124564+G*.3575761+B*.1804375)/.95047,Y=(R*.2126729+G*.7151522+B*.072175),Z=(R*.0193339+G*.119192+B*.9503041)/1.08883;
   const h=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;X=h(X);Y=h(Y);Z=h(Z);return[116*Y-16,500*(X-Y),200*(Y-Z)]}
 
-// ---------- map calibration (linear axes, possibly rotated) ----------
+// ---------- map calibration: control points -> affine ----------
+function solve3(A,b){ // Gauss elimination on a 3x3 system
+  const M=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<3;c++){let p=c;for(let r=c+1;r<3;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;
+    if(Math.abs(M[p][c])<1e-12)return null;[M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<3;r++)if(r!==c){const f=M[r][c]/M[c][c];for(let k=c;k<4;k++)M[r][k]-=f*M[c][k]}}
+  return M.map((r,i)=>r[3]/r[i])}
 function buildCal(){
-  const c=S.cal;if(c.pts.some(p=>!p))return null;
-  const v=c.vals.map(num);if(v.some(x=>!isFinite(x)))return null;
-  const [x1,x2,y1,y2]=v;
-  if(x1===x2||y1===y2)return{err:'The two values of an axis must differ'};
-  const [X1,X2,Y1,Y2]=c.pts,dx=[X2[0]-X1[0],X2[1]-X1[1]],dy=[Y2[0]-Y1[0],Y2[1]-Y1[1]];
-  const det=dy[0]*dx[1]-dx[0]*dy[1];
-  if(Math.abs(det)<1e-9)return{err:'The X and Y axes are parallel'};
-  const d=[Y1[0]-X1[0],Y1[1]-X1[1]],a=(d[0]*(-dy[1])+dy[0]*d[1])/det,b=(dx[0]*d[1]-dx[1]*d[0])/det;
-  const O=[X1[0]+a*dx[0],X1[1]+a*dx[1]],det2=dx[0]*dy[1]-dx[1]*dy[0];
-  return{x1,x2,y1,y2,
-    f(p){const q=[p[0]-O[0],p[1]-O[1]],u=(q[0]*dy[1]-dy[0]*q[1])/det2,w=(dx[0]*q[1]-dx[1]*q[0])/det2;
-      return[x1+(u+a)*(x2-x1),y1+(w+b)*(y2-y1)]},
-    inv(X,Y){const u=(X-x1)/(x2-x1)-a,w=(Y-y1)/(y2-y1)-b;return[O[0]+u*dx[0]+w*dy[0],O[1]+u*dx[1]+w*dy[1]]}};
-}
+  const P=S.cal.pts;if(!P.length)return null;
+  const Q=P.filter(q=>q.p&&isFinite(num(q.X))&&isFinite(num(q.Y)));
+  if(Q.length<P.length||P.length<2)return{err:P.length<2?'Add at least 2 control points.':'Type X and Y for every control point (a point still needs both values).',partial:true};
+  const px=Q.map(q=>q.p[0]),py=Q.map(q=>q.p[1]),X=Q.map(q=>num(q.X)),Y=Q.map(q=>num(q.Y)),n=Q.length;
+  let f,inv;
+  if(n===2){
+    if(px[0]===px[1]||X[0]===X[1])return{err:'With 2 points, X and the pixel column must differ between them (or add a 3rd point).'};
+    if(py[0]===py[1]||Y[0]===Y[1])return{err:'With 2 points, Y and the pixel row must differ between them (or add a 3rd point).'};
+    const a=(X[1]-X[0])/(px[1]-px[0]),b=X[0]-a*px[0],c=(Y[1]-Y[0])/(py[1]-py[0]),d=Y[0]-c*py[0];
+    f=p=>[a*p[0]+b,c*p[1]+d];inv=(x,y)=>[(x-b)/a,(y-d)/c]}
+  else{
+    const A=[[0,0,0],[0,0,0],[0,0,0]],bx=[0,0,0],by=[0,0,0];
+    for(let i=0;i<n;i++){const r=[px[i],py[i],1];for(let u=0;u<3;u++){for(let v=0;v<3;v++)A[u][v]+=r[u]*r[v];bx[u]+=r[u]*X[i];by[u]+=r[u]*Y[i]}}
+    const sx=solve3(A,bx),sy=solve3(A,by);if(!sx||!sy)return{err:'The control points are aligned: place them so they are not on one line.'};
+    const det=sx[0]*sy[1]-sx[1]*sy[0];if(Math.abs(det)<1e-14)return{err:'Degenerate control points.'};
+    f=p=>[sx[0]*p[0]+sx[1]*p[1]+sx[2],sy[0]*p[0]+sy[1]*p[1]+sy[2]];
+    inv=(x,y)=>{const u=x-sx[2],v=y-sy[2];return[(sy[1]*u-sx[1]*v)/det,(-sy[0]*u+sx[0]*v)/det]}}
+  let rms=0;for(let i=0;i<n;i++){const q=inv(X[i],Y[i]);rms+=(q[0]-px[i])**2+(q[1]-py[i])**2}rms=Math.sqrt(rms/n);
+  return{f,inv,rms,n,ext:{x0:Math.min(...X),x1:Math.max(...X),y0:Math.min(...Y),y1:Math.max(...Y)}}}
 const PXCAL={f:p=>[p[0],p[1]],inv:(X,Y)=>[X,Y],px:true};
 let CAL=null;
 const GEO=()=>(CAL&&!CAL.err)?CAL:PXCAL;
-function recal(){CAL=buildCal();const ok=CAL&&!CAL.err;
-  $('calMsg').textContent=CAL&&CAL.err?CAL.err:ok?'Calibrated ✓':(S.cal.step>=0&&S.cal.step<4?`Click the position of ${LABELS[S.cal.step]} on the map`:'Place the 4 points and enter their coordinates');
-  $('calMsg').className='msg'+(CAL&&CAL.err?' err':'');
-  $('thX').textContent=ok?'X':'X (px)';$('thY').textContent=ok?'Y':'Y (px)';
-  document.querySelectorAll('#calGrid .dot').forEach((d,i)=>d.classList.toggle('ok',!!S.cal.pts[i]));
-  draw()}
-(function(){const g=$('calGrid');LABELS.forEach((l,i)=>{g.insertAdjacentHTML('beforeend',`<span>${l}</span><span><span class="dot"></span> <span class="px" id="px${i}">not set</span></span><input type="text" id="cv${i}" placeholder="value" aria-label="${l} value">`);
-  $('cv'+i).addEventListener('input',e=>{S.cal.vals[i]=e.target.value;recal()})})})();
-function updCalPx(){S.cal.pts.forEach((p,i)=>$('px'+i).textContent=p?`${p[0].toFixed(1)}, ${p[1].toFixed(1)}`:'not set')}
-$('bCal').onclick=()=>{if(!S.map.img)return;S.cal.pts=[null,null,null,null];S.cal.step=0;setView('map');setTool('cal');updCalPx();recal()};
-$('bCalReset').onclick=()=>{S.cal.pts=[null,null,null,null];S.cal.step=-1;S.cal.vals=['','','',''];[0,1,2,3].forEach(i=>$('cv'+i).value='');if(S.tool==='cal')setTool(null);updCalPx();recal()};
+function renderCal(){$('calList').innerHTML=S.cal.pts.map((q,i)=>`<div class="crow"><span>P${i+1}</span><input type="text" data-c="${i}" data-a="X" value="${esc(q.X)}" placeholder="X" aria-label="P${i+1} X"><input type="text" data-c="${i}" data-a="Y" value="${esc(q.Y)}" placeholder="Y" aria-label="P${i+1} Y"><button data-d="${i}" title="Remove">×</button></div>`).join('')}
+function recal(){CAL=buildCal();const ok=CAL&&!CAL.err,m=$('calMsg');
+  m.textContent=!S.cal.pts.length?'No control point: the grid will be in image pixels.':CAL&&CAL.err?CAL.err:`Calibrated ✓ (${CAL.n} points, residual ${CAL.rms.toFixed(2)} px)`;
+  m.className='msg'+(CAL&&CAL.err&&S.cal.pts.length>=2&&!CAL.partial?' err':'');
+  $('thX').textContent=ok?'X':'X (px)';$('thY').textContent=ok?'Y':'Y (px)';draw()}
+$('calList').addEventListener('change',e=>{const i=e.target.dataset.c;if(i==null)return;const q=S.cal.pts[+i];let v=e.target.value;
+  if(e.target.dataset.a==='X'&&q.Y===''){const m=v.match(/^\s*([-+]?[\d.]+(?:[eE][-+]?\d+)?)\s*(?:;|\s|,(?=.*\.))\s*([-+]?[\d.]+(?:[eE][-+]?\d+)?)\s*$/);if(m){q.X=m[1];q.Y=m[2];renderCal();recal();return}}
+  q[e.target.dataset.a]=v;recal()});
+$('calList').addEventListener('input',e=>{const i=e.target.dataset.c;if(i==null)return;S.cal.pts[+i][e.target.dataset.a]=e.target.value;CAL=buildCal();recal()});
+$('calList').addEventListener('click',e=>{const d=e.target.dataset.d;if(d==null)return;S.cal.pts.splice(+d,1);renderCal();recal()});
+$('bCal').onclick=()=>{if(!S.map.img)return;if(S.cal.pts.length>=8)return;setView('map');setTool('cal')};
+$('bCalReset').onclick=()=>{S.cal.pts=[];renderCal();if(S.tool==='cal')setTool(null);recal()};
 
 // ---------- images ----------
 function setImage(doc,img){
@@ -348,7 +360,7 @@ function draw(){
     for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const k=j*R.nx+i,p=G.inv(R.x0+i*R.dx,R.y0+j*R.dy),[x,y]=toScr(p[0],p[1]);if(x<-5||y<-5||x>W+5||y>H+5)continue;
       const id=R.idx[k];ctx.beginPath();ctx.arc(x,y,rad,0,7);
       if(id<0){ctx.strokeStyle='#d63b32';ctx.stroke()}else{ctx.fillStyle=`rgb(${R.lut.rgb[3*id]},${R.lut.rgb[3*id+1]},${R.lut.rgb[3*id+2]})`;ctx.fill();ctx.strokeStyle='#232220';ctx.stroke()}}}
-  if(isMap)S.cal.pts.forEach((p,i)=>{if(p){const [x,y]=toScr(p[0],p[1]);marker(ctx,x,y,i<2?'#1f5fbf':'#2f8f83',LABELS[i],9)}});
+  if(isMap)S.cal.pts.forEach((q,i)=>{if(q.p){const [x,y]=toScr(q.p[0],q.p[1]);marker(ctx,x,y,'#1f5fbf','P'+(i+1),9)}});
   if(D===LD()){const mn=S.T.min.p,mx=S.T.max.p;
     if(mn&&mx){const a=toScr(...mn),b=toScr(...mx);ctx.strokeStyle='rgba(168,98,58,.9)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([])}
     tickList().forEach(([k,t])=>{const [x,y]=toScr(t.p[0],t.p[1]);marker(ctx,x,y,'#a8623a',(k==='min'?'min':k==='max'?'max':'T'+(+k.slice(1)+1))+(t.v!==''?' = '+t.v:''),7)})}
@@ -366,7 +378,7 @@ function drawLoupe(ix,iy){const D=CUR();
 // ---------- tools & pointer ----------
 function setTool(t){S.tool=t;$('bMin').classList.toggle('on',t==='tick'&&S.tickTarget==='min');$('bMax').classList.toggle('on',t==='tick'&&S.tickTarget==='max');[['bCal','cal'],['tRegion','region']].forEach(([id,n])=>$(id).classList.toggle('on',n===t));cv.style.cursor=t?'crosshair':'grab'}
 $('tRegion').onclick=()=>{if(!S.map.img)return;setView('map');setTool('region')};
-function hitCal(sx,sy){if(CUR()!==S.map)return -1;for(let i=0;i<4;i++){const p=S.cal.pts[i];if(!p)continue;const [x,y]=toScr(p[0],p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
+function hitCal(sx,sy){if(CUR()!==S.map)return -1;for(let i=0;i<S.cal.pts.length;i++){const q=S.cal.pts[i];if(!q.p)continue;const [x,y]=toScr(q.p[0],q.p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
 function tickList(){return[['min',S.T.min],['max',S.T.max],...S.T.mid.map((t,i)=>['m'+i,t])].filter(a=>a[1].p)}
 function hitTick(sx,sy){if(CUR()!==LD())return null;for(const [k,t] of tickList()){const [x,y]=toScr(t.p[0],t.p[1]);if(Math.hypot(x-sx,y-sy)<=10)return t}return null}
 let drag=null;
@@ -374,7 +386,7 @@ cv.addEventListener('pointerdown',e=>{
   const D=CUR();if(!D.img)return;cv.setPointerCapture(e.pointerId);const [sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
   if(e.button===1||S.space){drag={k:'pan',sx,sy,tx:D.tx,ty:D.ty};cv.style.cursor='grabbing';return}
   if(e.button===2)return;
-  if(S.tool==='cal'){if(S.cal.step>=0&&S.cal.step<4){S.cal.pts[S.cal.step]=[ix,iy];S.cal.step++;updCalPx();if(S.cal.step>=4){setTool(null);S.cal.step=-1;$('cv0').focus()}recal()}return}
+  if(S.tool==='cal'){S.cal.pts.push({p:[ix,iy],X:'',Y:''});setTool(null);renderCal();recal();const inp=$('calList').querySelector(`input[data-c="${S.cal.pts.length-1}"][data-a="X"]`);if(inp)inp.focus();return}
   if(S.tool==='tick'){const k=S.tickTarget,p=[ix,iy];
     if(k==='min'){S.T.min.p=p;S.tickTarget='max';$('bMin').classList.remove('on');$('bMax').classList.add('on');renderTicks();buildLUT();$('vMin').focus()}
     else if(k==='max'){S.T.max.p=p;setTool(null);renderTicks();buildLUT();$('vMax').focus()}
@@ -389,7 +401,7 @@ cv.addEventListener('pointermove',e=>{
   if(drag){
     if(drag.k==='pan'){D.tx=drag.tx+sx-drag.sx;D.ty=drag.ty+sy-drag.sy}
     else if(drag.k==='region')S.region={x0:Math.min(drag.x,ix),y0:Math.min(drag.y,iy),x1:Math.max(drag.x,ix),y1:Math.max(drag.y,iy)};
-    else if(drag.k==='cal'){S.cal.pts[drag.i]=[ix,iy];updCalPx();CAL=buildCal()}
+    else if(drag.k==='cal'){S.cal.pts[drag.i].p=[ix,iy];CAL=buildCal()}
     else if(drag.k==='tick'){drag.t.p=[ix,iy]}
     draw()}
   readout(ix,iy);drawLoupe(ix,iy)});
@@ -415,10 +427,10 @@ function setBounds(x0,x1,y0,y1){const f=v=>String(+v.toPrecision(8));$('gx0').va
   $('gdx').value=f(nice(x1-x0));$('gdy').value=f(nice(y1-y0));gUpd()}
 function regionToBounds(){const r=S.region;if(!r)return;const G=GEO(),c=[[r.x0,r.y0],[r.x1,r.y0],[r.x0,r.y1],[r.x1,r.y1]].map(p=>G.f(p));
   const xs=c.map(p=>p[0]),ys=c.map(p=>p[1]);setBounds(Math.min(...xs),Math.max(...xs),Math.min(...ys),Math.max(...ys))}
-$('bExtent').onclick=()=>{if(!CAL||CAL.err){$('gMsg').textContent='Calibrate the map first.';$('gMsg').className='msg err';return}setBounds(Math.min(CAL.x1,CAL.x2),Math.max(CAL.x1,CAL.x2),Math.min(CAL.y1,CAL.y2),Math.max(CAL.y1,CAL.y2))};
+$('bExtent').onclick=()=>{if(!CAL||CAL.err){$('gMsg').textContent='Calibrate the map first.';$('gMsg').className='msg err';return}setBounds(CAL.ext.x0,CAL.ext.x1,CAL.ext.y0,CAL.ext.y1)};
 function autoGrid(){const D=S.map;
   if(S.region){regionToBounds();return}
-  if(CAL&&!CAL.err){setBounds(Math.min(CAL.x1,CAL.x2),Math.max(CAL.x1,CAL.x2),Math.min(CAL.y1,CAL.y2),Math.max(CAL.y1,CAL.y2));return}
+  if(CAL&&!CAL.err){setBounds(CAL.ext.x0,CAL.ext.x1,CAL.ext.y0,CAL.ext.y1);return}
   setBounds(0,D.w,0,D.h)}
 function gUpd(){const g=gridSpec(),m=$('gMsg');m.className='msg'+(g.err?' err':'');m.textContent=g.err||`${g.nx} × ${g.ny} = ${g.nx*g.ny} nodes`;return g}
 ['gx0','gx1','gy0','gy1','gdx','gdy'].forEach(i=>$(i).addEventListener('input',gUpd));
@@ -429,6 +441,7 @@ $('bExtract').onclick=()=>{
   const m=$('exMsg');m.className='msg';
   if(!S.map.img){m.textContent='Open a map first.';m.className='msg err';banner('Open a map first.',true);return}
   if(!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';banner('Define the colour legend first (section 2): click the min and max ends of the colour bar and type their values.',true);return}
+  if(S.cal.pts.length&&(!CAL||CAL.err)){const e='Calibration incomplete: '+(CAL&&CAL.err?CAL.err:'fix the control points')+' Fix it, or press Reset to work in image pixels.';m.textContent=e;m.className='msg err';banner(e,true);return}
   if(['gx0','gx1','gy0','gy1','gdx','gdy'].some(i=>$(i).value.trim()===''))autoGrid();
   const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';$('gMsg').textContent=g.err;banner(g.err,true);return}
   const D=S.map,d=D.imgData.data,G=GEO(),tol2=(+$('tol').value)**2,w=Math.max(0,Math.min(15,Math.round(+$('win').value||0))),minN=Math.max(1,Math.ceil((+$('minf').value||30)/100*(2*w+1)**2));
@@ -469,6 +482,6 @@ $('bCsv').onclick=()=>{if(need())dl(xyz(','),'map_xyz.csv','text/csv')};
 $('bMat').onclick=()=>{if(need())dl(matrix(),'map_matrix.csv','text/csv')};
 $('bGrd').onclick=()=>{if(need())dl(grd(),'map_grid.grd','text/plain')};
 $('showR').onchange=$('showN').onchange=draw;$('showU').onchange=computeU;
-window.DG={S,get LUT(){return LUT},get CAL(){return CAL},imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
+window.DG={S,buildCal,get LUT(){return LUT},get CAL(){return CAL},imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
 recal();size();draw();
 </script></body></html>
