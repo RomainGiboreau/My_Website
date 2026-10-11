@@ -41,7 +41,7 @@ canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
 .drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
 .msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
 .msg.err{color:var(--acc2)}
-.dpanel{margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px}
+.dpanel{margin-top:12px}
 .tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
 table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
 th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
@@ -51,31 +51,62 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
 label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
 .note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
-@media (max-width:900px){.layout{grid-template-columns:1fr}.dpanel{grid-template-columns:1fr}}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
 </style></head><body>
-<div class="top"><h1>Plot digitizer</h1><a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="top"><h1>Plot digitizer</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <select id="exWhich"><option value="active">Active dataset</option><option value="all">All datasets</option></select>
+  <label><input type="checkbox" id="sortX">Sort by X</label>
+  <button class="pri" id="bCopy" title="Copy as tab-separated text, ready to paste into Excel">Copy</button>
+  <button id="bCsv">Download CSV</button>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the image is never uploaded. Points are stored in image pixels, so re-calibrating the axes updates every value. Without calibration the table shows pixel coordinates.">?</span>
+ </div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
 <aside class="side">
- <section class="panel"><h2><span class="n">1</span>Image</h2>
+ <section class="panel"><h2><span class="n">1</span>Image<span class="tt" tabindex="0" data-tip="Open a file, drop it on the canvas, or paste a screenshot with Ctrl+V. The image never leaves your browser.">?</span><i class="chev"></i></h2>
+  <div class="body">
   <div class="row"><button class="pri" id="bOpen">Open image…</button><button id="bExample">Try an example</button></div>
   <input type="file" id="file" accept="image/*" hidden>
-  <p class="hint">Open a file, drop it on the canvas, or paste a screenshot with Ctrl+V. The image never leaves your browser.</p>
+  </div>
  </section>
- <section class="panel"><h2><span class="n">2</span>Axes</h2>
+ <section class="panel"><h2><span class="n">2</span>Axes<span class="tt" tabindex="0" data-tip="Click two points on the X axis, then two on the Y axis (ticks or grid lines), then type their values. Axes may be slightly rotated.">?</span><i class="chev"></i></h2>
+  <div class="body">
   <div class="row"><label class="inl">X scale <select id="xs"><option value="lin">linear</option><option value="log">log</option></select></label>
    <label class="inl">Y scale <select id="ys"><option value="lin">linear</option><option value="log">log</option></select></label></div>
   <div class="row"><button id="bCal">Calibrate axes</button><button id="bCalReset">Reset</button></div>
   <div class="grid2" id="calGrid"></div>
   <div class="msg" id="calMsg"></div>
-  <p class="hint">Click two points on the X axis, then two on the Y axis (ticks or grid lines), then type their values. Axes may be slightly rotated.</p>
+  </div>
  </section>
- <section class="panel"><h2><span class="n">3</span>Points</h2>
+ <section class="panel"><h2><span class="n">3</span>Points<span class="tt" tabindex="0" data-tip="Click to add a point (drag to fine-tune before releasing). Drag an existing point to move it. Delete removes the selected point, arrows nudge it (Shift = 10 px), Ctrl+Z undoes. Hold Space or use the middle button to pan; the wheel zooms.">?</span><i class="chev"></i></h2>
+  <div class="body">
   <div class="row"><select id="dsSel" style="flex:1"></select><button id="dsNew">New</button><button id="dsDel">Delete</button></div>
   <div class="row"><input type="text" id="dsName" style="flex:1" aria-label="Dataset name"><input type="color" id="dsColor" aria-label="Dataset color" style="width:38px;height:28px;padding:1px"></div>
   <div class="row"><button id="tEdit" class="on">Add / move</button><button id="tPan">Pan</button><button id="tRegion">Region</button><button id="bClear">Clear dataset</button></div>
-  <p class="hint">Click to add a point (drag to fine-tune before releasing). Drag an existing point to move it. Delete removes the selected point, arrows nudge it (Shift = 10 px), Ctrl+Z undoes. Hold Space or use the middle button to pan; the wheel zooms.</p>
+  </div>
  </section>
- <section class="panel"><h2><span class="n">4</span>Auto-extract</h2>
+ <section class="panel"><h2><span class="n">4</span>Auto-extract<span class="tt" tabindex="0" data-tip="Pick the colour on the curve, adjust the tolerance until only the curve is highlighted, optionally draw a Region around the plot area, then extract.">?</span><i class="chev"></i></h2>
+  <div class="body">
   <div class="row"><button id="bPick">Pick curve colour</button><span class="sw" id="sw"></span><span id="swTxt" class="hint" style="margin:0">no colour</span></div>
   <label class="inl" style="margin-top:6px">Tolerance <input type="range" id="tol" min="5" max="200" value="60"><span id="tolV" style="width:28px;text-align:right">60</span></label>
   <div class="row"><label class="inl">Mode <select id="mode"><option value="curve">Curve (one point per column)</option><option value="blobs">Scatter (blob centres)</option></select></label></div>
@@ -84,7 +115,7 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <label class="inl"><input type="checkbox" id="showMask" checked>Show matching pixels</label>
   <div class="row"><button class="pri" id="bExtract">Extract into dataset</button><button id="bRegionClear">Clear region</button></div>
   <div class="msg" id="exMsg"></div>
-  <p class="hint">Pick the colour on the curve, adjust the tolerance until only the curve is highlighted, optionally draw a Region around the plot area, then extract.</p>
+  </div>
  </section>
 </aside>
 <main>
@@ -97,16 +128,7 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
  </div>
  <div class="dpanel">
   <div class="tw"><table><thead><tr><th>#</th><th id="thX">X</th><th id="thY">Y</th></tr></thead><tbody id="tb"></tbody></table></div>
-  <div class="panel">
-   <h2>Export</h2>
-   <div class="row"><select id="exWhich"><option value="active">Active dataset</option><option value="all">All datasets</option></select></div>
-   <label class="inl"><input type="checkbox" id="sortX">Sort by X</label>
-   <div class="row"><button class="pri" id="bCopy">Copy (paste into Excel)</button></div>
-   <div class="row"><button id="bCsv">Download CSV</button></div>
-   <div class="msg" id="exportMsg"></div>
-  </div>
  </div>
- <p class="note">Everything runs locally in your browser: the image is never uploaded. Points are stored in image pixels, so re-calibrating the axes updates every value. Without calibration the table shows pixel coordinates.</p>
 </main>
 </div>
 <script>
@@ -118,6 +140,7 @@ const S={img:null,imgC:null,imgData:null,w:0,h:0,s:1,tx:0,ty:0,tool:'edit',
   cal:{pts:[null,null,null,null],vals:['','','',''],step:-1},
   sets:[{name:'Dataset 1',color:COLORS[0],pts:[]}],active:0,sel:null,
   color:null,mask:null,maskC:null,region:null,undo:[],space:false,hover:null};
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
 const LABELS=['X1','X2','Y1','Y2'];
 
 // ---------- calibration ----------
