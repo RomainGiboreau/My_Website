@@ -115,9 +115,15 @@ table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .er
  <section class="panel"><h2><span class="n">1</span>Point cloud<span class="tt" tabindex="0" data-tip="Paste a table with X, Y and the value to map (tab, semicolon, comma or space separated; decimal comma accepted; an optional header row names the columns), or open a text/CSV file, or drop it on the page. Lines starting with # are ignored.">?</span><i class="chev"></i></h2>
   <div class="body"><textarea id="paste" rows="6" placeholder="X&#9;Y&#9;Depth&#10;12.5&#9;40.2&#9;1834.1&#10;…" spellcheck="false"></textarea>
   <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,.xyz,text/*" hidden>
-  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example: wells</button><button id="bExample2">Example: lines</button></div>
+  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
   <div class="g3"><span>X</span><select id="cx"></select><span>Y</span><select id="cy"></select><span>Value</span><select id="cz"></select></div>
-  <div class="msg" id="dataMsg">No data yet.</div></div>
+  <div class="msg" id="dataMsg">No data yet.</div>
+  <div style="margin-top:8px;font-weight:600;font-size:.82rem">Secondary variables <span class="tt" tabindex="0" data-tip="Optional, for kriging with external drift and cokriging. Tick extra columns of the table (secondary known at the data points only), or, better, give a secondary map X Y S1 [S2…] (e.g. a seismic attribute) known over the whole area: it is interpolated onto the data points and onto the grid nodes. Up to 4 variables.">?</span></div>
+  <div id="secCols" class="row" style="flex-wrap:wrap;gap:4px 10px"></div>
+  <textarea id="secPaste" rows="2" placeholder="Secondary map (optional): X&#9;Y&#9;S1 [S2…]" spellcheck="false"></textarea>
+  <input type="file" id="secFile" accept=".csv,.txt,.tsv,.dat,.xyz,text/*" hidden>
+  <div class="row"><button id="bSecOpen">Open secondary map…</button><button id="bSecClear">Clear</button></div>
+  <div class="msg" id="secMsg"></div></div>
  </section>
  <section class="panel"><h2><span class="n">2</span>Grid<span class="tt" tabindex="0" data-tip="Regular output grid. Nodes are xmin, xmin+dx, … up to xmax (same for y). The extrapolation limit blanks the nodes where the estimate would be pure extrapolation: outside the convex hull of the data, or farther than a given distance from any data point.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="g3"><span>xmin</span><input type="text" id="gx0"><span>xmax</span><input type="text" id="gx1"><span>ymin</span><input type="text" id="gy0"><span>ymax</span><input type="text" id="gy1"><span>dx</span><input type="text" id="gdx"><span>dy</span><input type="text" id="gdy"></div>
@@ -125,7 +131,7 @@ table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .er
   <div class="pg"><span>Extrapolation limit</span><select id="mask"><option value="hull">Convex hull of the data</option><option value="dist">Distance to nearest point ≤</option><option value="none">None</option></select><span>Distance</span><input type="text" id="mdist"></div></div>
  </section>
  <section class="panel"><h2><span class="n">3</span>Method<span class="tt" id="mInfo" tabindex="0" data-tip="">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="row"><select id="method" style="flex:1"><optgroup label="Kriging"><option value="ok" selected>Ordinary kriging</option><option value="sk">Simple kriging</option><option value="uk1">Universal kriging — linear drift</option><option value="uk2">Universal kriging — quadratic drift</option></optgroup><optgroup label="Other"><option value="idw">Inverse distance (IDW)</option><option value="rbf">Spline — thin-plate / RBF</option><option value="mincurv">Spline — minimum curvature</option><option value="lp">Local polynomial regression</option><option value="tin">Linear (Delaunay TIN)</option><option value="nn">Nearest neighbour</option></optgroup></select></div>
+  <div class="body"><div class="row"><select id="method" style="flex:1"><optgroup label="Kriging"><option value="ok" selected>Ordinary kriging</option><option value="sk">Simple kriging</option><option value="uk1">Universal kriging — linear drift</option><option value="uk2">Universal kriging — quadratic drift</option><option value="ked">Universal kriging — external drift (secondary)</option><option value="cok">Collocated cokriging (secondary)</option></optgroup><optgroup label="Other"><option value="idw">Inverse distance (IDW)</option><option value="rbf">Spline — thin-plate / RBF</option><option value="mincurv">Spline — minimum curvature</option><option value="lp">Local polynomial regression</option><option value="tin">Linear (Delaunay TIN)</option><option value="nn">Nearest neighbour</option></optgroup></select></div>
   <div id="pm_idw" class="pg" hidden><span>Neighbours k</span><input type="number" id="idwk" value="12" min="1" max="200"><span>Power p</span><input type="text" id="idwp" value="2"><span>Smoothing ε</span><input type="text" id="idwe" value="0"></div>
   <div id="pm_rbf" class="pg" hidden><span>Kernel</span><select id="rbfk"><option value="tps">Thin-plate (r² ln r)</option><option value="cubic">Cubic (r³)</option><option value="mq">Multiquadric</option></select><span>Smoothing λ</span><input type="text" id="rbfl" value="0"><span>Shape c (multiquadric)</span><input type="text" id="rbfc" value=""></div>
   <div id="pm_mincurv" class="pg" hidden><span>Tension (0–0.95)</span><input type="text" id="mct" value="0"><span>Iterations</span><input type="number" id="mci" value="400" min="50" max="5000"></div>
@@ -135,7 +141,7 @@ table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .er
    <span id="kar1" hidden>Ratio (minor/major range ≤ 1)</span><input type="text" id="kar" value="1" hidden><span id="kaa1" hidden>Major axis angle (° from x)</span><input type="text" id="kaa" value="0" hidden>
    <span id="skm1" hidden>Known mean (SK)</span><input type="text" id="skm" placeholder="data mean" hidden>
    <span>Nugget</span><input type="text" id="krn"><span>Partial sill</span><input type="text" id="krs"><span>Range</span><input type="text" id="krr"></div>
-   <div class="msg" id="anMsg"></div><div id="vTbl"></div>
+   <label class="inl" id="kedpolyl" hidden><input type="checkbox" id="kedpoly">Add a linear x,y trend to the drift</label><div class="msg" id="anMsg"></div><div id="vTbl"></div>
    <canvas class="v" id="vCan" width="300" height="150" hidden></canvas></div>
   <div class="row" style="margin-top:8px"><button class="pri" id="bRun">Interpolate</button></div>
   <div class="msg" id="exMsg"></div></div>
@@ -144,7 +150,7 @@ table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .er
   <div class="body"><div class="pg"><span>Show</span><select id="vsel"><option value="z">Interpolated value</option><option value="std" disabled>Kriging std error</option></select><span>Colour map</span><select id="cmap"><option value="viridis">Viridis</option><option value="rainbow">Rainbow</option><option value="terrain">Terrain</option><option value="RdBu">Blue–red</option><option value="gray">Grey</option></select>
    <span>Min / max</span><span style="display:flex;gap:4px"><input type="text" id="rmin" placeholder="auto"><input type="text" id="rmax" placeholder="auto"></span><span>Contour interval</span><input type="text" id="cint" placeholder="auto"></div>
   <div class="row"><label class="inl"><input type="checkbox" id="rev">Reverse</label><label class="inl"><input type="checkbox" id="showC">Contours</label><label class="inl"><input type="checkbox" id="smooth" checked>Smooth</label></div>
-  <div class="row"><label class="inl"><input type="checkbox" id="showP" checked>Points</label><label class="inl"><input type="checkbox" id="pcol">by value</label><label class="inl">size <input type="range" id="psz" min="1" max="8" value="3" style="width:70px"></label></div></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="showP" checked>Points</label><label class="inl"><input type="checkbox" id="pcol" checked>by value</label><label class="inl">size <input type="range" id="psz" min="1" max="10" value="5" style="width:70px"></label></div></div>
  </section>
  <section class="panel"><h2><span class="n">5</span>Compare methods<span class="tt" tabindex="0" data-tip="5-fold cross-validation with the current parameters: the points are split in 5 random groups; each group is predicted from the other four. RMSE, MAE and bias are in the units of the value. Lowest RMSE is highlighted. This measures how well each method predicts at unsampled locations; with clustered or line-wise sampling it is optimistic, because neighbours of held-out points are often still in the training set.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="row"><button id="bCV">Run cross-validation</button></div><div id="cvOut"></div></div>
@@ -329,7 +335,7 @@ const VMODELS={
   gaussian:(h,c0,c,a)=>h<=0?0:c0+c*(1-Math.exp(-3*h*h/(a*a))),
   matern:(h,c0,c,a)=>{if(h<=0)return 0;const u=4.744*h/a;return c0+c*(1-(1+u)*Math.exp(-u))}};   // Matérn ν = 3/2, range a = distance at 95 % of the sill
 const VNAMES={spherical:'Spherical',exponential:'Exponential',gaussian:'Gaussian',matern:'Matérn 3/2'};
-const KVAR={ok:'ok',sk:'sk',uk1:'uk',uk2:'uk'},KDEG={ok:0,sk:0,uk1:1,uk2:2};
+const KVAR={ok:'ok',sk:'sk',uk1:'uk',uk2:'uk',ked:'ked',cok:'cok'},KDEG={ok:0,sk:0,uk1:1,uk2:2,ked:0,cok:0};
 const isKrig=m=>m in KVAR;
 function empVario(X,Y,Z,n,dirs){
   const step=Math.max(1,Math.ceil(n/2500)),idx=[];for(let i=0;i<n;i+=step)idx.push(i);
@@ -354,12 +360,12 @@ function fitWLS(pts,F,dmax,fixed){            // weighted least squares: g(h) �
     if(pass===0)w=pts.map(p=>{const gm=best.c0+best.c*F(p.h,0,1,best.a);return p.n/(gm*gm+1e-12)})}
   return best}
 const floorVm=vm=>({...vm,c0:Math.max(vm.c0,1e-4*(vm.c0+vm.c))});   // numerical nugget: gaussian/spherical systems are otherwise ill-conditioned
-const newBuf=k=>({bi:new Int32Array(k+2),bd:new Float64Array(k+2),id:new Int32Array(k+1),d2:new Float64Array(k+1),A:new Float64Array((k+8)*(k+8)),b:new Float64Array(k+8),g:new Float64Array(k+8),f:new Float64Array(6)});
+const newBuf=k=>({bi:new Int32Array(k+2),bd:new Float64Array(k+2),id:new Int32Array(k+1),d2:new Float64Array(k+1),A:new Float64Array((k+16)*(k+16)),b:new Float64Array(k+16),g:new Float64Array(k+16),f:new Float64Array(16)});
 function drift(deg,x,y,o){o[0]=1;if(deg>=1){o[1]=x;o[2]=y}if(deg>=2){o[3]=x*x;o[4]=x*y;o[5]=y*y}}
-function krigAt(T,kn,x,y,k,vm,variant,deg,m0,B,ex){   // returns [estimate, variance]; ex = index of a point to leave out (leave-one-out)
+function krigAt(T,kn,x,y,k,vm,variant,deg,m0,B,ex,qs){   // returns [estimate, variance]; ex = index of a point to leave out (leave-one-out)
   const cnt0=kn.query(x,y,k+(ex>=0?1:0),B.bi,B.bd);let cnt=0;
   for(let t=0;t<cnt0&&cnt<k;t++){if(B.bi[t]===ex)continue;B.id[cnt]=B.bi[t];B.d2[cnt]=B.bd[t];cnt++}
-  const F=VMODELS[vm.model],sill=vm.c0+vm.c,p=variant==='sk'?0:variant==='ok'?1:(deg===1?3:6);
+  const F=VMODELS[vm.model],sill=vm.c0+vm.c,ns=variant==='ked'?T.S.length:0,pd=variant==='ok'?0:deg,np=pd===0?1:pd===1?3:6,p=variant==='sk'?0:np+ns;   // drift basis = polynomial (np terms) + secondary variables (ns terms)
   if(cnt<Math.max(3,p+1))return[NaN,NaN];
   const m=cnt+p,A=B.A,b=B.b,sk=variant==='sk';
   for(let i=0;i<m*m;i++)A[i]=0;
@@ -367,8 +373,8 @@ function krigAt(T,kn,x,y,k,vm,variant,deg,m0,B,ex){   // returns [estimate, vari
     for(let j=0;j<i;j++){const h=Math.hypot(xi-T.X[B.id[j]],yi-T.Y[B.id[j]]),g=F(h,vm.c0,vm.c,vm.a),v=sk?sill-g:g;A[i*m+j]=v;A[j*m+i]=v}
     A[i*m+i]=sk?sill*(1+1e-9):1e-10*sill;
     const g0=F(Math.sqrt(B.d2[i]),vm.c0,vm.c,vm.a);b[i]=sk?sill-g0:g0;
-    if(p){drift(variant==='ok'?0:deg,xi,yi,B.f);for(let q=0;q<p;q++){A[i*m+cnt+q]=B.f[q];A[(cnt+q)*m+i]=B.f[q]}}}
-  if(p){drift(variant==='ok'?0:deg,x,y,B.f);for(let q=0;q<p;q++)b[cnt+q]=B.f[q]}
+    if(p){drift(pd,xi,yi,B.f);for(let q=0;q<ns;q++)B.f[np+q]=T.S[q][B.id[i]];for(let q=0;q<p;q++){A[i*m+cnt+q]=B.f[q];A[(cnt+q)*m+i]=B.f[q]}}}
+  if(p){drift(pd,x,y,B.f);for(let q=0;q<ns;q++)B.f[np+q]=qs[q];for(let q=0;q<p;q++)b[cnt+q]=B.f[q]}
   for(let i=0;i<m;i++)B.g[i]=b[i];
   if(!luSolve(A,b,m))return[NaN,NaN];
   let z=0,vr=0;
@@ -384,6 +390,28 @@ function autoVariogram(T,model,k){                      // fits every candidate 
   for(const c of cand)c.loo=looScore(T,c,k);
   cand.sort((a,b)=>(a.loo-b.loo)||(a.sse-b.sse));
   return{best:cand[0],cand,emp:ev.pts,dmax:ev.dmax}}
+
+// ---- Secondary variables: regression on [1 (+ x,y), S1..Sm] (global OLS), used for the variogram residuals (external drift) and for cokriging
+function extFit(T,pd){const ns=T.S.length,np=pd===1?3:1,p=np+ns,A=new Float64Array(p*p),b=new Float64Array(p),f=new Float64Array(p+6);
+  const basis=i=>{drift(pd,T.X[i],T.Y[i],f);for(let q=0;q<ns;q++)f[np+q]=T.S[q][i]};
+  for(let i=0;i<T.n;i++){basis(i);for(let u=0;u<p;u++){b[u]+=f[u]*T.Z[i];for(let v=0;v<p;v++)A[u*p+v]+=f[u]*f[v]}}
+  for(let u=0;u<p;u++)A[u*p+u]*=1+1e-10;
+  if(!luSolve(A,b,p))return null;
+  const r=new Float64Array(T.n);for(let i=0;i<T.n;i++){basis(i);let e=0;for(let u=0;u<p;u++)e+=b[u]*f[u];r[i]=T.Z[i]-e}
+  return{beta:b,resid:r,np}}
+// Collocated simple cokriging, Markov model 1 (Xu et al. 1992): Cov(z(h),s(0)) = rho * C(h) / sigma_z, s standardised (unit variance).
+// Unknowns: n weights on the primary data + 1 weight on the secondary value at the target (units of z).
+function cokAt(T,kn,x,y,k,vm,m0,B,rho,sq){
+  const cnt=kn.query(x,y,k,B.bi,B.bd),F=VMODELS[vm.model],sill=vm.c0+vm.c,sz=Math.sqrt(sill);if(cnt<3)return[NaN,NaN];
+  const m=cnt+1,A=B.A,b=B.b;for(let i=0;i<m*m;i++)A[i]=0;
+  for(let i=0;i<cnt;i++){const id=B.bi[i],xi=T.X[id],yi=T.Y[id];
+    for(let j=0;j<i;j++){const c=sill-F(Math.hypot(xi-T.X[B.bi[j]],yi-T.Y[B.bi[j]]),vm.c0,vm.c,vm.a);A[i*m+j]=c;A[j*m+i]=c}
+    A[i*m+i]=sill*(1+1e-9);
+    const c0=sill-F(Math.sqrt(B.bd[i]),vm.c0,vm.c,vm.a);b[i]=c0;B.g[i]=c0;A[i*m+cnt]=rho*c0/sz;A[cnt*m+i]=rho*c0/sz}
+  A[cnt*m+cnt]=1;b[cnt]=rho*sz;B.g[cnt]=rho*sz;
+  if(!luSolve(A,b,m))return[NaN,NaN];
+  let z=m0+b[cnt]*sq,vr=sill-b[cnt]*rho*sz;for(let i=0;i<cnt;i++){z+=b[i]*(T.Z[B.bi[i]]-m0);vr-=b[i]*B.g[i]}
+  return[z,Math.max(0,vr)]}
 function polyResidual(T,deg){const p=deg===1?3:6,A=new Float64Array(p*p),b=new Float64Array(p),f=new Float64Array(6);
   for(let i=0;i<T.n;i++){drift(deg,T.X[i],T.Y[i],f);for(let u=0;u<p;u++){b[u]+=f[u]*T.Z[i];for(let v=0;v<p;v++)A[u*p+v]+=f[u]*f[v]}}
   const A2=A.slice(),beta=b.slice();if(!luSolve(A2,beta,p))return T.Z;
@@ -398,8 +426,10 @@ function detectAniso(T,vm0){       // directional variograms at 0/45/90/135°, r
 function applyAniso(X,Y,an){if(!an)return[X,Y];const c=Math.cos(an.ang),s=Math.sin(an.ang),n=X.length,U=new Float64Array(n),V=new Float64Array(n);
   for(let i=0;i<n;i++){U[i]=X[i]*c+Y[i]*s;V[i]=(-X[i]*s+Y[i]*c)*an.ratio}return[U,V]}
 function krigPrep(method,tr,P){
-  const K=P.krig,deg=KDEG[method],k=Math.max(K.k,deg===2?20:0);let an=null,T=tr;
-  const zfit=t=>deg?{...t,Z:polyResidual(t,deg)}:(method==='sk'?{...t,Z:t.Z.map(z=>z-K.mean)}:t);
+  const K=P.krig,isKed=method==='ked',isCok=method==='cok',deg=isKed?(K.kedpoly?1:0):KDEG[method],ns=tr.S?tr.S.length:0;
+  if((isKed||isCok)&&!ns)throw new Error('This method needs at least one secondary variable: define one in section 1 (extra column or secondary map).');
+  const k=Math.max(K.k,deg===2?20:0,isKed?8+3*(ns+(deg?3:1)):0),mz=tr.Z.reduce((a,v)=>a+v,0)/tr.n;let an=null,T=tr;
+  const zfit=t=>isKed?{...t,Z:(extFit(t,deg)||{resid:t.Z}).resid}:isCok?{...t,Z:t.Z.map(z=>z-mz)}:deg?{...t,Z:polyResidual(t,deg)}:(method==='sk'?{...t,Z:t.Z.map(z=>z-K.mean)}:t);
   if(K.aniso.mode==='manual'&&K.aniso.ratio>1.0001)an={ang:K.aniso.angle*Math.PI/180,ratio:K.aniso.ratio};
   else if(K.aniso.mode==='auto'){const v0=autoVariogram(zfit(tr),'spherical',k).best,d=detectAniso(zfit(tr),v0);
     if(d&&d.ratio>=1.25){       // kept only if it lowers the leave-one-out error by at least 5 % (directional variograms of smooth fields can be misleading)
@@ -409,12 +439,22 @@ function krigPrep(method,tr,P){
   const Tz=zfit(T);let vm,cand=null,emp,dmax;
   if(K.vmode==='auto'){const f=autoVariogram(Tz,K.model,k);vm=f.best;cand=f.cand;emp=f.emp;dmax=f.dmax}
   else{const ev=empVario(Tz.X,Tz.Y,Tz.Z,Tz.n,false);vm={...K.vario};emp=ev.pts;dmax=ev.dmax}
-  vm={...vm,emp,dmax};return{T,Tz,an,vm,cand,k,deg}}
+  vm={...vm,emp,dmax};let cok=null;
+  if(isCok){const ft=extFit(tr,0);if(!ft)throw new Error('The secondary variables are collinear: remove one.');const n=tr.n,sp=new Float64Array(n);
+    for(let i=0;i<n;i++){let e=ft.beta[0];for(let q=0;q<ns;q++)e+=ft.beta[1+q]*tr.S[q][i];sp[i]=e}
+    let ms=0;for(let i=0;i<n;i++)ms+=sp[i];ms/=n;let vs=0,cz=0,vz=0;for(let i=0;i<n;i++){vs+=(sp[i]-ms)**2;cz+=(sp[i]-ms)*(tr.Z[i]-mz);vz+=(tr.Z[i]-mz)**2}
+    const ss=Math.sqrt(vs/n)||1,rho=cz/Math.sqrt((vs*vz)||1);cok={beta:ft.beta,ms,ss,rho:Math.max(-0.98,Math.min(0.98,rho)),rho0:rho,mz}}
+  return{T,Tz,an,vm,cand,k,deg,cok,ns}}
 function krigMain(method,tr,QX,QY,P){
   const pr=krigPrep(method,tr,P),K=P.krig,variant=KVAR[method],vm=floorVm(pr.vm),kn=new KNN(pr.T.X,pr.T.Y),B=newBuf(pr.k),nq=QX.length,z=new Float64Array(nq).fill(NaN),v=new Float64Array(nq).fill(NaN);
-  const [QU,QV]=applyAniso(QX,QY,pr.an);
-  for(let q=0;q<nq;q++){const r=krigAt(pr.T,kn,QU[q],QV[q],pr.k,vm,variant,pr.deg,K.mean,B,-1);z[q]=r[0];v[q]=r[1]}
-  return{z,v,vario:pr.vm,cand:pr.cand,aniso:pr.an,anisoInfo:K.anisoInfo}}
+  const [QU,QV]=applyAniso(QX,QY,pr.an),qs=new Float64Array(pr.ns||1);let note='';
+  if((method==='ked'||method==='cok')&&!(P.qS&&P.qS.length===pr.ns))throw new Error('Secondary variables are not available at the target locations.');
+  if(method==='cok'){const c=pr.cok;
+    for(let q=0;q<nq;q++){let e=c.beta[0];for(let j=0;j<pr.ns;j++)e+=c.beta[1+j]*P.qS[j][q];const r=cokAt(pr.T,kn,QU[q],QV[q],pr.k,vm,c.mz,B,c.rho,(e-c.ms)/c.ss);z[q]=r[0];v[q]=r[1]}
+    note=`secondary correlation ρ = ${c.rho0.toFixed(2)}${Math.abs(c.rho0)>0.98?' (capped at 0.98)':''}`}
+  else{for(let q=0;q<nq;q++){if(method==='ked')for(let j=0;j<pr.ns;j++)qs[j]=P.qS[j][q];const r=krigAt(pr.T,kn,QU[q],QV[q],pr.k,vm,variant,pr.deg,K.mean,B,-1,qs);z[q]=r[0];v[q]=r[1]}
+    if(method==='ked')note='external drift: '+S.secNames.join(', ')}
+  return{z,v,vario:pr.vm,cand:pr.cand,aniso:pr.an,anisoInfo:K.anisoInfo,note}}
 
 // ---- Local polynomial regression (moving least squares, tricube weights)
 function lpPredict(tr,QX,QY,P){
@@ -437,7 +477,7 @@ function predictAt(method,tr,QX,QY,P,G){
     case'lp':return lpPredict(tr,QX,QY,P.lp);
     default:if(isKrig(method))return krigMain(method,tr,QX,QY,P)}
   throw new Error('Unknown method')}
-const METHODS={ok:'Ordinary kriging',sk:'Simple kriging',uk1:'Universal kriging (linear drift)',uk2:'Universal kriging (quadratic drift)',idw:'Inverse distance (IDW)',nn:'Nearest neighbour',tin:'Linear (Delaunay TIN)',lp:'Local polynomial regression',rbf:'Spline — thin-plate / RBF',mincurv:'Spline — minimum curvature'};
+const METHODS={ok:'Ordinary kriging',sk:'Simple kriging',uk1:'Universal kriging (linear drift)',uk2:'Universal kriging (quadratic drift)',ked:'Universal kriging — external drift (secondary variables)',cok:'Collocated cokriging (secondary variables)',idw:'Inverse distance (IDW)',nn:'Nearest neighbour',tin:'Linear (Delaunay TIN)',lp:'Local polynomial regression',rbf:'Spline — thin-plate / RBF',mincurv:'Spline — minimum curvature'};
 
 // =====================================================================
 //  Data
@@ -456,37 +496,72 @@ function guessCols(head){
   let x=find(/^(x|lon|long|longitude|east|easting|e)$/i),y=find(/^(y|lat|latitude|north|northing|n)$/i);
   if(x<0||y<0||x===y){x=0;y=1}let z=head.findIndex((_,i)=>i!==x&&i!==y);return[x,y,Math.max(0,z)]}
 function fillColSelects(){const t=S.table,[x,y,z]=guessCols(t.head);
-  for(const [id,v] of [['cx',x],['cy',y],['cz',z]])$(id).innerHTML=t.head.map((h,i)=>`<option value="${i}"${i===v?' selected':''}>${esc(h)}</option>`).join('')}
+  for(const [id,v] of [['cx',x],['cy',y],['cz',z]])$(id).innerHTML=t.head.map((h,i)=>`<option value="${i}"${i===v?' selected':''}>${esc(h)}</option>`).join('');fillSecCols()}
 function buildPoints(){
   const t=S.table;if(!t)return;const cx=+$('cx').value,cy=+$('cy').value,cz=+$('cz').value;
-  const pts=[];for(const r of t.rows){const x=toN(r[cx]),y=toN(r[cy]),z=toN(r[cz]);if(isFinite(x)&&isFinite(y)&&isFinite(z))pts.push([x,y,z])}
+  const sel=S.secMap?[]:[...document.querySelectorAll('#secCols input:checked')].map(e=>+e.value);
+  const pts=[];let dropS=0;for(const r of t.rows){const x=toN(r[cx]),y=toN(r[cy]),z=toN(r[cz]);if(isFinite(x)&&isFinite(y)&&isFinite(z)){const sv=sel.map(i=>toN(r[i]));if(sv.some(v=>!isFinite(v))){dropS++;continue}pts.push([x,y,z,sv])}}
   const m=$('dataMsg');m.className='msg';
   if(pts.length<4){m.textContent=`Only ${pts.length} valid point(s): at least 4 are needed.`;m.className='msg err';S.pts=null;return}
   if(pts.length>20000){m.textContent='More than 20 000 points: please thin the data.';m.className='msg err';S.pts=null;return}
   let x0=1e300,x1=-1e300,y0=1e300,y1=-1e300;for(const p of pts){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])}
   const sc=Math.max(x1-x0,y1-y0);if(!(sc>0)){m.textContent='All points are at the same location.';m.className='msg err';return}
-  const tol=sc*1e-9,mp=new Map();for(const p of pts){const k=Math.round(p[0]/tol)+'|'+Math.round(p[1]/tol),e=mp.get(k);if(e){e.s+=p[2];e.n++}else mp.set(k,{x:p[0],y:p[1],s:p[2],n:1})}
-  const u=[...mp.values()].map(e=>[e.x,e.y,e.s/e.n]),dup=pts.length-u.length;
+  const tol=sc*1e-9,mp=new Map();for(const p of pts){const k=Math.round(p[0]/tol)+'|'+Math.round(p[1]/tol),e=mp.get(k);if(e){e.s+=p[2];e.n++;p[3].forEach((v,j)=>e.sv[j]+=v)}else mp.set(k,{x:p[0],y:p[1],s:p[2],n:1,sv:p[3].slice()})}
+  const u=[...mp.values()].map(e=>[e.x,e.y,e.s/e.n,e.sv.map(v=>v/e.n)]),dup=pts.length-u.length;
   S.pts=u;S.names=[t.head[cx],t.head[cy],t.head[cz]];S.norm={cx:(x0+x1)/2,cy:(y0+y1)/2,S:sc};
   let zmin=1e300,zmax=-1e300,zs=0;for(const p of u){zmin=Math.min(zmin,p[2]);zmax=Math.max(zmax,p[2]);zs+=p[2]}
   S.zmean=zs/u.length;S.grid=null;S.cv=null;S.vario=null;
-  m.textContent=`${u.length} points${dup?` (${dup} duplicate location(s) averaged)`:''} · x ${fmt(x0)} → ${fmt(x1)} · y ${fmt(y0)} → ${fmt(y1)} · ${esc(S.names[2])} ${fmt(zmin)} → ${fmt(zmax)}`;
+  S.secNames=[];S.secMu=[];S.secSd=[];let secTxt='';
+  if(S.secMap){const src=secSource(),N=S.norm,V=secInterp(src.X,src.Y,src.V,Float64Array.from(u,p=>(p[0]-N.cx)/N.S),Float64Array.from(u,p=>(p[1]-N.cy)/N.S));u.forEach((p,i)=>{p[3]=V.map(a=>a[i])});S.secNames=S.secMap.names.slice()}
+  else if(sel.length)S.secNames=sel.map(i=>t.head[i]);
+  for(let j=0;j<S.secNames.length;j++){let mu=0;for(const p of u)mu+=p[3][j];mu/=u.length;let vv=0;for(const p of u)vv+=(p[3][j]-mu)**2;S.secMu.push(mu);S.secSd.push(Math.sqrt(vv/u.length)||1)}
+  if(S.secNames.length)secTxt=` · secondary: ${S.secNames.map(esc).join(', ')}${dropS?` (${dropS} row(s) without a valid secondary value dropped)`:''}`;
+  m.textContent=`${u.length} points${dup?` (${dup} duplicate location(s) averaged)`:''} · x ${fmt(x0)} → ${fmt(x1)} · y ${fmt(y0)} → ${fmt(y1)} · ${esc(S.names[2])} ${fmt(zmin)} → ${fmt(zmax)}${secTxt}`;
   setGridDefaults(x0,x1,y0,y1);S.bbox=[x0,x1,y0,y1];fit();$('cvOut').innerHTML='';$('vCan').hidden=true;schedPreview()}
 function loadText(text){const t=parseTable(text);if(!t||t.err){$('dataMsg').textContent=t?t.err:'Empty input.';$('dataMsg').className='msg err';return false}S.table=t;fillColSelects();buildPoints();return true}
 $('paste').addEventListener('input',()=>{clearTimeout(S.pt);S.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
-['cx','cy','cz'].forEach(i=>$(i).onchange=buildPoints);
+['cx','cy','cz'].forEach(i=>$(i).onchange=()=>{fillSecCols();buildPoints()});
 $('bOpen').onclick=()=>$('file').click();
 $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>2e6?r.result.slice(0,2e6):r.result;loadText(r.result)};r.readAsText(f);e.target.value=''};
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
 
+
+// ---- Secondary variables: either extra columns of the table (known at the data points only) or a separate secondary map X Y S1 [S2…]
+function fillSecCols(){const t=S.table,box=$('secCols');if(!t){box.innerHTML='';return}
+  const used=new Set([+$('cx').value,+$('cy').value,+$('cz').value]),old=new Set([...box.querySelectorAll('input:checked')].map(e=>+e.value));
+  box.innerHTML=t.head.map((h,i)=>used.has(i)?'':`<label class="inl"><input type="checkbox" value="${i}"${old.has(i)?' checked':''}>${esc(h)}</label>`).join('')||'<span class="msg">No extra column in the table.</span>';
+  box.querySelectorAll('input').forEach(e=>e.onchange=buildPoints)}
+function parseSec(text){const t=parseTable(text);if(!t||t.err)return{err:t?t.err:'Empty input.'};
+  const[x,y]=guessCols(t.head),cols=t.head.map((_,i)=>i).filter(i=>i!==x&&i!==y).slice(0,4),X=[],Y=[],V=cols.map(()=>[]);
+  for(const r of t.rows){const a=toN(r[x]),b=toN(r[y]),v=cols.map(i=>toN(r[i]));if(!isFinite(a)||!isFinite(b)||v.some(q=>!isFinite(q)))continue;X.push(a);Y.push(b);v.forEach((q,j)=>V[j].push(q))}
+  if(X.length<4)return{err:'Fewer than 4 valid rows in the secondary map.'};if(X.length>30000)return{err:'More than 30 000 secondary points: please thin them.'};
+  return{names:cols.map(i=>t.head[i]),X:Float64Array.from(X),Y:Float64Array.from(Y),V:V.map(a=>Float64Array.from(a)),n:X.length}}
+function secSource(){const N=S.norm;
+  if(S.secMap){const m=S.secMap;return{X:m.X.map(v=>(v-N.cx)/N.S),Y:m.Y.map(v=>(v-N.cy)/N.S),V:m.V}}
+  return{X:Float64Array.from(S.pts,p=>(p[0]-N.cx)/N.S),Y:Float64Array.from(S.pts,p=>(p[1]-N.cy)/N.S),V:S.secNames.map((_,j)=>Float64Array.from(S.pts,p=>p[3][j]))}}
+function secInterp(sx,sy,vals,qx,qy){       // TIN interpolation of each secondary onto the query locations; nearest neighbour outside the hull
+  const out=[];for(const v of vals){const src={X:sx,Y:sy,Z:v,n:sx.length},z=tinPredict(src,qx,qy).z;let miss=false;for(let i=0;i<z.length;i++)if(!isFinite(z[i])){miss=true;break}
+    if(miss){const nn=idwPredict(src,qx,qy,{k:1,p:1,eps:0,maxd:0}).z;for(let i=0;i<z.length;i++)if(!isFinite(z[i]))z[i]=nn[i]}out.push(z)}
+  return out}
+function secStd(arrs){return arrs.map((a,j)=>a.map(v=>(v-S.secMu[j])/S.secSd[j]))}
+function setSecText(text){const m=$('secMsg');m.className='msg';
+  if(!text.trim()){S.secMap=null;m.textContent='';if(S.table)buildPoints();return}
+  const r=parseSec(text);if(r.err){S.secMap=null;m.textContent=r.err;m.className='msg err';if(S.table)buildPoints();return}
+  S.secMap=r;m.textContent=`Secondary map: ${r.n} points · ${r.names.map(esc).join(', ')} · interpolated (TIN) onto the data points and the grid nodes. The table's own extra columns are then ignored.`;if(S.table)buildPoints()}
+$('secPaste').addEventListener('input',()=>{clearTimeout(S.st);S.st=setTimeout(()=>setSecText($('secPaste').value),350)});
+$('bSecOpen').onclick=()=>$('secFile').click();
+$('secFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('secPaste').value=r.result.length>2e6?r.result.slice(0,2e6):r.result;setSecText(r.result)};r.readAsText(f);e.target.value=''};
+$('bSecClear').onclick=()=>{$('secPaste').value='';setSecText('')};
+
 // ---- examples
 const EXZ=(x,y)=>1800+520*Math.sin(x/17)*Math.cos(y/13)+7*x-4*y;
-function example(kind){const r=rng(kind==='lines'?7:42),L=['X\tY\tDepth'];
-  if(kind==='lines'){for(let l=0;l<9;l++){const y=3+l*6.7;for(let i=0;i<34;i++){const x=r()*100,yy=y+(r()-.5)*.6;L.push(`${x.toFixed(2)}\t${yy.toFixed(2)}\t${(EXZ(x,yy)+(r()-.5)*20).toFixed(1)}`)}}}
-  else{for(let i=0;i<150;i++){const x=r()*100,y=r()*60;L.push(`${x.toFixed(2)}\t${y.toFixed(2)}\t${(EXZ(x,y)+(r()-.5)*20).toFixed(1)}`)}}
+function example(){const r=rng(42),L=['X\tY\tDepth'],M=['X\tY\tTWT'];       // synthetic: 150 wells; secondary = two-way time (ms) on a regular 51 x 31 map, TWT = 2000 z / v with v = 2400 + 2.5 x (m/s) and 0.5 % noise
+  for(let i=0;i<150;i++){const x=r()*100,y=r()*60;L.push(`${x.toFixed(2)}\t${y.toFixed(2)}\t${(EXZ(x,y)+(r()-.5)*20).toFixed(1)}`)}
+  for(let j=0;j<=30;j++)for(let i=0;i<=50;i++){const x=i*2,y=j*2,t=2000*EXZ(x,y)/(2400+2.5*x);M.push(`${x}\t${y}\t${(t*(1+(r()-.5)*.01)).toFixed(1)}`)}
+  $('secPaste').value=M.join('\n');S.secMap=null;const ps=parseSec($('secPaste').value);S.secMap=ps;$('secMsg').className='msg';$('secMsg').textContent=`Secondary map: ${ps.n} points · ${ps.names.join(', ')} (synthetic seismic time) · interpolated (TIN) onto the data points and the grid nodes.`;
   $('paste').value=L.join('\n');loadText($('paste').value);run()}
-$('bExample').onclick=()=>example('random');$('bExample2').onclick=()=>example('lines');
+$('bExample').onclick=()=>example();
 
 // =====================================================================
 //  Grid & parameters
@@ -509,13 +584,15 @@ function methodInfo(){const t={nn:'Each node takes the value of the closest data
   tin:'Delaunay triangulation of the points, linear interpolation inside each triangle. Exact, local, undefined outside the convex hull of the data; creases at the triangle edges.',
   rbf:'Global radial basis function interpolation: thin-plate spline (r² ln r, the minimum-bending-energy surface), cubic, or multiquadric. Smooth, can overshoot the data range, dense O(n³) solve (limited to 1200 points). Smoothing λ > 0 turns it into a smoothing spline.',
   mincurv:'Iterative minimum-curvature surface on the grid (Briggs 1974) with optional internal tension (Smith & Wessel 1990, 0 = pure minimum curvature, towards 1 = membrane). Works with many points; data are snapped to the nearest node.',
+  ked:'Universal kriging with external drift (KED): the local mean is a linear function of the secondary variable(s) (e.g. a seismic attribute known on a map): m(u) = a0 + a1·S1(u) + …, estimated inside each kriging system. The variogram is fitted on the residuals of a global regression on the secondaries. The secondaries must be known at every node: give a secondary map, or the extra columns of the table are interpolated (TIN) to the nodes, which adds little. Optional linear x,y trend.',
+  cok:'Collocated simple cokriging with the Markov model 1 (Xu et al. 1992): the secondary value at the target is used as one extra datum, with a cross-covariance proportional to the primary one and the correlation estimated from the data. Several secondaries are first combined into their linear regression on the primary. Needs a secondary smoother than the primary and a stable correlation; the correlation is capped at 0.98.',
   ok:'Ordinary kriging: best linear unbiased estimate with an unknown but locally constant mean, using the k nearest points and a variogram fitted automatically (spherical, exponential, gaussian, Matérn 3/2: the one with the lowest leave-one-out error wins) or entered by hand. Also gives the kriging standard error.',
   sk:'Simple kriging: the mean is known (sample mean by default, or the value you type) and the estimate reverts to it far from data. Needs a stationary field around that mean; with a regional trend it is biased. Solved with the covariance C = sill − γ.',
   uk1:'Universal kriging with a linear drift (a + bx + cy) modelled inside the kriging system. The variogram is fitted on the residuals of a global linear trend, which is the right thing to do when the field has a regional dip.',
   uk2:'Universal kriging with a quadratic drift (6 terms). Needs more neighbours (at least 20 are used) and well-spread data: with few points it can oscillate.',
   lp:'Local polynomial regression (moving least squares): at each node a plane or quadric is fitted by weighted least squares to the k nearest points with tricube weights. Smooth, local, not exact at the data (it smooths noise); no variogram needed.'};
   $('mInfo').dataset.tip=t[$('method').value]}
-function togAux(){const sk=$('method').value==='sk',m=$('kan').value==='manual';['skm1','skm'].forEach(i=>$(i).hidden=!sk);['kar1','kar','kaa1','kaa'].forEach(i=>$(i).hidden=!m)}
+function togAux(){const sk=$('method').value==='sk',m=$('kan').value==='manual';['skm1','skm'].forEach(i=>$(i).hidden=!sk);['kar1','kar','kaa1','kaa'].forEach(i=>$(i).hidden=!m);$('kedpolyl').hidden=$('method').value!=='ked'}
 $('method').onchange=()=>{const mv=$('method').value,kg=isKrig(mv);PM.forEach(m=>{const e=$('pm_'+m);if(e)e.hidden=m==='krig'?!kg:m!==mv});methodInfo();
   togAux();
   $('vsel').querySelector('option[value="std"]').disabled=!kg;if(!kg&&$('vsel').value==='std')$('vsel').value='z';schedPreview()};
@@ -524,7 +601,7 @@ function readParams(){
     rbf:{kernel:$('rbfk').value,lambda:Math.max(0,toN($('rbfl').value)||0),c:(toN($('rbfc').value)||0.05*(S.norm?S.norm.S:1))/(S.norm?S.norm.S:1),maxN:1200},
     mc:{tension:Math.min(0.95,Math.max(0,toN($('mct').value)||0)),iters:Math.max(50,+$('mci').value||400)},
     lp:{k:+$('lpk').value||24,deg:+$('lpd').value||1},
-    krig:{k:+$('krk').value||16,model:$('krm').value,vmode:$('vmode').value,mean:(isFinite(toN($('skm').value))?toN($('skm').value)-(S.zmean||0):0),
+    krig:{k:+$('krk').value||16,kedpoly:$('kedpoly').checked,model:$('krm').value,vmode:$('vmode').value,mean:(isFinite(toN($('skm').value))?toN($('skm').value)-(S.zmean||0):0),
       aniso:{mode:$('kan').value,ratio:toN($('kar').value)||1,angle:toN($('kaa').value)||0}}};
   if(P.krig.vmode==='manual'){const sc=S.norm.S;P.krig.vario={model:$('krm').value==='auto'?'spherical':$('krm').value,c0:Math.max(0,toN($('krn').value)||0),c:Math.max(1e-12,toN($('krs').value)||1),a:Math.max(1e-9,(toN($('krr').value)||sc/3)/sc)}}
   return P}
@@ -544,7 +621,8 @@ function showVario(vm,cand,an,info,fill){
 //  Run
 // =====================================================================
 function normTrain(pts){const N=S.norm,n=pts.length,X=new Float64Array(n),Y=new Float64Array(n),Z=new Float64Array(n);
-  for(let i=0;i<n;i++){X[i]=(pts[i][0]-N.cx)/N.S;Y[i]=(pts[i][1]-N.cy)/N.S;Z[i]=pts[i][2]-S.zmean}return{X,Y,Z,n}}
+  for(let i=0;i<n;i++){X[i]=(pts[i][0]-N.cx)/N.S;Y[i]=(pts[i][1]-N.cy)/N.S;Z[i]=pts[i][2]-S.zmean}
+  const T={X,Y,Z,n};if(S.secNames&&S.secNames.length)T.S=S.secNames.map((_,j)=>Float64Array.from(pts,p=>(p[3][j]-S.secMu[j])/S.secSd[j]));return T}
 function hull(P){P=P.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
   const lo=[],up=[];for(const p of P){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}
   for(let i=P.length-1;i>=0;i--){const p=P[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}
@@ -564,6 +642,7 @@ function run(){
   setTimeout(()=>{try{
     const t0=performance.now(),method=$('method').value,P=readParams(),tr=normTrain(S.pts),N=S.norm,{X,Y}=nodeCoords(g);
     const QX=X.map(x=>(x-N.cx)/N.S),QY=Y.map(y=>(y-N.cy)/N.S),G={x0:(g.x0-N.cx)/N.S,y0:(g.y0-N.cy)/N.S,dx:g.dx/N.S,dy:g.dy/N.S,nx:g.nx,ny:g.ny};
+    if(method==='ked'||method==='cok'){if(!S.secNames.length)throw new Error('This method needs a secondary variable: define one in section 1.');const src=secSource();P.qS=secStd(secInterp(src.X,src.Y,src.V,QX,QY))}
     const res=predictAt(method,tr,QX,QY,P,G),z=res.z;for(let k=0;k<z.length;k++)z[k]+=S.zmean;
     let v=null;if(res.v){v=new Float64Array(res.v.length);for(let k=0;k<v.length;k++)v[k]=Math.sqrt(res.v[k])}
     applyMask(g,z,v);
@@ -572,7 +651,7 @@ function run(){
     let ok=0,mn=Infinity,mx=-Infinity;for(let k=0;k<z.length;k++)if(isFinite(z[k])){ok++;if(z[k]<mn)mn=z[k];if(z[k]>mx)mx=z[k]}
     S.grid.ok=ok;S.grid.zmin=mn;S.grid.zmax=mx;
     if(!ok)throw new Error('No node could be estimated: check the grid bounds and the extrapolation limit.');
-    m.textContent=`${METHODS[method]} · ${ok} / ${z.length} nodes · ${fmt(mn)} → ${fmt(mx)} · ${(S.grid.ms/1000).toFixed(2)} s`+(res.vario?` · ${VNAMES[res.vario.model]}`:'');
+    m.textContent=`${METHODS[method]} · ${ok} / ${z.length} nodes · ${fmt(mn)} → ${fmt(mx)} · ${(S.grid.ms/1000).toFixed(2)} s`+(res.vario?` · ${VNAMES[res.vario.model]}`:'')+(res.note?` · ${res.note}`:'');
     banner(`Done: ${METHODS[method]}, ${ok} nodes in ${(S.grid.ms/1000).toFixed(2)} s.`);
     rebuildDisplay();fit()}
   catch(e){m.textContent=e.message;m.className='msg err';banner(e.message,true)}
@@ -588,13 +667,13 @@ $('bCV').onclick=async()=>{
   const out=$('cvOut'),P=readParams(),N=S.norm,n=S.pts.length,K=Math.min(5,n),r=rng(99),perm=Array.from({length:n},(_,i)=>i);
   for(let i=n-1;i>0;i--){const j=Math.floor(r()*(i+1));[perm[i],perm[j]]=[perm[j],perm[i]]}
   const G={x0:(g.x0-N.cx)/N.S,y0:(g.y0-N.cy)/N.S,dx:g.dx/N.S,dy:g.dy/N.S,nx:g.nx,ny:g.ny},rows=[];$('bCV').disabled=true;
-  const ids=['nn','idw','tin','lp','rbf','mincurv','ok','sk','uk1','uk2'];
+  const ids=['nn','idw','tin','lp','rbf','mincurv','ok','sk','uk1','uk2'].concat(S.secNames.length?['ked','cok']:[]);
   for(const meth of ids){
     out.innerHTML=`<div class="msg">Computing ${esc(METHODS[meth])}…</div>`+tbl(rows);await new Promise(r=>setTimeout(r,20));
     const pred=new Float64Array(n).fill(NaN);let err=null;
     try{for(let f=0;f<K;f++){const te=[],trn=[];perm.forEach((id,i)=>(i%K===f?te:trn).push(id));
       const tr=normTrain(trn.map(i=>S.pts[i])),QX=Float64Array.from(te,i=>(S.pts[i][0]-N.cx)/N.S),QY=Float64Array.from(te,i=>(S.pts[i][1]-N.cy)/N.S);
-      const zm=S.zmean;const res=predictAt(meth,tr,QX,QY,P,G);te.forEach((id,q)=>{pred[id]=res.z[q]+zm})}}catch(e){err=e.message}
+      const zm=S.zmean,Pf=S.secNames.length?{...P,qS:secStd(S.secNames.map((_,j)=>Float64Array.from(te,i=>S.pts[i][3][j])))}:P;const res=predictAt(meth,tr,QX,QY,Pf,G);te.forEach((id,q)=>{pred[id]=res.z[q]+zm})}}catch(e){err=e.message}
     if(err){rows.push({m:METHODS[meth],err});continue}
     let se=0,ae=0,b=0,c=0,sy=0,syy=0;for(let i=0;i<n;i++)if(isFinite(pred[i])){const e=pred[i]-S.pts[i][2];se+=e*e;ae+=Math.abs(e);b+=e;c++}
     let mean=0;for(const p of S.pts)mean+=p[2];mean/=n;let vt=0;for(const p of S.pts)vt+=(p[2]-mean)**2;
@@ -624,6 +703,7 @@ const CMAPS={viridis:[[68,1,84],[72,36,117],[65,68,135],[53,95,141],[42,120,142]
   RdBu:[[33,102,172],[103,169,207],[209,229,240],[247,247,247],[253,219,199],[239,138,98],[178,24,43]]};
 function cmapRGB(t){const st=CMAPS[$('cmap').value];if($('rev').checked)t=1-t;t=Math.min(1,Math.max(0,t))*(st.length-1);const i=Math.min(st.length-2,Math.floor(t)),f=t-i;return st[i].map((c,k)=>Math.round(c+(st[i+1][k]-c)*f))}
 function curField(){const g=S.grid;if(!g)return null;return $('vsel').value==='std'&&g.v?g.v:g.z}
+function ptsRange(){let a=Infinity,b=-Infinity;for(const p of S.pts){if(p[2]<a)a=p[2];if(p[2]>b)b=p[2]}return[a,b]}
 function range(){const f=curField(),a=toN($('rmin').value),b=toN($('rmax').value);let mn=Infinity,mx=-Infinity;for(const v of f)if(isFinite(v)){if(v<mn)mn=v;if(v>mx)mx=v}
   return[isFinite(a)?a:mn,isFinite(b)?b:mx]}
 function niceStep(r){return niceNum(r)}
@@ -662,9 +742,9 @@ function draw(){
   ctx.save();ctx.beginPath();ctx.rect(MARG.l,MARG.t,W-MARG.l-MARG.r,H-MARG.t-MARG.b);ctx.clip();
   if(g&&RC){ctx.imageSmoothingEnabled=$('smooth').checked;ctx.drawImage(RC,sx(e[0]),sy(e[3]),(e[1]-e[0])*S.view.s,(e[3]-e[2])*S.view.s)}
   if(g&&SEGS.length){ctx.strokeStyle='rgba(35,34,32,.55)';ctx.lineWidth=.8;ctx.beginPath();for(let i=0;i<SEGS.length;i+=4){ctx.moveTo(sx(SEGS[i]),sy(SEGS[i+1]));ctx.lineTo(sx(SEGS[i+2]),sy(SEGS[i+3]))}ctx.stroke()}
-  if(S.pts&&$('showP').checked){const r=+$('psz').value,[lo,hi]=g?range():[0,1],byv=$('pcol').checked&&g&&$('vsel').value!=='std';
+  if(S.pts&&$('showP').checked){const r=+$('psz').value,[lo,hi]=g?range():ptsRange(),byv=$('pcol').checked&&$('vsel').value!=='std';
     for(const p of S.pts){const x=sx(p[0]),y=sy(p[1]);if(x<MARG.l-5||x>W-MARG.r+5||y<MARG.t-5||y>H-MARG.b+5)continue;ctx.beginPath();ctx.arc(x,y,r,0,7);
-      if(byv){const c=cmapRGB((p[2]-lo)/((hi-lo)||1));ctx.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`}else ctx.fillStyle='#232220';ctx.fill();ctx.lineWidth=1.2;ctx.strokeStyle=byv?'#232220':'#fff';ctx.stroke()}}
+      if(byv){const c=cmapRGB((p[2]-lo)/((hi-lo)||1));ctx.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`}else ctx.fillStyle='#232220';ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle=byv?'#000':'#fff';ctx.stroke()}}
   ctx.restore();
   ctx.strokeStyle='#8a8678';ctx.lineWidth=1;ctx.strokeRect(MARG.l+.5,MARG.t+.5,W-MARG.l-MARG.r,H-MARG.t-MARG.b);
   ctx.fillStyle='#5c5a52';ctx.font='11px Inter,sans-serif';ctx.textAlign='center';
