@@ -1,0 +1,4 @@
+# Sorties locales de Claude : ne jamais commiter
+Claude outputs/
+# Build MkDocs
+site/

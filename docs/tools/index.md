@@ -1,3 +1,11 @@
+---
+hide:
+  - navigation
+  - toc
+---
+
 # Tools
 
-The tools page is password protected: [open it here](https://RomainGiboreau.github.io/My_Website/tools-home/).
+<meta http-equiv="refresh" content="0; url=https://RomainGiboreau.github.io/My_Website/tools-home/">
+
+Redirection vers la page Tools, protégée par mot de passe : [ouvrir](https://RomainGiboreau.github.io/My_Website/tools-home/).

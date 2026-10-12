@@ -28,11 +28,11 @@ markdown_extensions:
 
 extra_javascript:
   - javascripts/mathjax.js
-  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+  - https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js
 
 extra_css:
   - stylesheets/extra.css
-  
+
 plugins:
   - search
   - tags:
@@ -45,7 +45,7 @@ nav:
       - notes/index.md
       - notes/pandas_polars.md
       - notes/mcda_promethee_ahp.md
-  - Resources: 
+  - Resources:
       - resources/index.md
       - resources/bibliography.md
   - Tools:
@@ -66,5 +66,3 @@ nav:
       - Ternary diagram: https://RomainGiboreau.github.io/My_Website/ternary/
       - Variogram: https://RomainGiboreau.github.io/My_Website/variogram/
   - Tags: tags.md
-
-
