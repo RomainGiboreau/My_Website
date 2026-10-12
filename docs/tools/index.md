@@ -4,8 +4,8 @@ hide:
   - toc
 ---
 
+<meta http-equiv="refresh" content="0; url=https://RomainGiboreau.github.io/My_Website/tr-cycles/">
+
 # Tools
 
-<meta http-equiv="refresh" content="0; url=https://RomainGiboreau.github.io/My_Website/tools-home/">
-
-Redirection vers la page Tools, protégée par mot de passe : [ouvrir](https://RomainGiboreau.github.io/My_Website/tools-home/).
+The tools are password protected: [open them here](https://RomainGiboreau.github.io/My_Website/tr-cycles/). Each tool page has a "Method & sources" button.
