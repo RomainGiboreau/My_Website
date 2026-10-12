@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Map interpolation</title>
+<meta name="description" content="Interpolate a scattered point cloud (X, Y, value) onto a regular grid: nearest neighbour, inverse distance, Delaunay, thin-plate spline, minimum curvature, ordinary kriging, with cross-validation. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+</style></head><body>
+<div class="top"><h1>Map interpolation</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <label><input type="checkbox" id="skipNaN" checked>Skip empty nodes</label>
+  <button class="pri" id="bCopy" title="Copy x, y, value as tab-separated text, ready to paste into Excel">Copy XYZ</button>
+  <button id="bCsv">XYZ CSV</button><button id="bMat" title="One row per y (top = ymax), one column per x">Matrix CSV</button>
+  <button id="bGrd" title="Surfer ASCII grid (DSAA); empty nodes = 1.70141e38">Surfer .grd</button>
+  <button id="bAsc" title="ESRI ASCII grid; needs dx = dy">ESRI .asc</button><button id="bPng">PNG</button>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: your data never leave it. Paste or open a table with at least three columns (X, Y, value). Duplicate locations are averaged. Interpolation is done in coordinates centred and scaled by the longest extent; results are in your units.">?</span>
+ </div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Point cloud<span class="tt" tabindex="0" data-tip="Paste a table with X, Y and the value to map (tab, semicolon, comma or space separated; decimal comma accepted; an optional header row names the columns), or open a text/CSV file, or drop it on the page. Lines starting with # are ignored.">?</span><i class="chev"></i></h2>
+  <div class="body"><textarea id="paste" rows="6" placeholder="X&#9;Y&#9;Depth&#10;12.5&#9;40.2&#9;1834.1&#10;…" spellcheck="false"></textarea>
+  <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,.xyz,text/*" hidden>
+  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example: wells</button><button id="bExample2">Example: lines</button></div>
+  <div class="g3"><span>X</span><select id="cx"></select><span>Y</span><select id="cy"></select><span>Value</span><select id="cz"></select></div>
+  <div class="msg" id="dataMsg">No data yet.</div></div>
+ </section>
+ <section class="panel"><h2><span class="n">2</span>Grid<span class="tt" tabindex="0" data-tip="Regular output grid. Nodes are xmin, xmin+dx, … up to xmax (same for y). The extrapolation limit blanks the nodes where the estimate would be pure extrapolation: outside the convex hull of the data, or farther than a given distance from any data point.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="g3"><span>xmin</span><input type="text" id="gx0"><span>xmax</span><input type="text" id="gx1"><span>ymin</span><input type="text" id="gy0"><span>ymax</span><input type="text" id="gy1"><span>dx</span><input type="text" id="gdx"><span>dy</span><input type="text" id="gdy"></div>
+  <div class="row"><button id="bExt">Data extent</button></div><div class="msg" id="gMsg"></div>
+  <div class="pg"><span>Extrapolation limit</span><select id="mask"><option value="hull">Convex hull of the data</option><option value="dist">Distance to nearest point ≤</option><option value="none">None</option></select><span>Distance</span><input type="text" id="mdist"></div></div>
+ </section>
+ <section class="panel"><h2><span class="n">3</span>Method<span class="tt" id="mInfo" tabindex="0" data-tip="">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><select id="method" style="flex:1"><optgroup label="Kriging"><option value="ok" selected>Ordinary kriging</option><option value="sk">Simple kriging</option><option value="uk1">Universal kriging — linear drift</option><option value="uk2">Universal kriging — quadratic drift</option></optgroup><optgroup label="Other"><option value="idw">Inverse distance (IDW)</option><option value="rbf">Spline — thin-plate / RBF</option><option value="mincurv">Spline — minimum curvature</option><option value="lp">Local polynomial regression</option><option value="tin">Linear (Delaunay TIN)</option><option value="nn">Nearest neighbour</option></optgroup></select></div>
+  <div id="pm_idw" class="pg" hidden><span>Neighbours k</span><input type="number" id="idwk" value="12" min="1" max="200"><span>Power p</span><input type="text" id="idwp" value="2"><span>Smoothing ε</span><input type="text" id="idwe" value="0"></div>
+  <div id="pm_rbf" class="pg" hidden><span>Kernel</span><select id="rbfk"><option value="tps">Thin-plate (r² ln r)</option><option value="cubic">Cubic (r³)</option><option value="mq">Multiquadric</option></select><span>Smoothing λ</span><input type="text" id="rbfl" value="0"><span>Shape c (multiquadric)</span><input type="text" id="rbfc" value=""></div>
+  <div id="pm_mincurv" class="pg" hidden><span>Tension (0–0.95)</span><input type="text" id="mct" value="0"><span>Iterations</span><input type="number" id="mci" value="400" min="50" max="5000"></div>
+  <div id="pm_lp" class="pg" hidden><span>Neighbours k</span><input type="number" id="lpk" value="24" min="4" max="200"><span>Degree</span><select id="lpd"><option value="1">1 (plane)</option><option value="2">2 (quadric)</option></select></div>
+  <div id="pm_krig"><div class="pg"><span>Variogram</span><select id="vmode"><option value="auto">Automatic fit (default)</option><option value="manual">Manual</option></select><span>Model</span><select id="krm"><option value="auto">Best of 4 (leave-one-out)</option><option value="spherical">Spherical</option><option value="exponential">Exponential</option><option value="gaussian">Gaussian</option><option value="matern">Matérn 3/2-like</option></select><span>Neighbours k</span><input type="number" id="krk" value="16" min="4" max="100">
+   <span>Anisotropy</span><select id="kan"><option value="auto">Auto-detect</option><option value="none">None</option><option value="manual">Manual</option></select>
+   <span id="kar1" hidden>Ratio (minor/major range ≤ 1)</span><input type="text" id="kar" value="1" hidden><span id="kaa1" hidden>Major axis angle (° from x)</span><input type="text" id="kaa" value="0" hidden>
+   <span id="skm1" hidden>Known mean (SK)</span><input type="text" id="skm" placeholder="data mean" hidden>
+   <span>Nugget</span><input type="text" id="krn"><span>Partial sill</span><input type="text" id="krs"><span>Range</span><input type="text" id="krr"></div>
+   <div class="msg" id="anMsg"></div><div id="vTbl"></div>
+   <canvas class="v" id="vCan" width="300" height="150" hidden></canvas></div>
+  <div class="row" style="margin-top:8px"><button class="pri" id="bRun">Interpolate</button></div>
+  <div class="msg" id="exMsg"></div></div>
+ </section>
+ <section class="panel"><h2><span class="n">4</span>Display<span class="tt" tabindex="0" data-tip="Colour range is automatic unless min/max are typed. Contours use a nice interval unless one is given. Points can be coloured by their own value with the same scale: a point whose colour clashes with the surface under it is a point the interpolation does not honour.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Show</span><select id="vsel"><option value="z">Interpolated value</option><option value="std" disabled>Kriging std error</option></select><span>Colour map</span><select id="cmap"><option value="viridis">Viridis</option><option value="rainbow">Rainbow</option><option value="terrain">Terrain</option><option value="RdBu">Blue–red</option><option value="gray">Grey</option></select>
+   <span>Min / max</span><span style="display:flex;gap:4px"><input type="text" id="rmin" placeholder="auto"><input type="text" id="rmax" placeholder="auto"></span><span>Contour interval</span><input type="text" id="cint" placeholder="auto"></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="rev">Reverse</label><label class="inl"><input type="checkbox" id="showC">Contours</label><label class="inl"><input type="checkbox" id="smooth" checked>Smooth</label></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="showP" checked>Points</label><label class="inl"><input type="checkbox" id="pcol">by value</label><label class="inl">size <input type="range" id="psz" min="1" max="8" value="3" style="width:70px"></label></div></div>
+ </section>
+ <section class="panel"><h2><span class="n">5</span>Compare methods<span class="tt" tabindex="0" data-tip="5-fold cross-validation with the current parameters: the points are split in 5 random groups; each group is predicted from the other four. RMSE, MAE and bias are in the units of the value. Lowest RMSE is highlighted. This measures how well each method predicts at unsampled locations; with clustered or line-wise sampling it is optimistic, because neighbours of held-out points are often still in the training set.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button id="bCV">Run cross-validation</button></div><div id="cvOut"></div></div>
+ </section>
+</aside>
+<main>
+ <div class="stage" id="stage">
+  <canvas id="cv" style="cursor:grab"></canvas>
+  <div class="banner" id="banner" hidden></div>
+  <div class="tools"><button id="zIn" title="Zoom in">+</button><button id="zOut" title="Zoom out">−</button><button id="zFit" title="Fit">Fit</button></div>
+  <div class="ro" id="ro">—</div>
+ </div>
+</main>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const toN=s=>{const t=String(s).trim().replace(',','.');return t!==''&&isFinite(+t)?+t:NaN};
+function fmt(v){if(!isFinite(v))return'—';const a=Math.abs(v);return(a!==0&&(a<1e-3||a>=1e7))?v.toExponential(4):String(+v.toPrecision(7))}
+let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2800)}
+let banT=null;function banner(m,err){const b=$('banner');b.textContent=m;b.className='banner'+(err?' err':'');b.hidden=false;clearTimeout(banT);banT=setTimeout(()=>{b.hidden=true},err?9000:5000)}
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+// =====================================================================
+//  Linear algebra
+// =====================================================================
+function luSolve(A,b,m){          // A: row-major m*m (destroyed), b: rhs replaced by the solution; false if singular
+  for(let c=0;c<m;c++){
+    let p=c,mx=Math.abs(A[c*m+c]);
+    for(let r=c+1;r<m;r++){const v=Math.abs(A[r*m+c]);if(v>mx){mx=v;p=r}}
+    if(mx<1e-13)return false;
+    if(p!==c){for(let k=0;k<m;k++){const t=A[c*m+k];A[c*m+k]=A[p*m+k];A[p*m+k]=t}const t=b[c];b[c]=b[p];b[p]=t}
+    const piv=A[c*m+c];
+    for(let r=c+1;r<m;r++){const f=A[r*m+c]/piv;if(f!==0){A[r*m+c]=0;const rc=r*m,cc=c*m;for(let k=c+1;k<m;k++)A[rc+k]-=f*A[cc+k];b[r]-=f*b[c]}}
+  }
+  for(let r=m-1;r>=0;r--){let s=b[r];for(let k=r+1;k<m;k++)s-=A[r*m+k]*b[k];b[r]=s/A[r*m+r]}
+  return true}
+
+// =====================================================================
+//  k-nearest-neighbour search on a bucket grid
+// =====================================================================
+class KNN{
+  constructor(X,Y){const n=X.length;this.X=X;this.Y=Y;this.n=n;
+    let x0=1e300,x1=-1e300,y0=1e300,y1=-1e300;for(let i=0;i<n;i++){x0=Math.min(x0,X[i]);x1=Math.max(x1,X[i]);y0=Math.min(y0,Y[i]);y1=Math.max(y1,Y[i])}
+    const w=Math.max(x1-x0,1e-12),h=Math.max(y1-y0,1e-12),cs=Math.max(Math.sqrt(w*h/Math.max(1,n)*2),Math.max(w,h)/200,1e-12);
+    this.x0=x0;this.y0=y0;this.cs=cs;this.nx=Math.floor(w/cs)+1;this.ny=Math.floor(h/cs)+1;
+    const cnt=new Int32Array(this.nx*this.ny+1),cell=new Int32Array(n);
+    for(let i=0;i<n;i++){const c=Math.min(this.ny-1,Math.floor((Y[i]-y0)/cs))*this.nx+Math.min(this.nx-1,Math.floor((X[i]-x0)/cs));cell[i]=c;cnt[c+1]++}
+    for(let c=0;c<this.nx*this.ny;c++)cnt[c+1]+=cnt[c];
+    this.start=cnt;this.items=new Int32Array(n);const pos=cnt.slice();for(let i=0;i<n;i++)this.items[pos[cell[i]]++]=i}
+  query(x,y,k,bi,bd){            // fills bi/bd (sorted by distance, length >= k); returns count found
+    k=Math.min(k,this.n);let m=0;const cs=this.cs;
+    const ci=Math.min(this.nx-1,Math.max(0,Math.floor((x-this.x0)/cs))),cj=Math.min(this.ny-1,Math.max(0,Math.floor((y-this.y0)/cs)));
+    const R=Math.max(this.nx,this.ny);
+    for(let r=0;r<=R;r++){
+      for(let j=cj-r;j<=cj+r;j++){if(j<0||j>=this.ny)continue;
+        const edge=(j===cj-r||j===cj+r);
+        for(let i=ci-r;i<=ci+r;i+=(edge||r===0)?1:2*r){if(i<0||i>=this.nx)continue;
+          const c=j*this.nx+i;
+          for(let t=this.start[c];t<this.start[c+1];t++){const id=this.items[t],dx=this.X[id]-x,dy=this.Y[id]-y,d=dx*dx+dy*dy;
+            if(m<k||d<bd[m-1]){let q=m<k?m++:m-1;while(q>0&&bd[q-1]>d){bd[q]=bd[q-1];bi[q]=bi[q-1];q--}bd[q]=d;bi[q]=id}}}}
+      if(m>=k){const g=r*cs;if(bd[k-1]<=g*g)break}}
+    return m}}
+
+// =====================================================================
+//  Methods.  All work on normalised coordinates; tr = {X,Y,Z,n}, Z has zero mean.
+//  Each returns {z:Float64Array, v:Float64Array|null}
+// =====================================================================
+function idwPredict(tr,QX,QY,P){
+  const nq=QX.length,z=new Float64Array(nq).fill(NaN),k=Math.max(1,Math.min(P.k,tr.n)),bi=new Int32Array(k+1),bd=new Float64Array(k+1),kn=new KNN(tr.X,tr.Y);
+  const e2=P.eps*P.eps,hp=P.p/2,maxd2=P.maxd>0?P.maxd*P.maxd:Infinity;
+  for(let q=0;q<nq;q++){const m=kn.query(QX[q],QY[q],k,bi,bd);let sw=0,sz=0,hit=-1;
+    for(let t=0;t<m;t++){if(bd[t]>maxd2)break;if(bd[t]<1e-24&&e2===0){hit=bi[t];break}const w=1/Math.pow(bd[t]+e2,hp);sw+=w;sz+=w*tr.Z[bi[t]]}
+    z[q]=hit>=0?tr.Z[hit]:(sw>0?sz/sw:NaN)}
+  return{z,v:null}}
+
+// ---- Delaunay (Bowyer–Watson) + linear interpolation
+function delaunay(X,Y){
+  const n=X.length;let x0=1e300,x1=-1e300,y0=1e300,y1=-1e300;
+  for(let i=0;i<n;i++){x0=Math.min(x0,X[i]);x1=Math.max(x1,X[i]);y0=Math.min(y0,Y[i]);y1=Math.max(y1,Y[i])}
+  const d=Math.max(x1-x0,y1-y0,1e-9),mx=(x0+x1)/2,my=(y0+y1)/2,px=new Float64Array(n+3),py=new Float64Array(n+3);
+  const rnd=rng(12345);                       // tiny deterministic jitter: avoids degenerate cocircular configurations on regular grids
+  for(let i=0;i<n;i++){px[i]=X[i]+(rnd()-.5)*d*1e-9;py[i]=Y[i]+(rnd()-.5)*d*1e-9}
+  px[n]=mx-20*d;py[n]=my-d;px[n+1]=mx;py[n+1]=my+20*d;px[n+2]=mx+20*d;py[n+2]=my-d;
+  let T=[];                                    // each: [a,b,c,cx,cy,r2]
+  const mk=(a,b,c)=>{const ax=px[a],ay=py[a],bx=px[b],by=py[b],cx=px[c],cy=py[c],D=2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));
+    if(Math.abs(D)<1e-30)return[a,b,c,0,0,Infinity];
+    const a2=ax*ax+ay*ay,b2=bx*bx+by*by,c2=cx*cx+cy*cy,ux=(a2*(by-cy)+b2*(cy-ay)+c2*(ay-by))/D,uy=(a2*(cx-bx)+b2*(ax-cx)+c2*(bx-ax))/D;
+    return[a,b,c,ux,uy,(ax-ux)*(ax-ux)+(ay-uy)*(ay-uy)]};
+  T.push(mk(n,n+1,n+2));
+  const order=Array.from({length:n},(_,i)=>i).sort((a,b)=>px[a]-px[b]);
+  for(const p of order){const x=px[p],y=py[p],bad=[],keep=[];
+    for(const t of T){const dx=x-t[3],dy=y-t[4];(dx*dx+dy*dy<t[5]*(1-1e-12)?bad:keep).push(t)}
+    const edges=new Map();
+    for(const t of bad){for(const [u,v] of [[t[0],t[1]],[t[1],t[2]],[t[2],t[0]]]){const key=u<v?u*(n+3)+v:v*(n+3)+u;edges.has(key)?edges.delete(key):edges.set(key,[u,v])}}
+    for(const [u,v] of edges.values())keep.push(mk(u,v,p));
+    T=keep}
+  const out=[];for(const t of T)if(t[0]<n&&t[1]<n&&t[2]<n)out.push(t[0],t[1],t[2]);
+  return new Int32Array(out)}
+function tinPredict(tr,QX,QY){
+  const tri=delaunay(tr.X,tr.Y),nt=tri.length/3,X=tr.X,Y=tr.Y,Z=tr.Z,nq=QX.length,z=new Float64Array(nq).fill(NaN);
+  let x0=1e300,x1=-1e300,y0=1e300,y1=-1e300;for(let i=0;i<tr.n;i++){x0=Math.min(x0,X[i]);x1=Math.max(x1,X[i]);y0=Math.min(y0,Y[i]);y1=Math.max(y1,Y[i])}
+  const g=Math.max(1,Math.floor(Math.sqrt(nt/2))),w=Math.max(x1-x0,1e-12),h=Math.max(y1-y0,1e-12),bk=Array.from({length:g*g},()=>[]);
+  const ci=x=>Math.min(g-1,Math.max(0,Math.floor((x-x0)/w*g))),cj=y=>Math.min(g-1,Math.max(0,Math.floor((y-y0)/h*g)));
+  for(let t=0;t<nt;t++){const a=tri[3*t],b=tri[3*t+1],c=tri[3*t+2];
+    const ia=ci(Math.min(X[a],X[b],X[c])),ib=ci(Math.max(X[a],X[b],X[c])),ja=cj(Math.min(Y[a],Y[b],Y[c])),jb=cj(Math.max(Y[a],Y[b],Y[c]));
+    for(let j=ja;j<=jb;j++)for(let i=ia;i<=ib;i++)bk[j*g+i].push(t)}
+  const eps=1e-9;
+  for(let q=0;q<nq;q++){const x=QX[q],y=QY[q];if(x<x0-eps||x>x1+eps||y<y0-eps||y>y1+eps)continue;
+    for(const t of bk[cj(y)*g+ci(x)]){const a=tri[3*t],b=tri[3*t+1],c=tri[3*t+2],d=(Y[b]-Y[c])*(X[a]-X[c])+(X[c]-X[b])*(Y[a]-Y[c]);if(Math.abs(d)<1e-30)continue;
+      const l1=((Y[b]-Y[c])*(x-X[c])+(X[c]-X[b])*(y-Y[c]))/d,l2=((Y[c]-Y[a])*(x-X[c])+(X[a]-X[c])*(y-Y[c]))/d,l3=1-l1-l2;
+      if(l1>=-eps&&l2>=-eps&&l3>=-eps){z[q]=l1*Z[a]+l2*Z[b]+l3*Z[c];break}}}
+  return{z,v:null}}
+
+// ---- Radial basis functions (thin-plate spline & co), global, exact unless smoothing > 0
+function rbfKernel(kind,c){
+  if(kind==='tps')return r2=>r2>0?0.5*r2*Math.log(r2):0;
+  if(kind==='cubic')return r2=>r2*Math.sqrt(r2);
+  return r2=>Math.sqrt(r2+c*c)}                       // multiquadric
+function rbfPredict(tr,QX,QY,P){
+  const n=tr.n;if(n>P.maxN)throw new Error(`Spline (RBF) is global and dense: ${n} points is above the ${P.maxN} limit. Use minimum curvature, kriging or IDW, or thin the data.`);
+  const phi=rbfKernel(P.kernel,P.c),m=n+3,A=new Float64Array(m*m),b=new Float64Array(m);
+  for(let i=0;i<n;i++){for(let j=0;j<=i;j++){const dx=tr.X[i]-tr.X[j],dy=tr.Y[i]-tr.Y[j],v=phi(dx*dx+dy*dy);A[i*m+j]=v;A[j*m+i]=v}
+    A[i*m+i]+=P.lambda;A[i*m+n]=1;A[i*m+n+1]=tr.X[i];A[i*m+n+2]=tr.Y[i];A[n*m+i]=1;A[(n+1)*m+i]=tr.X[i];A[(n+2)*m+i]=tr.Y[i];b[i]=tr.Z[i]}
+  if(!luSolve(A,b,m))throw new Error('Singular spline system (duplicate or aligned points?).');
+  const nq=QX.length,z=new Float64Array(nq);
+  for(let q=0;q<nq;q++){let s=b[n]+b[n+1]*QX[q]+b[n+2]*QY[q];for(let i=0;i<n;i++){const dx=QX[q]-tr.X[i],dy=QY[q]-tr.Y[i];s+=b[i]*phi(dx*dx+dy*dy)}z[q]=s}
+  return{z,v:null}}
+
+// ---- Minimum curvature on a grid (Briggs 1974; Smith & Wessel 1990 tension), coarse-to-fine SOR
+function relax(z,fixed,nx,ny,T,iters,tol){
+  const W=nx+4,a=20*(1-T)+4*T,om=1.3;
+  for(let it=0;it<iters;it++){
+    for(let j=0;j<ny;j++){const r=(j+2)*W;z[r+1]=2*z[r+2]-z[r+3];z[r]=2*z[r+2]-z[r+4];z[r+nx+2]=2*z[r+nx+1]-z[r+nx];z[r+nx+3]=2*z[r+nx+1]-z[r+nx-1]}
+    for(let i=0;i<W;i++){z[W+i]=2*z[2*W+i]-z[3*W+i];z[i]=2*z[2*W+i]-z[4*W+i];z[(ny+2)*W+i]=2*z[(ny+1)*W+i]-z[ny*W+i];z[(ny+3)*W+i]=2*z[(ny+1)*W+i]-z[(ny-1)*W+i]}
+    let md=0;
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){if(fixed[j*nx+i])continue;const k=(j+2)*W+i+2;
+      const sn=z[k-1]+z[k+1]+z[k-W]+z[k+W],sd=z[k-W-1]+z[k-W+1]+z[k+W-1]+z[k+W+1],s2=z[k-2]+z[k+2]+z[k-2*W]+z[k+2*W];
+      const d=((1-T)*(8*sn-2*sd-s2)+T*sn)/a-z[k];z[k]+=om*d;if(Math.abs(d)>md)md=Math.abs(d)}
+    if(md<tol)break}}
+function minCurvGrid(tr,g,P){          // g = {x0,y0,dx,dy,nx,ny} in normalised units
+  let f=1;while(Math.min(g.nx,g.ny)/(f*2)>=8)f*=2;
+  let prev=null,mean=0;for(let i=0;i<tr.n;i++)mean+=tr.Z[i];mean/=tr.n;
+  let zr=0;for(let i=0;i<tr.n;i++)zr=Math.max(zr,Math.abs(tr.Z[i]-mean));const tol=1e-5*Math.max(zr,1e-9);
+  const ext={x:(g.nx-1)*g.dx,y:(g.ny-1)*g.dy};
+  for(let ff=f;ff>=1;ff/=2){
+    const nx=ff===1?g.nx:Math.max(5,Math.round((g.nx-1)/ff)+1),ny=ff===1?g.ny:Math.max(5,Math.round((g.ny-1)/ff)+1),dx=ext.x/(nx-1),dy=ext.y/(ny-1),W=nx+4;
+    const sum=new Float64Array(nx*ny),cnt=new Int32Array(nx*ny);
+    for(let i=0;i<tr.n;i++){const ix=Math.round((tr.X[i]-g.x0)/dx),jy=Math.round((tr.Y[i]-g.y0)/dy);if(ix<0||jy<0||ix>=nx||jy>=ny)continue;sum[jy*nx+ix]+=tr.Z[i];cnt[jy*nx+ix]++}
+    const z=new Float64Array(W*(ny+4)),fixed=new Uint8Array(nx*ny);
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const k=(j+2)*W+i+2;
+      if(prev){const u=i*(prev.nx-1)/(nx-1),v=j*(prev.ny-1)/(ny-1),i0=Math.min(prev.nx-2,Math.floor(u)),j0=Math.min(prev.ny-2,Math.floor(v)),fu=u-i0,fv=v-j0,Wp=prev.nx+4,pk=(j0+2)*Wp+i0+2;
+        z[k]=(1-fu)*(1-fv)*prev.z[pk]+fu*(1-fv)*prev.z[pk+1]+(1-fu)*fv*prev.z[pk+Wp]+fu*fv*prev.z[pk+Wp+1]}
+      else z[k]=mean;
+      if(cnt[j*nx+i]){z[k]=sum[j*nx+i]/cnt[j*nx+i];fixed[j*nx+i]=1}}
+    relax(z,fixed,nx,ny,P.tension,ff===1?P.iters:Math.max(200,P.iters/2),tol);
+    if(ff===1){                      // successive correction: data are snapped to nodes, so push the residuals at the true positions back into the nodes
+      const pn=new Int32Array(tr.n).fill(-1);
+      for(let i=0;i<tr.n;i++){const ix=Math.round((tr.X[i]-g.x0)/dx),jy=Math.round((tr.Y[i]-g.y0)/dy);if(ix>=0&&jy>=0&&ix<nx&&jy<ny)pn[i]=jy*nx+ix}
+      for(let rd=0;rd<4;rd++){const add=new Float64Array(nx*ny),c2=new Int32Array(nx*ny);
+        for(let i=0;i<tr.n;i++){if(pn[i]<0)continue;const u=(tr.X[i]-g.x0)/dx,v=(tr.Y[i]-g.y0)/dy,i0=Math.min(nx-2,Math.max(0,Math.floor(u))),j0=Math.min(ny-2,Math.max(0,Math.floor(v))),fu=Math.min(1,Math.max(0,u-i0)),fv=Math.min(1,Math.max(0,v-j0)),k=(j0+2)*W+i0+2;
+          const s=(1-fu)*(1-fv)*z[k]+fu*(1-fv)*z[k+1]+(1-fu)*fv*z[k+W]+fu*fv*z[k+W+1];add[pn[i]]+=tr.Z[i]-s;c2[pn[i]]++}
+        for(let nd=0;nd<nx*ny;nd++)if(c2[nd]){const j=Math.floor(nd/nx),i=nd-j*nx;z[(j+2)*W+i+2]+=add[nd]/c2[nd]}
+        relax(z,fixed,nx,ny,P.tension,Math.max(100,P.iters/4),tol)}}
+    prev={z,nx,ny}}
+  const out=new Float64Array(g.nx*g.ny),W=g.nx+4;
+  for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++)out[j*g.nx+i]=prev.z[(j+2)*W+i+2];
+  return out}
+function minCurvPredict(tr,QX,QY,P0,G0){
+  const pad=Math.max(4,Math.round(0.1*Math.max(G0.nx,G0.ny))),G={x0:G0.x0-pad*G0.dx,y0:G0.y0-pad*G0.dy,dx:G0.dx,dy:G0.dy,nx:G0.nx+2*pad,ny:G0.ny+2*pad},P=P0;   // solve on a padded grid so the boundary condition stays away from the output area
+  const z=minCurvGrid(tr,G,P),nq=QX.length,out=new Float64Array(nq).fill(NaN);
+  for(let q=0;q<nq;q++){const u=(QX[q]-G.x0)/G.dx,v=(QY[q]-G.y0)/G.dy;if(u<-1e-9||v<-1e-9||u>G.nx-1+1e-9||v>G.ny-1+1e-9)continue;
+    const i0=Math.min(G.nx-2,Math.max(0,Math.floor(u))),j0=Math.min(G.ny-2,Math.max(0,Math.floor(v))),fu=u-i0,fv=v-j0,k=j0*G.nx+i0;
+    out[q]=(1-fu)*(1-fv)*z[k]+fu*(1-fv)*z[k+1]+(1-fu)*fv*z[k+G.nx]+fu*fv*z[k+G.nx+1]}
+  return{z:out,v:null}}
+
+// ---- Kriging family: simple / ordinary / universal (linear or quadratic drift), automatic variogram fit, optional geometric anisotropy
+const VMODELS={
+  spherical:(h,c0,c,a)=>h<=0?0:h>=a?c0+c:c0+c*(1.5*h/a-0.5*Math.pow(h/a,3)),
+  exponential:(h,c0,c,a)=>h<=0?0:c0+c*(1-Math.exp(-3*h/a)),
+  gaussian:(h,c0,c,a)=>h<=0?0:c0+c*(1-Math.exp(-3*h*h/(a*a))),
+  matern:(h,c0,c,a)=>{if(h<=0)return 0;const u=4.744*h/a;return c0+c*(1-(1+u)*Math.exp(-u))}};   // Matérn ν = 3/2, range a = distance at 95 % of the sill
+const VNAMES={spherical:'Spherical',exponential:'Exponential',gaussian:'Gaussian',matern:'Matérn 3/2'};
+const KVAR={ok:'ok',sk:'sk',uk1:'uk',uk2:'uk'},KDEG={ok:0,sk:0,uk1:1,uk2:2};
+const isKrig=m=>m in KVAR;
+function empVario(X,Y,Z,n,dirs){
+  const step=Math.max(1,Math.ceil(n/2500)),idx=[];for(let i=0;i<n;i+=step)idx.push(i);
+  let x0=1e300,x1=-1e300,y0=1e300,y1=-1e300;for(const i of idx){x0=Math.min(x0,X[i]);x1=Math.max(x1,X[i]);y0=Math.min(y0,Y[i]);y1=Math.max(y1,Y[i])}
+  const dmax=Math.hypot(x1-x0,y1-y0)/2,nlag=20,mk=()=>({s:new Float64Array(nlag),c:new Float64Array(nlag),h:new Float64Array(nlag)}),om=mk(),dr=dirs?[mk(),mk(),mk(),mk()]:null;
+  for(let a=0;a<idx.length;a++)for(let b=a+1;b<idx.length;b++){const i=idx[a],j=idx[b],dx=X[i]-X[j],dy=Y[i]-Y[j],h=Math.hypot(dx,dy);if(h>=dmax||h===0)continue;
+    const k=Math.floor(h/dmax*nlag),dz=Z[i]-Z[j],g=0.5*dz*dz;om.s[k]+=g;om.c[k]++;om.h[k]+=h;
+    if(dr){let ang=Math.atan2(dy,dx);if(ang<0)ang+=Math.PI;const d=dr[Math.floor(((ang+Math.PI/8)%Math.PI)/(Math.PI/4))];d.s[k]+=g;d.c[k]++;d.h[k]+=h}}
+  const out=m=>{const o=[];for(let k=0;k<nlag;k++)if(m.c[k]>=10)o.push({h:m.h[k]/m.c[k],g:m.s[k]/m.c[k],n:m.c[k]});return o};
+  return{pts:out(om),dir:dr?dr.map(out):null,dmax}}
+function fitWLS(pts,F,dmax,fixed){            // weighted least squares: g(h) ≈ c0 + c·shape(h/a); Cressie-type weights N/γ² after a first pass
+  let w=pts.map(p=>p.n/(p.h*p.h+1e-12)),best=null;
+  for(let pass=0;pass<2;pass++){best=null;
+    for(let s=0;s<90;s++){const a=dmax*(0.04+s*0.0175);let c0,c;
+      if(fixed){c0=fixed.c0;c=fixed.c}
+      else{let s11=0,s12=0,s22=0,t1=0,t2=0;
+        pts.forEach((p,i)=>{const sh=F(p.h,0,1,a);s11+=w[i];s12+=w[i]*sh;s22+=w[i]*sh*sh;t1+=w[i]*p.g;t2+=w[i]*sh*p.g});
+        const det=s11*s22-s12*s12;if(Math.abs(det)>1e-18){c0=(t1*s22-t2*s12)/det;c=(s11*t2-s12*t1)/det}else{c0=0;c=t2/Math.max(s22,1e-18)}
+        if(c0<0){c0=0;c=t2/Math.max(s22,1e-18)}if(c<=0){c=1e-12;c0=t1/s11}}
+      let sse=0;pts.forEach((p,i)=>{const e=p.g-(c0+c*F(p.h,0,1,a));sse+=w[i]*e*e});
+      if(!best||sse<best.sse)best={c0:Math.max(0,c0),c,a,sse}}
+    if(pass===0)w=pts.map(p=>{const gm=best.c0+best.c*F(p.h,0,1,best.a);return p.n/(gm*gm+1e-12)})}
+  return best}
+const floorVm=vm=>({...vm,c0:Math.max(vm.c0,1e-4*(vm.c0+vm.c))});   // numerical nugget: gaussian/spherical systems are otherwise ill-conditioned
+const newBuf=k=>({bi:new Int32Array(k+2),bd:new Float64Array(k+2),id:new Int32Array(k+1),d2:new Float64Array(k+1),A:new Float64Array((k+8)*(k+8)),b:new Float64Array(k+8),g:new Float64Array(k+8),f:new Float64Array(6)});
+function drift(deg,x,y,o){o[0]=1;if(deg>=1){o[1]=x;o[2]=y}if(deg>=2){o[3]=x*x;o[4]=x*y;o[5]=y*y}}
+function krigAt(T,kn,x,y,k,vm,variant,deg,m0,B,ex){   // returns [estimate, variance]; ex = index of a point to leave out (leave-one-out)
+  const cnt0=kn.query(x,y,k+(ex>=0?1:0),B.bi,B.bd);let cnt=0;
+  for(let t=0;t<cnt0&&cnt<k;t++){if(B.bi[t]===ex)continue;B.id[cnt]=B.bi[t];B.d2[cnt]=B.bd[t];cnt++}
+  const F=VMODELS[vm.model],sill=vm.c0+vm.c,p=variant==='sk'?0:variant==='ok'?1:(deg===1?3:6);
+  if(cnt<Math.max(3,p+1))return[NaN,NaN];
+  const m=cnt+p,A=B.A,b=B.b,sk=variant==='sk';
+  for(let i=0;i<m*m;i++)A[i]=0;
+  for(let i=0;i<cnt;i++){const xi=T.X[B.id[i]],yi=T.Y[B.id[i]];
+    for(let j=0;j<i;j++){const h=Math.hypot(xi-T.X[B.id[j]],yi-T.Y[B.id[j]]),g=F(h,vm.c0,vm.c,vm.a),v=sk?sill-g:g;A[i*m+j]=v;A[j*m+i]=v}
+    A[i*m+i]=sk?sill*(1+1e-9):1e-10*sill;
+    const g0=F(Math.sqrt(B.d2[i]),vm.c0,vm.c,vm.a);b[i]=sk?sill-g0:g0;
+    if(p){drift(variant==='ok'?0:deg,xi,yi,B.f);for(let q=0;q<p;q++){A[i*m+cnt+q]=B.f[q];A[(cnt+q)*m+i]=B.f[q]}}}
+  if(p){drift(variant==='ok'?0:deg,x,y,B.f);for(let q=0;q<p;q++)b[cnt+q]=B.f[q]}
+  for(let i=0;i<m;i++)B.g[i]=b[i];
+  if(!luSolve(A,b,m))return[NaN,NaN];
+  let z=0,vr=0;
+  if(sk){z=m0;for(let i=0;i<cnt;i++){z+=b[i]*(T.Z[B.id[i]]-m0);vr+=b[i]*B.g[i]}vr=sill-vr}
+  else{for(let i=0;i<cnt;i++){z+=b[i]*T.Z[B.id[i]];vr+=b[i]*B.g[i]}for(let q=0;q<p;q++)vr+=b[cnt+q]*B.g[cnt+q]}
+  return[z,Math.max(0,vr)]}
+function looScore(T,vm,k){const kn=new KNN(T.X,T.Y),B=newBuf(k),n=T.n,step=Math.max(1,Math.floor(n/700)),v=floorVm(vm);let se=0,c=0;
+  for(let i=0;i<n;i+=step){const r=krigAt(T,kn,T.X[i],T.Y[i],k,v,'ok',0,0,B,i);if(isFinite(r[0])){const e=r[0]-T.Z[i];se+=e*e;c++}}
+  return c?Math.sqrt(se/c):Infinity}
+function autoVariogram(T,model,k){                      // fits every candidate model by weighted LS, then picks the one with the lowest leave-one-out error
+  const ev=empVario(T.X,T.Y,T.Z,T.n,false);if(ev.pts.length<4)throw new Error('Too few point pairs to estimate a variogram: use more data, or switch to a manual variogram.');
+  const names=model==='auto'?Object.keys(VMODELS):[model],cand=names.map(mn=>{const f=fitWLS(ev.pts,VMODELS[mn],ev.dmax);return{model:mn,...f}});
+  for(const c of cand)c.loo=looScore(T,c,k);
+  cand.sort((a,b)=>(a.loo-b.loo)||(a.sse-b.sse));
+  return{best:cand[0],cand,emp:ev.pts,dmax:ev.dmax}}
+function polyResidual(T,deg){const p=deg===1?3:6,A=new Float64Array(p*p),b=new Float64Array(p),f=new Float64Array(6);
+  for(let i=0;i<T.n;i++){drift(deg,T.X[i],T.Y[i],f);for(let u=0;u<p;u++){b[u]+=f[u]*T.Z[i];for(let v=0;v<p;v++)A[u*p+v]+=f[u]*f[v]}}
+  const A2=A.slice(),beta=b.slice();if(!luSolve(A2,beta,p))return T.Z;
+  const r=new Float64Array(T.n);for(let i=0;i<T.n;i++){drift(deg,T.X[i],T.Y[i],f);let s=0;for(let u=0;u<p;u++)s+=beta[u]*f[u];r[i]=T.Z[i]-s}return r}
+function detectAniso(T,vm0){       // directional variograms at 0/45/90/135°, range fitted per direction with the omnidirectional sill and nugget
+  const ev=empVario(T.X,T.Y,T.Z,T.n,true),F=VMODELS[vm0.model],R=[];
+  for(const d of ev.dir){if(d.length<4)return null;const f=fitWLS(d,F,ev.dmax,{c0:vm0.c0,c:vm0.c});R.push(f.a)}
+  const q=R.map(a=>1/(a*a)),al=(q[0]+q[1]+q[2]+q[3])/4,be=(q[0]-q[2])/2,ga=(q[1]-q[3])/2,Rr=Math.hypot(be,ga);
+  if(Rr>=al*0.98)return null;
+  const ratio=Math.sqrt((al+Rr)/(al-Rr)),minorQ=0.5*Math.atan2(ga,be),major=minorQ+Math.PI/2;      // 1/a² is largest across the major axis
+  return{ratio,ang:((major%Math.PI)+Math.PI)%Math.PI,ranges:R}}
+function applyAniso(X,Y,an){if(!an)return[X,Y];const c=Math.cos(an.ang),s=Math.sin(an.ang),n=X.length,U=new Float64Array(n),V=new Float64Array(n);
+  for(let i=0;i<n;i++){U[i]=X[i]*c+Y[i]*s;V[i]=(-X[i]*s+Y[i]*c)*an.ratio}return[U,V]}
+function krigPrep(method,tr,P){
+  const K=P.krig,deg=KDEG[method],k=Math.max(K.k,deg===2?20:0);let an=null,T=tr;
+  const zfit=t=>deg?{...t,Z:polyResidual(t,deg)}:(method==='sk'?{...t,Z:t.Z.map(z=>z-K.mean)}:t);
+  if(K.aniso.mode==='manual'&&K.aniso.ratio>1.0001)an={ang:K.aniso.angle*Math.PI/180,ratio:K.aniso.ratio};
+  else if(K.aniso.mode==='auto'){const v0=autoVariogram(zfit(tr),'spherical',k).best,d=detectAniso(zfit(tr),v0);
+    if(d&&d.ratio>=1.25){       // kept only if it lowers the leave-one-out error by at least 5 % (directional variograms of smooth fields can be misleading)
+      const [U,V]=applyAniso(tr.X,tr.Y,d),va=autoVariogram(zfit({...tr,X:U,Y:V}),'spherical',k).best;d.loo0=v0.loo;d.loo1=va.loo;if(va.loo<0.95*v0.loo)an=d}
+    K.anisoInfo=d}
+  if(an){const [U,V]=applyAniso(tr.X,tr.Y,an);T={...tr,X:U,Y:V}}
+  const Tz=zfit(T);let vm,cand=null,emp,dmax;
+  if(K.vmode==='auto'){const f=autoVariogram(Tz,K.model,k);vm=f.best;cand=f.cand;emp=f.emp;dmax=f.dmax}
+  else{const ev=empVario(Tz.X,Tz.Y,Tz.Z,Tz.n,false);vm={...K.vario};emp=ev.pts;dmax=ev.dmax}
+  vm={...vm,emp,dmax};return{T,Tz,an,vm,cand,k,deg}}
+function krigMain(method,tr,QX,QY,P){
+  const pr=krigPrep(method,tr,P),K=P.krig,variant=KVAR[method],vm=floorVm(pr.vm),kn=new KNN(pr.T.X,pr.T.Y),B=newBuf(pr.k),nq=QX.length,z=new Float64Array(nq).fill(NaN),v=new Float64Array(nq).fill(NaN);
+  const [QU,QV]=applyAniso(QX,QY,pr.an);
+  for(let q=0;q<nq;q++){const r=krigAt(pr.T,kn,QU[q],QV[q],pr.k,vm,variant,pr.deg,K.mean,B,-1);z[q]=r[0];v[q]=r[1]}
+  return{z,v,vario:pr.vm,cand:pr.cand,aniso:pr.an,anisoInfo:K.anisoInfo}}
+
+// ---- Local polynomial regression (moving least squares, tricube weights)
+function lpPredict(tr,QX,QY,P){
+  const k=Math.max(8,Math.min(P.k,tr.n)),kn=new KNN(tr.X,tr.Y),bi=new Int32Array(k+1),bd=new Float64Array(k+1),p=P.deg===2?6:3,nq=QX.length,z=new Float64Array(nq).fill(NaN),A=new Float64Array(p*p),b=new Float64Array(p),f=new Float64Array(6);
+  for(let q=0;q<nq;q++){const cnt=kn.query(QX[q],QY[q],k,bi,bd),hm=Math.sqrt(bd[cnt-1])*1.0001+1e-12;A.fill(0);b.fill(0);let sw=0,sz=0;
+    for(let t=0;t<cnt;t++){const id=bi[t],dx=tr.X[id]-QX[q],dy=tr.Y[id]-QY[q],u=Math.sqrt(bd[t])/hm,w=Math.pow(1-u*u*u,3);
+      f[0]=1;f[1]=dx;f[2]=dy;if(p===6){f[3]=dx*dx;f[4]=dx*dy;f[5]=dy*dy}
+      for(let r=0;r<p;r++){b[r]+=w*f[r]*tr.Z[id];for(let c=0;c<p;c++)A[r*p+c]+=w*f[r]*f[c]}sw+=w;sz+=w*tr.Z[id]}
+    for(let r=0;r<p;r++)A[r*p+r]+=1e-9*(A[0]||1);
+    z[q]=luSolve(A,b,p)?b[0]:(sw>0?sz/sw:NaN)}
+  return{z,v:null}}
+
+function predictAt(method,tr,QX,QY,P,G){
+  switch(method){
+    case'nn':return idwPredict(tr,QX,QY,{k:1,p:1,eps:0,maxd:0});
+    case'idw':return idwPredict(tr,QX,QY,P.idw);
+    case'tin':return tinPredict(tr,QX,QY);
+    case'rbf':return rbfPredict(tr,QX,QY,P.rbf);
+    case'mincurv':return minCurvPredict(tr,QX,QY,P.mc,G);
+    case'lp':return lpPredict(tr,QX,QY,P.lp);
+    default:if(isKrig(method))return krigMain(method,tr,QX,QY,P)}
+  throw new Error('Unknown method')}
+const METHODS={ok:'Ordinary kriging',sk:'Simple kriging',uk1:'Universal kriging (linear drift)',uk2:'Universal kriging (quadratic drift)',idw:'Inverse distance (IDW)',nn:'Nearest neighbour',tin:'Linear (Delaunay TIN)',lp:'Local polynomial regression',rbf:'Spline — thin-plate / RBF',mincurv:'Spline — minimum curvature'};
+
+// =====================================================================
+//  Data
+// =====================================================================
+const S={table:null,raw:[],pts:null,norm:null,grid:null,cmap:'viridis',view:{s:1,tx:0,ty:0},vario:null,cv:null};
+function parseTable(text){
+  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(l=>l&&!/^(#|\/\/)/.test(l));if(!lines.length)return null;
+  const has=c=>lines.some(l=>l.includes(c));let sep;
+  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=3))sep=',';else sep=/\s+/;
+  let rows=lines.map(l=>l.split(sep).map(s=>s.trim().replace(/^"|"$/g,'')));
+  const nc=Math.max(...rows.map(r=>r.length));if(nc<3)return{err:'At least 3 columns (X, Y, value) are needed.'};
+  let head=null;if(rows[0].slice(0,3).some(s=>isNaN(toN(s)))){head=rows.shift()}
+  return{head:head||Array.from({length:nc},(_,i)=>'col '+(i+1)),rows,nc}}
+function guessCols(head){
+  const find=re=>head.findIndex(h=>re.test(h.trim()));
+  let x=find(/^(x|lon|long|longitude|east|easting|e)$/i),y=find(/^(y|lat|latitude|north|northing|n)$/i);
+  if(x<0||y<0||x===y){x=0;y=1}let z=head.findIndex((_,i)=>i!==x&&i!==y);return[x,y,Math.max(0,z)]}
+function fillColSelects(){const t=S.table,[x,y,z]=guessCols(t.head);
+  for(const [id,v] of [['cx',x],['cy',y],['cz',z]])$(id).innerHTML=t.head.map((h,i)=>`<option value="${i}"${i===v?' selected':''}>${esc(h)}</option>`).join('')}
+function buildPoints(){
+  const t=S.table;if(!t)return;const cx=+$('cx').value,cy=+$('cy').value,cz=+$('cz').value;
+  const pts=[];for(const r of t.rows){const x=toN(r[cx]),y=toN(r[cy]),z=toN(r[cz]);if(isFinite(x)&&isFinite(y)&&isFinite(z))pts.push([x,y,z])}
+  const m=$('dataMsg');m.className='msg';
+  if(pts.length<4){m.textContent=`Only ${pts.length} valid point(s): at least 4 are needed.`;m.className='msg err';S.pts=null;return}
+  if(pts.length>20000){m.textContent='More than 20 000 points: please thin the data.';m.className='msg err';S.pts=null;return}
+  let x0=1e300,x1=-1e300,y0=1e300,y1=-1e300;for(const p of pts){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])}
+  const sc=Math.max(x1-x0,y1-y0);if(!(sc>0)){m.textContent='All points are at the same location.';m.className='msg err';return}
+  const tol=sc*1e-9,mp=new Map();for(const p of pts){const k=Math.round(p[0]/tol)+'|'+Math.round(p[1]/tol),e=mp.get(k);if(e){e.s+=p[2];e.n++}else mp.set(k,{x:p[0],y:p[1],s:p[2],n:1})}
+  const u=[...mp.values()].map(e=>[e.x,e.y,e.s/e.n]),dup=pts.length-u.length;
+  S.pts=u;S.names=[t.head[cx],t.head[cy],t.head[cz]];S.norm={cx:(x0+x1)/2,cy:(y0+y1)/2,S:sc};
+  let zmin=1e300,zmax=-1e300,zs=0;for(const p of u){zmin=Math.min(zmin,p[2]);zmax=Math.max(zmax,p[2]);zs+=p[2]}
+  S.zmean=zs/u.length;S.grid=null;S.cv=null;S.vario=null;
+  m.textContent=`${u.length} points${dup?` (${dup} duplicate location(s) averaged)`:''} · x ${fmt(x0)} → ${fmt(x1)} · y ${fmt(y0)} → ${fmt(y1)} · ${esc(S.names[2])} ${fmt(zmin)} → ${fmt(zmax)}`;
+  setGridDefaults(x0,x1,y0,y1);S.bbox=[x0,x1,y0,y1];fit();$('cvOut').innerHTML='';$('vCan').hidden=true;schedPreview()}
+function loadText(text){const t=parseTable(text);if(!t||t.err){$('dataMsg').textContent=t?t.err:'Empty input.';$('dataMsg').className='msg err';return false}S.table=t;fillColSelects();buildPoints();return true}
+$('paste').addEventListener('input',()=>{clearTimeout(S.pt);S.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
+['cx','cy','cz'].forEach(i=>$(i).onchange=buildPoints);
+$('bOpen').onclick=()=>$('file').click();
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>2e6?r.result.slice(0,2e6):r.result;loadText(r.result)};r.readAsText(f);e.target.value=''};
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
+
+// ---- examples
+const EXZ=(x,y)=>1800+520*Math.sin(x/17)*Math.cos(y/13)+7*x-4*y;
+function example(kind){const r=rng(kind==='lines'?7:42),L=['X\tY\tDepth'];
+  if(kind==='lines'){for(let l=0;l<9;l++){const y=3+l*6.7;for(let i=0;i<34;i++){const x=r()*100,yy=y+(r()-.5)*.6;L.push(`${x.toFixed(2)}\t${yy.toFixed(2)}\t${(EXZ(x,yy)+(r()-.5)*20).toFixed(1)}`)}}}
+  else{for(let i=0;i<150;i++){const x=r()*100,y=r()*60;L.push(`${x.toFixed(2)}\t${y.toFixed(2)}\t${(EXZ(x,y)+(r()-.5)*20).toFixed(1)}`)}}
+  $('paste').value=L.join('\n');loadText($('paste').value);run()}
+$('bExample').onclick=()=>example('random');$('bExample2').onclick=()=>example('lines');
+
+// =====================================================================
+//  Grid & parameters
+// =====================================================================
+function niceNum(v){if(!(v>0))return 1;const p=Math.pow(10,Math.floor(Math.log10(v))),m=v/p;return(m<1.5?1:m<3.5?2:m<7.5?5:10)*p}
+function setGridDefaults(x0,x1,y0,y1){const f=v=>String(+v.toPrecision(8)),d=Math.max(x1-x0,y1-y0)/100;
+  $('gx0').value=f(x0);$('gx1').value=f(x1);$('gy0').value=f(y0);$('gy1').value=f(y1);$('gdx').value=f(+d.toPrecision(2));$('gdy').value=f(+d.toPrecision(2));$('mdist').value=f(+(Math.max(x1-x0,y1-y0)*0.12).toPrecision(2));
+  gUpd();syncDefaults()}
+function syncDefaults(){const sc=S.norm?S.norm.S:1;if(S.pts){const n=S.pts.length,sp=0.5*Math.sqrt(1*0.6/n);$('rbfc').value=String(+(sp*sc).toPrecision(2))}}
+function gridSpec(){const v=['gx0','gx1','gy0','gy1','gdx','gdy'].map(i=>toN($(i).value));if(v.some(x=>!isFinite(x)))return{err:'Fill in xmin, xmax, ymin, ymax, dx and dy.'};
+  const[x0,x1,y0,y1,dx,dy]=v;if(dx<=0||dy<=0)return{err:'dx and dy must be positive.'};if(x1<=x0||y1<=y0)return{err:'max must be larger than min.'};
+  const nx=Math.floor((x1-x0)/dx+1e-9)+1,ny=Math.floor((y1-y0)/dy+1e-9)+1;if(nx<3||ny<3)return{err:'The grid needs at least 3 × 3 nodes.'};if(nx*ny>250000)return{err:`Too many nodes (${nx} × ${ny}); increase dx, dy.`};
+  return{x0,y0,dx,dy,nx,ny}}
+function gUpd(){const g=gridSpec(),m=$('gMsg');m.className='msg'+(g.err?' err':'');m.textContent=g.err||`${g.nx} × ${g.ny} = ${g.nx*g.ny} nodes`;return g}
+['gx0','gx1','gy0','gy1','gdx','gdy'].forEach(i=>$(i).addEventListener('input',gUpd));
+$('bExt').onclick=()=>{if(S.bbox)setGridDefaults(...S.bbox)};
+const PM=['idw','rbf','mincurv','lp','krig'];
+function methodInfo(){const t={nn:'Each node takes the value of the closest data point. Blocky, never creates values outside the data range.',
+  idw:'Weighted mean of the k closest points, weights 1/d^p. Honours the data, never exceeds their range, produces bull’s-eyes around points. A larger power makes it more local; smoothing ε adds a floor to the distance so the surface no longer passes exactly through the points.',
+  tin:'Delaunay triangulation of the points, linear interpolation inside each triangle. Exact, local, undefined outside the convex hull of the data; creases at the triangle edges.',
+  rbf:'Global radial basis function interpolation: thin-plate spline (r² ln r, the minimum-bending-energy surface), cubic, or multiquadric. Smooth, can overshoot the data range, dense O(n³) solve (limited to 1200 points). Smoothing λ > 0 turns it into a smoothing spline.',
+  mincurv:'Iterative minimum-curvature surface on the grid (Briggs 1974) with optional internal tension (Smith & Wessel 1990, 0 = pure minimum curvature, towards 1 = membrane). Works with many points; data are snapped to the nearest node.',
+  ok:'Ordinary kriging: best linear unbiased estimate with an unknown but locally constant mean, using the k nearest points and a variogram fitted automatically (spherical, exponential, gaussian, Matérn 3/2: the one with the lowest leave-one-out error wins) or entered by hand. Also gives the kriging standard error.',
+  sk:'Simple kriging: the mean is known (sample mean by default, or the value you type) and the estimate reverts to it far from data. Needs a stationary field around that mean; with a regional trend it is biased. Solved with the covariance C = sill − γ.',
+  uk1:'Universal kriging with a linear drift (a + bx + cy) modelled inside the kriging system. The variogram is fitted on the residuals of a global linear trend, which is the right thing to do when the field has a regional dip.',
+  uk2:'Universal kriging with a quadratic drift (6 terms). Needs more neighbours (at least 20 are used) and well-spread data: with few points it can oscillate.',
+  lp:'Local polynomial regression (moving least squares): at each node a plane or quadric is fitted by weighted least squares to the k nearest points with tricube weights. Smooth, local, not exact at the data (it smooths noise); no variogram needed.'};
+  $('mInfo').dataset.tip=t[$('method').value]}
+function togAux(){const sk=$('method').value==='sk',m=$('kan').value==='manual';['skm1','skm'].forEach(i=>$(i).hidden=!sk);['kar1','kar','kaa1','kaa'].forEach(i=>$(i).hidden=!m)}
+$('method').onchange=()=>{const mv=$('method').value,kg=isKrig(mv);PM.forEach(m=>{const e=$('pm_'+m);if(e)e.hidden=m==='krig'?!kg:m!==mv});methodInfo();
+  togAux();
+  $('vsel').querySelector('option[value="std"]').disabled=!kg;if(!kg&&$('vsel').value==='std')$('vsel').value='z';schedPreview()};
+function readParams(){
+  const P={idw:{k:+$('idwk').value||12,p:toN($('idwp').value)||2,eps:Math.max(0,toN($('idwe').value)||0)/(S.norm?S.norm.S:1),maxd:0},
+    rbf:{kernel:$('rbfk').value,lambda:Math.max(0,toN($('rbfl').value)||0),c:(toN($('rbfc').value)||0.05*(S.norm?S.norm.S:1))/(S.norm?S.norm.S:1),maxN:1200},
+    mc:{tension:Math.min(0.95,Math.max(0,toN($('mct').value)||0)),iters:Math.max(50,+$('mci').value||400)},
+    lp:{k:+$('lpk').value||24,deg:+$('lpd').value||1},
+    krig:{k:+$('krk').value||16,model:$('krm').value,vmode:$('vmode').value,mean:(isFinite(toN($('skm').value))?toN($('skm').value)-(S.zmean||0):0),
+      aniso:{mode:$('kan').value,ratio:toN($('kar').value)||1,angle:toN($('kaa').value)||0}}};
+  if(P.krig.vmode==='manual'){const sc=S.norm.S;P.krig.vario={model:$('krm').value==='auto'?'spherical':$('krm').value,c0:Math.max(0,toN($('krn').value)||0),c:Math.max(1e-12,toN($('krs').value)||1),a:Math.max(1e-9,(toN($('krr').value)||sc/3)/sc)}}
+  return P}
+['krn','krs','krr'].forEach(i=>$(i).addEventListener('input',()=>{$('vmode').value='manual';schedPreview()}));
+['vmode','krm','krk','kan','kar','kaa','skm'].forEach(i=>$(i).addEventListener('change',()=>{togAux();schedPreview()}));
+let pvT=null;function schedPreview(){clearTimeout(pvT);pvT=setTimeout(previewVario,350)}
+function previewVario(){const mv=$('method').value;if(!S.pts||!isKrig(mv)){return}
+  try{const P=readParams(),pr=krigPrep(mv,normTrain(S.pts),P);showVario(pr.vm,pr.cand,pr.an,P.krig.anisoInfo,P.krig.vmode==='auto')}catch(e){$('anMsg').textContent=e.message;$('anMsg').className='msg err'}}
+function showVario(vm,cand,an,info,fill){
+  const sc=S.norm.S;if(fill){$('krn').value=String(+vm.c0.toPrecision(4));$('krs').value=String(+vm.c.toPrecision(4));$('krr').value=String(+(vm.a*sc).toPrecision(4))}
+  S.vario=vm;drawVario(vm);
+  $('vTbl').innerHTML=cand?`<table class="cvt"><thead><tr><th>Model</th><th>Range</th><th>Nugget</th><th>Sill</th><th>LOO RMSE</th></tr></thead><tbody>`+cand.map((c,i)=>`<tr${i===0?' class="best"':''}><td>${VNAMES[c.model]}</td><td>${fmt(+(c.a*sc).toPrecision(3))}</td><td>${fmt(+c.c0.toPrecision(3))}</td><td>${fmt(+c.c.toPrecision(3))}</td><td>${fmt(+c.loo.toPrecision(3))}</td></tr>`).join('')+'</tbody></table>':'';
+  const m=$('anMsg');m.className='msg';
+  m.textContent=an?`Anisotropy applied: ratio ${an.ratio.toFixed(2)}, major axis ${(an.ang*180/Math.PI).toFixed(0)}° from the x axis.`:(info?`Anisotropy tested: ratio ${info.ratio.toFixed(2)}, ${info.loo1!==undefined?'no leave-one-out gain ('+info.loo0.toPrecision(3)+' → '+info.loo1.toPrecision(3)+')':'below 1.25'}: ignored.`:($('kan').value==='auto'?'Anisotropy tested: none detected.':''))}
+
+// =====================================================================
+//  Run
+// =====================================================================
+function normTrain(pts){const N=S.norm,n=pts.length,X=new Float64Array(n),Y=new Float64Array(n),Z=new Float64Array(n);
+  for(let i=0;i<n;i++){X[i]=(pts[i][0]-N.cx)/N.S;Y[i]=(pts[i][1]-N.cy)/N.S;Z[i]=pts[i][2]-S.zmean}return{X,Y,Z,n}}
+function hull(P){P=P.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[],up=[];for(const p of P){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}
+  for(let i=P.length-1;i>=0;i--){const p=P[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}
+  lo.pop();up.pop();return lo.concat(up)}
+function inPoly(x,y,H){let c=false;for(let i=0,j=H.length-1;i<H.length;j=i++){const a=H[i],b=H[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+function distSeg(x,y,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;let t=l>0?((x-a[0])*dx+(y-a[1])*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(x-a[0]-t*dx,y-a[1]-t*dy)}
+function nodeCoords(g){const X=new Float64Array(g.nx*g.ny),Y=new Float64Array(g.nx*g.ny);for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){X[j*g.nx+i]=g.x0+i*g.dx;Y[j*g.nx+i]=g.y0+j*g.dy}return{X,Y}}
+function applyMask(g,z,v){const mode=$('mask').value;if(mode==='none')return;const {X,Y}=nodeCoords(g);
+  if(mode==='hull'){const H=hull(S.pts.map(p=>[p[0],p[1]]));for(let k=0;k<z.length;k++){if(!inPoly(X[k],Y[k],H)){z[k]=NaN;if(v)v[k]=NaN}}}
+  else{const R=toN($('mdist').value)||Infinity,N=S.norm,tr={X:Float64Array.from(S.pts,p=>p[0]),Y:Float64Array.from(S.pts,p=>p[1])},kn=new KNN(tr.X,tr.Y),bi=new Int32Array(2),bd=new Float64Array(2);
+    for(let k=0;k<z.length;k++){kn.query(X[k],Y[k],1,bi,bd);if(Math.sqrt(bd[0])>R){z[k]=NaN;if(v)v[k]=NaN}}}}
+function run(){
+  const m=$('exMsg');m.className='msg';
+  if(!S.pts){banner('Load a point cloud first (section 1).',true);return}
+  const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';banner(g.err,true);return}
+  $('bRun').disabled=true;banner('Computing…');
+  setTimeout(()=>{try{
+    const t0=performance.now(),method=$('method').value,P=readParams(),tr=normTrain(S.pts),N=S.norm,{X,Y}=nodeCoords(g);
+    const QX=X.map(x=>(x-N.cx)/N.S),QY=Y.map(y=>(y-N.cy)/N.S),G={x0:(g.x0-N.cx)/N.S,y0:(g.y0-N.cy)/N.S,dx:g.dx/N.S,dy:g.dy/N.S,nx:g.nx,ny:g.ny};
+    const res=predictAt(method,tr,QX,QY,P,G),z=res.z;for(let k=0;k<z.length;k++)z[k]+=S.zmean;
+    let v=null;if(res.v){v=new Float64Array(res.v.length);for(let k=0;k<v.length;k++)v[k]=Math.sqrt(res.v[k])}
+    applyMask(g,z,v);
+    if(res.vario)showVario(res.vario,res.cand,res.aniso,res.anisoInfo,P.krig.vmode==='auto');
+    S.grid={...g,z,v,method,ms:performance.now()-t0};
+    let ok=0,mn=Infinity,mx=-Infinity;for(let k=0;k<z.length;k++)if(isFinite(z[k])){ok++;if(z[k]<mn)mn=z[k];if(z[k]>mx)mx=z[k]}
+    S.grid.ok=ok;S.grid.zmin=mn;S.grid.zmax=mx;
+    if(!ok)throw new Error('No node could be estimated: check the grid bounds and the extrapolation limit.');
+    m.textContent=`${METHODS[method]} · ${ok} / ${z.length} nodes · ${fmt(mn)} → ${fmt(mx)} · ${(S.grid.ms/1000).toFixed(2)} s`+(res.vario?` · ${VNAMES[res.vario.model]}`:'');
+    banner(`Done: ${METHODS[method]}, ${ok} nodes in ${(S.grid.ms/1000).toFixed(2)} s.`);
+    rebuildDisplay();fit()}
+  catch(e){m.textContent=e.message;m.className='msg err';banner(e.message,true)}
+  $('bRun').disabled=false},30)}
+$('bRun').onclick=run;
+
+// =====================================================================
+//  Cross-validation (5 folds, same parameters)
+// =====================================================================
+$('bCV').onclick=async()=>{
+  if(!S.pts){banner('Load a point cloud first.',true);return}
+  const g=gridSpec();if(g.err){banner(g.err,true);return}
+  const out=$('cvOut'),P=readParams(),N=S.norm,n=S.pts.length,K=Math.min(5,n),r=rng(99),perm=Array.from({length:n},(_,i)=>i);
+  for(let i=n-1;i>0;i--){const j=Math.floor(r()*(i+1));[perm[i],perm[j]]=[perm[j],perm[i]]}
+  const G={x0:(g.x0-N.cx)/N.S,y0:(g.y0-N.cy)/N.S,dx:g.dx/N.S,dy:g.dy/N.S,nx:g.nx,ny:g.ny},rows=[];$('bCV').disabled=true;
+  const ids=['nn','idw','tin','lp','rbf','mincurv','ok','sk','uk1','uk2'];
+  for(const meth of ids){
+    out.innerHTML=`<div class="msg">Computing ${esc(METHODS[meth])}…</div>`+tbl(rows);await new Promise(r=>setTimeout(r,20));
+    const pred=new Float64Array(n).fill(NaN);let err=null;
+    try{for(let f=0;f<K;f++){const te=[],trn=[];perm.forEach((id,i)=>(i%K===f?te:trn).push(id));
+      const tr=normTrain(trn.map(i=>S.pts[i])),QX=Float64Array.from(te,i=>(S.pts[i][0]-N.cx)/N.S),QY=Float64Array.from(te,i=>(S.pts[i][1]-N.cy)/N.S);
+      const zm=S.zmean;const res=predictAt(meth,tr,QX,QY,P,G);te.forEach((id,q)=>{pred[id]=res.z[q]+zm})}}catch(e){err=e.message}
+    if(err){rows.push({m:METHODS[meth],err});continue}
+    let se=0,ae=0,b=0,c=0,sy=0,syy=0;for(let i=0;i<n;i++)if(isFinite(pred[i])){const e=pred[i]-S.pts[i][2];se+=e*e;ae+=Math.abs(e);b+=e;c++}
+    let mean=0;for(const p of S.pts)mean+=p[2];mean/=n;let vt=0;for(const p of S.pts)vt+=(p[2]-mean)**2;
+    rows.push({m:METHODS[meth],rmse:Math.sqrt(se/c),mae:ae/c,bias:b/c,r2:1-se/(vt*c/n),cov:c/n})}
+  S.cv=rows;out.innerHTML=tbl(rows);$('bCV').disabled=false;
+  function tbl(rows){const ok=rows.filter(x=>x.rmse!=null),best=ok.length?Math.min(...ok.map(x=>x.rmse)):0;
+    return`<table class="cvt"><thead><tr><th>Method</th><th>RMSE</th><th>MAE</th><th>Bias</th><th>R²</th></tr></thead><tbody>`+rows.map(x=>x.err?`<tr><td>${esc(x.m)}</td><td colspan="4" class="err">${esc(x.err)}</td></tr>`:`<tr${x.rmse===best?' class="best"':''}><td>${esc(x.m)}${x.cov<1?` <small>(${Math.round(x.cov*100)} % covered)</small>`:''}</td><td>${fmt(+x.rmse.toPrecision(4))}</td><td>${fmt(+x.mae.toPrecision(4))}</td><td>${fmt(+x.bias.toPrecision(3))}</td><td>${x.r2.toFixed(3)}</td></tr>`).join('')+'</tbody></table>'}
+  banner('Cross-validation done (5 folds).')};
+
+// =====================================================================
+//  Variogram plot
+// =====================================================================
+function drawVario(vm){const c=$('vCan');c.hidden=false;const x=c.getContext('2d'),W=c.width,H=c.height,sc=S.norm.S;x.clearRect(0,0,W,H);
+  x.fillStyle='#f5f3ed';x.fillRect(0,0,W,H);const hm=vm.dmax*1.0,gm=Math.max(...vm.emp.map(p=>p.g),vm.c0+vm.c)*1.15,px=h=>34+(W-44)*h/hm,py=g=>H-22-(H-34)*g/gm;
+  x.strokeStyle='#c9c4b6';x.beginPath();x.moveTo(34,8);x.lineTo(34,H-22);x.lineTo(W-8,H-22);x.stroke();x.fillStyle='#5c5a52';x.font='10px Inter,sans-serif';
+  x.fillText('0',30,H-10);x.fillText(fmt(+(hm*sc).toPrecision(3)),W-44,H-10);x.fillText('lag',W/2-8,H-10);x.save();x.translate(9,H/2+10);x.rotate(-Math.PI/2);x.fillText('γ',0,0);x.restore();x.fillText(fmt(+gm.toPrecision(2)),2,14);
+  const F=VMODELS[vm.model];x.strokeStyle='#a8623a';x.lineWidth=2;x.beginPath();for(let i=0;i<=80;i++){const h=hm*i/80;i?x.lineTo(px(h),py(F(h,vm.c0,vm.c,vm.a))):x.moveTo(px(h),py(0))}x.stroke();
+  x.fillStyle='#4a5a4e';const nm=Math.max(...vm.emp.map(p=>p.n));for(const p of vm.emp){x.beginPath();x.arc(px(p.h),py(p.g),2+3*p.n/nm,0,7);x.fill()}}
+
+// =====================================================================
+//  Display
+// =====================================================================
+const CMAPS={viridis:[[68,1,84],[72,36,117],[65,68,135],[53,95,141],[42,120,142],[33,145,140],[34,168,132],[68,191,112],[122,209,81],[189,223,38],[253,231,37]],
+  rainbow:[[48,18,140],[40,80,220],[0,170,230],[20,200,130],[120,220,40],[240,230,30],[250,150,20],[220,40,20],[130,0,20]],
+  terrain:[[50,70,160],[60,140,200],[90,180,120],[190,200,110],[230,200,120],[190,150,90],[150,110,80],[245,245,245]],
+  gray:[[20,20,20],[240,240,240]],
+  RdBu:[[33,102,172],[103,169,207],[209,229,240],[247,247,247],[253,219,199],[239,138,98],[178,24,43]]};
+function cmapRGB(t){const st=CMAPS[$('cmap').value];if($('rev').checked)t=1-t;t=Math.min(1,Math.max(0,t))*(st.length-1);const i=Math.min(st.length-2,Math.floor(t)),f=t-i;return st[i].map((c,k)=>Math.round(c+(st[i+1][k]-c)*f))}
+function curField(){const g=S.grid;if(!g)return null;return $('vsel').value==='std'&&g.v?g.v:g.z}
+function range(){const f=curField(),a=toN($('rmin').value),b=toN($('rmax').value);let mn=Infinity,mx=-Infinity;for(const v of f)if(isFinite(v)){if(v<mn)mn=v;if(v>mx)mx=v}
+  return[isFinite(a)?a:mn,isFinite(b)?b:mx]}
+function niceStep(r){return niceNum(r)}
+let RC=null,SEGS=[];
+function rebuildDisplay(){const g=S.grid;if(!g){draw();return}const f=curField(),[lo,hi]=range(),sp=hi-lo||1;
+  RC=document.createElement('canvas');RC.width=g.nx;RC.height=g.ny;const x=RC.getContext('2d'),im=x.createImageData(g.nx,g.ny);
+  for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){const v=f[j*g.nx+i],o=((g.ny-1-j)*g.nx+i)*4;if(!isFinite(v))continue;const c=cmapRGB((v-lo)/sp);im.data[o]=c[0];im.data[o+1]=c[1];im.data[o+2]=c[2];im.data[o+3]=255}
+  x.putImageData(im,0,0);
+  SEGS=[];const ci=toN($('cint').value);if($('showC').checked&&hi>lo){const st=ci>0?ci:niceStep((hi-lo)/10);
+    for(let L=Math.ceil(lo/st)*st;L<=hi;L+=st){contourLevel(g,f,L)}}
+  draw()}
+function contourLevel(g,z,L){const T=[[],[3,0],[0,1],[3,1],[1,2],null,[0,2],[3,2],[2,3],[0,2],null,[1,2],[1,3],[0,1],[3,0]];
+  for(let j=0;j<g.ny-1;j++)for(let i=0;i<g.nx-1;i++){
+    const a=z[j*g.nx+i],b=z[j*g.nx+i+1],c=z[(j+1)*g.nx+i+1],d=z[(j+1)*g.nx+i];if(!(isFinite(a)&&isFinite(b)&&isFinite(c)&&isFinite(d)))continue;
+    let k=(a>L?1:0)|(b>L?2:0)|(c>L?4:0)|(d>L?8:0);if(k===0||k===15)continue;
+    const x0=g.x0+i*g.dx,y0=g.y0+j*g.dy;
+    const E=e=>e===0?[x0+g.dx*(L-a)/(b-a),y0]:e===1?[x0+g.dx,y0+g.dy*(L-b)/(c-b)]:e===2?[x0+g.dx*(L-d)/(c-d),y0+g.dy]:[x0,y0+g.dy*(L-a)/(d-a)];
+    let pr=T[k];if(!pr){const m=(a+b+c+d)/4>L;pr=k===5?(m?[[0,1],[2,3]]:[[3,0],[1,2]]):(m?[[3,0],[1,2]]:[[0,1],[2,3]])}
+    if(typeof pr[0]==='number')pr=[pr];
+    for(const [e1,e2] of pr){const p=E(e1),q=E(e2);SEGS.push(p[0],p[1],q[0],q[1])}}}
+['cmap','rev','rmin','rmax','showC','cint','vsel','smooth','showP','psz','pcol'].forEach(i=>{const e=$(i);e.addEventListener(e.type==='text'?'input':'change',()=>{if(i==='psz'){draw();return}rebuildDisplay()})});
+$('psz').oninput=draw;
+
+// ---- canvas & view
+const cv=$('cv'),ctx=cv.getContext('2d');
+const MARG={l:56,r:96,t:14,b:34};
+function size(){const r=$('stage').getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);return{w:r.width,h:r.height,dpr}}
+function extentWorld(){const g=S.grid;if(g)return[g.x0-g.dx/2,g.x0+(g.nx-.5)*g.dx,g.y0-g.dy/2,g.y0+(g.ny-.5)*g.dy];return S.bbox||null}
+function fit(){const {w,h}=size(),e=extentWorld();if(!e){draw();return}const ww=e[1]-e[0],hh=e[3]-e[2],aw=w-MARG.l-MARG.r,ah=h-MARG.t-MARG.b;
+  const s=Math.min(aw/ww,ah/hh);S.view.s=s;S.view.tx=MARG.l+(aw-ww*s)/2-e[0]*s;S.view.ty=MARG.t+(ah-hh*s)/2+e[3]*s;draw()}
+const sx=x=>x*S.view.s+S.view.tx,sy=y=>-y*S.view.s+S.view.ty,wx=px=>(px-S.view.tx)/S.view.s,wy=py=>(S.view.ty-py)/S.view.s;
+function ticks(lo,hi,n){const st=niceNum((hi-lo)/n),out=[];for(let v=Math.ceil(lo/st)*st;v<=hi+1e-12;v+=st)out.push(+v.toPrecision(12));return out}
+function draw(){
+  const dpr=window.devicePixelRatio||1,W=cv.width/dpr,H=cv.height/dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const e=extentWorld();if(!e)return;const g=S.grid;
+  ctx.save();ctx.beginPath();ctx.rect(MARG.l,MARG.t,W-MARG.l-MARG.r,H-MARG.t-MARG.b);ctx.clip();
+  if(g&&RC){ctx.imageSmoothingEnabled=$('smooth').checked;ctx.drawImage(RC,sx(e[0]),sy(e[3]),(e[1]-e[0])*S.view.s,(e[3]-e[2])*S.view.s)}
+  if(g&&SEGS.length){ctx.strokeStyle='rgba(35,34,32,.55)';ctx.lineWidth=.8;ctx.beginPath();for(let i=0;i<SEGS.length;i+=4){ctx.moveTo(sx(SEGS[i]),sy(SEGS[i+1]));ctx.lineTo(sx(SEGS[i+2]),sy(SEGS[i+3]))}ctx.stroke()}
+  if(S.pts&&$('showP').checked){const r=+$('psz').value,[lo,hi]=g?range():[0,1],byv=$('pcol').checked&&g&&$('vsel').value!=='std';
+    for(const p of S.pts){const x=sx(p[0]),y=sy(p[1]);if(x<MARG.l-5||x>W-MARG.r+5||y<MARG.t-5||y>H-MARG.b+5)continue;ctx.beginPath();ctx.arc(x,y,r,0,7);
+      if(byv){const c=cmapRGB((p[2]-lo)/((hi-lo)||1));ctx.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`}else ctx.fillStyle='#232220';ctx.fill();ctx.lineWidth=1.2;ctx.strokeStyle=byv?'#232220':'#fff';ctx.stroke()}}
+  ctx.restore();
+  ctx.strokeStyle='#8a8678';ctx.lineWidth=1;ctx.strokeRect(MARG.l+.5,MARG.t+.5,W-MARG.l-MARG.r,H-MARG.t-MARG.b);
+  ctx.fillStyle='#5c5a52';ctx.font='11px Inter,sans-serif';ctx.textAlign='center';
+  for(const v of ticks(wx(MARG.l),wx(W-MARG.r),7)){const x=sx(v);ctx.beginPath();ctx.moveTo(x,H-MARG.b);ctx.lineTo(x,H-MARG.b+4);ctx.stroke();ctx.fillText(fmt(v),x,H-MARG.b+16)}
+  ctx.textAlign='right';for(const v of ticks(wy(H-MARG.b),wy(MARG.t),6)){const y=sy(v);ctx.beginPath();ctx.moveTo(MARG.l-4,y);ctx.lineTo(MARG.l,y);ctx.stroke();ctx.fillText(fmt(v),MARG.l-7,y+4)}
+  ctx.textAlign='left';
+  if(g){const [lo,hi]=range(),bx=W-MARG.r+18,bt=MARG.t,bh=H-MARG.t-MARG.b;
+    for(let i=0;i<bh;i++){const c=cmapRGB(1-i/(bh-1));ctx.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;ctx.fillRect(bx,bt+i,14,1)}
+    ctx.strokeStyle='#8a8678';ctx.strokeRect(bx+.5,bt+.5,14,bh);ctx.fillStyle='#5c5a52';
+    for(const v of ticks(lo,hi,8)){const y=bt+bh*(1-(v-lo)/((hi-lo)||1));ctx.beginPath();ctx.moveTo(bx+14,y);ctx.lineTo(bx+18,y);ctx.stroke();ctx.fillText(fmt(v),bx+21,y+4)}
+    ctx.font='600 11px Inter,sans-serif';ctx.fillText($('vsel').value==='std'?'Std error':(S.names?S.names[2]:'value'),bx,bt-3)}}
+window.addEventListener('resize',fit);
+$('zFit').onclick=fit;$('zIn').onclick=()=>zoomAt(1.4);$('zOut').onclick=()=>zoomAt(1/1.4);
+function zoomAt(f,px,py){const {w,h}=size();px=px??w/2;py=py??h/2;const wxx=wx(px),wyy=wy(py);S.view.s*=f;S.view.tx=px-wxx*S.view.s;S.view.ty=py+wyy*S.view.s;draw()}
+let drag=null;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag={x:e.offsetX,y:e.offsetY,tx:S.view.tx,ty:S.view.ty};cv.style.cursor='grabbing'});
+cv.addEventListener('pointermove',e=>{if(drag){S.view.tx=drag.tx+e.offsetX-drag.x;S.view.ty=drag.ty+e.offsetY-drag.y;draw()}readout(e.offsetX,e.offsetY)});
+cv.addEventListener('pointerup',()=>{drag=null;cv.style.cursor='grab'});
+cv.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.deltaY<0?1.2:1/1.2,e.offsetX,e.offsetY)},{passive:false});
+function readout(px,py){const x=wx(px),y=wy(py);let t=`x ${fmt(+x.toPrecision(7))}, y ${fmt(+y.toPrecision(7))}`,g=S.grid;
+  if(g){const i=Math.round((x-g.x0)/g.dx),j=Math.round((y-g.y0)/g.dy);if(i>=0&&j>=0&&i<g.nx&&j<g.ny){const f=curField()[j*g.nx+i];t+=`  →  ${$('vsel').value==='std'?'std error':'value'} ${fmt(f)}`}}
+  $('ro').textContent=t}
+
+// =====================================================================
+//  Export
+// =====================================================================
+const need=()=>{if(!S.grid){toast('Nothing to export: run the interpolation first.');return false}return true};
+const fz=v=>isFinite(v)?+v.toPrecision(8):'';
+function xyz(sep){const g=S.grid,sk=$('skipNaN').checked,f=curField(),L=[['x','y',$('vsel').value==='std'?'std_error':(S.names?S.names[2]:'value')].join(sep)];
+  for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){const v=f[j*g.nx+i];if(sk&&!isFinite(v))continue;L.push([+(g.x0+i*g.dx).toPrecision(10),+(g.y0+j*g.dy).toPrecision(10),fz(v)].join(sep))}return L.join('\n')}
+function matrix(){const g=S.grid,f=curField(),L=['y\\x,'+Array.from({length:g.nx},(_,i)=>+(g.x0+i*g.dx).toPrecision(10)).join(',')];
+  for(let j=g.ny-1;j>=0;j--){const r=[+(g.y0+j*g.dy).toPrecision(10)];for(let i=0;i<g.nx;i++)r.push(fz(f[j*g.nx+i]));L.push(r.join(','))}return L.join('\n')}
+function grd(){const g=S.grid,f=curField();let mn=Infinity,mx=-Infinity;for(const v of f)if(isFinite(v)){if(v<mn)mn=v;if(v>mx)mx=v}const L=['DSAA',`${g.nx} ${g.ny}`,`${+g.x0.toPrecision(10)} ${+(g.x0+(g.nx-1)*g.dx).toPrecision(10)}`,`${+g.y0.toPrecision(10)} ${+(g.y0+(g.ny-1)*g.dy).toPrecision(10)}`,`${+mn.toPrecision(8)} ${+mx.toPrecision(8)}`];
+  for(let j=0;j<g.ny;j++){const r=[];for(let i=0;i<g.nx;i++){const v=f[j*g.nx+i];r.push(isFinite(v)?+v.toPrecision(8):'1.70141e+38')}L.push(r.join(' '))}return L.join('\n')}
+function asc(){const g=S.grid,f=curField();if(Math.abs(g.dx-g.dy)>1e-9*Math.max(g.dx,g.dy)){toast('ESRI ASCII needs dx = dy.');return null}
+  const L=[`ncols ${g.nx}`,`nrows ${g.ny}`,`xllcorner ${+(g.x0-g.dx/2).toPrecision(10)}`,`yllcorner ${+(g.y0-g.dy/2).toPrecision(10)}`,`cellsize ${g.dx}`,'NODATA_value -9999'];
+  for(let j=g.ny-1;j>=0;j--){const r=[];for(let i=0;i<g.nx;i++){const v=f[j*g.nx+i];r.push(isFinite(v)?+v.toPrecision(8):-9999)}L.push(r.join(' '))}return L.join('\n')}
+function dl(text,name,type){const b=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast(name+' downloaded.')}
+$('bCopy').onclick=async()=>{if(!need())return;const t=xyz('\t');try{await navigator.clipboard.writeText(t)}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}toast('Copied — paste into Excel.')};
+$('bCsv').onclick=()=>{if(need())dl(xyz(','),'grid_xyz.csv','text/csv')};
+$('bMat').onclick=()=>{if(need())dl(matrix(),'grid_matrix.csv','text/csv')};
+$('bGrd').onclick=()=>{if(need())dl(grd(),'grid.grd','text/plain')};
+$('bAsc').onclick=()=>{if(!need())return;const t=asc();if(t)dl(t,'grid.asc','text/plain')};
+$('bPng').onclick=()=>{if(!need())return;cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='map.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('map.png downloaded.')})};
+
+$('method').onchange();size();draw();
+window.DG={S,run,predictAt,normTrain,autoVariogram,empVario,delaunay,get CVrows(){return S.cv}};
+
+</script></body></html>
