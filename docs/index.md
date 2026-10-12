@@ -4,16 +4,16 @@ Notes on petroleum systems and basin modeling — written first for myself, kept
 
 Each note stands on its own: a position on a method, a case with its real constraint, or something I'm still working through.
 
-- [CV](cv.md)
+- [Notes](notes/index.md)
 - [Resources](resources/index.md)
-
-Notes are coming as they're written.
+- [Tools](tools/index.md) (access on request)
+- [CV](cv.md)
 
 ---
 
 ## Contact
 
-- LinkedIn — search my name
+- [LinkedIn](https://www.linkedin.com/in/romain-giboreau)
 
 ---
 
