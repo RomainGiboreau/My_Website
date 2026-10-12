@@ -10,6 +10,7 @@ Small utilities that run entirely in your browser: nothing you load leaves your 
 | [Map interpolation](https://RomainGiboreau.github.io/My_Website/gridding/) | Grid scattered points: kriging variants, IDW, splines, TIN, with secondary variables |
 | [Rock-Eval QC](https://RomainGiboreau.github.io/My_Website/rockeval/) | Quality control of Rock-Eval data and standard crossplots |
 | [Compaction fit](https://RomainGiboreau.github.io/My_Website/compaction/) | Porosity–depth fits (Athy and others) and layer decompaction |
+| [Thermal maturity](https://RomainGiboreau.github.io/My_Website/maturity/) | EASY%Ro vitrinite reflectance and Lopatin TTI from a burial and temperature history |
 | [Biomarkers](https://RomainGiboreau.github.io/My_Website/biomarkers/) | Biomarker ratios, ternary C27–C28–C29, maturity indicators |
 | [Chromatogram](https://RomainGiboreau.github.io/My_Website/chromatogram/) | Peak detection, baseline and areas from a chromatogram |
 | [Clustering](https://RomainGiboreau.github.io/My_Website/clustering/) | k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow/BIC and PCA view |
