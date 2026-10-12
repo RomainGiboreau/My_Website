@@ -12,3 +12,5 @@ Small utilities that run entirely in your browser: nothing you load leaves your 
 | [Compaction fit](https://RomainGiboreau.github.io/My_Website/compaction/) | Porosity–depth fits (Athy and others) and layer decompaction |
 | [Biomarkers](https://RomainGiboreau.github.io/My_Website/biomarkers/) | Biomarker ratios, ternary C27–C28–C29, maturity indicators |
 | [Chromatogram](https://RomainGiboreau.github.io/My_Website/chromatogram/) | Peak detection, baseline and areas from a chromatogram |
+| [Clustering](https://RomainGiboreau.github.io/My_Website/clustering/) | k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow/BIC and PCA view |
+| [Convex & concave hulls](https://RomainGiboreau.github.io/My_Website/hull/) | Convex hull and alpha-shape concave hull per group, with area, perimeter, WKT and GeoJSON export |
