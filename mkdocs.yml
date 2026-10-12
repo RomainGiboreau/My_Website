@@ -48,14 +48,16 @@ nav:
   - Resources: 
       - resources/index.md
       - resources/bibliography.md
-  - TR Cycles: https://RomainGiboreau.github.io/My_Website/tr-cycles/
-  - Plot digitizer: https://RomainGiboreau.github.io/My_Website/digitizer/
-  - Map digitizer: https://RomainGiboreau.github.io/My_Website/mapdigitizer/
-  - Map interpolation: https://RomainGiboreau.github.io/My_Website/gridding/
-  - Rock-Eval QC: https://RomainGiboreau.github.io/My_Website/rockeval/
-  - Compaction fit: https://RomainGiboreau.github.io/My_Website/compaction/
-  - Biomarkers: https://RomainGiboreau.github.io/My_Website/biomarkers/
-  - Chromatogram: https://RomainGiboreau.github.io/My_Website/chromatogram/
+  - Tools:
+      - tools/index.md
+      - TR Cycles: https://RomainGiboreau.github.io/My_Website/tr-cycles/
+      - Plot digitizer: https://RomainGiboreau.github.io/My_Website/digitizer/
+      - Map digitizer: https://RomainGiboreau.github.io/My_Website/mapdigitizer/
+      - Map interpolation: https://RomainGiboreau.github.io/My_Website/gridding/
+      - Rock-Eval QC: https://RomainGiboreau.github.io/My_Website/rockeval/
+      - Compaction fit: https://RomainGiboreau.github.io/My_Website/compaction/
+      - Biomarkers: https://RomainGiboreau.github.io/My_Website/biomarkers/
+      - Chromatogram: https://RomainGiboreau.github.io/My_Website/chromatogram/
   - Tags: tags.md
 
 
