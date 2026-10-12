@@ -15,3 +15,7 @@ Small utilities that run entirely in your browser: nothing you load leaves your 
 | [Chromatogram](https://RomainGiboreau.github.io/My_Website/chromatogram/) | Peak detection, baseline and areas from a chromatogram |
 | [Clustering](https://RomainGiboreau.github.io/My_Website/clustering/) | k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow/BIC and PCA view |
 | [Convex & concave hulls](https://RomainGiboreau.github.io/My_Website/hull/) | Convex hull and alpha-shape concave hull per group, with area, perimeter, WKT and GeoJSON export |
+| [BHT correction](https://RomainGiboreau.github.io/My_Website/bht/) | Horner extrapolation of bottom-hole temperatures, last-resort correction, geothermal gradient |
+| [Source rock potential](https://RomainGiboreau.github.io/My_Website/source/) | Pyrolysis richness, kerogen quality and maturity classes, HI–Tmax and TOC–S2 plots, source potential index |
+| [Ternary diagram](https://RomainGiboreau.github.io/My_Website/ternary/) | Ternary plots by group with arithmetic and compositional (geometric) centres |
+| [Variogram](https://RomainGiboreau.github.io/My_Website/variogram/) | Directional experimental variogram of scattered data and spherical / exponential / Gaussian fit |
