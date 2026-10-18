@@ -49,20 +49,25 @@ nav:
       - resources/index.md
       - resources/bibliography.md
   - Tools:
-      - TR Cycles: https://RomainGiboreau.github.io/My_Website/tr-cycles/
-      - Plot digitizer: https://RomainGiboreau.github.io/My_Website/digitizer/
-      - Map digitizer: https://RomainGiboreau.github.io/My_Website/mapdigitizer/
-      - Map interpolation: https://RomainGiboreau.github.io/My_Website/gridding/
-      - Rock-Eval QC: https://RomainGiboreau.github.io/My_Website/rockeval/
-      - Compaction fit: https://RomainGiboreau.github.io/My_Website/compaction/
-      - Thermal maturity: https://RomainGiboreau.github.io/My_Website/maturity/
-      - Biomarkers: https://RomainGiboreau.github.io/My_Website/biomarkers/
-      - Chromatogram: https://RomainGiboreau.github.io/My_Website/chromatogram/
-      - Clustering: https://RomainGiboreau.github.io/My_Website/clustering/
-      - Convex & concave hulls: https://RomainGiboreau.github.io/My_Website/hull/
-      - BHT correction: https://RomainGiboreau.github.io/My_Website/bht/
-      - Source rock potential: https://RomainGiboreau.github.io/My_Website/source/
-      - Ternary diagram: https://RomainGiboreau.github.io/My_Website/ternary/
-      - Variogram: https://RomainGiboreau.github.io/My_Website/variogram/
-      - MCDA (AHP & PROMETHEE): https://RomainGiboreau.github.io/My_Website/mcda/
+      - Digitization:
+          - Plot digitizer: https://RomainGiboreau.github.io/My_Website/digitizer/
+          - Map digitizer: https://RomainGiboreau.github.io/My_Website/mapdigitizer/
+      - Mapping and spatial statistics:
+          - Map interpolation: https://RomainGiboreau.github.io/My_Website/gridding/
+          - Variogram: https://RomainGiboreau.github.io/My_Website/variogram/
+          - Convex & concave hulls: https://RomainGiboreau.github.io/My_Website/hull/
+          - Clustering: https://RomainGiboreau.github.io/My_Website/clustering/
+      - Organic geochemistry:
+          - Rock-Eval QC: https://RomainGiboreau.github.io/My_Website/rockeval/
+          - Source rock potential: https://RomainGiboreau.github.io/My_Website/source/
+          - Thermal maturity: https://RomainGiboreau.github.io/My_Website/maturity/
+          - Biomarkers: https://RomainGiboreau.github.io/My_Website/biomarkers/
+          - Chromatogram: https://RomainGiboreau.github.io/My_Website/chromatogram/
+          - Ternary diagram: https://RomainGiboreau.github.io/My_Website/ternary/
+      - Basin modelling and petrophysics:
+          - Compaction fit: https://RomainGiboreau.github.io/My_Website/compaction/
+          - BHT correction: https://RomainGiboreau.github.io/My_Website/bht/
+          - TR Cycles: https://RomainGiboreau.github.io/My_Website/tr-cycles/
+      - Decision support:
+          - MCDA (AHP & PROMETHEE): https://RomainGiboreau.github.io/My_Website/mcda/
   - Tags: tags.md
