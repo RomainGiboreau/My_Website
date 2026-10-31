@@ -1,78 +1,95 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
 <title>Chess</title>
 <style>
 :root{--bg:#f5f3ed;--fg:#232220;--mut:#5c5a52;--acc:#4a5a4e;--line:#c9c4b6}
 @media(prefers-color-scheme:dark){:root{--bg:#1d1e1c;--fg:#e8e5dc;--mut:#a9a699;--acc:#9bb5a0;--line:#3a3b37}}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Inter,system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;padding:16px;box-sizing:border-box}
-main{max-width:460px;width:100%}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Inter,system-ui,sans-serif;padding:24px 16px}
+.box{max-width:440px;margin:12vh auto 0}
 h1{font-size:1.4rem;margin:0 0 8px}
 p{color:var(--mut);margin:0 0 16px}
-button,a.btn{display:inline-block;background:var(--acc);color:var(--bg);border:0;border-radius:6px;padding:10px 18px;font:inherit;cursor:pointer;text-decoration:none}
+button{background:var(--acc);color:var(--bg);border:0;border-radius:6px;padding:10px 18px;font:inherit;cursor:pointer}
+input{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg);width:100%;margin-bottom:10px}
 a.back{color:var(--mut);font-size:.9rem;display:inline-block;margin-top:20px}
 [hidden]{display:none!important}
-#err{color:#b3402f}
-</style></head><body><main>
-<section id="gate">
+.err{color:#b3402f}
+</style></head><body>
+<div class="box" id="s1">
 <h1>Chess</h1>
-<p>Sign in with your Lichess account. The login happens on lichess.org; this site never sees your password.</p>
+<p>Step 1 of 2. Sign in with your Lichess account. The login happens on lichess.org; this site never sees your password.</p>
 <button id="go" type="button">Sign in with Lichess</button>
-<p id="err" role="alert" hidden></p>
-<a class="back" href="../">← Back to the site</a>
-</section>
-<section id="app" hidden>
-<h1>Chess</h1>
-<p>Signed in as <strong id="who"></strong>.</p>
-<p>Nothing here yet.</p>
-<button id="out" type="button">Sign out</button>
+<p class="err" id="e1" role="alert" hidden></p>
 <br><a class="back" href="../">← Back to the site</a>
-</section>
-</main>
+</div>
+<div class="box" id="s2" hidden>
+<h1>Chess</h1>
+<p>Step 2 of 2. Signed in as <strong id="who"></strong>. Enter the passphrase to open the page.</p>
+<form id="f"><input id="pw" type="password" autocomplete="off" placeholder="Passphrase"><button id="ok" type="submit">Open</button></form>
+<p class="err" id="e2" role="alert" hidden></p>
+<button id="out" type="button" style="background:none;color:var(--mut);padding:0;margin-top:14px">Sign out</button>
+</div>
+<div id="dash" hidden></div>
 <script>
-// Gate only: the allow-list is client-side, so it keeps casual visitors out but is NOT access control.
-const ALLOWED=['rom9228'];            // Lichess usernames, compared lowercase; empty/placeholder = nobody gets in
-const CLIENT_ID='romaingiboreau-chess';            // public PKCE client: any identifying string, no secret, no registration on Lichess
+// The Lichess check only identifies the visitor. The passphrase is the real protection: it is the AES-GCM key of the payload below.
+const ALLOWED=['rom9228'];                         // compared lowercase
+const CLIENT_ID='romaingiboreau-chess';            // public PKCE client: no secret, no registration needed on Lichess
 const LI='https://lichess.org';
-const REDIRECT=location.origin+location.pathname;  // must be identical at /oauth and /api/token
+const REDIRECT=location.origin+location.pathname;  // identical at /oauth and /api/token
+const P={"s":"Us5QqPUsSGqt065qwg63+A==","n":"I+fRTAt17Fi+dPqS","c":"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","i":600000};
 const $=id=>document.getElementById(id);
 const ss={get:k=>{try{return sessionStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{sessionStorage.setItem(k,v)}catch(e){}},del:k=>{try{sessionStorage.removeItem(k)}catch(e){}}};
-const b64=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-const rnd=n=>b64(crypto.getRandomValues(new Uint8Array(n)));
-function fail(m){$('err').textContent=m;$('err').hidden=false;$('gate').hidden=false;$('app').hidden=true}
-function show(name){$('who').textContent=name;$('gate').hidden=true;$('app').hidden=false}
+const b64u=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const rnd=n=>b64u(crypto.getRandomValues(new Uint8Array(n)));
+function step(n,err){$('s1').hidden=n!==1;$('s2').hidden=n!==2;$('dash').hidden=n!==3;if(err){const e=$(n===1?'e1':'e2');e.textContent=err;e.hidden=false}}
 async function login(){
   const v=rnd(48),st=rnd(16);ss.set('li_v',v);ss.set('li_s',st);
-  const ch=b64(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
+  const ch=b64u(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
   location.href=LI+'/oauth?'+new URLSearchParams({response_type:'code',client_id:CLIENT_ID,redirect_uri:REDIRECT,code_challenge_method:'S256',code_challenge:ch,state:st});
 }
-async function who(tok){
-  const r=await fetch(LI+'/api/account',{headers:{Authorization:'Bearer '+tok}});
-  if(!r.ok)throw new Error('account '+r.status);
-  return (await r.json()).username;
-}
 function admit(name){
-  if(ALLOWED.map(s=>s.toLowerCase()).includes(name.toLowerCase())){ss.set('li_u',name);show(name)}
-  else fail('The Lichess account "'+name+'" is not on the list.');
+  if(ALLOWED.includes(name.toLowerCase())){ss.set('li_u',name);$('who').textContent=name;step(2);tryStored()}
+  else step(1,'The Lichess account "'+name+'" is not on the list.');
 }
+async function decrypt(pw){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:unb64(P.s),iterations:P.i,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+  const gz=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(P.n)},key,unb64(P.c));   // throws on a wrong passphrase
+  const txt=await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  return JSON.parse(txt);
+}
+async function open_(pw){
+  const d=await decrypt(pw);
+  window.LI_USER=ss.get('li_u');
+  $('dash').innerHTML=d.html;step(3);
+  const s=document.createElement('script');s.textContent=d.js;document.body.appendChild(s);
+}
+async function tryStored(){const pw=ss.get('li_pw');if(pw){try{await open_(pw)}catch(e){ss.del('li_pw')}}}
 (async()=>{
   $('go').onclick=login;
-  $('out').onclick=()=>{['li_u','li_v','li_s'].forEach(ss.del);location.href=REDIRECT};
+  $('out').onclick=()=>{['li_u','li_v','li_s','li_pw'].forEach(ss.del);location.href=REDIRECT};
+  $('f').onsubmit=async ev=>{ev.preventDefault();const pw=$('pw').value;$('e2').hidden=true;
+    if(!pw)return step(2,'Enter the passphrase.');
+    try{await open_(pw);ss.set('li_pw',pw)}catch(e){step(2,'Wrong passphrase.')}};
   const q=new URLSearchParams(location.search);
-  if(q.get('error')){history.replaceState(null,'',REDIRECT);return fail('Lichess sign-in cancelled or refused.')}
+  if(q.get('error')){history.replaceState(null,'',REDIRECT);return step(1,'Lichess sign-in cancelled or refused.')}
   if(q.get('code')){
     const v=ss.get('li_v'),st=ss.get('li_s');history.replaceState(null,'',REDIRECT);
-    if(!v||q.get('state')!==st)return fail('Sign-in state mismatch, please try again.');
+    if(!v||q.get('state')!==st)return step(1,'Sign-in state mismatch, please try again.');
     try{
       const r=await fetch(LI+'/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
         body:new URLSearchParams({grant_type:'authorization_code',code:q.get('code'),code_verifier:v,redirect_uri:REDIRECT,client_id:CLIENT_ID})});
       if(!r.ok)throw new Error('token '+r.status);
       const t=(await r.json()).access_token;
-      const name=await who(t);
-      // The token is only needed to read the username: drop it, and revoke it on Lichess.
-      fetch(LI+'/api/token',{method:'DELETE',headers:{Authorization:'Bearer '+t}}).catch(()=>{});
+      const a=await fetch(LI+'/api/account',{headers:{Authorization:'Bearer '+t}});
+      if(!a.ok)throw new Error('account '+a.status);
+      const name=(await a.json()).username;
+      fetch(LI+'/api/token',{method:'DELETE',headers:{Authorization:'Bearer '+t}}).catch(()=>{});   // token only served to read the username
       ss.del('li_v');ss.del('li_s');admit(name);
-    }catch(e){fail('Sign-in failed ('+e.message+').')}
+    }catch(e){step(1,'Sign-in failed ('+e.message+').')}
     return;
   }
   const u=ss.get('li_u');if(u)admit(u);
