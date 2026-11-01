@@ -1,0 +1,5 @@
+Chess piece set "staunty" by sadsnake1
+Source: lichess.org (https://github.com/lichess-org/lila, public/piece/staunty)
+License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+The SVG files in this folder are unmodified copies, redistributed under the same license.
