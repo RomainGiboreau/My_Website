@@ -17,7 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install mkdocs-material
+      # Pinned to the versions tested locally; bump deliberately (MkDocs 2.0 is not compatible yet)
+      - run: pip install mkdocs==1.6.1 mkdocs-material==9.7.6
       - run: mkdocs build
       - name: Render CV as PDF
         run: >

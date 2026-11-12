@@ -45,8 +45,7 @@ exclude_docs: |
 
 plugins:
   - search
-  - tags:
-      tags_file: tags.md
+  - tags
 
 nav:
   - Home: index.md
