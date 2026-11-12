@@ -581,3 +581,12 @@ html {
   .rig .spark,
   .rig .bubble { opacity: 1; }
 }
+
+/* ---------- Home: use the full grid width (text pages keep 46rem for reading) ---------- */
+.md-content:has(.hero) {
+  max-width: none;
+}
+
+.md-content:has(.hero) .md-content__inner > p {
+  max-width: 46rem;
+}
