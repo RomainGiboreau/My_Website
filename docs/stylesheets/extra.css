@@ -590,3 +590,19 @@ html {
 .md-content:has(.hero) .md-content__inner > p {
   max-width: 46rem;
 }
+
+/* Home: wider grid (header, content, footer stay aligned) and no well-log rail */
+body:has(.hero) .md-grid {
+  max-width: 80rem;
+}
+
+.md-content:has(.hero) .md-content__inner {
+  border-left: none;
+  background-image: none;
+  padding-left: 0;
+}
+
+/* Keep the whole structure map visible on wide screens */
+.md-typeset .hero {
+  min-height: 26vw;
+}
