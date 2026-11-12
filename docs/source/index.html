@@ -1,57 +1,415 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>Protected page</title>
+<title>Source rock potential</title>
+<meta name="description" content="Pyrolysis-based source rock richness, quality, maturity, original potential and resources">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#eeece6;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e}
+
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
 html{color-scheme:light only}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 Inter,system-ui,sans-serif}
-form{width:min(92vw,360px);padding:0 4px}
-h1{font-family:'Space Grotesk',Inter,sans-serif;font-weight:700;font-size:1.2rem;margin:0 0 .25rem}
-p{margin:0 0 1rem;color:var(--mut);font-size:.9rem}
-.pwr{position:relative}
-.pwr input{padding-right:2.6rem}
-.eye{position:absolute;right:4px;top:4px;bottom:4px;width:2.2rem!important;margin:0!important;padding:0!important;background:transparent!important;border:0!important;color:var(--mut)!important;display:grid;place-items:center}
-.eye svg{width:20px;height:20px}
-input,button{font:inherit;width:100%;padding:.65rem .8rem;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--fg)}
-button{margin-top:.6rem;background:var(--acc);border-color:var(--acc);color:#f5f3ed;cursor:pointer}
-button:disabled{opacity:.6;cursor:wait}
-#err{min-height:1.4em;margin-top:.6rem;color:#a8623a;font-size:.88rem}
-a{color:var(--mut);font-size:.85rem}
-</style></head><body>
-<form id="f" style="display:none"><h1>Protected page</h1><p>Enter the password to open Source rock potential.</p>
-<div class="pwr"><input id="pw" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Password" required>
-<button type="button" class="eye" id="eye" aria-label="Show password" title="Show / hide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-<button id="go">Unlock</button><div id="err" role="alert"></div>
-<a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></form>
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Source rock potential</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button class="pri" id="bCsv" title="One line per sample: HI, OI, PI, S1+S2, S2/S3 and the classes">Samples CSV</button>
+  <button id="bCsv2" title="One line per group: means, classes, source potential index">Groups CSV</button>
+  <button id="bPng">PNG</button><span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. Pyrolysis data (Rock-Eval type): TOC in wt %, S1, S2, S3 in mg/g rock, Tmax in °C. Derived: HI = 100·S2/TOC, OI = 100·S3/TOC (mg/g TOC), PI = S1/(S1+S2), genetic potential S1+S2. Source potential index (Demaison & Huizinga 1991 definition): SPI = Σ h·(S1+S2)·ρ / 1000 in tonnes of hydrocarbons per m² of source rock surface, with h thickness in m, S1+S2 in kg/t (= mg/g) and ρ rock density in t/m³; the sum runs over the samples, each one representing the thickness given in the thickness column. The class limits are editable in step 3; the defaults are the usual richness / kerogen-quality / maturity categories, whose exact limits vary between authors (see the note in step 3).">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Data<i class="chev"></i></h2>
+  <div class="body"><textarea id="paste" rows="6" placeholder="Depth&#9;TOC&#9;S1&#9;S2&#9;Tmax&#10;…" spellcheck="false"></textarea>
+  <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
+  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
+  <div class="pg"><span>Depth</span><select id="cz"></select><span>TOC (wt %)</span><select id="cT"></select><span>S1</span><select id="k1"></select><span>S2</span><select id="k2"></select><span>S3</span><select id="k3"></select><span>Tmax</span><select id="cx"></select><span>Thickness</span><select id="ch"></select><span>Group</span><select id="cg"></select></div>
+  <div class="msg" id="dataMsg">No data yet.</div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Source potential index<i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Density (t/m³)</span><input id="rho" value="2.5"></div><div class="hint">SPI needs a thickness column (m).</div><div class="msg" id="runMsg"></div></div></section>
+ <section class="panel collapsed"><h2><span class="n">3</span>Original potential<span class="tt" tabindex="0" data-tip="Estimates the transformation ratio TR and the original TOC (TOC0) of a mature sample, from an assumed original HI (HI0). Jarvie et al. (2007, AAPG Bull. 91(4), 475–499), as presented on the ZetaWare page: TR = 1 − HI·(1200 − HI0·(1 − PI0)) / [HI0·(1200 − HI·(1 − PI))], with PI0 the original production index (assumed, default 0.02: check against the paper). TOC0 is then obtained here from a carbon mass balance (generated hydrocarbons, 83.3 % carbon, leave the rock; no residual-carbon enrichment): TOC0 = 100·TOC / [100·(1 − 0.8333·a) + a·TOC], a = TR·HI0/1000. I did not use the TOC0 equation as it is written on the ZetaWare page, because as transcribed it does not return TOC0 = TOC when TR = 0. He method (as on the ZetaWare page): TOC0 = TOC·(1000 − 0.833·HI − 0.833·TI)/(1000 − 0.833·HI0 − 0.833·TI0), TR = 1 − HI·TOC/(HI0·TOC0), with TI = 100·S1/TOC (mg/g TOC). Errors can be large: each method assumes HI0 (and PI0 or TI0), which is unknown. Set the method to none to switch off.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Method</span><select id="om"><option value="none">none</option><option value="jarvie">Jarvie et al. 2007 (TR from HI, PI)</option><option value="he">He (HI, TI)</option></select>
+  <span>HI0 (mg/g TOC)</span><input id="hi0" value="600"><span>PI0 (Jarvie)</span><input id="pi0" value="0.02"><span>TI0 (He)</span><input id="ti0" value="20"></div></div></section>
+ <section class="panel collapsed"><h2><span class="n">4</span>Resources<span class="tt" tabindex="0" data-tip="Mass balance, without kinetics. Generative potential of a group = Σ h·ρ·S2 / 1000 in Mt of hydrocarbons per km² (= t/m²); with an original-potential method active, the original potential Σ h·ρ·TOC0·HI0/100/1000 is given too. Oil and gas split: gas mass fraction = GOGI/(1 + GOGI) (GOGI = gas-prone / oil-prone mass ratio: 1 → 50 % gas, 0.5 → 33 %, 0.2 → 17 %, as on the ZetaWare page). Oil volume from the API gravity (density = 141.5/(131.5 + API) × 1000 kg/m³ at 1000 kg/m³ water), gas volume from the gas density at standard conditions below (an assumption, not a measurement). This is the total generative potential at surface conditions, not an expelled volume: the Pepper & Corvi (1995) expulsion model used by ZetaWare is not implemented. Tight oil from S1 (Downey 2011 quick look, as described on the ZetaWare page): S1 × rock density / oil density; the ZetaWare example (S1 = 5 mg/g, 35 °API, 2.5 g/cm³) gives 114 stb/acre-ft and 92 514 stb/km²·m, which this page reproduces. S1 is only part of the oil: light ends may be lost, so treat it as a minimum.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Oil API (°)</span><input id="api" value="35"><span>GOGI</span><input id="gogi" value="0"><span>Gas density (kg/m³)</span><input id="rhog" value="0.7"></div><div class="hint">Gas density at standard conditions: assumed, adjust it. Needs a thickness column for per-area results.</div></div></section>
+ <section class="panel collapsed"><h2><span class="n">5</span>Class limits<span class="tt" tabindex="0" data-tip="Four limits per row separate five classes. Defaults: TOC 0.5/1/2/4 wt % (poor, fair, good, very good, excellent; the TOC limits are those of the Peters (1986) guidelines as reproduced in several open reports); S1 and S2 limits as I remember them from Peters & Cassa (1994, Applied Source Rock Geochemistry, AAPG Memoir 60): not rechecked against the original, and some authors use different S2 limits (e.g. 2 and 5 mg/g only), so adjust them to the scheme you use; HI 50/200/300/600 (kerogen IV, III, II/III, II, I); Tmax 435/445/450/470 °C (immature, early, peak, late, post-mature), also from memory, and Tmax limits depend on kerogen type, so use them as a rough guide.">?</span><i class="chev"></i></h2>
+  <div class="body"><div id="lim"></div><div class="row"><button id="bReset">Reset defaults</button></div></div></section>
+</aside>
+<main>
+ <div class="legend" id="legend"></div>
+ <div class="cards">
+  <div class="card"><h3>TOC – S2 (generative potential)<span class="sp"></span><button data-png="c1">PNG</button></h3><canvas id="c1" style="position:static;height:380px"></canvas></div>
+  <div class="card"><h3>HI – Tmax (quality and maturity)<span class="sp"></span><button data-png="c2">PNG</button></h3><canvas id="c2" style="position:static;height:380px"></canvas></div>
+  <div class="card wide" id="cardP"><h3>Profiles with depth<span class="sp"></span><button data-png="c3">PNG</button></h3><canvas id="c3" style="position:static;height:420px"></canvas></div>
+ </div>
+ <div class="card" style="margin-top:12px"><h3>Resource potential<span class="tt" tabindex="0" data-tip="See the tip of step 4. Mt = million tonnes; mmbbl = million barrels; bcf = billion cubic feet (standard conditions). Per km² of source rock outcrop surface, summed over the thickness of the samples.">?</span></h3><div class="tw" id="resR"></div></div>
+ <div class="card" style="margin-top:12px"><h3>Groups<span class="tt" tabindex="0" data-tip="Means are arithmetic means over the samples. HI of a group = 100·mean S2 / mean TOC. SPI in t HC per m² (needs thickness); thickness-weighted means are used when a thickness column is given.">?</span></h3><div class="tw" id="resT"></div></div>
+</main></div>
+
 <script>
-(()=>{
-const P={"s":"FYvrleTlsvG1di7PJImLug==","n":"1juHQjkShYozwCDs","c":"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","i":600000};
-const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),K='rg_site_pw';
-async function unlock(pw){
-  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
-  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(P.s),iterations:P.i,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
-  const buf=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(P.n)},key,b64(P.c));
-  return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-}
-function show(html){document.open();document.write(html);document.close()}
-const f=document.getElementById('f'),eye=document.getElementById('eye'),pwi=document.getElementById('pw'),err=document.getElementById('err');
-eye.addEventListener('click',()=>{const sh=pwi.type==='password';pwi.type=sh?'text':'password';eye.setAttribute('aria-label',sh?'Hide password':'Show password');pwi.focus()});
-f.addEventListener('submit',async e=>{
-  e.preventDefault();const btn=document.getElementById('go');btn.disabled=true;err.textContent='';
-  let v=pwi.value,html=null;
-  try{html=await unlock(v)}catch(x){if(v!==v.trim()){v=v.trim();try{html=await unlock(v)}catch(y){}}}
-  if(html===null){err.textContent='Incorrect password.';btn.disabled=false;return}
-  try{sessionStorage.setItem(K,v)}catch(x){}
-  show(html)});
-(async()=>{
-  if(!window.crypto||!crypto.subtle){f.style.display='';err.textContent='Unsupported browser (HTTPS required).';return}
-  let v=null;try{v=sessionStorage.getItem(K)}catch(x){}
-  if(v){try{show(await unlock(v));return}catch(x){try{sessionStorage.removeItem(K)}catch(y){}}}
-  f.style.display='';pwi.focus()})();
-})();
-</script></body></html>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
+  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
+  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
+const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
+const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>banner(ok||'Copied.'),()=>fallbackCopy(t,ok));else fallbackCopy(t,ok)}
+function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
+const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
+document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
+function parseTable(text,minCols){
+  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
+  const has=c=>lines.some(l=>l.includes(c));let sep;
+  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
+  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
+  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
+  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
+const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+// ---- plotting engine ----------------------------------------------------------------
+const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
+function niceStep(r,n){const raw=r/n,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return(m<1.5?1:m<2.25?2:m<3.5?2.5:m<7.5?5:10)*p}
+function lin(lo,hi,n){const st=niceStep(hi-lo,n),a=Math.ceil(lo/st-1e-9)*st,t=[];for(let v=a;v<=hi+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t}
+function logt(lo,hi){const t=[];for(let e=Math.floor(Math.log10(lo));e<=Math.ceil(Math.log10(hi));e++)for(const m of[1,2,5]){const v=m*Math.pow(10,e);if(v>=lo*0.999&&v<=hi*1.001)t.push(v)}return t}
+const tickTxt=v=>(Math.abs(v)>=1e5||(Math.abs(v)<1e-2&&v!==0))?v.toExponential(0):String(+v.toPrecision(6));
+function tipEl(){let t=$('tip');if(!t){t=document.createElement('div');t.id='tip';document.body.appendChild(t)}return t}
+/* spec: {title, ylab, ylim, yrev, ylog, panels:[{xlab,xlim,xlog,pts:[{x,y,c,g(rey),info}],lines:[{x:[],y:[],c,w,dash,label}],vlines:[{v,c,label}],hlines:[{v,c,label}]}], sq(uare)} */
+function drawChart(cv,spec){
+  const dpr=window.devicePixelRatio||1,W=cv.clientWidth||600,H=cv.clientHeight||340;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  const P=spec.panels,np=P.length,L=58,R=10,T=spec.title?22:10,B=44,gap=np>1?10:0,pw=(W-L-R-gap*(np-1))/np,ph=H-T-B;
+  const fin=Number.isFinite;
+  // shared y range
+  let ys=[];for(const p of P){for(const q of p.pts)if(fin(q.y))ys.push(q.y);for(const l of p.lines||[])for(const v of l.y)if(fin(v))ys.push(v)}
+  let [y0,y1]=spec.ylim||[Math.min(...ys),Math.max(...ys)];if(!fin(y0)||!fin(y1)){y0=0;y1=1}if(y0===y1){y0-=1;y1+=1}
+  if(!spec.ylim){const pd=(y1-y0)*0.04;if(spec.ylog){y0/=1.15;y1*=1.15}else{y0-=pd;y1+=pd}}
+  const fy=spec.ylog?Math.log10:v=>v,ya=fy(y0),yb=fy(y1),py=v=>spec.yrev?T+(fy(v)-ya)/(yb-ya)*ph:T+ph-(fy(v)-ya)/(yb-ya)*ph;
+  x.font='11px Inter,sans-serif';x.textBaseline='middle';cv._hits=[];
+  if(spec.title){x.fillStyle='#232220';x.font='600 12px "Space Grotesk",Inter,sans-serif';x.textAlign='left';x.fillText(spec.title,L,10)}
+  P.forEach((p,k)=>{
+    const ox=L+k*(pw+gap);let xs=[];for(const q of p.pts)if(fin(q.x))xs.push(q.x);
+    let [x0,x1]=p.xlim||[Math.min(...xs),Math.max(...xs)];if(!fin(x0)||!fin(x1)){x0=0;x1=1}if(x0===x1){x0-=1;x1+=1}
+    if(!p.xlim){if(p.xlog){x0/=1.15;x1*=1.15}else{const pd=(x1-x0)*0.05;x0-=pd;x1+=pd}}
+    const fx=p.xlog?Math.log10:v=>v,xa=fx(x0),xb=fx(x1),px=v=>p.xrev?ox+pw-(fx(v)-xa)/(xb-xa)*pw:ox+(fx(v)-xa)/(xb-xa)*pw;
+    x.save();x.beginPath();x.rect(ox,T,pw,ph);x.clip();
+    // grid
+    const xt=p.xlog?logt(x0,x1):lin(x0,x1,Math.max(3,Math.floor(pw/70))),yt=spec.ylog?logt(y0,y1):lin(y0,y1,Math.max(3,Math.floor(ph/48)));
+    x.strokeStyle='#ece9df';x.lineWidth=1;x.beginPath();for(const t of xt){const u=Math.round(px(t))+.5;x.moveTo(u,T);x.lineTo(u,T+ph)}for(const t of yt){const u=Math.round(py(t))+.5;x.moveTo(ox,u);x.lineTo(ox+pw,u)}x.stroke();
+    for(const v of p.vlines||[]){const u=px(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(u,T);x.lineTo(u,T+ph);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,u+3,T+9)}}
+    for(const v of p.hlines||[]){const u=py(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(ox,u);x.lineTo(ox+pw,u);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,ox+3,u-7)}}
+    for(const l of p.lines||[]){x.strokeStyle=l.c||'#5c5a52';x.lineWidth=l.w||1.2;x.setLineDash(l.dash||[]);x.beginPath();let on=false,last=null,first=null;
+      for(let i=0;i<l.x.length;i++){if(!fin(l.x[i])||!fin(l.y[i])){on=false;continue}const a=px(l.x[i]),b=py(l.y[i]);if(on)x.lineTo(a,b);else x.moveTo(a,b);on=true;last=[a,b];if(!first)first=[a,b]}x.stroke();x.setLineDash([]);
+      if(l.label&&l.start&&first){x.fillStyle=l.c||'#5c5a52';x.textAlign='left';x.fillText(l.label,Math.max(first[0]+4,ox+4),Math.min(T+ph-8,first[1]-8))}else if(l.label&&last){x.fillStyle=l.c||'#5c5a52';x.textAlign='right';x.fillText(l.label,Math.min(last[0]-3,ox+pw-3),Math.max(T+8,last[1]-8))}}
+    // points: grey crosses first, then coloured
+    for(const q of p.pts){if(!q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y);x.strokeStyle='#9a968a';x.lineWidth=1.3;x.beginPath();x.moveTo(a-3,b-3);x.lineTo(a+3,b+3);x.moveTo(a+3,b-3);x.lineTo(a-3,b+3);x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    for(const q of p.pts){if(q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y),r=q.r||4;x.beginPath();x.arc(a,b,r,0,7);x.fillStyle=q.c||'#4a5a4e';x.fill();x.lineWidth=q.ring?2:1;x.strokeStyle=q.ring||'#232220';x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    x.restore();
+    x.strokeStyle='#8a8678';x.lineWidth=1;x.strokeRect(ox+.5,T+.5,pw,ph);
+    x.fillStyle='#5c5a52';x.textAlign='center';x.textBaseline='top';x.font='11px Inter,sans-serif';for(const t of xt){const u=px(t);if(u>=ox-1&&u<=ox+pw+1)x.fillText(tickTxt(t),u,T+ph+4)}
+    x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(p.xlab||'',ox+pw/2,T+ph+22);
+    if(k===0){x.textAlign='right';x.textBaseline='middle';x.fillStyle='#5c5a52';x.font='11px Inter,sans-serif';for(const t of yt){const u=py(t);if(u>=T-1&&u<=T+ph+1)x.fillText(tickTxt(t),ox-5,u)}
+      x.save();x.translate(12,T+ph/2);x.rotate(-Math.PI/2);x.textAlign='center';x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(spec.ylab||'',0,0);x.restore()}
+    x.textBaseline='middle'});
+  if(!cv._tip){cv._tip=true;cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=100;for(const h of cv._hits||[]){const d=(h.x-mx)**2+(h.y-my)**2;if(d<bd){bd=d;best=h}}
+      const t=tipEl();if(best&&best.i){t.innerHTML=best.i;t.style.display='block';t.style.left=Math.min(window.innerWidth-310,e.clientX+14)+'px';t.style.top=(e.clientY+14)+'px'}else t.style.display='none'});
+    cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
+function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)})}
+
+// ---- shared data-loading helpers (paste / open file / drag-and-drop) --------------------------------------------
+function wireData(loadText){
+  let pt;$('paste').addEventListener('input',()=>{clearTimeout(pt);pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
+  $('bOpen').onclick=()=>$('file').click();
+  const rd=f=>{const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>3e6?r.result.slice(0,3e6):r.result;loadText(r.result)};r.readAsText(f)};
+  $('file').onchange=e=>{const f=e.target.files[0];if(f)rd(f);e.target.value=''};
+  document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)rd(f)})}
+const gcol=(head,re,skip)=>head.findIndex((h,i)=>re.test(normName(h))&&!(skip||[]).includes(i));
+function fillSel(ids,head,guess,none){const o=head.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');ids.forEach((id,k)=>{$(id).innerHTML=(none&&none[k]?'<option value="-1">— (none)</option>':'')+o;$(id).value=guess[k]})}
+// two-sided 95 % Student t quantile: exact tabulated values for df 1-10, 12, 15, 20, 30; linear interpolation in 1/df between 30 and 120; 1.96 beyond
+const TT={1:12.706,2:4.303,3:3.182,4:2.776,5:2.571,6:2.447,7:2.365,8:2.306,9:2.262,10:2.228,12:2.179,15:2.131,20:2.086,30:2.042,120:1.980};
+function tcrit(df){if(df<1)return NaN;if(df>120)return 1.96;if(TT[df])return TT[df];const k=Object.keys(TT).map(Number).sort((a,b)=>a-b);let a=k[0],b=k[k.length-1];for(const v of k){if(v<=df)a=v;if(v>=df){b=v;break}}
+  return df>30?TT[a]+(TT[b]-TT[a])*(1/df-1/a)/(1/b-1/a):TT[a]+(TT[b]-TT[a])*(df-a)/(b-a)}
+// =====================================================================================
+//  Source rock potential from pyrolysis data.   HI = 100 S2/TOC [mg/g TOC], OI = 100 S3/TOC, PI = S1/(S1+S2), GP = S1+S2 [mg/g = kg/t]
+//  SPI = sum( h * GP * rho ) / 1000   [m * kg/t * t/m3 / 1000 = t HC / m2]     (Demaison & Huizinga 1991 definition)
+// =====================================================================================
+const D={table:null,rows:[],groups:[]};
+const DEF={toc:[0.5,1,2,4],s1:[0.5,1,2,4],s2:[2.5,5,10,20],hi:[50,200,300,600],tmax:[435,445,450,470]};
+const NAMES={toc:['poor','fair','good','very good','excellent'],s1:['poor','fair','good','very good','excellent'],s2:['poor','fair','good','very good','excellent'],hi:['IV','III','II/III','II','I'],tmax:['immature','early mature','peak mature','late mature','post-mature']};
+const LABEL={toc:'TOC (wt %)',s1:'S1 (mg/g)',s2:'S2 (mg/g)',hi:'HI (kerogen type, ascending)',tmax:'Tmax (°C)'};
+const LIM=JSON.parse(JSON.stringify(DEF));
+const cls=(v,k)=>{if(!isFinite(v))return'–';const b=LIM[k];let i=0;while(i<4&&v>=b[i])i++;return NAMES[k][i]};
+function limUI(){$('lim').innerHTML=Object.keys(DEF).map(k=>`<div style="margin-top:6px;font-size:.78rem;color:var(--mut)">${LABEL[k]}</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">`+LIM[k].map((v,i)=>`<input data-k="${k}" data-i="${i}" value="${v}">`).join('')+'</div>').join('');
+  $('lim').querySelectorAll('input').forEach(e=>e.addEventListener('input',()=>{const v=toN(e.value);if(isFinite(v)){LIM[e.dataset.k][+e.dataset.i]=v;if(D.rows.length)refresh()}}))}
+$('bReset').onclick=()=>{for(const k in DEF)LIM[k]=DEF[k].slice();limUI();if(D.rows.length)refresh()};
+function guess(h){const z=gcol(h,/^(depth|prof|tvd|md|z)/),T=gcol(h,/^(toc|corg|c)/,[z]),s1=gcol(h,/^s1/),s2=gcol(h,/^s2/),s3=gcol(h,/^s3/),x=gcol(h,/^(tmax|tm)/),th=gcol(h,/^(thick|thickness|h|epaisseur)/,[z]),g=gcol(h,/^(group|well|unit|formation|fm|name|type|facies|lith)/,[z]);return[z,T,s1,s2,s3,x,th,g]}
+function loadText(text){const t=parseTable(text,3);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;const g=guess(t.head);const fb=g.map((v,i)=>v);
+  fillSel(['cz','cT','k1','k2','k3','cx','ch','cg'],t.head,fb,[1,0,1,0,1,1,1,1]);build();return true}
+function build(){const t=D.table;if(!t)return;const c=['cz','cT','k1','k2','k3','cx','ch','cg'].map(i=>+$(i).value),m=new Map();let bad=0;D.rows=[];
+  for(const r of t.rows){const get=k=>c[k]>=0?toN(r[c[k]]):NaN,z=get(0),toc=get(1),s1=get(2),s2=get(3),s3=get(4),tm=get(5),h=get(6);
+    if(!(toc>0)||!isFinite(s2)){bad++;continue}const gn=c[7]>=0?(r[c[7]]||'').trim()||'(blank)':'all';if(!m.has(gn))m.set(gn,m.size);
+    const o={z,toc,s1,s2,s3,tm:tm>0?tm:NaN,h,g:m.get(gn),gn};o.hi=100*s2/toc;o.ti=isFinite(s1)?100*s1/toc:NaN;o.oi=100*s3/toc;o.gp=isFinite(s1)?s1+s2:NaN;o.pi=isFinite(s1)?s1/(s1+s2):NaN;D.rows.push(o)}
+  D.groups=[...m.keys()];
+  $('dataMsg').className='msg';$('dataMsg').textContent=`${D.rows.length} sample(s) · ${D.groups.length} group(s)`+(bad?` · ${bad} row(s) skipped (TOC ≤ 0 or S2 missing)`:'');
+  if(!D.rows.length){$('dataMsg').className='msg err';$('dataMsg').textContent='No valid row (need TOC > 0 and S2).';return}refresh()}
+const mean=a=>{const b=a.filter(isFinite);return b.length?b.reduce((x,y)=>x+y,0)/b.length:NaN};
+function groups(){const rho=toN($('rho').value);return D.groups.map((gn,gi)=>{const R=D.rows.filter(r=>r.g===gi),n=R.length,hs=R.every(r=>r.h>0)&&R.some(r=>isFinite(r.gp));
+  const w=hs?R.map(r=>r.h):R.map(()=>1),sw=w.reduce((a,b)=>a+b,0),wm=k=>{let s=0,sv=0;R.forEach((r,i)=>{if(isFinite(r[k])){s+=w[i]*r[k];sv+=w[i]}});return sv?s/sv:NaN};
+  const toc=wm('toc'),s2=wm('s2'),s1=wm('s1'),tm=wm('tm');let spi=NaN;if(hs&&rho>0)spi=R.reduce((a,r)=>a+(isFinite(r.gp)?r.h*r.gp*rho/1000:0),0);
+  return{gn,n,toc,s1,s2,hi:100*s2/toc,tm,gp:wm('gp'),spi,h:hs?sw:NaN}})}
+// ---- original potential (see the tip of step 3) and resources (step 4)
+function orig(r){const m=$('om').value,HI0=toN($('hi0').value);if(m==='none'||!(HI0>0))return{};
+  if(m==='jarvie'){const PI0=toN($('pi0').value);if(!isFinite(r.pi)||!isFinite(PI0))return{};let tr=1-r.hi*(1200-HI0*(1-PI0))/(HI0*(1200-r.hi*(1-r.pi)));if(!isFinite(tr))return{};const a=Math.max(0,tr)*HI0/1000,den=100*(1-0.8333*a)+a*r.toc;return{tr,toc0:den>0?100*r.toc/den:NaN}}
+  const TI0=toN($('ti0').value);if(!isFinite(r.ti)||!isFinite(TI0))return{};const toc0=r.toc*(1000-0.833*r.hi-0.833*r.ti)/(1000-0.833*HI0-0.833*TI0);return{tr:1-r.hi*r.toc/(HI0*toc0),toc0}}
+const BBL=0.158987294928,ACFT=1233.48184,FT3=35.3146667;
+const oilRho=api=>141.5/(131.5+api)*1000;                                // kg/m3
+const tightBblPerM3=(s1,rho,api)=>s1*1e-3*rho*1000/oilRho(api)/BBL;      // s1 mg/g rock, rho t/m3 -> bbl of oil per m3 of rock
+function resources(){const rho=toN($('rho').value),api=toN($('api').value),gg=Math.max(0,toN($('gogi').value)||0),rg=toN($('rhog').value),gf=gg/(1+gg),HI0=toN($('hi0').value);
+  return D.groups.map((gn,gi)=>{const R=D.rows.filter(r=>r.g===gi),hs=R.every(r=>r.h>0)&&R.length>0;let M=NaN,M0=NaN;
+    if(hs&&rho>0){M=R.reduce((a,r)=>a+r.h*r.s2*rho/1000,0);const O=R.map(r=>orig(r));if(O.every(o=>isFinite(o.toc0)))M0=R.reduce((a,r,i)=>a+r.h*rho*(O[i].toc0*HI0/100)/1000,0);}
+    const vol=m=>{if(!isFinite(m)||!(api>0))return[NaN,NaN];const oil=m*1e9*(1-gf)/oilRho(api)/BBL/1e6,gas=gf>0&&rg>0?m*1e9*gf/rg*FT3/1e9:(gf>0?NaN:0);return[oil,gas]};
+    const s1m=(()=>{let s=0,w=0;R.forEach(r=>{if(isFinite(r.s1)){s+=r.s1*(r.h>0?r.h:1);w+=r.h>0?r.h:1}});return w?s/w:NaN})();
+    const oipAc=isFinite(s1m)&&rho>0&&api>0?tightBblPerM3(s1m,rho,api)*ACFT:NaN;
+    const O=R.map(r=>orig(r)),w=R.map(r=>r.h>0?r.h:1),sw=w.reduce((a,b)=>a+b,0),wm=k=>{let s=0,v=0;O.forEach((o,i)=>{if(isFinite(o[k])){s+=w[i]*o[k];v+=w[i]}});return v?s/v:NaN};
+    return{gn,M,M0,vol:vol(M),vol0:vol(M0),oipAc,oipKm:hs&&isFinite(oipAc)?R.reduce((a,r)=>a+r.h*tightBblPerM3(isFinite(r.s1)?r.s1:0,rho,api),0):NaN,toc0:wm('toc0'),tr:wm('tr')}})}
+const pc=i=>PAL[i%PAL.length];
+function refresh(){D.gs=groups();D.rs=resources();draw();table()}
+function draw(){if(!D.rows.length)return;const R=D.rows;
+  $('legend').innerHTML=D.groups.map((g,i)=>`<span><i style="background:${pc(i)}"></i>${esc(g)}</span>`).join('');
+  const info=r=>`<b>${esc(r.gn)}</b>${isFinite(r.z)?` · ${fmt(r.z)}`:''}<br>TOC ${fmt(r.toc)} · S1 ${fmt(r.s1)} · S2 ${fmt(r.s2)}<br>HI ${fmt(r.hi)} · PI ${fmt(r.pi)} · Tmax ${fmt(r.tm)}<br>${cls(r.toc,'toc')} / ${cls(r.hi,'hi')} / ${cls(r.tm,'tmax')}`;
+  const pts=R.map(r=>({x:r.toc,y:r.s2,c:pc(r.g),info:info(r)})),xm=Math.max(...R.map(r=>r.toc))*1.08,ym=Math.max(...R.map(r=>r.s2))*1.08;
+  const iso=LIM.hi.map((h,i)=>{const e=Math.min(xm,ym/(h/100));return{x:[0,e],y:[0,h*e/100],c:'#9a968a',w:1,dash:[4,3],label:'HI '+h}});
+  drawChart($('c1'),{ylab:'S2 (mg HC/g rock)',ylim:[0,ym],panels:[{xlab:'TOC (wt %)  ·  dashed: iso-HI lines (mg/g TOC)',xlim:[0,xm],pts,lines:iso,vlines:LIM.toc.filter(v=>v<xm).map(v=>({v,c:'#ccc8b8'}))}]});
+  const R2=R.filter(r=>isFinite(r.tm)),hm=Math.max(...R.map(r=>r.hi),LIM.hi[3]*1.1),tl=R2.length?[Math.min(...R2.map(r=>r.tm),LIM.tmax[0]-10),Math.max(...R2.map(r=>r.tm),LIM.tmax[3]+10)]:[400,500];
+  drawChart($('c2'),{ylab:'HI (mg HC/g TOC)',ylim:[0,hm],panels:[{xlab:'Tmax (°C)  ·  vertical: maturity limits, horizontal: kerogen-type limits',xlim:tl,pts:R2.map(r=>({x:r.tm,y:r.hi,c:pc(r.g),info:info(r)})),vlines:LIM.tmax.map(v=>({v,c:'#ccc8b8'})),hlines:LIM.hi.map(v=>({v,c:'#ccc8b8'}))}]});
+  const hasZ=R.some(r=>isFinite(r.z));$('cardP').style.display=hasZ?'':'none';
+  if(hasZ){const Z=R.filter(r=>isFinite(r.z)),zl=[Math.min(...Z.map(r=>r.z)),Math.max(...Z.map(r=>r.z))];
+    const P=(k,lab,vl)=>({xlab:lab,pts:Z.filter(r=>isFinite(r[k])).map(r=>({x:r[k],y:r.z,c:pc(r.g),info:info(r)})),vlines:vl?vl.map(v=>({v,c:'#ccc8b8'})):[]});
+    const gp=Z.filter(r=>isFinite(r.gp)).length;
+    drawChart($('c3'),{ylab:'Depth',yrev:true,ylim:[zl[0]-(zl[1]-zl[0])*.04||zl[0]-1,zl[1]+(zl[1]-zl[0])*.04||zl[1]+1],panels:[P('toc','TOC (wt %)',LIM.toc),P('s2','S2 (mg/g)',LIM.s2),P('hi','HI (mg/g TOC)',LIM.hi),...(gp?[P('gp','S1+S2 (mg/g)')]:[]),...(Z.some(r=>isFinite(r.tm))?[P('tm','Tmax (°C)',LIM.tmax)]:[])]})}}
+function table(){const f=v=>isFinite(v)?fmt(v):'–';
+  $('resT').innerHTML=`<table><thead><tr><th>Group</th><th>n</th><th>TOC</th><th>richness</th><th>S2</th><th>S2 class</th><th>HI</th><th>kerogen</th><th>Tmax</th><th>maturity</th><th>S1+S2</th><th>thickness (m)</th><th>SPI (t HC/m²)</th></tr></thead><tbody>`+D.gs.map((s,i)=>`<tr><td><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${pc(i)};margin-right:5px"></i>${esc(s.gn)}</td><td>${s.n}</td><td>${f(s.toc)}</td><td>${cls(s.toc,'toc')}</td><td>${f(s.s2)}</td><td>${cls(s.s2,'s2')}</td><td>${f(s.hi)}</td><td>${cls(s.hi,'hi')}</td><td>${f(s.tm)}</td><td>${cls(s.tm,'tmax')}</td><td>${f(s.gp)}</td><td>${f(s.h)}</td><td><b>${f(s.spi)}</b></td></tr>`).join('')+'</tbody></table>';
+  const g=v=>isFinite(v)?fmt(v):'–',orig=$('om').value!=='none';
+  $('resR').innerHTML=`<table><thead><tr><th>Group</th><th>generative potential (Mt/km²)</th><th>oil (mmbbl/km²)</th><th>gas (bcf/km²)</th>${orig?'<th>TOC0 (wt %)</th><th>TR</th><th>original potential (Mt/km²)</th><th>oil (mmbbl/km²)</th><th>gas (bcf/km²)</th>':''}<th>tight oil from S1 (stb/acre-ft)</th><th>(mmbbl/km²)</th></tr></thead><tbody>`+D.rs.map((s,i)=>`<tr><td><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${pc(i)};margin-right:5px"></i>${esc(s.gn)}</td><td><b>${g(s.M)}</b></td><td>${g(s.vol[0])}</td><td>${g(s.vol[1])}</td>${orig?`<td>${g(s.toc0)}</td><td>${g(s.tr)}</td><td>${g(s.M0)}</td><td>${g(s.vol0[0])}</td><td>${g(s.vol0[1])}</td>`:''}<td>${g(s.oipAc)}</td><td>${g(s.oipKm)}</td></tr>`).join('')+'</tbody></table>';
+  const warn=[];if(D.rows.some(r=>r.toc>40))warn.push('TOC > 40 wt %: check units');if(D.rows.some(r=>r.hi>1500))warn.push('HI > 1500: check units of S2 / TOC');if(D.rows.some(r=>isFinite(r.tm)&&(r.tm<300||r.tm>650)))warn.push('Tmax outside 300–650 °C ignored');
+  $('runMsg').className='msg'+(warn.length?' err':'');$('runMsg').textContent=warn.join(' · ')}
+['rho','api','gogi','rhog','hi0','pi0','ti0'].forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(D.kt);D.kt=setTimeout(()=>{if(D.rows.length)refresh()},250)}));$('om').addEventListener('change',()=>{if(D.rows.length)refresh()});
+$('rho').addEventListener('input',()=>{clearTimeout(D.kt);D.kt=setTimeout(()=>{if(D.rows.length)refresh()},250)});
+$('bCsv').onclick=()=>{if(!D.rows.length)return;const f=v=>isFinite(v)?+v.toPrecision(8):'';const L=['group,depth,thickness,TOC,S1,S2,S3,Tmax,HI,OI,PI,S1+S2,TI,TOC0,TR,richness_TOC,class_S2,kerogen_HI,maturity_Tmax'];
+  for(const r of D.rows)L.push([csvCell(r.gn,','),f(r.z),f(r.h),f(r.toc),f(r.s1),f(r.s2),f(r.s3),f(r.tm),f(r.hi),f(r.oi),f(r.pi),f(r.gp),f(r.ti),f((orig(r)).toc0),f((orig(r)).tr),cls(r.toc,'toc'),cls(r.s2,'s2'),cls(r.hi,'hi'),cls(r.tm,'tmax')].join(','));download('source_potential_samples.csv',L.join('\n')+'\n','text/csv;charset=utf-8')};
+$('bCsv2').onclick=()=>{if(!D.gs)return;const f=v=>isFinite(v)?+v.toPrecision(8):'';const L=['group,n,TOC,richness,S2,class_S2,HI,kerogen,Tmax,maturity,S1+S2,thickness_m,SPI_tHC_per_m2'];
+  for(const s of D.gs)L.push([csvCell(s.gn,','),s.n,f(s.toc),cls(s.toc,'toc'),f(s.s2),cls(s.s2,'s2'),f(s.hi),cls(s.hi,'hi'),f(s.tm),cls(s.tm,'tmax'),f(s.gp),f(s.h),f(s.spi)].join(','));download('source_potential_groups.csv',L.join('\n')+'\n','text/csv;charset=utf-8')};
+$('bPng').onclick=()=>pngOf($('c1'),'toc_s2.png');document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b)pngOf($(b.dataset.png),{c1:'toc_s2.png',c2:'hi_tmax.png',c3:'profiles.png'}[b.dataset.png])});
+wireData(loadText);['cz','cT','k1','k2','k3','cx','ch','cg'].forEach(i=>$(i).addEventListener('change',build));window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(draw,150)});limUI();
+// ---- example (synthetic): two source intervals; HI falls and Tmax rises with depth (maturation), 10 m per sample
+function example(){const r=rng(21),g=()=>{let s=0;for(let i=0;i<6;i++)s+=r();return(s-3)/Math.sqrt(0.5)},L=['Depth (m)\tThickness (m)\tTOC (wt%)\tS1 (mg/g)\tS2 (mg/g)\tS3 (mg/g)\tTmax (°C)\tUnit'];
+  for(const [u,z0,toc0,hi0] of [['Upper shale',2000,1.6,380],['Lower shale',2600,4.2,620]])for(let i=0;i<30;i++){const z=z0+i*20,mat=Math.min(1,Math.max(0,(z-2000)/1800)),toc=toc0*Math.exp(0.3*g()),hi=hi0*(1-0.55*mat)*Math.exp(0.08*g()),s2=hi*toc/100,pi=0.04+0.3*mat,s1=s2*pi/(1-pi),tm=424+30*mat+2*g(),s3=0.4*toc*Math.exp(0.2*g());
+    L.push([z,10,toc.toFixed(2),s1.toFixed(2),s2.toFixed(2),s3.toFixed(2),tm.toFixed(0),u].join('\t'))}
+  $('paste').value=L.join('\n');loadText($('paste').value)}
+$('bExample').onclick=example;
+window.DG={cls,groups,LIM,orig,tightBblPerM3,oilRho,resources};
+
+</script><script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Digitization',[['Plot digitizer','digitizer'],['Map digitizer','mapdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what": "Runs entirely in your browser: nothing you load leaves your machine. Pyrolysis richness, kerogen quality and maturity classes, HI–Tmax and TOC–S2 plots, source potential index, original TOC and transformation ratio, resource volumes. Designed after the ZetaWare source-rock potential page.", "method": ["HI = 100·S2/TOC, OI = 100·S3/TOC, PI = S1/(S1 + S2), TI = 100·S1/TOC.", "SPI = Σ h (S1 + S2) ρ / 1000, in t HC/m² (= Mt/km²).", "Class limits are editable: TOC 0.5/1/2/4, S1 0.5/1/2/4, S2 2.5/5/10/20, HI 50/200/300/600, Tmax 435/445/450/470.", "Original potential: Jarvie transformation ratio with a carbon mass balance for TOC0, or the He method.", "Resources: gas fraction = GOGI/(1 + GOGI), oil density = 141.5/(131.5 + API)·1000, tight oil from S1. Constants: 1 bbl = 0.158987 m³, 1 acre-ft = 1233.48 m³, 1 m³ = 35.3147 ft³."], "sources": [["TOC richness limits 0.5 / 1 / 2 / 4 wt %", "Reproduced in open reports, after Peters (1986)", "published (second hand)"], ["S1, S2, HI and Tmax class limits", "Peters &amp; Cassa (1994), <i>Applied Source Rock Geochemistry<\/i>, AAPG Memoir 60; other authors use different S2 limits", "memory (editable in the page)"], ["Source potential index SPI", "Demaison &amp; Huizinga (1991) (reference not retrieved here)", "memory"], ["Transformation ratio from HI and PI", "Jarvie et al. (2007), AAPG Bulletin 91(4), 475–499, as presented by ZetaWare", "published (second hand)"], ["TOC0 from a carbon mass balance (generated hydrocarbons, 83.3 % carbon, leave the rock)", "The TOC0 equation as written on the ZetaWare page does not return TOC0 = TOC at TR = 0 and was not used", "derived"], ["Original TOC0 and TR, He method", "As given on the ZetaWare page (author named there: Zhiyong He)", "published (second hand)"], ["Tight oil from S1 (S1 × rock density / oil density)", "Downey (2011), AAPG Annual Convention, as described by ZetaWare", "published (second hand)"], ["Gas / oil split by GOGI", "ZetaWare page, which cites Pepper &amp; Corvi (1995), Marine and Petroleum Geology 12, 291–319. The expulsion model of that paper is not implemented", "published (second hand)"], ["PI0 = 0.02, gas density 0.7 kg/m³ at standard conditions", "Assumptions, editable in the page", "memory"]], "validation": ["HI and SPI against numpy.", "The ZetaWare tight-oil example (S1 = 5 mg/g, 35 °API, 2.5 g/cm³) is reproduced: 114.1 stb/acre-ft and 92 514 stb/km²·m."], "limits": ["Not implemented: TR-model method 1, tight rock II, expulsion model of Pepper &amp; Corvi."]});
+</script>
+</body></html>

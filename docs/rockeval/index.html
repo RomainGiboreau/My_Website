@@ -1,57 +1,487 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>Protected page</title>
+<title>Rock-Eval QC</title>
+<meta name="description" content="Quality control and plots for Rock-Eval pyrolysis data: automatic flags, HI-Tmax, HI-OI, S2-TOC, depth profiles, standards control charts. Runs entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#eeece6;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e}
+
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
 html{color-scheme:light only}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 Inter,system-ui,sans-serif}
-form{width:min(92vw,360px);padding:0 4px}
-h1{font-family:'Space Grotesk',Inter,sans-serif;font-weight:700;font-size:1.2rem;margin:0 0 .25rem}
-p{margin:0 0 1rem;color:var(--mut);font-size:.9rem}
-.pwr{position:relative}
-.pwr input{padding-right:2.6rem}
-.eye{position:absolute;right:4px;top:4px;bottom:4px;width:2.2rem!important;margin:0!important;padding:0!important;background:transparent!important;border:0!important;color:var(--mut)!important;display:grid;place-items:center}
-.eye svg{width:20px;height:20px}
-input,button{font:inherit;width:100%;padding:.65rem .8rem;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--fg)}
-button{margin-top:.6rem;background:var(--acc);border-color:var(--acc);color:#f5f3ed;cursor:pointer}
-button:disabled{opacity:.6;cursor:wait}
-#err{min-height:1.4em;margin-top:.6rem;color:#a8623a;font-size:.88rem}
-a{color:var(--mut);font-size:.85rem}
-</style></head><body>
-<form id="f" style="display:none"><h1>Protected page</h1><p>Enter the password to open Rock-Eval QC.</p>
-<div class="pwr"><input id="pw" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Password" required>
-<button type="button" class="eye" id="eye" aria-label="Show password" title="Show / hide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-<button id="go">Unlock</button><div id="err" role="alert"></div>
-<a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></form>
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Rock-Eval QC &amp; plots</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button class="pri" id="bCopy" title="Copy the cleaned table (rejected rows removed, masked values blanked) as tab-separated text, ready to paste into Excel">Copy clean</button>
+  <button id="bClean" title="Cleaned table: rejected/excluded rows and standards removed, masked values blanked">Clean CSV</button>
+  <button id="bQC" title="Every row with its QC status and the list of flags">QC CSV</button>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: your data never leave it. Paste or open a Rock-Eval table (CSV, TSV, or copied from Excel). Columns are recognised from their names and can be reassigned. Rules and thresholds are editable; nothing is hidden: a flagged point stays visible as a grey cross unless you turn that off.">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Data<i class="chev"></i></h2>
+  <div class="body"><textarea id="paste" rows="6" placeholder="Sample&#9;Depth&#9;S1&#9;S2&#9;S3&#9;Tmax&#9;TOC&#10;A-01&#9;2010&#9;0.8&#9;9.1&#9;0.4&#9;429&#9;2.4&#10;…" spellcheck="false"></textarea>
+  <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
+  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
+  <div class="msg" id="dataMsg">No data yet.</div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Columns<span class="tt" tabindex="0" data-tip="Detected from the column names (S1, S2, S3, Tmax/Tpeak, TOC, HI, OI, PI, PC, RC, MinC, depth, sample, formation…). Change any of them. HI, OI and PI are recomputed from S1, S2, S3 and TOC when absent; when present in the file they are compared with the recomputed values. Rows whose sample name matches the standards pattern are kept apart and shown as control charts.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg" id="colMap"></div>
+  <div class="pg"><span>Standards (regex)</span><input type="text" id="stdre" value="^(std|standard|ref)"></div></div></section>
+ <section class="panel"><h2><span class="n">3</span>QC rules<span class="tt" tabindex="0" data-tip="Each rule can be switched off, has an editable threshold and an action: Flag only (the point stays coloured), Mask (the point is greyed in the plots that depend on the suspect value: Tmax, or HI/OI), or Exclude (the sample is greyed everywhere and removed from the clean export). Default thresholds are common practice, not a standard: adjust them to your lab and your basin.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="rules" id="rules"></div></div></section>
+ <section class="panel"><h2><span class="n">4</span>Display<i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Colour by</span><select id="colby"><option value="qc">QC status</option><option value="group">Group</option><option value="depth">Depth</option></select></div>
+  <label class="inl"><input type="checkbox" id="showGrey" checked>Show masked / excluded as grey crosses</label>
+  <label class="inl"><input type="checkbox" id="logS" checked>Log axes for S1, S2 vs TOC</label></div></section>
+</aside>
+<main>
+ <div class="tabs"><button class="on" data-t="plots">Crossplots</button><button data-t="prof">Depth profiles</button><button data-t="qc">QC report</button><button data-t="std">Standards</button></div>
+ <div class="legend" id="legend"></div>
+ <div class="pane on" id="t_plots"><div class="cards" id="cards"></div></div>
+ <div class="pane" id="t_prof"><div class="cards"><div class="card wide"><h3>Depth profiles<span class="sp"></span><button data-png="cvProf">PNG</button></h3><canvas id="cvProf"></canvas></div></div></div>
+ <div class="pane" id="t_qc"><div class="sum" id="sum"></div><div class="row"><span style="font-size:.82rem">Show</span><select id="qcf"><option value="all">all samples</option><option value="flag">flagged only</option><option value="ok">ok</option><option value="warn">warn</option><option value="masked">masked</option><option value="excluded">excluded</option></select></div><div class="tw tall"><table id="qcT"></table></div></div>
+ <div class="pane" id="t_std"><div class="cards" id="stdCards"></div><div class="msg" id="stdMsg"></div></div>
+</main></div>
+
 <script>
-(()=>{
-const P={"s":"1KSYF2Mj4jZhuTg1ERBPaQ==","n":"Hf0mWiEMlehek36S","c":"DjAsScDRySr8vKHCjCFd3RVVPluW7Mw5dQmXEqk3q4dzCzqwRK9mghKoFQZ8nWQp7C8psTQdXXGmj9FQlfX21VOnGwg5zxRMN+MqFTCr+DHGcY10mlcYRRq4aWKLz35ZXaRiwCX2Bvwx1cDr+BbX3CV/CIN/wgdW3NFpWUyEEWkb/peHNk2nrl/sB2raX9NMMBA3fVy/yHdwKo28Y49i/QohYwfIfHZ4ikRV5OFxAwRcoLzcs1AwDzEroDeabVrO3P+oRM1UM+bkfc4BwSYq48CNLJa5S+7t44ih4OfFDUuMY/hhDWFkXDM7ywBerO4gs1/EuRAmWfvWJIza/sEKnDhpizaLX2UHL3tI8Xe4NKxqsadqpTpQxCFtqF7j4gD0DyF56oPbg9C4yL2+lN94NbuhP2iQ5jh3thWnDiqKh1Ks/Bb4fHAl/Ut1NQxwr2Sytp6lyEtURgfMbdH9PdIFzwkUkpbP1bE+yg8gr1x7MvpBDtWI1SvZNbNWdIKlisl1HoZg75TsK0SYjf8hj5lakg+ylEESjW2/biCBvGiX/Un0xqyZJyYS4BmfHy37lkiITdDl9JX6j8iQUqmLhLV54T7g9AvJRnGCpiW8Fq5UNEipp0KZ9ALDTAZPg73sKCSQkaeFcFKmCi0ST9VxjpQMSPSx5gIXwrUlzDxTJ0plY2GjaJAQgREy3JXecXpq5Poo3axogwTPCpWz/Y548GBWQf+6yXlPJrJZtA/ZCWNDceuAo3SHkqLFfZ5Q0kiOfRZEgNtXDC3aO3K55iCe11KxP6wJ5x4IPzvKG8OPyvy+iTvTH8ND+f96alkKBtfu1Y8c77yI4AXwYvBCGtjqcREcOLBjUAHjXeZqEvGZfEB15bzdOABXwAc5jQ6ge2n9m035PYk6jzEskvoaaFgQzjI6NBTU3PHBKHj110Sgk9Hb+dQeq+lh6GiF5rbsCy0+qjSPxPjWRo2cw6htSg2R3ouZ96RiE4Kd6XKJ+DNP/1PdGtAVnqDzSAmrkY7nR/Kt7egsW0l0OkyOJYy+ou5fNrjn7iMI9F7U2gpEuAQJW+bZkUs82b6leRN5JCKAD0KhysaNogsLLWltgRfnSuv9UYlBfdd5qkSzWgHYFbOSxX4+Q3QDUt4HTaYz+6TpP0OTfX/71Ls60m+CCafW/BwVEG/JggIZmBuL1tycDPcYegx09jhRawxfZLfuC3xnsxCYWWfjP3NFLFxUuqPGghxywAxGs4cCHVgb4ywFktrnGs2gDNBgJP+kNlXM3oxQHMPuXYHqUdJ98/EuLCwQa/HV95lNZ2aaml3Ln6IDsWFe+B2o6xCx7PFQtUqtDUBr6fokMZH+wdBYrkalJ6lRMH5vmm1NWYK0p7oLZshPNMo9E7/zYKAUfLW87j1a888qrnfu5ao1SqJ22HHTyYtG/Ixc5ci1CUNtDQmZ0q/BMwTbbBek7ux2FAARzkWSaY4HCVg8Dy4aqsUUfHIQVtsgtO+BxbwQFVyyFUW9Fo+5TkS0NFajLkaeMR9jh/xESa9nEo9LJgqb+6Wbm4wX1bE5X5qPyrCfTJfek0Z8oah5AWiPfkmoqhLtce99cygwmFssKXNGwdwGB8iJFyP1FbMHeDnCz0yU2BiLWR+Sjw2r47qZEPOIr8eAgu72fWodu3XgpTFaNTOWeV9I/5KBnV+FQe7n9N7nN+105TN/smg2ATcISGgMQSFk7D5ld1koM2Ku7Egdn9E5W5riYMsSg3zYIXLL7XfzXM2rvfpiDzpApAsqH3a/iOv3UC0mu9qhHI3CqPZT2CXHmV5rMTZ/zvUdfQmWVBdxr8c9Nf1a6G1ZGz4Cng+LM//gXUmzdQzN2ucJRgVlp2odOGJlsQKF6xoTXycjJC7S1O/PEjpsIioovgf6WN4LqrjuYG1+lEPesqjFoCeUy9sb7fUP0vczf1XVt2lo/j0Iw6YuJ8gm+qa5cIVE47Xh/vjoHgkeHlI1S+XCVThroItrlGKeP8Pxf36CaJHuUz25p6prXy2XZx0AD/LOrFOod+u7wr+d89gJHKxN4UCPGiK0YFulICjn8Fid/qjVs7oSxsH2j4uf9SuUOlO8Icf0YM3KNDE+fed4uNoi5WjprlUfAUSbuNPP+ImQR3W4rcKORWLjz3WIbvCx2fyksZFTl7RjVeO1sZn0JcvDmJHkxnHDDyjitzxJ7gXS3ckQX6Gwl6YvFeyqkRzPLGQ0irIMr8LvrbptLNsAyu2QYRHDo7zNfE6+3Vn212/0zApY3jMEeGa7pCW5MLH4t/QGWxVKuP3Ng+UiIHbMBfatUgi6tgsVgjp8jd1pG3jjjgcovwVZ3f+rkn+nHsIjH3iAAB/W6bllMX91VBCteZAnl+6TC8HyTedVhyQJC6uJZFEBBUO35xUjCA2gDT/oKA+MCabAauRGGaWlWxNH30CXHoFjHCTMP+MR9ePP4VsBkPm45MjK3J7p5XhsJEWAA3vFfSfAqLuv2mU+qnWxsf/uviRxrhZZcObj6SvlC/JAM5u5/2lqFe0pv1zKrDxglr3mAMjgq+fxWfuywVYHOmt2TaQvrBBhGVHRJPtT1yEeIuFVxBKzFkAO72GaTDemqkrnyupsYvPmqWKidg6jFonHPcuhNoLfNc+V9kCXddWStd4RiP29FCt1953NCj7ex0LTaAU+ooSwwAwMitbpt+wd1V9XnVatIyzKgyw3/HUkg7fZ6DjGdIS5MHnILD6VaoCMU115Ulsxb6PLjgqZU9Txysq4bSAEf4l+8oXTL7hjtTgAKIBWUp4djWFVL7xelli+MlNUUqTGkIKgCy6thRJ/Qz5XoyJSKfqdl1FS5/1wyD8Bjn28BtPIWgC70XBRAR4ftKb5kX4EOTGOQWQ/ItcM6lNhEoX+9+HzKpqRbvhEhmfrSfQOg+EA/ofEVDlcmzPsFgsNAMmUK3RxhF96tNYrYZ3WBrLkGLH81vw+kNCiBQfbUp5QI484ToOESJ3UAFuqdYG7GWG+eQ3lGdhhTqao+skJqN2FbQ1f5nhH0saA9I/1xl2XmIG3qp4m6y0dqt+pSBA91VcIwNqFm5k6KNA/AwM7FpCVsRoI8PdBWz8L8+cYYP94GDw5/I1rMEXpD2K40twUJ0CkZno0xHdP//eatmMon2UE8GhB3sfoldVAxW0DbSTc/HA9VscUMF4wxbW2cQDb1J8zgwR4gWyNSJEYJSG3rKF6y5FQIZsqkhF2pZ+B+vttngNFtV+vBC7qqj+Od1Qq2ZKyVFuKmKKG6+bpo7zZATpOckMWJKSW+CpF50whAYq/asWI2+w9oUGUHVbfptNMxldUIMcibpB2DYd+v/ZxwPji033H5WBJIf/qK/Q2y0SPq/eZjflKR778K2RNfQ3aiMtHs9PheH5N9QbG6JCDECUuO5HzaRXgM/8PXTO3olrCIOBx+UtullWkxKt9m/PVEwwIF2uebi+/SqhAIG62Vily2sDmOa2I1Ww5qEsQxD0aPvoycYKPwUzMuV7p6aijyyQBwRLYRCKDWnEn1kgW4wz7O07lcMzYSqEpTVo8QvtRVXYA+fdq7UYEL44MoaddPLrzkpFOtyomNIJ5aDLxft6ANJLyTVkPXL986Bta/JHOBSm7Ei6CctC/9gcCxwCCzVDRVWt4Ukj8J941H81bKxRH32PFPeGdrTclCqgwti1xmDhqdupxsuVDSewvhr+bkLtw8CfVm6LcAbnBpyUizPMsBTVmATTJ9nxlWN7UdfYBHzRIhvZ4zGPTrFbtYVyMnspW/InsL9wNQOOysybnI7++61bN2JBChBFJXvpfK1iII5JACasSIwEj4jKoyUErBOc5M+t0gqRXPiZUykOxxr+U9gw22ACZBEzfznoFCMS/2+iA+dz7p/kMbtGe9zATluqG5ALPNbXjDH9hAc7+X33ro6eHvPGmDuJ/tVyxK32BX6pMSYqeNlwLKftGwOLqU+Or0YC/XNf0QtfL+DpQ4fd6ha+g991BOatEBSQqb7HMUp7wwgaKTxgT7PoXsCphShzXbnhLbDmmryZdEBJClRK2IuozGj13/HtItLHMSq7qHaY5MqZFnnM3nrVtGe6CxmiNHeokp2hXU7awM/YWPQOwZfvBzBwxaQsSlVSKiuncYl8yOTJEnwDYR3OQ0Ne+n5VqbItnMjevCoqcRbmm51i2EFntQlKAaWurO1APOuVE4C7BgCwE0QV8FpK/UoRS0NEPSicXMsXRSKPIu+GCmfPPRXZtJp4GsReD/3EyfRUwEqA5NtKeP7HABA3ke6AGwRBFaB9QbCBeQo01dFIlEz6QR0rIJ9eDBoUmTCl00w54rlOFatngAQ9HI6rCoVWKoldQjeq+Sx4Cy0Ri7s2LCrus9WYPtADxfUZcvzMbOSJ4V88wMUkeGSm24YhZeJ1X/Nozas9+OmP98byuIoRrX/C/UKMceT6dXFwi/qQIjZs263riQIG3ZbproNypZw1BTNjimYe1a8Qlds8QGg9BBwaa9q1Cb8R7oXPj+Mdks6ZqQAS/SYB+xl12yX97TFUxCr6gRClCt2O/Hn4LLLjFl+9WK9H6kwTCS9sXjYy/ZfmWWxKtRQhteJw+3rOcoGdcxOklPoKlB4Vd+LRZt+ayvTs8wUgbiGNq0U7NvRAyN2GOIhseVbhbevg0ppSPDAEiaAebIHSG9D8XAdLLwlMC9KnH/GTD6qNvZcbOC9aEnz701e5vmTuqAJBUX0gU2QJOd452BC318Z4N8N9oaw9uu90PDN0b9PgFZv1NP6pzwyu8PEZaJo+lybBlfqhG4WWLJQNxhXnd5xq7EQcRRmUQwzuGN7U7f0e1Wt5Kxc5u5qa5YmvrP1tr01r5ZD05mTQpEOy96eud6L4Iv0FsTBLs9gDhb+xKsSy3sGqxrRJCqRu4E5RxnHnyn+8FR0s8Qyg8eLZd6whW7XGDiRFS/Qvxph9MQFEmX7Cba03/o483cVvNWRPZkHElmfinw87yDWaaJxWGvRb4hlSMhSEmLueqCRIJilbcYmUw2oOs/DUYmuqTeuVAQPI9za9ERd5TYKAOs9GCM4kn7mTBkm3XVm5aYz9YMMay5LkCX8F6+KxjEWoPKG1h935zoiK86h7YkHdPDSevlvalQPdYk5B7bbVXl7Wqvy+NSXRE0O+7zP4DB7s1h0Xf4KCm7G4E5Hzfa3LASeEzCAEskw5y0DCJ0cM4AnT6IHHhXBfLXAeG2v3gT/rDPddpH6sXmxyFq63SJspk3OrcyEg3GQ380BaU4onZOtQjA7Ph/oNzpj1rLtapFu1RQDI4VCNMxYJ7dtbTaR77SI6SANdeTeHOPplTFoOIJNQ1UZdXugXAQ3zQqOcpjww6kttDBAFCl+qZzqkS7Qqee0fqAoOLIcGdawtWWTX69RV6ncTq0VeDAyEmfYASEcld6izqyQWpVtRKHVHP8Lu0+AeSmGJNFrNDAqxjC/vkrWgE2Bd/B21CWzsPHFvumPVf7XwTohB+hi/fqQEMIjItJJ/+pxoUBfs9KeaBgY5l3RzXhW36u/zVuCha2nNRg+iJXf5BGlXNxy4B1F2oP/XVWFXV9rDGvZczlkqbb1Wjhw1tAxCaO9kEpQPCKaUCAH31VOCfCQaH+gVkaBNj6OdBfuxggDiWAAKrozY+U0kXvyBxBKKpz+HjT871+VMz7qF4Ynofb4w8x0140FykGN3Fpdb2KxG8teiBsECZ/A7mTNODSkB9wQqFKEI+o7k0yznCK5Hq8MqNvcJsoK/8ttLToFFhQzpEFYYRapV7mSp6PVuaClS148L4khRgNzghRHR88y/feUYCbd7xSJdbFNysBWoD+kmQVTf8K160k4RYBp03pLKKKh1ZiWZM+XZkX9EkjZg9t8AT27dlcwYnanWb/X2Y1eKouW6IQAQBs29q/1YuHl9Hf64HITARQvk0z6nspXJCkHE+yXehzy9rxltYOqf3U3ACu0kJ4RzaIgtvrZxXEaiIMw+Jpq0bq9UykNOJY/m2YL0+i2Dq9nN5dKf14EYd113LtFeQvmvrvVEXPIBsRL+5ulhKK5QEYrP1oT9fIy34lWPqR+xUlt4/D9r1c58H86JQO0XQHyUAUWc4L7VrW3QCWLnHti3PgKS4cgO7vRCjhq74KMSslUy2/eeHAZymRtaPdqsnOltpMiK+X7SAxHMMriyDNLpssCfC2yyrL07GJDNW/Hn2+b8MQ1++tVmQ85dc28cZ5RS3GER9LrRWlj5lEWh9sDLdsKbHFpsJjp1TmrcozXjgpnTS4GRUlD/kbrfZx8rca3OnGHmiC2Il+I6gpMdURQ/RFAjNk2tKmIG+TD2Ndp9+Kq4crO//1GGLVltLRfwVx/0p251LGOHk/BfQiO+t80KABr5Hn9qfdbgYnB6AeYZ71lvWYWde9ehDxzPHnxYyPoNEtTm0UM1ZUKxVk+pU0+pVGcTfb0SR2O4WA9HYIQ178jPPmtFPR3IYeqe1nTd+CaJ8C7VJ159R/Yff4rLRo2YQzEPEoFBGK1Yuiy8NI+Hv/oFk7DPIwdDrEHWbAd94S8KDG7HBG3f9qAwYq9QWNCS1k5yuX/wTSY7oRiOcXU2GavhbfnoRer8GdsBckieXkU9noJTDMa2oBFICA2v+rzn36wsy0S+U480XWCUE0E55bTOIaa1VPu1tpOnqYTv+wYpIctQIdFcfeyhabXdAK8GtYWEZzCjy2yueBSU/W2ygZQs/Kr6FTXoQxOk34cSBG3rgm3F6tJSbQY5HOdNN8ascp3y3vF/Pjn38epW8ly9Ck8TzcchGhGo872agT7/p8C8/K3x3tSN7+ZbYYlRfQuDT22cMuwjonZxgLHzPPPDBf5Nwj1Spa4thsAp/xnPNg8j9XjKrNN7B5cKAD6dTK9GJjCEiDGj5tq0NiJGoiwLHRSsrXVEgWT/1/LgcEQagbwd3FEoFedYv+umWb3u+mCQeyUPrG8N6OPyy2MzTX5J6Ba/ZDRaSMyiHZbbOLL9iR6xZEHCpoA1xIUcXMZ/suXUHgLDlwjQv3/Re3WKNv2ex4omUgHliTZ2Y6anMOwmXpOagyvkK3JoX/JlyKhKVEBXrX1/3CeXjRBPHoA+JQ8sCKK10kASme/m1ATdWq60wISwZlPaT9SUbJ5GZmZm1+Js+/TPm86rlY/09Dw6SPc6Iq54vdaj4jOqCBZTpTC6A5rPp/P4OU2VuKcG02p6sDq77sKJ43OTZrKDdzLXCDwHyTaaBqvDZnfRPLabsXiSbk3rJaNYd/Jwl/r4QxhcGUm/WoYJUwhqp198DVib1QrSUZwrhhBiVvRJYxPmr7lrwBbmGnb2vhlTyzB4gooVOaLX7X4Vx9pNI66y94LJIwvwj82wZBZh55mbB7rdN3z5iQTZACotiGU1A3mbukcrDym5LRZGFw+qhwAWlf6BeosVN0ABGeaSXO2ihvWa1lT0PV52yQPqYQAyel7HBhL4NL+D4B2+gnHyO7OXptzzRcGvGuRtmGVVCvKoe657UkXbyXhOuxm5tm08a9ICx7+knHhZPhZWAUDIvgiWSx4QETZVAdLs0mbdvUIWL4W45eb4NPOzldTbKEu5Jj5poge2SoQZSr9Z6WKdKszuhRrl98usBHeEqYe8VmN14a8duVX7waE9lUVYHpkcgxOBEjIbFn9ogqycEjUxs/B1xnyB/0aJeDrM9UWlL1fR6feA/DkQTA0IwzstllTANhPwW8IJUBhLuSzcGX3MkldPej8g06SsgStOVQBCCQmOE+Mq98r8kbIdUIVjCpCpc/UMJv29ONabsc9kY+5t9MdZdzZmfepJI8uwUyiLp+xOan1vFC6A096QWoHbUaTxf7LoQTYF6sQ+ZB1xldXiDonWRQj+rLC66voGA+NzavGeWbYSWq7y3dJmdnCgqIDWzYFFuXyCYGf5Liqp3dwGQ6KZV1N6ntz+XRysG4U9NsCEM2I9xPvxc/BWWVm/RAj3U5DjekFI+DMa8JeCu+ghWNKt6TKbSxdg+Xx7DM+lxW8TmP+qfK/8Tcv1BfZpbHBHCCqMrGNxhBdYnKWUwMCKS9YOZo8JGULzwc10EeMqqAe2PJFOI13ivmzLCLinhblZRywFKozNdFQ92yUnAeAmpB6s30ooXHNqxNokGt6hJ2v1w8C65ieNX68HjDJ2LyUGkHzKswv1LX28TVirI4BTt3qLknsuz4QNvzYYieIBUSWqPGRtlRR9rAEz0uk2UrBPRgw5BloRY4W9U3YwArKvXmZicUHX62L+62XeRkTtwXM1BLjFjULbrPA5wMYsBQ3TuZHMQXAXOcP/Sc90Vac2r3+6R71nbT6NklLqfV8DWbZ3Ix51Gt6v83eeopblIyt13KQfoqPWYr15eRf+wGfkD48/Be9ZdlJKNK5ZtR5cj7J3Y+b4b8Q7LVK6d3U+h3+0o7EJzH9VQXSUPmWfeLtMAmERafT6MEUFHDu/1ju7LQDFiTNrNw7WziP1SPBfuM0h7drV0vqHQ2AbkflSEsNR3qayOAlRe9zflyOG/45+Ct1GnEpJi236hVu/VSaYtWJ5oDTP0uJV2HxpFbFBO/9sXQQeqU3v8wdCjBFt8ZIUbwnXhjm1lJT1BSV5mjsOdloxAqlY4kKutAvqeqRHgAqemJIuQJs1soc2D/K+Csdv/MoV8o51yzGu54ClG9022s0S2rmJNdQhhrdxKRAnNVd1zLXYryqRnjy6uERngYPW6+0qpc79MNJS/TwJMgUjoU8hZ3A2u0yQqd3vA+bpRi53kpWJpotDgqHmoDHWyWuJXWeLIo9gHe6K/VlworfV+T7WogDG70GrxJe/lQQc76OjAaiIIYjBhmlqfXmfwMkFaFLZdnzCqSLu6SZO1V9xmTzJuHBZ7fGSe3Lz2xZxmNb6kiuCnsihzUEzH0Z0dx3WLP9Rrpzpk9rRI0uxSpfNPq4hR0tNsEBGoB3v4RVCGlGKsRfSusZjSyr2werhzRFmd9of9KFloNfgRkqh4m3rRbtHdmT+pZSs179N7MTPYDSsjhgsOfqG19r8JkZ1f8HVKJ5LMJrZIAm+WmiV/Wid/jPJ8N8GaiJ7oYvyyOJy6e6lMwL6VwWOa4ODSjp2Q6q31Oa1b/qvxWoK7fqId+EVLXYVll9KSBQr3LkOVMa9/KVXKgv1Kudi7xxGOiSZvGY9QQ/R6eOjGnrBvYXWWfTRTOLQ3qUXKWByve0RGYae2ycAN1C2eoapku7YTXSQM+odyKrDrHefbyEk1jGgZFhMv9oJxigTjXLKp76THTclKG/5p4ooFGjN9tCPNaSP4wYXyuMdoTjX/GLTifhp8VzzfXd+reB5+oMYeHTXyBFunRkrDiiBDbFPN5/DIg2FYWmrY78QSbkaYhqupWty/sOCZYPFfyZCYP3D0j35bUZ1icpzHw4IIobLqVvS8CzvCzxiMATwaWeNVIDXwKJ2YQOQ/ogutg9rU9h7FDhFL4DZ8UjqnfCtnEkenceZxj1DyFwCwQzNcxDekUiSEMB0j2lHycO+w/GgySVGJRHjB+SjWF86vfoONW7uHUl2SvHgOgPYXTN5j1IJ/4XbYIy0XCnGJwc7cTJHGGJhKgwXQwugsxKHIq1n6B+zQFhsR1fD7+eJjiKA8/cPNdUXlieQSb/J5fq6ivz17AzdRiGEyyYCoizpodVMMMumRot+iB2IhGZilgHTICMQ4fZb4yNYuex2+KxjmNwXlfVpwUPzsbGNHjFRF8Er1JM19ZGn16eHYVNh2LwzAW7ps1QhH8stijysO6LdtB2c+rEJctA9DneL1bp9VMuZnxaT5ESkCEmgKGIqS7/gIdpqV6NDs2K71nyzeZ9RYYwzj0Z0Kj+cSTA49GqS6Ha9bqyFvC0ZCqnqnIxWooUfCgba1ag+hFgQ7yhCiEzdBHW7melLbBOdFJ7+ABqWiqsVENXa1HQ700H3zIedqBmij286YOA5ldKp7z7aZ67HvDFysGsqwtf8a2r+aziDeSqI1xXVQzWwNCD5c4DGHV2z50YaipbzK1b93qRCDsBQ8DrMHxLAxWBf8cQaJQ/tiKt3zDMZ902W/vKkk9WXTrYaoplzonMNxwMFleA5fGmPAYkoWK2hxXSQx1WQf+OWO7N+AontJEr52tIJAEKVzqmsw5rZaj/1J+9+XQgrEbltbY3nNkBDOkb5j8ZCXtKljUf7aTAxzdJVknCGeMguFd1UE2zmpbOBXLmF1SDN7kLk61f89+VoT9zL/3j8b5/SCbxFmPr/6ws5CbsiYMM4myH3WvcckMLnxSNNkNyIwFpIh7/dM+SuL9slILX1Q0pa94d+Dbw/BOwqlyBrGVucnFpt4zNinzHMXhE/YCVKrrszonSInWSACow25zj59LCgYKXx5Q1TQszylmwGwcihGi5u5Qg8XfJqIfnP9RquWHFYnD91SoZb8NRfj7nc9V4HhGCFjQL0k/iAObINnSWJ0+0x+RdkxymjklGh1TQwjv0J281AVsvjGF9NhRgCUtsm5kHrR7icftcQAdFpF56FcMkfDm8karytOfKOSJbZlFoDOVNu6FzNhdnaltoQ180bWc+w20WnmB4ceRtCr04K1u+GO+v8Z5AOk7i+Alej1ex1KtQMZOu3A3gV9vhwMTDcZt3zZi/ZPv1Y1qn3SJLXmC5ZcL2o+xCQTKllm9d8ZbuKMGsTqXO/HHmteh0BTmnT4b0TR7wLI+xe008XWweX3OMbxJ7zzYm/lrxRW5tRq4SjSrMhkBO2kY6z+dFl9TyCimPJ6CXPPhwhF0ahGdKwPhnCS6HJX4zzT+CzxH0GXwAMmpz6tdlhyPrJKR4oYaMPo0rFJBfKnGZUey/CbeZbnkCHn9iQkVCxQaANLkhxQV90f6CQCzq9wAIO7NZUYR16dfUFsMR8n9GEcSvwJLAqbnRZ3s+0o6ZWdNkE9vekvFQbufT4qOWrLSMPWqKiqCRUeS4lvOkhwQhL8WsIgaUu1WSVnn6Qara50RMZ66L/3PSPQsP1lB4D6naXWonnA7xPlpMHQI2XZfRup0GB77G/CMOrOmTNzFcqokRbX7QLmQK+lNBojE4RM8R8VWX4DFqatN7c8YAjY+B4a71VT+tFxXenfjuWv7Zq5LF7uub4/fBxkTKCBFmsQyIUDThBCGkuejZ9FUZYH2yh2Sw2yx6VJ3XRuJbvRhmPml7yHpI80jBLdnodS2BZ1tCiBWuhF4l6BLMLZQn/7Xy6JYJAmpnxAzUQ+9un2Ihsy97X5QHS0QKTMX5QA9+UlhIP6WJ2xy8ZbIndyq3HvKANxLlYfM69HfkashS2vlPVMhf38gmefDl73iqgez3H99yLiOB68LhiyWwXTZAPvwxg6RvZLdHtmmLwuAp4Me0z4f7Ker/56vQg197lFTY9Kib2t9j4aSZCj8I9JVYMsdLexlBBLp0HPzjkTTI+5Qqa5rQur13m3/ES2PFuO4dGDhtBmWyrN4GQ8yVVH+y6QmZsIhJYPqiIGeak11pm74Ju9VQhslK18cwplPT844aTDKUQyA+vvg3JQRqQE5pVYwJk+kohp1dgKEzwONBKhWOz+TlIkmX092PUSIC2QQF+ViA6FYez1Dv8QMszDsoKwUMueJyHDeKPG9gYiYvVKtefxI5gXQiQbH8K6UApCWXtE4Q9+BGIrccwu0jpLFm9QXLLOzwQQN6Zi1x7ew4HsySgbFWc+3ah4tYRB+N7CU4obhC9nY/N86rp/c0gB3MgUZEdaEeLUHLK2v/sropvpzTpilqVFW5Fd4j6iDL0HFBM8wH4FIBRBWQ+uVgmHf+HXC4q+g/XuODE8jivSRG0mq/NfcCqyZx7GNRyzkpp6QCZk/Y34Zk+itmEmrorZVbq7IQpV+8ozYvCmQJOt7ghrw+CXDQVrLIwNEdNXcavTSdJtn6AUyh16/TcMWHVXDqBh19rh0cM6sGEusEmv5FxlIDcWOK4sojlheUAfWp3NnxZryJ7V6SNqXawFqJGRV76RsBFdy0PL1mkM1VDAbgtoFqmQ0Pa80rLy6aiqdFlB8JhWfkgGkvJjOGeFiKXUgNB509lxW4fBjGPLEDSc8WSyZAlFo0oRkgtoO1WYLGHOIeWr6QDql//UWvhDdGUV59q/Q5U0FQNZbgI7HSdE7h0lD/9PUbNAOZX/s1wspU4wnbwl0E7+HYn7AOHoA6+ulFO3VVjDfKIKdo8QTki8o1deWH0V2ccisv4ahuiyD24mgq5euRr5NEmtEPmHzVKspR8B9zohRqswaN1B0QOcw7rOIT8dXkFCsEVCPXqQvAnlELw0z19PhGtncL/M4ZeHhrfFh5LbFCQpdJYJS41y3sTSXVrpi8GmCjBrLjo+bQNyVeMMyv9iOqxyirAsPnrbk5yFjh19HnZ9MHLCVyzzcNRHIQg5lBWzxhsyxJscJ8fTvwOt8Qy5gJaF170iKaJJbXdg7YdNFe/b1UCI3k/r7ZxlKD2G17tVovdURMTl8sqXkjYdw927Jtc0zbf9RsrQo8TFpZgrKrthUkGefT1WcJY380XZO+cT5xKYcaSLv4mHxDN3lh4w6w9D1fBUMcIcnktUmIZ5/Lb0zKjXzCm+4ArQzSx+QdevDkOii4ZuCyyJNs1/htTUbVeWPcqC4xewQ/rc8heCMo/8gDzt3si/ViWdu6ubgVKlMnw+O83dqnanjH1EuEPhlEgJ2sqVc2dJeORopWgSCiuzUnClmFIrROSkazHg2S926QNG/sZBCb7F8p/fwDUrPQ7z/tKvCy66CDSHrurOIXNy1lcUlqWnD1FYsTVCAHrWjpViElYlfsNBSZV6jmbuXIX+qZg5bIFFSi1ZvBkZz5djtlc1Zyz1+6TO+IvuytLLh7WdkuDpkksS7DtuDldLc3oxPS09Xc0m3mBzuckReNuQNG2jXiSlLQqRYTq1ou20xhmRMKLb53Nnne50Md9DTBWkkCfGCqefMQWwS5xsRZdtPw9ppzCrL32aYXGbcPSRnW3DQbFED6vk6fmtc1n7UqLCXp/+bHjggEtLq4G5gZwg3SJ/A9z/MF5KKrC0sMXyOJq2cJyVyIJioCBDVg7c6/078Va+nU1MMJVUFHjOo6Wsm7iugx1WEiwHFJQLR0XIsgwU3oNzFIzpyW6D3T4oyV3pzqCADC9nw+APbswpSfrXrej/SCBc27imrG+L/SX49UYzwHtXzbS401Ap7CW5YUZ6+lSzR6vHz/TUsaNJhruf6+sMC1vXzfBN7NkMPKeYgrjMpvzopkUJFupvcUTbf+yggmdZ9U3lvwUUPrjgPbs5JLtk1/aBVbGF9GpHKSbXoZALG8Q9UcZryRyYRCGYO77wJQNiHF/jqxmRePTwqDn/Q841yRfPteOGx5I9+/igPZeZVE01fquf44mXIWPpMu2wv8J6r5oUpUh2fSWbllWH+inDOx4xDhcmmUq07XaRMF1k3xnE03bMoO/xCGIQ0J/+3Zy3wrAGV/MCOFYaXES1wevjVlO+L2yTf0THE3Ck7uRoitEaMsdyZ8LuSYaOJZETN8ITNuhYvfzvSU24LvWVNZv5HBUpn4D6/KbXawSVywlRTF8yq9mH8xnqK/BoqenjLfmJgzXAXrgFpnTXVMzm11f1eDbND9lHATb0vax4iEF8aodJKAWxU0xvjYrS6VLsspJDyXpcivsZA+85c5qZ3vXHonlol8TFM76UdRssI3kJYfup7UW5oCn88vx9sahuBbiiya4Chc2R8h4NXZ6bK6iygqrSLK4Zk3oBjZWk6p7SfKm9sAC7fy7qIEU2BSGCqtFnguLXmHkG0J2D/sXLNAqTwU2A9fP5/8CpyvPFC4o8XTHaUtootJuZQ8v/B7qBewEFoM5HivVzHV6CpddYSMspElvDshx9MbCIUAfqoAaPM3UlqqGRdDO1G7biq96Y950MGd4vsdzU5fA5cbL+VOWzxzltoKERAE67KWAf48rFr8RWp+m8GGZa4GKMDb2S2a8CpEO6oIrdZPOv053mzMWlIa1knxZKKRe5QKaXWEh0wrhM1Nc5sCI6LY0KmqzMnV0H8/4r16QJxA8QLAxJtsxmyhdSVDCLdWahcc9KbMR36kkKcW9bCZU9OAsvzfLNoyi5XMXKz66Edcb50hN25XAUolUCEbAfEfny74JW5BRF8RvRAreyBax7saklC63CWMgFGYwwICoCE+h5faLlIx9CZETEP0IJCkGD4FqbEmjjnapdXI6piqzpQHMh7lhQ+IdhZ509KuCiFTGnS9lAxG4bX3Yb5G7l0WJ5qPHK7Az8/PCZImz/cIL5zHZHgOonViuEoa2JDI6QBfLlMYmxUHbE4/kHvv1txse6FGcxoOnnFAeodj1F33WHLrlUqNS3+ECv+z816HseES5kDmeT7S6SmiecCVOs/aOnwJ63fSS1+f/sDo35PBjIL49JOEUSB6lYSYTifkZcFZrfc0WCTJTrKPu5/i4evAf0GP76ewAgPrSJIPL2rSscbY4RZPwZSFCVPTw02rvHO9xueE09RBbws/KYMdRbWgDzuj86Krw8WY3mgSCnv/Uw/D2zmYqEGe6Kr7JJAkeKbKClbhgOhjzJeySn5DPTqbC4S8ZGf72hkWqbr1oPD3zcd8eseIJzA5pc2migqOZ6R/pJia2jFjAKDGa3GC/R4YBhQzKCiCqzUIyub922GZu+5EPI9rARkatpoyvSXGLlCIfYSW7INuT9UiKL/Zi62h0HhoaDW6K38HbyeHy0eK8kqGL8J+G8e69q39iHmAOaezGOc1VkPIK5XTDCsdoycaK8C5adUTom6KALkzfqH3WND8MbnbPC9pBPEdsnxHdM9UXLUe8ECrT5lxWKX3R5Kwu7Iy6zUMnn6p4IzZsTniX6evTqGjBgmplGpifhZOtBTAv6f39F9+dZ8sUP5zTsUC2E+WDcpY2R89CPIzQ/InHQvPJyFOjjZb4z6HgQB30OPcxmZWVgz6g5wVFKGentiRzb0MlJel/9cyCv8lstInt4GFl3pgi2WkS3QCjfVGTqJWnxGQmltjFT9hp75pHOTKyJ7T5RgNmfApTTadre9q4jv0hyOTLMb5o0yKiy/ZK3ENylPRgD4sE+QYA42AeTyHCKM9qoRkytvBlIjovgh7DwnNGuO5gKzjPrCjVgnymbySIo5v+7lW3N2q0Xs5wPgjSHfy1DRmSQhHw3Axau5BNWBGie16IY0+wfNZwODe1buvbY2wjs+ErixUHlvbOYboSpiX7ZuxNJSz+tpHkj2CKnZLS1U8SaxCG4rp6w3sRvzh7zknea72dprsC1xyC4hoDeAAdRMZHcuflV801V9OGHZ5bg4xwN+xnJhUr6aUkLb4dl+Gru0aHamkGXPpxPiue+8Hg79YN/vlfxouqmrgOISvvoQVax1w4bk8ZL1i5RsLSC54Cf1OCJANAYq0sC7jrhxMq+tfrRbr5nOkckynROWy3y7MNnCmpag0czoUpW7aA8VzCu6FjZaBpBSoUcl/44Mk3EQWX++vGJy/6J5Hm3e0mcgkVP2hq1c3/++k0DsJubw7DunIX+Lvzk5PL7DFNaCX2gJwmyHBs3VwaonsafLIkO3twEx4SqKAyAUEenRPa400boqHQSVLZv4cMUjDJ+VeYofSwt7MhDY9/3A3nn6NRjF7pIXB4kTB5TBT0on1KXe1Ah6GiDntUKXrpDv1DjCgVl+FG+JEEdlxk3lRP2FSzYHbe5yIJthSdsLf6LqpZq8H+TkL4oLhPhDdDsoYK/I1v2AMq9E2T/5yfhBETGZQKzcjGgtYQgQ6ka1ifkkOuNZdQrN23xuO8ImiKzXroG/WAwur43bXt/6C1GP+J1jq9u6zwW3w6gfFQ9xTuUJ8EuADJR+cyDj4jl8n4SQdHhbN5XrFQVpDxTZ1xXMSuP3KAdHnm7h3fSXzDeIKWqU/9mTcjIyzeTIHk6b+I+G/kIVXHOIsveCAortEmyi628bszGUMlBRRqOBNaNgI2m1oretAH+ZormQac+tfNo2SNNg5QlI7VVPaBMxg26DLr6X5uYss7QBJ+JL8N0I5FaPUJEzU4cTu3Vun7mryRrRQicCqeqar0nocSm8UkEHb/8hjR4CWJByoiDqatOoOr7DIWxMVuC0ZqAkF9a/2hh3zm6CV55Cebc8RKyeCPd2EX49LuJfZV+1ZDr15dOQRXET5xQfZt9r+z7mJ7jDblC5tfFjabai0AVE2DtNX/QFRlUKIx+ZwlQjWnHIFIJFg8756u+e/dDFCDs5YzzBwqlyAnPN9eAlfXRf/F9LboxZhCMn4+iJKtRmNBnwIf6ZHIOoIO2YL9tqinVDJARby9gcka+To4muuTKGAEemSNC6Ee/LU55l3epMKJUh5dpiiwcFtNwVQKWLHeAPfV1wccAgq/hwEM1cRqbShF+n+KoWhuQilTSQB1D0sFMZBnCwtwEyK1ct2XMkoqjVHyAIuxW0JN5Cn0zMY874bKOD3qBtEaRVfbVj8PHcXk2FyX3FsT/cGj6JsVy30ZhW+7HPO07s6/ZPFLqW1+iM3CFyyokQ4xzwCQuTzknuA86s6JQsAD5X1fJi6vY7/OHaoO2Fl63ul7CRUM82T6KHd6KyEZQ4QQtTEpKluMFCxiNSpycajKT9WqPXjUin7gegM1J5U+Ac5hmnZVsTRrMxEedYYx1buS71/keh/uD5//hbRvgnHswZGQgtZxO0tmpqHwMngpQai6HdzHkfjjvohqq8WdI1LJOqdlFzym8r2hs2pluu56guASNL5oTtZ6iRIsmfBKcQ29AHHbBxRp04vYD51EI4yakuMEhZCg9Vddg5W2p3yhjYvih5GSkmBaWEeZaqCl+1w0TGK4jFXWKo7cr8TwPu67Lls9qGXJQWXaWm/9HD6asSTJFdEJOpplw370XkKmrxerxUtjJALz4bXv3Jxg2CsDs0N130+D1LIpR4roKfzRJHG+QN3g68ojg/mAza+rpa1gNgJYqWDZSfS4NZnGNp5jPW+L3SR949hfqJaV4aTHAxQTz7au7ipLpAqoB9I+IIx2HiUOZu2B5LyA/PyQuuY2wqpN0vubVo4R1ObPiZU2psKavPm4iNy102P39LK3+QP8st6nUgTw6nMmZjENO+XI0DD+FTe4yeLVWz+Vp6eF5FSahfOXYmIfOLveYr/X7FtPOepaq9ANGNKzmO67DcdnX20RRlW5ca4WzMnpRqqEWQqsJ0zwmuKVTJDE2rN5KVlqFWSLMTZ/TQ5lKK5YOpei3XOv1a12zIaSQxcjU8tdkEecdJ7yC/lV1aPQZdsPnXWx8CUnUAQHN6e5XQEVw+vvxakwT8+LwG8HmzCMcmr6dqcRZ8ppU9hjZMr0Q9ROkQw6gCQ8bM/HQj/KdRs4IVgYsJNGc/smICcNs8J4QMhya9kebGVGZW4hBf59WQf3gm6a6JKe3QydSWhcrslFRFfI0upph+pibgxaEdZpa1WjoQPWqKUTCO/mLMIRolCm+o8N07p0zyIZaQS0gQpwKIjZ9HBA7bS2TqrTyU8I/V6uHZ5A0wkWDYnmmDhRlIGBNWe33ahMoZGU569RBkJKB48EMp8eA5JoF0rMIstbeRONRsCW7Fjbt9Fi9WqoMXKw5EbfmDiygM+3+t2mbXt9SkXoCwfYetgsDkB4nIxxCV5S5GIEcvbqUEIfXMGVw+aO34BTFRWPHyyR1eOuxMWnETz5EaPpsTQ4kwVTB2jorh8w8zxFNsKAiYLRG3Wkm1sedbn9IWY3QN58H++gJnMhyKhwH8WU9TQdMxwRv4RkcxEntYz/qS6lj84oi+pMUxrb5Q9czM1YwDe8PvFVfiiNShQvWilwdG3xjedqWOViP3NZyV8qVZojdH2dkfWdLPH60sc+jvZFkw6MKyqduX1vVfNg/jDVTpT4jTnBdpPlTUtNzwADYgamBNKHuWgkFLYGPOPC3B8/6a+w+IPw79etlCNklE9xw0jezWKAzk3k6mzVH77G8BfuhVoO8W/Fott9zRrozCtLsJoy3wLPHkf9lpv5nY3XOJRENrEIHtP5pCaW0COeGDAPwr/T39+MpELypv+Sj+ieIP3E1uXL4kGDbyJvu4ehcypihoLyMozQdaMTXOX+JxmmoqwB1YBbpksV4LgDUUpSWXjP+DRGtGLarcOOPSp3F61WTAmEyOpox7fha5KC/HZJdMRLRSSn9zgC1eSH0jDKc/DqdMzREQ0djofC2QqxwA3OKZanGxATIikoQXglmlmB2tN7Nyg9TqY2eCHZ7ehnuBLfnlN3zjfImdbnvhMimFo4DLmybHTHTnVEztoVSywNakf5Ozf3RGbs5++jpbPtwvRqIS7z/LErZPAMKB0XxsNsAFSS4v/ox70X3Z/l5sMJZfwytrm/UgWbjeaPsBOurSjteSKVPHwoCsQqXFV2CsGrMAqLUEARs/EyEBUmQXgz18JryeY2KsGI+k8Q+z+p5K+wz0uC3KAv2lHkumGSPVwvGVzV1qWoKMBxQBzeMJlPIwIzgHKxvNnuBqWvOU2w5deOIhc5cWL7SCwtyLZcBoczoOL+TtooTOqL0zgS8ChyKR8dVX6cc8a5OA6EmRuR0hJQTr+M6dtd34ysGWN426N2h/qIdhz2/WDQVcHtnH5A8HBlPBtIJLJUJuZQGfnZC/rIxA2UbUfzSQ+JiCb6Y15BDO0zM65ht3/56NMHA6Txj6dNowr8c6UUl5bdU+MWGQi+r9bWfsxmM9UrITCi540UDhYzZ3wzltwg77T1TIeL2ZTGnuGGacDMlla6EvIaBazRCd75PmgqAVsuFd1cXTek43usn36E0I/0RIg0fPmqTtHsAaxCeTUUsvp5ztnKl4Cf2W1wjvItdZ/ZW8haAmUzhHqWYGYjRhFvKWwFC483MsrP0w1HxDYYevPorJQ4IH52/Wc0u7Psno5eJUplyo1XUhkw1auG6YtLUrN5uOd93e4OVUZX1uCEfqRbClEG0tTkrNltMEkE25jtReJ5WNDk53/IhctGpvUGQltpSkUwmcvm3JE9cXfiT34xE9RQIgXitCXm1HZhuiPUKd/t4k9yxe/o2JXLMKUtgCjkyzEPigUPCfJE1WnxzPQUQSOuNIVsgW6nQ7zgfPzGaHoxpEUnK47FzmO+Ev3FAZakvNbhQQImQMABsEfR+jBdH01niMvh850ea0n+HYuXKnxahv4LqzNI7BDyh1N3H35pOtG6yaYDDYqf7J2wW8WMqOhFlcMIehZrOlxsU6xi2RrMbvrQzMoJumL3+7P+Ov87RVG0V3EXE8Ii/tKvB2I+17Hu11yMf5ThR+KG51XeEKiWOTm1ARKTTxOLyPOdfpKPXeYlBYmsV8VQ72dcSQfNTl/ZEswuo5BCppIoJaGnFHOjC8wYorOP2+GdsniLZFOB2fewU6ABPkifwiFMO4K1tqmRgruqzwqFtw9AyQKV+sAbi08h5dIxMS9jd5rSxzSzYVBKGmO4NmX4NuwdQ96KKwYTY5a3Ec1xjzGrtXsSVDiUWGGpxC3Q65klALnlRZi+y/4rTkJlMAXG0qK58ATDp3zWLXatQlHVVa+kyw5CfbGBpS44JWqd4m9Nbii618+NaYwnXVeXATSPOzk3SCo4cya5Zm7ccluVYBy/9UvLzVNbDfeIhpZSY/15M9Ga9JHb3SkJEVs149tGC0zElMdqiP9DMif5Nqq8YvzWov2XjtIbtynSN2LQABNMFpTX7GPk718p10SVHZYCv6lqVcsWoed8oumyYMLReO5gQEPRZWL4iqrqtUfW69YfEgjNF55pwtkMm/OfBQTpVYtoE0zSwfbVnSivtfI8OLzhZ71QOiq/I7aq1eZE/EruDOlOfmNIqAZurre/QnhAc9cC4GGha50mlJnI0vtfV2mpj3QAPMY6R3Aw28ID0s1vXEiddO6l/qiOvm+zvqxVqlh5viyWcEZMdlxkIO2eQu4H60HcrcOzlWkCzgulClq4g8G0voo9HpyZIR8t9i3IcMY0m0rm7S+3CJflqOUVBPwQ0A9LfpHKqU33QgSSP3vUYahsmIgfAxfRw4SWf3GB1YsqbBImpMDhKJeT88GI9QOfVYWcy/5/EeHdD7q8erUllMQn6Yado+6C0AuUEHIywkVd7Hk0rOeWJXCctDOuyvIxmmlTt7T+t6l2Bss9OWaNb0lsvncEm9y/wifJokcpucWETRouRCvJNGWuaNq+qnNBxOx1hbm7Idc/TJuJfmSpTZSiZImB3lUqkoQoP8caLzpB3WR5XkjGQlCZAHJzSpJGeIEjkJVASGlIOx+a45f4/RceCvLD5iaNPKd/Y5DUsYT6Os3bQnYG13aq0p39CJwdOXJSDSHIc2i8SJbRqz4f9dpR/nWFXSkxKmQ6/nzlbEcPB0GO4gjqBX1xrfHGIa/SOygglhNIt+/w+IAs2exQGBS0KfsddtwcyXFC2YIkXg7IZVI7bPxjghAiWvzOg8sUP/C/1SFdGgK1NnG8CKHbTus1zRQ8FFGjKs74I3fXjRGYTs5NXYD+jOyxdcJeumQmuNkwU6IaUB4+EcKyo5UkXN5hH5IkacVR4cTtE/dTpQpNIPQjK4Hpht7MpGtk1qpGkvblMAkUArwy3g2K88KrRTPQsoZBuKWsYd0fEbO0ls/Gvv7QLH3vJ6SvgsimOYakabq4Vme1C7AtOO8s9Zmrqf9ddnLXPAvsfYAYLTQXHWjVFhff7McmImF+E9mvNBIz0lm3jqEZgjhCWdErTk7RaiV84WL38nkVL+Z372wPntWU9vcq46yXIMfSMwc17srytlDLNoVP/Z0UshuTXmF2PgpVhMewsXayY1kubH451890vrn3ezp3m5Q1KC1GSDSDYRpZvooOmI5ytc+LscaLZ+orQQN0gM+FC4oCqkimduzRXHt6RUl4g1FRprpU49+paKYtfC3/LqqrNeBzf645HW0+4ukRWuNlzcpvZqOKpOxKrskpSHktWcBTxFcXWcHzmFQYIkyqvM1UwXqBF+5hzIq+ghnSBuHomS1uSXbq/PCVr+cjQ/Pz7QI5AkdDq2LWJVtQL54s/RD9gkV7n0r8Pj1af6Ri1Zr8oWHd53R2CnRsDe1HrfTO12c21MgeqfZXp3ZkbsYORdYrSx2ihsbkmiGLtF9C441T5XlXznRtKipxd/LagbzTfYKvztgD8WWlb8K3cvMCRDaiQPHgrHt7xuVf+JXUpDwm2XnN7KXmzoy8xBRV2H194TX6OgGNtyzWjNsccpp7POz23QnU3BEps5xo4FWcD+ktnSpx52hTDdaYcEgV5unakxs/s5HMvR+YZsZzOQwVYHW8MUqBvrKguJnRBMMrNjcoTjj/QOXrBoQsXF2VPXhPF/vu22taxRCP/ijwq2l7hHHZnt+t78E8u5jY6Y/HpQ2iw1EfYkGRzMvr4ZsIq+CxRcSCu6t69UOpXAseumOcA5SFJvj8GP65futub3wI/vsheYhuNJHsaogHHuqzY6o4HKexcvJm4/2Tq+XDH2ifEwDJZNSwm7L8iaaO7cPJQ2pdqrowVcmKArG89uhfLslGeghOYfNFsqRyQGgJdVQrv8bdR9ZVQWO2KW1e2xo/QJiSiIHE49pH+rLzHbISavVUBwqzhXbu28gTF1r5orpmBCCMxXfHOswApITYE46TanhuwGZ60igN6LaDS2e/kBLFY79jwNla0/NW5a4J4RGeNNdXl/lpx0Z3ycXcCsHadrFRXiqEgCfLvIYnUKTmC5CEGY4UmRb3vmTUukyZljDtfehHezlvaOzkj8rHPomNXhdsMZ4bYm3mVfBLlZyJXkviMPihmAVMkVxvuRTxvyD7gKEIgju0f+2d2F3HQoJgD9DJM46d7MyOLKERoT/6bmgaLm6U3oz3YHrQ9p8etoCy2UW+nA3u2wDcBwW3aOjXw1thU1LYlQ29oA9LRPqzvmdk6+ckVDGldR1U6GiCTiZhFRd6b/XgTgDpXMIu48DK557LJYpFzkqYwp7i1+jVwDhu7ALyUCsHQfWsDzO+Zir8mgyKzveeqAURSwXZKBwDzZCJg/OOUrtj8sxXnCi/cZMaF3yXnO/5DMWFvRJbFfsqm9t9Fe0NErDF8KaRqTaslN5xA0d4ITXkDmg+H65hhnXCmeQVQVkGoy0/O8W4cGxQ9dE+12deKAK8EHlCy3pra0EiGc3+8kcXuDpf5jukpD+rvqkz8qWbhNj+Tli4aSkCYvnGDdCPGsdTMEKR9uzVgR4MgU3KVyJ/47YskTFgrJfYjS+NT1jgpKg1ddtEnVmKXsQpPhTNlTZ2NCTc5noAlm63yxkoAv10ThwszmVAxQFK8tv+OXlr08FC81qdu+c0hQMA5MT+VsAqftRPLyUAFptm1bFthQIykHnVDXKvOFUsghn9t2Gobxid8p25FdcDmcn410MTxN5tYXwv2IKJbThgeuRlw0V2cv/2/YIYGUZ9PSL3pN2OUffjhABItpHMvhc0Prtx/ssnUQCLhr7qgkP/iHaJqWvyNDUbvWJ2brXmC77ZvDpwfJ0IqAOYIPlZ3FYJn+OrkhhZI+MNB5EKYjMAJ6jnCyQwxBeJrgt/uwEBk7oVusAotf92+vHC/K/8F0EJ4wGKK5sms4pQE49hWSfKzlmxJviab2lz8EDZpSLG4x31VAkG9cpTN5WrXVm7Dp8t83rCqxBjjiEtt7M7RMusuzznTvHrljiko1E/946KC5oH+dNVJoOPYee+WOV/dHmL+WJyaEIX7uSgZaQtdxod9mb4qvSXlfCHKQvsfP9WXsbiWGAy02GKpo/rATzN5UJCPZwy5rrigtlnsNPmFCYFOOKPJbwmW/sBQCz/KXELnximu0NG4mZtoN6bVK1U95UZJzT2VpaZ/qi7DvPCW72HEdFgxbAoPZcy1lf8jUXbAGFoQUDazZFCsGO6GBcWEL67WEHBfguR8NLF0f1SR7YnKxez30KEys8lBv70PuMVALGaPgZGU2jNi6FRu5wVa9jSuABIL9nVu13lGfu6c4PETsYujCI0jPpQZ2edRAl4Qul7zWIAQjXxdTDOYeTVcYHaCQ2nvpa21gxBdZTedIAPKjUCuBXBnZJPIg8QALdH/XJZF7y6ACYUwABFkLmeU6oFXe2olt4GGWHrNP8khDkXW/Ib5Q4Hxhr7At4xT9WWnpiNtPaGMH+xqb1NEpOMqkT8KqYwGdlankAPnhTGNBDtVifShJMNwQ6/z+ny+aMNiANAYDm1X+TFDsjBbBMX3vba2POW6k7LehSdVAYsYLD8M+eYo8NBt5rfGR9KLNdXX5bA/sDjbFhyVw+PkvYzcsS7ouBFxVLw5zf9KWPYk9WXNy707lcwteQWZLTKEIn6uQU5mk5n4kSKRDOAZTuMP0862/mu9QUppQklqhqP5IH8hfSvXlejfekP/KFeaG11F/c4rcALXe1HuuStpwS3fSIBtQ5tRoDLHX334asMGUPS0aRnjDRWsQ+ogCOTWZyEnLjVlTcbDQKXN9O4h347k8fdeD3ouBbeEr59DSERb0ne1POFXiCobQtZZ9rjunQcd5I5aKlkh29olWw9keopkXsu+br8Ad2xAoqU2PSQKwipfZKZWNxeDInc9kxBdRgQPxyDSBvzyZJDRdNrYsORiadZMg1c1RFa3MpVpy3ezaRlaPn3PNNi/Vq+Qwb4+db1Xws/cCqCorWIYcvDqPZIEO3gtfqm9T0R5WJ2DMT7xZL/JQcq752xfvjo3/ra7D2clW4lnpW5GzBIvpnEA/ISXiNLZr2/vsmxFMfTiO6N87eSyiPPg64gls9JyYaHIAsWoCH4dMEPJN+wFO+90nDfB0GHA0tSlxC/+aiof66IP2w/SK4U85VoDw/Wh2YywkrXjL5rctcc9ax4qDhz7RNjhuoS7VIb5GI+q9WPZCpDuQlITO154ZQ660u30gLOQT34FbwTj9DKukOQO3xWHBpHTb3K9+ccXqj/EK63UkqWe/j/xpPUyxzh0dkUeQ1f4+voHoOq/kuH+Adzk0xdU1dZXKQxNwQZqm4FejKeoaiLI8QMlPLwG5PetvfL8YnEZTqk7y/DYwl+gwTlocgJTvvsIhzUcG9ywxb+tp8fH3R0ydwnI3JprzxGewUk8aCpXjZN86szVVEIkF1FOy/4V2CqM9TCwoVqIPnliZsdNOhiJAymlcaYIBZpHctxd5CeldSfA9JTdnBmogOU0FCkGR0WWIctM5oEPsd47Zp46r5bLRN9P9RkzLIU8/ZFKphjubLagyccu1H2vOX8JxZFAj1oohZ2hU/XD8tk6aKX9unbxKqUk5aPNtkjK88VrS93mS6ioc4+UewY8WyH7jVP1/wwaBqdvY1+ih0m0mCDR/nZPdMB7uih+D39PJr1H9LUAL7rW+gJqVbQx+QKhNHeIBSCpJz2SZpi+X4l1bZvIUSfPdTtCOiQz/at9LQ07mzZhvj+v5o3i/ffIF7uwbuCxuRBpF0yQP8TD94cH0CwRmHo74SdMLHwKBeyIQZbCZCajf4r2r2H/2lnuGWdpphmrF4dJLyw7PQY9HRs7s04n7PN6d82YW4Bc9Z/0QhRnq4x2UTeTaptgT4v/3Y50ut8c8E4aCVzfq/Lxhg+rqMc8TPSBrNaJVvQYvF0rL5MptpWHTYUM7Vb954QaX+meUC/lDrv1VMMXqHcL8IHDpLiPUOee6GCOHTI3FRdG8ph5wy20vF+rD454XiJEakIciZWi1cGJLiUU2rodBRwjuCFrSo4BwCdgenY7JpLQAATVMgmYdiwGCknfxwhHH9i/8AmAusugZpvtE5awgAyMp5jFQy7HWtKNlSdnEtWQc+ujjG4Rx0XSiOhh8geCoSOU/hOc9oInnn7tvDdN+VU9fTO+JYOyM6SEleq7uay0plHoX9QLjqqgVccMZrJ5NS3brlHhMs0RHFahGxw1erX9w9HNTAUFI7gXe+4MVCuRETv+zXybM0V73n8v3QcCHJw0/3yzE+9HLRH4TSoeLXS1Z3Hxhw19pkjyrPetOMGOspzGOCDJxOkTYQimi9/WnkKNWkE8K76hbfwuRVOKGGj+HTskSE43eT010fGu95kb2SvclVDQfZm9OtVqQFrPEfZ9Ol/7a4wmP3cZ+FgUJIN3qEH6jp+v8bJsnEqULuob37WAu1ms1/3bcced089bUM49yaSJUrMZ5CFE4j4tSWf5lzNeJ6nQ/jS8L4+a/9koLtBMYAYhXuEO3WoMb+UygEwDU/Lb3thlzteiIDctRZwKLMONXDvBbJiqICxlx8sLoMLYyIchpQI6H/6alwXsfh0EcoXIhtKocRSdRlkRmlAMw3NSBo3lGPXFZ9BhucBFQF4e3uU/ZXAwXaaNQU8dR2TX9BGFi5Q/7ecJfCfdQM7r5XZVczeakET4wtAhj68TonFSS3/FqosNwEuvn8FEILgqem3gXBZbh4RQWgsubAdK7ByOSyVW7oHHctoT6HZ5jdzhaykeV4VxxwCnXOwEqmCLtQ3Fme+MhjjEppVwpwgwBIzr6bkgF3CWZyHgb86cCBI9rPaHRS82BTHaH/UvhbXXv9jipcOdezdJ78cS5PaMWYfhbGSvCii0m1DzM41HdurhL7wL4HMpfxo3zAttzUAeS61ISzFPd4Q58vLooJaIoTdseap+Ru889nt89DNemct3/cq7nh6z5t5Ei22sPE4LmxjmpZ8i2kIOIM7KopNtUg8O47DGfKqXRvGD+rpzkYLP3EE/FiL4dcFuXfbNOvz+N5hgp+E2lofqQiivphnQeTCjGeKrVzWEOVPmhVPBui2wsmcXJzLuCyyD4gvsIwRjun4IZmYxA7C8kmeVyybP59jUMSUTPXif4FIYCa5iEbfeyZJQbbig/RetCP3e3F1cAKPqNhC+3AJlzm5/ZFjl9qgSCC77SNtyWA7V3ackj5kG6/FsWrpfZ9P6SRrYIcG8ZtqH9NvxC+bnB779DvgOZMKY87kqugJESvFj8EvXa/wJ8QHRp3zNuueoJnAKpFPh3Vc/Pph43CSxf9s4tlLZk2uVecQb6VEAev9RCctT0iTnH+agetHKnG8J++rV7zoDFrJ8fQSvvPsq2CFx2FmTuo5p5CFoz3FkwZ239DDJTWToneYsbAjzDat7W5uYshjNDfF+UlM/2+ecGUIcObUXv8aZYZoxDRFmUTBK9jGKhAB3WzTtP8qWLe7xFAK8dfbN9szmIPB/y98Rac8spSCfbWG4u+qS6LLyNWJwfnhmck8Q69tKbKaW+S59Kkt0KHne5C6b4PPrYbWIQbuwOPHJqNON/B+6W5W3jfux2rWGQWhSk/XanabAiLMz5uGYX4kKQCXueHOCn81WXPf1rk5ENSnoqJHPvbR5H0usQGJP6R0M2lu5Rpy0jIRZcT1PDMNB+PuetkidR1nPkPZ8lID/vXhd8HtxoYDtTRu3DwgZtttfkPadeM3aXvN+r1Hdl5pekIprC/0vzepL8e60RAoVzqh2TFpf7AGvpYrzcdxs8JqoR/3oiMGTygjS2kBYIxct3UcJ+ec/QewXJnvG8/7mJHMmIvBzfZmiXcLv5qEsd6PnNZhoETPYEViwhto9IUGrTLTAbnqZrN6558GVQH9RM04yO+iLx0kRT2VH+PLhui5JR721A7U5JfunFhnKsObAiTu2Qvqz3e9BG7xkdvIptiIUn+toYAGb6iyENnEhmNHDwX4tGZoHhchO67YaVSQTlQz/hGvXziQZ7/r20DJXbWwmmR0sJdko/gkIHUzjWSCWGTshtACXrsBUWbmZA6NywoN4bfmdNHEzIfBzRtlpWc+r/s3reQDNPi1TNKzYvMnSGitl4CGUiRMl8oAM8JtzTthJ23IqZhPmcwQFrHuCBu7noXvFANZBVZm2FOdFOjM8MUWz4aNo6lFNREbnPeQo8BKVwgzxefn10Jy0Q4PC0fdiZA+3y1viqHoi2AUryQF3oFJHd6cCMBIIiJjS1/rRRwqqkuW9wIpUdrl4Idu0Wgwiq+H6ZZv6oxO5SLeSLdfwe93d0wEHXiOBmZx6PO1jdhLQ1sKkZyHVjnoMFbcxJjlZ4KFIa9ng1lPcUMuUCHJF0yq08w5H2paVxkD7T0O4LvZbLdc+we4WS9o5sE4B6Yw3nysbFYN6l3Dz3Ge64g3RHNK+NWaz0BjhWblBTjxY2pWPBZgy8zqTN0RLJ+XB4enkKMSKq+IH+eTyvaLjqjad2zyoeLtL3vasbbeD64YPiub5sOlHzjSWvDFvKWNSz37YexB2r11s+PX2YPGP03FGwDRgWCDbak9JUGlXuMlNIlJTNo0/vlYn0jpvODO/0+S7RYbBbC4y1X2rNdwke/JM1jWQ2mfFQq4XoQrVsfaIKzdh/2OHDqIhoQasPuoAieB7nl9s5Sm2ajwnvSvjzdsH6q9XS+MypPABrgDSC0WJfX2+A3JE2qI6SYl/L3YAVFfsl6dmTSbZaWZpoOK6VlES3DGbDKAEvDVSuIhyprfFf1bs5vlXGV1zNjGRyn9zdHNX6ygFo5Y66NOin+HHA8ZX84J6LWvSzGppXer6HGi6hfNR8fyALb2d6H8hwqYNNBBB9xWs/XCOuiFUtEzIfE4uq5+LCalGjHUMNnIDveRgOBYudkmD2PLNtozZMqULhOPL0huk5RaRadaOuJx5rT65pI+XWkZkSAD1msdWAmctYLt/tUQB315D21kGuK/sOrMEX/uLEizl5hyft5Y3L7BJyZYOSfPDXM91NuwSCbRZwTBJblhT6g==","i":600000};
-const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),K='rg_site_pw';
-async function unlock(pw){
-  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
-  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(P.s),iterations:P.i,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
-  const buf=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(P.n)},key,b64(P.c));
-  return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-}
-function show(html){document.open();document.write(html);document.close()}
-const f=document.getElementById('f'),eye=document.getElementById('eye'),pwi=document.getElementById('pw'),err=document.getElementById('err');
-eye.addEventListener('click',()=>{const sh=pwi.type==='password';pwi.type=sh?'text':'password';eye.setAttribute('aria-label',sh?'Hide password':'Show password');pwi.focus()});
-f.addEventListener('submit',async e=>{
-  e.preventDefault();const btn=document.getElementById('go');btn.disabled=true;err.textContent='';
-  let v=pwi.value,html=null;
-  try{html=await unlock(v)}catch(x){if(v!==v.trim()){v=v.trim();try{html=await unlock(v)}catch(y){}}}
-  if(html===null){err.textContent='Incorrect password.';btn.disabled=false;return}
-  try{sessionStorage.setItem(K,v)}catch(x){}
-  show(html)});
-(async()=>{
-  if(!window.crypto||!crypto.subtle){f.style.display='';err.textContent='Unsupported browser (HTTPS required).';return}
-  let v=null;try{v=sessionStorage.getItem(K)}catch(x){}
-  if(v){try{show(await unlock(v));return}catch(x){try{sessionStorage.removeItem(K)}catch(y){}}}
-  f.style.display='';pwi.focus()})();
-})();
-</script></body></html>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
+  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
+  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
+const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
+const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>banner(ok||'Copied.'),()=>fallbackCopy(t,ok));else fallbackCopy(t,ok)}
+function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
+const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
+document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
+function parseTable(text,minCols){
+  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
+  const has=c=>lines.some(l=>l.includes(c));let sep;
+  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
+  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
+  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
+  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
+const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+// ---- plotting engine ----------------------------------------------------------------
+const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
+function niceStep(r,n){const raw=r/n,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return(m<1.5?1:m<2.25?2:m<3.5?2.5:m<7.5?5:10)*p}
+function lin(lo,hi,n){const st=niceStep(hi-lo,n),a=Math.ceil(lo/st-1e-9)*st,t=[];for(let v=a;v<=hi+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t}
+function logt(lo,hi){const t=[];for(let e=Math.floor(Math.log10(lo));e<=Math.ceil(Math.log10(hi));e++)for(const m of[1,2,5]){const v=m*Math.pow(10,e);if(v>=lo*0.999&&v<=hi*1.001)t.push(v)}return t}
+const tickTxt=v=>(Math.abs(v)>=1e5||(Math.abs(v)<1e-2&&v!==0))?v.toExponential(0):String(+v.toPrecision(6));
+function tipEl(){let t=$('tip');if(!t){t=document.createElement('div');t.id='tip';document.body.appendChild(t)}return t}
+/* spec: {title, ylab, ylim, yrev, ylog, panels:[{xlab,xlim,xlog,pts:[{x,y,c,g(rey),info}],lines:[{x:[],y:[],c,w,dash,label}],vlines:[{v,c,label}],hlines:[{v,c,label}]}], sq(uare)} */
+function drawChart(cv,spec){
+  const dpr=window.devicePixelRatio||1,W=cv.clientWidth||600,H=cv.clientHeight||340;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  const P=spec.panels,np=P.length,L=58,R=10,T=spec.title?22:10,B=44,gap=np>1?10:0,pw=(W-L-R-gap*(np-1))/np,ph=H-T-B;
+  const fin=Number.isFinite;
+  // shared y range
+  let ys=[];for(const p of P){for(const q of p.pts)if(fin(q.y))ys.push(q.y);for(const l of p.lines||[])for(const v of l.y)if(fin(v))ys.push(v)}
+  let [y0,y1]=spec.ylim||[Math.min(...ys),Math.max(...ys)];if(!fin(y0)||!fin(y1)){y0=0;y1=1}if(y0===y1){y0-=1;y1+=1}
+  if(!spec.ylim){const pd=(y1-y0)*0.04;if(spec.ylog){y0/=1.15;y1*=1.15}else{y0-=pd;y1+=pd}}
+  const fy=spec.ylog?Math.log10:v=>v,ya=fy(y0),yb=fy(y1),py=v=>spec.yrev?T+(fy(v)-ya)/(yb-ya)*ph:T+ph-(fy(v)-ya)/(yb-ya)*ph;
+  x.font='11px Inter,sans-serif';x.textBaseline='middle';cv._hits=[];
+  if(spec.title){x.fillStyle='#232220';x.font='600 12px "Space Grotesk",Inter,sans-serif';x.textAlign='left';x.fillText(spec.title,L,10)}
+  P.forEach((p,k)=>{
+    const ox=L+k*(pw+gap);let xs=[];for(const q of p.pts)if(fin(q.x))xs.push(q.x);
+    let [x0,x1]=p.xlim||[Math.min(...xs),Math.max(...xs)];if(!fin(x0)||!fin(x1)){x0=0;x1=1}if(x0===x1){x0-=1;x1+=1}
+    if(!p.xlim){if(p.xlog){x0/=1.15;x1*=1.15}else{const pd=(x1-x0)*0.05;x0-=pd;x1+=pd}}
+    const fx=p.xlog?Math.log10:v=>v,xa=fx(x0),xb=fx(x1),px=v=>p.xrev?ox+pw-(fx(v)-xa)/(xb-xa)*pw:ox+(fx(v)-xa)/(xb-xa)*pw;
+    x.save();x.beginPath();x.rect(ox,T,pw,ph);x.clip();
+    // grid
+    const xt=p.xlog?logt(x0,x1):lin(x0,x1,Math.max(3,Math.floor(pw/70))),yt=spec.ylog?logt(y0,y1):lin(y0,y1,Math.max(3,Math.floor(ph/48)));
+    x.strokeStyle='#ece9df';x.lineWidth=1;x.beginPath();for(const t of xt){const u=Math.round(px(t))+.5;x.moveTo(u,T);x.lineTo(u,T+ph)}for(const t of yt){const u=Math.round(py(t))+.5;x.moveTo(ox,u);x.lineTo(ox+pw,u)}x.stroke();
+    for(const v of p.vlines||[]){const u=px(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(u,T);x.lineTo(u,T+ph);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,u+3,T+9)}}
+    for(const v of p.hlines||[]){const u=py(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(ox,u);x.lineTo(ox+pw,u);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,ox+3,u-7)}}
+    for(const l of p.lines||[]){x.strokeStyle=l.c||'#5c5a52';x.lineWidth=l.w||1.2;x.setLineDash(l.dash||[]);x.beginPath();let on=false,last=null,first=null;
+      for(let i=0;i<l.x.length;i++){if(!fin(l.x[i])||!fin(l.y[i])){on=false;continue}const a=px(l.x[i]),b=py(l.y[i]);if(on)x.lineTo(a,b);else x.moveTo(a,b);on=true;last=[a,b];if(!first)first=[a,b]}x.stroke();x.setLineDash([]);
+      if(l.label&&l.start&&first){x.fillStyle=l.c||'#5c5a52';x.textAlign='left';x.fillText(l.label,Math.max(first[0]+4,ox+4),Math.min(T+ph-8,first[1]-8))}else if(l.label&&last){x.fillStyle=l.c||'#5c5a52';x.textAlign='right';x.fillText(l.label,Math.min(last[0]-3,ox+pw-3),Math.max(T+8,last[1]-8))}}
+    // points: grey crosses first, then coloured
+    for(const q of p.pts){if(!q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y);x.strokeStyle='#9a968a';x.lineWidth=1.3;x.beginPath();x.moveTo(a-3,b-3);x.lineTo(a+3,b+3);x.moveTo(a+3,b-3);x.lineTo(a-3,b+3);x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    for(const q of p.pts){if(q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y),r=q.r||4;x.beginPath();x.arc(a,b,r,0,7);x.fillStyle=q.c||'#4a5a4e';x.fill();x.lineWidth=q.ring?2:1;x.strokeStyle=q.ring||'#232220';x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    x.restore();
+    x.strokeStyle='#8a8678';x.lineWidth=1;x.strokeRect(ox+.5,T+.5,pw,ph);
+    x.fillStyle='#5c5a52';x.textAlign='center';x.textBaseline='top';x.font='11px Inter,sans-serif';for(const t of xt){const u=px(t);if(u>=ox-1&&u<=ox+pw+1)x.fillText(tickTxt(t),u,T+ph+4)}
+    x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(p.xlab||'',ox+pw/2,T+ph+22);
+    if(k===0){x.textAlign='right';x.textBaseline='middle';x.fillStyle='#5c5a52';x.font='11px Inter,sans-serif';for(const t of yt){const u=py(t);if(u>=T-1&&u<=T+ph+1)x.fillText(tickTxt(t),ox-5,u)}
+      x.save();x.translate(12,T+ph/2);x.rotate(-Math.PI/2);x.textAlign='center';x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(spec.ylab||'',0,0);x.restore()}
+    x.textBaseline='middle'});
+  if(!cv._tip){cv._tip=true;cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=100;for(const h of cv._hits||[]){const d=(h.x-mx)**2+(h.y-my)**2;if(d<bd){bd=d;best=h}}
+      const t=tipEl();if(best&&best.i){t.innerHTML=best.i;t.style.display='block';t.style.left=Math.min(window.innerWidth-310,e.clientX+14)+'px';t.style.top=(e.clientY+14)+'px'}else t.style.display='none'});
+    cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
+function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)})}
+
+// =====================================================================================
+//  Rock-Eval QC. Units: S1, S2 mg HC / g rock; S3 mg CO2 / g rock; Tmax °C; TOC, PC, RC, MinC wt %;
+//  HI = 100 S2 / TOC (mg HC / g TOC); OI = 100 S3 / TOC (mg CO2 / g TOC); PI = S1 / (S1 + S2); OSI = 100 S1 / TOC (mg HC / g TOC).
+// =====================================================================================
+const FIELDS=[
+ {k:'id',label:'Sample',re:/^(sample|sampleid|samplename|echantillon|ech|id|name|labno|lab)/,text:true},
+ {k:'depth',label:'Depth',re:/^(depth|prof|md|tvd|z$)/},
+ {k:'group',label:'Group / formation',re:/^(form|litho|well|puits|unit|group|fm$|facies|zone|stage|age)/,text:true},
+ {k:'s1',label:'S1',re:/^s1/},{k:'s2',label:'S2',re:/^s2/},{k:'s3',label:'S3',re:/^s3(?!co|p)/},
+ {k:'tmax',label:'Tmax',re:/^(tmax|tpeak|tmx)/},{k:'toc',label:'TOC',re:/^(toc|cot)/},
+ {k:'hi',label:'HI',re:/^(hi|hydrogenindex)/},{k:'oi',label:'OI',re:/^(oi|oxygenindex)/},{k:'pi',label:'PI',re:/^(pi|productionindex)/},
+ {k:'pc',label:'PC',re:/^pc/},{k:'rc',label:'RC',re:/^rc/},{k:'minc',label:'MinC',re:/^(minc|mineralcarbon)/}];
+const NUM=FIELDS.filter(f=>!f.text).map(f=>f.k);
+const D={table:null,map:{},rows:[],stds:[],groups:[],tab:'plots'};
+// ---- QC rules. scope: which plots a "mask" removes the point from. acts: allowed actions.
+const RULES=[
+ {id:'neg',label:'Negative value in S1, S2, S3, TOC, PC or RC',acts:['flag','excl'],act:'excl',on:true,tip:'A negative peak or carbon content is an instrument or transcription error.'},
+ {id:'s2low',label:'S2 below',p:[['thr',0.2,'mg HC/g']],scope:'tmax',acts:['flag','mask','excl'],act:'mask',on:true,tip:'Tmax read on a very small S2 peak is unreliable (usual practice, see Peters 1986, AAPG Bull. 70(3), p. 318, for the guidelines on Tmax and S2).'},
+ {id:'tmaxr',label:'Tmax outside',p:[['lo',350,'°C'],['hi',600,'°C']],scope:'tmax',acts:['flag','mask','excl'],act:'mask',on:true,tip:'Physically implausible Tmax for a Rock-Eval run (instrument range, not a geological limit).'},
+ {id:'toclow',label:'TOC below',p:[['thr',0.5,'wt %']],scope:'hioi',acts:['flag','mask','excl'],act:'mask',on:true,tip:'HI and OI are ratios to TOC: with very low TOC they are dominated by noise and by the mineral matrix.'},
+ {id:'hihigh',label:'HI above',p:[['thr',1000,'mg HC/g TOC']],scope:'hioi',acts:['flag','mask','excl'],act:'mask',on:true,tip:'HI above about 1000 is not credible for sedimentary organic matter: contamination, wrong TOC or wrong units.'},
+ {id:'osi',label:'S1/TOC × 100 above',p:[['thr',100,'mg HC/g TOC']],acts:['flag','excl'],act:'flag',on:true,tip:'Oil saturation index. Above ~100 the S1 peak is likely to contain migrated oil or contamination (mud, additives): HI and Tmax of such samples are biased.'},
+ {id:'picons',label:'PI differs from S1/(S1+S2) by more than',p:[['tol',0.03,'']],acts:['flag','excl'],act:'flag',on:true,tip:'PI in the file is compared with the value recomputed from S1 and S2.'},
+ {id:'hicons',label:'HI or OI differs from 100·S2/TOC, 100·S3/TOC by more than',p:[['tol',5,'%']],acts:['flag','excl'],act:'flag',on:true,tip:'Relative difference with the recomputed index (plus 2 units of absolute tolerance for rounding).'},
+ {id:'toccons',label:'TOC differs from PC + RC by more than',p:[['tol',10,'%']],acts:['flag','excl'],act:'flag',on:true,tip:'TOC (wt %) should equal pyrolysed carbon plus residual carbon.'},
+ {id:'oihigh',label:'OI above',p:[['thr',200,'mg CO2/g TOC']],scope:'hioi',acts:['flag','mask','excl'],act:'flag',on:true,tip:'Very high OI usually means CO2 from carbonates or oxidation, not organic oxygen; check MinC.'},
+ {id:'dup',label:'Duplicate sample name or depth',acts:['flag','excl'],act:'flag',on:true,tip:'Same sample name, or same depth and group, appearing more than once.'}];
+const ACTN={flag:'Flag only',mask:'Mask',excl:'Exclude'};
+function buildRulesUI(){$('rules').innerHTML=RULES.map(r=>`<div class="r"><input type="checkbox" data-r="${r.id}" ${r.on?'checked':''}><div>${esc(r.label)} ${(r.p||[]).map(([k,v,u])=>`<input type="number" step="any" data-rp="${r.id}.${k}" value="${v}"> ${esc(u)}`).join(' ')}<span class="tt" tabindex="0" data-tip="${esc(r.tip)}" style="margin-left:4px;width:15px;height:15px">?</span>
+  <span class="act"><select data-ra="${r.id}">${r.acts.map(a=>`<option value="${a}"${a===r.act?' selected':''}>${ACTN[a]}</option>`).join('')}</select></span></div></div>`).join('');
+  $('rules').querySelectorAll('input,select').forEach(e=>e.addEventListener('change',refresh))}
+const rv=(id,k)=>{const e=document.querySelector(`[data-rp="${id}.${k}"]`);const v=e?+e.value:NaN;return isFinite(v)?v:RULES.find(r=>r.id===id).p.find(p=>p[0]===k)[1]};
+const ron=id=>document.querySelector(`[data-r="${id}"]`).checked,ract=id=>document.querySelector(`[data-ra="${id}"]`).value;
+// ---- loading
+function fillMap(){const t=D.table,used=new Set();D.map={};
+  for(const f of FIELDS){let j=-1;for(let i=0;i<t.nc;i++){if(used.has(i))continue;if(f.re.test(normName(t.head[i]))){j=i;break}}if(j>=0)used.add(j);D.map[f.k]=j}
+  $('colMap').innerHTML=FIELDS.map(f=>`<span>${f.label}</span><select data-m="${f.k}"><option value="-1">—</option>${t.head.map((h,i)=>`<option value="${i}"${D.map[f.k]===i?' selected':''}>${esc(h)}</option>`).join('')}</select>`).join('');
+  $('colMap').querySelectorAll('select').forEach(e=>e.onchange=()=>{D.map[e.dataset.m]=+e.value;build()})}
+function loadText(text){const t=parseTable(text,3);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillMap();build();return true}
+$('paste').addEventListener('input',()=>{clearTimeout(D.pt);D.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
+$('bOpen').onclick=()=>$('file').click();
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>3e6?r.result.slice(0,3e6):r.result;loadText(r.result)};r.readAsText(f);e.target.value=''};
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
+$('stdre').addEventListener('change',()=>{if(D.table)build()});
+function build(){const t=D.table;if(!t)return;const M=D.map;let re;try{re=new RegExp($('stdre').value,'i')}catch(e){re=null}
+  D.rows=[];D.stds=[];
+  t.rows.forEach((r,n)=>{const o={n,raw:r};for(const f of FIELDS){const j=M[f.k];o[f.k]=j>=0?(f.text?(r[j]||'').trim():toN(r[j])):(f.text?'':NaN)}
+    if(!o.id)o.id='#'+(n+1);
+    const isStd=re&&re.test(String(o.id).trim());(isStd?D.stds:D.rows).push(o)});
+  for(const o of D.rows.concat(D.stds)){o.hiC=isFinite(o.s2)&&o.toc>0?100*o.s2/o.toc:NaN;o.oiC=isFinite(o.s3)&&o.toc>0?100*o.s3/o.toc:NaN;o.piC=isFinite(o.s1)&&isFinite(o.s2)&&o.s1+o.s2>0?o.s1/(o.s1+o.s2):NaN;o.osi=isFinite(o.s1)&&o.toc>0?100*o.s1/o.toc:NaN;
+    o.HI=isFinite(o.hi)?o.hi:o.hiC;o.OI=isFinite(o.oi)?o.oi:o.oiC;o.PI=isFinite(o.pi)?o.pi:o.piC}
+  D.groups=[...new Set(D.rows.map(o=>o.group).filter(g=>g))];
+  const has=NUM.filter(k=>M[k]>=0).map(k=>FIELDS.find(f=>f.k===k).label);
+  $('dataMsg').className='msg';$('dataMsg').textContent=`${D.rows.length} samples${D.stds.length?` + ${D.stds.length} standard run(s)`:''} · numeric columns: ${has.join(', ')||'none'}${M.s2<0||M.toc<0?' · S2 and TOC are needed for most plots':''}`;
+  refresh()}
+// ---- QC
+function qc(){
+  const nmap=new Map(),dmap=new Map();for(const o of D.rows){const a=String(o.id).toLowerCase();nmap.set(a,(nmap.get(a)||0)+1);if(isFinite(o.depth)){const k=o.depth+'|'+o.group;dmap.set(k,(dmap.get(k)||0)+1)}}
+  for(const o of D.rows){o.flags=[];o.maskT=false;o.maskH=false;o.excluded=false;
+    const add=(id,txt)=>{if(!ron(id))return;const a=ract(id),R=RULES.find(r=>r.id===id);o.flags.push(txt);if(a==='excl')o.excluded=true;else if(a==='mask'){if(R.scope==='tmax')o.maskT=true;else o.maskH=true}};
+    if(['s1','s2','s3','toc','pc','rc'].some(k=>o[k]<0))add('neg','negative value');
+    if(o.s2<rv('s2low','thr'))add('s2low',`S2 < ${rv('s2low','thr')}`);
+    if(o.tmax<rv('tmaxr','lo')||o.tmax>rv('tmaxr','hi'))add('tmaxr','Tmax out of range');
+    if(o.toc<rv('toclow','thr'))add('toclow',`TOC < ${rv('toclow','thr')}`);
+    if(o.HI>rv('hihigh','thr'))add('hihigh','HI implausible');
+    if(o.osi>rv('osi','thr'))add('osi',`S1/TOC×100 = ${Math.round(o.osi)}`);
+    if(isFinite(o.pi)&&isFinite(o.piC)&&Math.abs(o.pi-o.piC)>rv('picons','tol'))add('picons','PI inconsistent');
+    const tl=rv('hicons','tol')/100;
+    if((isFinite(o.hi)&&isFinite(o.hiC)&&Math.abs(o.hi-o.hiC)>tl*o.hiC+2)||(isFinite(o.oi)&&isFinite(o.oiC)&&Math.abs(o.oi-o.oiC)>tl*o.oiC+2))add('hicons','HI/OI inconsistent');
+    if(isFinite(o.toc)&&isFinite(o.pc)&&isFinite(o.rc)&&Math.abs(o.toc-o.pc-o.rc)>rv('toccons','tol')/100*o.toc)add('toccons','TOC ≠ PC + RC');
+    if(o.OI>rv('oihigh','thr'))add('oihigh','OI high');
+    if(nmap.get(String(o.id).toLowerCase())>1||(isFinite(o.depth)&&dmap.get(o.depth+'|'+o.group)>1))add('dup','duplicate');
+    o.status=o.excluded?'excluded':(o.maskT||o.maskH)?'masked':o.flags.length?'warn':'ok'}}
+// ---- colours
+function colorOf(o){const m=$('colby').value;
+  if(m==='group'&&D.groups.length)return PAL[Math.max(0,D.groups.indexOf(o.group))%PAL.length];
+  if(m==='depth'){const d=D.dr;if(d&&isFinite(o.depth)){const t=(o.depth-d[0])/((d[1]-d[0])||1),a=[74,90,78],b=[168,98,58],c=a.map((v,i)=>Math.round(v+(b[i]-v)*t));return`rgb(${c})`}}
+  return o.status==='warn'?'#a8623a':'#4a5a4e'}
+function legend(){const m=$('colby').value;let h='';
+  if(m==='group'&&D.groups.length)h=D.groups.map((g,i)=>`<span><i style="background:${PAL[i%PAL.length]}"></i>${esc(g)}</span>`).join('');
+  else if(m==='depth'&&D.dr)h=`<span><i style="background:#4a5a4e"></i>${fmt(D.dr[0])}</span><span>→</span><span><i style="background:#a8623a"></i>${fmt(D.dr[1])} (depth)</span>`;
+  else h='<span><i style="background:#4a5a4e"></i>ok</span><span><i style="background:#a8623a"></i>flagged (warning)</span>';
+  h+='<span><i class="x">×</i>masked / excluded</span>';$('legend').innerHTML=h}
+function info(o){const f=(l,v,u)=>isFinite(v)?`<br>${l} ${fmt(v)}${u||''}`:'';
+  return`<b>${esc(o.id)}</b>${o.group?' · '+esc(o.group):''}${f('depth',o.depth)}${f('S1',o.s1)}${f('S2',o.s2)}${f('S3',o.s3)}${f('Tmax',o.tmax,' °C')}${f('TOC',o.toc,' %')}${f('HI',o.HI)}${f('OI',o.OI)}${f('PI',o.PI)}${o.flags.length?'<br>⚑ '+o.flags.map(esc).join('; '):''}`}
+// ---- charts
+function pt(o,xv,yv,need){const g=o.excluded||(need.t&&o.maskT)||(need.h&&o.maskH);if(g&&!$('showGrey').checked)return null;return{x:xv,y:yv,g,c:colorOf(o),info:info(o)}}
+// Tmax <= 0 or > 650 degC is a missing/failed measurement (Rock-Eval reports 0): never plot it nor let it set the axis
+const TMX=t=>t>=300&&t<=650;
+function mk(rows,fx,fy,need){const out=[];for(const o of rows){const x=fx(o),y=fy(o);if(!isFinite(x)||!isFinite(y))continue;const p=pt(o,x,y,need);if(p)out.push(p)}return out}
+// logical axis bounds: Tmax window around the oil window, indices from 0, PI in [0,1]; based on points actually drawn
+function lim(pts,k,kind){const v=pts.filter(q=>!q.g&&isFinite(q[k])).map(q=>q[k]);const all=pts.filter(q=>isFinite(q[k])).map(q=>q[k]);const a=v.length?v:all;if(!a.length)return undefined;
+  const lo=Math.min(...a),hi=Math.max(...a);
+  if(kind==='tmax')return[Math.floor((Math.min(lo,425)-5)/10)*10,Math.ceil((Math.max(hi,475)+5)/10)*10];
+  if(kind==='pi')return[0,Math.min(1,Math.max(0.1,Math.ceil(hi*11)/10))];
+  if(kind==='idx')return[0,Math.ceil(hi*1.05/50)*50||50];
+  return undefined}
+function renderCharts(){const R=D.rows,log=$('logS').checked,cards=[];
+  const have=k=>R.some(o=>isFinite(o[k])),haveHI=R.some(o=>isFinite(o.HI)),haveOI=R.some(o=>isFinite(o.OI)),havePI=R.some(o=>isFinite(o.PI));
+  const add=(id,title,spec)=>cards.push({id,title,spec});
+  if(haveHI&&have('tmax')){const pts=mk(R,o=>TMX(o.tmax)?o.tmax:NaN,o=>o.HI,{t:1,h:1});add('c1','HI vs Tmax',{ylab:'HI (mg HC / g TOC)',ylim:lim(pts.map(q=>({g:q.g,v:q.y})),'v','idx'),panels:[{xlab:'Tmax (°C)',xlim:lim(pts,'x','tmax'),pts,vlines:[{v:435,label:'435'},{v:470,label:'470'}]}]})}
+  if(haveHI&&haveOI){const pts=mk(R,o=>o.OI,o=>o.HI,{h:1});add('c2','HI vs OI',{ylab:'HI (mg HC / g TOC)',ylim:lim(pts.map(q=>({g:q.g,v:q.y})),'v','idx'),panels:[{xlab:'OI (mg CO₂ / g TOC)',xlim:lim(pts,'x','idx'),pts}]})}
+  if(have('s2')&&have('toc')){const mx=Math.max(...R.filter(o=>isFinite(o.toc)).map(o=>o.toc)),ym=Math.max(...R.filter(o=>isFinite(o.s2)).map(o=>o.s2))*1.1,x0=log?0.05:0,ln=[100,200,300,400,600].map(h=>{const xe=Math.min(mx*1.2,ym*100/h);return{x:[x0,xe],y:[h*x0/100,h*xe/100],c:'#b8b2a0',dash:[4,3],label:'HI '+h,start:log}});
+    add('c3','S2 vs TOC (lines: constant HI)',{ylab:'S2 (mg HC / g rock)',ylog:log,panels:[{xlab:'TOC (wt %)',xlog:log,pts:mk(R,o=>o.toc,o=>o.s2,{}),lines:ln}]})}
+  if(have('s1')&&have('toc')){const mx=Math.max(...R.filter(o=>isFinite(o.toc)).map(o=>o.toc)),ym=Math.max(...R.filter(o=>isFinite(o.s1)).map(o=>o.s1))*1.1,xe=Math.min(mx*1.2,ym);
+    add('c4','S1 vs TOC (line: S1/TOC×100 = 100)',{ylab:'S1 (mg HC / g rock)',ylog:log,panels:[{xlab:'TOC (wt %)',xlog:log,pts:mk(R,o=>o.toc,o=>o.s1,{}),lines:[{x:[log?0.05:0,xe],y:[log?0.05:0,xe],c:'#a8623a',dash:[5,4],label:'OSI 100'}]}]})}
+  if(havePI&&have('tmax')){const pts=mk(R,o=>TMX(o.tmax)?o.tmax:NaN,o=>o.PI,{t:1});add('c5','PI vs Tmax',{ylab:'PI = S1/(S1+S2)',ylim:lim(pts.map(q=>({g:q.g,v:q.y})),'v','pi'),panels:[{xlab:'Tmax (°C)',xlim:lim(pts,'x','tmax'),pts,vlines:[{v:435,label:'435'},{v:470,label:'470'}]}]})}
+  if(have('s2')&&have('s3'))add('c6','S2 vs S3',{ylab:'S2 (mg HC / g rock)',panels:[{xlab:'S3 (mg CO₂ / g rock)',pts:mk(R,o=>o.s3,o=>o.s2,{})}]});
+  if(have('minc')&&have('s3'))add('c7','S3 vs MinC',{ylab:'S3 (mg CO₂ / g rock)',panels:[{xlab:'MinC (wt %)',pts:mk(R,o=>o.minc,o=>o.s3,{})}]});
+  const box=$('cards');if(!cards.length){box.innerHTML='<div class="empty">Load data with at least S2 and TOC, or Tmax and HI.</div>';return}
+  box.innerHTML=cards.map(c=>`<div class="card"><h3>${esc(c.title)}<span class="sp"></span><button data-png="${c.id}">PNG</button></h3><canvas id="${c.id}"></canvas></div>`).join('');
+  for(const c of cards)drawChart($(c.id),c.spec)}
+function renderProf(){const R=D.rows.filter(o=>isFinite(o.depth)),cv=$('cvProf');
+  if(!R.length){const x=cv.getContext('2d');cv.width=cv.clientWidth;cv.height=cv.clientHeight;x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);x.fillStyle='#5c5a52';x.font='13px Inter,sans-serif';x.fillText('Depth profiles need a depth column.',20,30);return}
+  const tr=[['toc','TOC (wt %)',o=>o.toc,{h:1}],['s1s2','S1 (blue), S2 (purple) mg/g',null],['hi','HI',o=>o.HI,{h:1}],['tmax','Tmax (°C)',o=>TMX(o.tmax)?o.tmax:NaN,{t:1}],['pi','PI',o=>o.PI,{t:1}],['oi','OI',o=>o.OI,{h:1}]],panels=[];
+  for(const [k,lab,f,need] of tr){
+    if(k==='s1s2'){if(!have2('s1')&&!have2('s2'))continue;const a=mk(R,o=>o.s1,o=>o.depth,{}),b=mk(R,o=>o.s2,o=>o.depth,{});
+      panels.push({xlab:lab,pts:a.map(p=>({...p,c:'#3b6ea5'})).concat(b.map(p=>({...p,c:'#7b4f9d'})))});continue}
+    if(!R.some(o=>isFinite(f(o))))continue;const pp=mk(R,f,o=>o.depth,need||{}),kd={tmax:'tmax',pi:'pi',hi:'idx',oi:'idx'}[k];panels.push({xlab:lab,pts:pp,xlim:kd?lim(pp,'x',kd):undefined})}
+  function have2(k){return R.some(o=>isFinite(o[k]))}
+  if(!panels.length){return}
+  drawChart(cv,{ylab:'Depth',yrev:true,panels})}
+function qcTable(){const R=D.rows,cnt={ok:0,warn:0,masked:0,excluded:0};for(const o of R)cnt[o.status]++;
+  $('sum').innerHTML=`<div><b>${R.length}</b>samples</div><div><b style="color:#4a5a4e">${cnt.ok}</b>ok</div><div><b style="color:#a8623a">${cnt.warn}</b>flagged</div><div><b>${cnt.masked}</b>masked</div><div><b style="color:#7a3a2a">${cnt.excluded}</b>excluded</div>`+(D.stds.length?`<div><b>${D.stds.length}</b>standard runs</div>`:'');
+  const f=$('qcf').value,rows=R.filter(o=>f==='all'||(f==='flag'?o.flags.length>0:o.status===f)),cols=NUM.filter(k=>D.map[k]>=0);
+  $('qcT').innerHTML=`<thead><tr><th class="l">Sample</th><th class="l">Group</th>${cols.map(k=>`<th>${FIELDS.find(x=>x.k===k).label}</th>`).join('')}<th class="l">Status</th><th class="l">Flags</th></tr></thead><tbody>`+
+   rows.map(o=>`<tr><td class="l">${esc(o.id)}</td><td class="l">${esc(o.group)}</td>${cols.map(k=>`<td>${isFinite(o[k])?fmt(o[k]):'–'}</td>`).join('')}<td class="l"><span class="chip ${o.status}">${o.status}</span></td><td class="l">${o.flags.map(esc).join('; ')}</td></tr>`).join('')+'</tbody>'}
+function renderStd(){const S=D.stds,box=$('stdCards');
+  if(S.length<2){box.innerHTML='';$('stdMsg').textContent=S.length?'Only one standard run: a control chart needs at least two.':'No standard runs: rows whose sample name matches the pattern in section 2 are treated as standards (control charts with mean ± 2 SD).';return}
+  const prm=[['tmax','Tmax (°C)'],['s1','S1'],['s2','S2'],['s3','S3'],['toc','TOC (wt %)'],['HI','HI']].filter(([k])=>S.some(o=>isFinite(o[k]))),cards=[],out=[];
+  for(const [k,lab] of prm){const v=S.map(o=>o[k]).filter(isFinite),m=v.reduce((a,b)=>a+b,0)/v.length,sd0=Math.sqrt(v.reduce((a,b)=>a+(b-m)**2,0)/(v.length-1)),sd=sd0<1e-9*Math.max(Math.abs(m),1)?0:sd0;
+    const pts=S.map((o,i)=>isFinite(o[k])?{x:i+1,y:o[k],c:'#4a5a4e',ring:sd>0&&Math.abs(o[k]-m)>2*sd?'#a8623a':null,r:sd>0&&Math.abs(o[k]-m)>2*sd?5:4,info:`<b>${esc(o.id)}</b> (run ${i+1})<br>${lab} ${fmt(o[k])}`}:null).filter(Boolean),n2=pts.filter(p=>p.ring).length;
+    out.push(`${lab}: mean ${fmt(m)}, SD ${fmt(sd)}${n2?`, ${n2} run(s) beyond ±2 SD`:''}`);
+    cards.push({id:'sd_'+k,title:lab,spec:{ylab:lab,panels:[{xlab:'Run order in the file',xlim:[0.5,S.length+0.5],pts,lines:[{x:[0.5,S.length+0.5],y:[m,m],c:'#4a5a4e',w:1.5},{x:[0.5,S.length+0.5],y:[m+2*sd,m+2*sd],c:'#a8623a',dash:[5,4]},{x:[0.5,S.length+0.5],y:[m-2*sd,m-2*sd],c:'#a8623a',dash:[5,4]}]}]}})}
+  box.innerHTML=cards.map(c=>`<div class="card"><h3>${esc(c.title)}<span class="sp"></span><button data-png="${c.id}">PNG</button></h3><canvas id="${c.id}"></canvas></div>`).join('');
+  for(const c of cards)drawChart($(c.id),c.spec);$('stdMsg').innerHTML=out.map(esc).join('<br>')+'<br>Solid line: mean; dashed: ±2 SD of the runs shown (computed from these runs only, not from the lab certificate).'}
+let rq=0;function refresh(){if(!D.table)return;cancelAnimationFrame(rq);rq=requestAnimationFrame(()=>{
+  const ds=D.rows.map(o=>o.depth).filter(isFinite);D.dr=ds.length?[Math.min(...ds),Math.max(...ds)]:null;
+  qc();for(const o of D.rows){o._f=o.flags}legend();
+  ({plots:renderCharts,prof:renderProf,qc:qcTable,std:renderStd})[D.tab]();$('exportMsg').textContent=''})}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{D.tab=b.dataset.t;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='t_'+D.tab));$('legend').style.display=D.tab==='qc'||D.tab==='std'?'none':'';refresh()});
+['colby','showGrey','logS','qcf'].forEach(i=>$(i).addEventListener('change',refresh));
+window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(refresh,150)});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b){const c=$(b.dataset.png);if(c)pngOf(c,b.dataset.png+'.png')}});
+// ---- export
+function sep(){return D.table.sep===' '?',':D.table.sep}
+function cleanRows(){const M=D.map,out=[];for(const o of D.rows){if(o.excluded)continue;const r=o.raw.slice();if(o.maskT&&M.tmax>=0)r[M.tmax]='';if(o.maskH){if(M.hi>=0)r[M.hi]='';if(M.oi>=0)r[M.oi]=''}out.push(r)}return out}
+$('bClean').onclick=()=>{if(!D.table)return banner('Load data first.',true);const s=sep(),L=[D.table.head.map(c=>csvCell(c,s)).join(s)].concat(cleanRows().map(r=>r.map(c=>csvCell(c,s)).join(s)));download('rockeval_clean.csv',L.join('\n')+'\n')};
+$('bCopy').onclick=()=>{if(!D.table)return banner('Load data first.',true);const L=[D.table.head.join('\t')].concat(cleanRows().map(r=>r.join('\t')));copyText(L.join('\n'),'Clean table copied.')};
+$('bQC').onclick=()=>{if(!D.table)return banner('Load data first.',true);const s=sep(),L=[D.table.head.concat(['qc_status','qc_flags']).map(c=>csvCell(c,s)).join(s)];
+  for(const o of D.rows)L.push(o.raw.concat([o.status,o.flags.join(' | ')]).map(c=>csvCell(c,s)).join(s));for(const o of D.stds)L.push(o.raw.concat(['standard','']).map(c=>csvCell(c,s)).join(s));download('rockeval_qc.csv',L.join('\n')+'\n')};
+// ---- example (synthetic)
+function example(){const r=rng(11),L=['Sample\tDepth (m)\tFormation\tS1 (mg/g)\tS2 (mg/g)\tS3 (mg/g)\tTmax (°C)\tTOC (wt%)\tPC (wt%)\tRC (wt%)\tMinC (wt%)\tHI\tOI\tPI'];
+  const rows=[];function row(id,d,fm,toc,hi,oi,tmax,s1f,minc){const s2=hi*toc/100,s1=s1f*s2,s3=oi*toc/100,pc=0.083*(s1+s2)+0.012*s3,rc=toc-pc;rows.push({id,d,fm,s1,s2,s3,tmax,toc,pc,rc,minc,hi,oi})}
+  let k=1;for(let i=0;i<22;i++){const d=2000+i*18+r()*8;row('A-'+String(k++).padStart(2,'0'),d,'Alpha shale',2+3.2*r(),380+200*r(),12+30*r(),427+(d-2000)*0.03+(r()-.5)*3,0.1+0.12*r(),0.2+0.5*r())}
+  for(let i=0;i<18;i++){const d=2400+i*16+r()*8;row('B-'+String(k++).padStart(2,'0'),d,'Beta coal-shale',1+2.6*r(),90+130*r(),20+40*r(),441+(d-2400)*0.02+(r()-.5)*4,0.08+0.1*r(),0.1+0.4*r())}
+  for(let i=0;i<14;i++){const d=2700+i*14+r()*8;row('G-'+String(k++).padStart(2,'0'),d,'Gamma sandstone',0.15+0.5*r(),20+60*r(),80+170*r(),400+60*r(),0.2+0.4*r(),1+3*r())}
+  rows[6].s1=3.1*rows[6].toc;rows[11].hiBad=1.35;rows[19].rcBad=0.9;rows[29].s3=-0.15;rows[33].tmax=338;
+  const dupe={...rows[24]};rows.splice(25,0,dupe);
+  const fmtR=o=>{const hi=o.hiBad?Math.round(100*o.s2/o.toc*o.hiBad):Math.round(100*o.s2/o.toc),oi=Math.round(100*o.s3/o.toc),pi=o.s1/(o.s1+o.s2),rc=o.rc+(o.rcBad||0);
+    return[o.id,o.d.toFixed(1),o.fm,o.s1.toFixed(2),o.s2.toFixed(2),o.s3.toFixed(2),o.tmax.toFixed(0),o.toc.toFixed(2),o.pc.toFixed(2),rc.toFixed(2),o.minc.toFixed(2),hi,oi,pi.toFixed(2)].join('\t')};
+  const out=[];rows.forEach((o,i)=>{out.push(fmtR(o));if(i%7===3){const j=out.filter(x=>x.startsWith('STD')).length;out.push(['STD-01','','',(0.31+(r()-.5)*.04).toFixed(2),(12.4+(r()-.5)*.8).toFixed(1),(0.78+(r()-.5)*.1).toFixed(2),(418.5+0.25*j+(r()-.5)*1.6+(j===5?4.5:0)).toFixed(0),(5.02+(r()-.5)*.1).toFixed(2),'1.09','3.93','0.10',247,16,'0.02'].join('\t'))}});
+  $('paste').value=L.concat(out).join('\n');loadText($('paste').value)}
+$('bExample').onclick=example;
+buildRulesUI();
+
+</script><script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Digitization',[['Plot digitizer','digitizer'],['Map digitizer','mapdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what": "Runs entirely in your browser: nothing you load leaves your machine. Quality control of Rock-Eval data (automatic flags), HI–Tmax, HI–OI and S2–TOC plots, depth profiles and control charts of standards.", "method": ["Columns are recognised from their names (S1, S2, S3, Tmax/Tpeak, TOC, HI, OI, PI, PC, RC, MinC, depth, sample, formation…) and can be reassigned. HI, OI and PI are recomputed from S1, S2, S3 and TOC when absent; when present in the file they are compared with the recomputed values.", "Each rule can be switched off, has an editable threshold and an action: flag only (the point stays coloured), mask (greyed in the plots that depend on the suspect value: Tmax, or HI/OI) or exclude (greyed everywhere and removed from the clean export). Defaults, all editable on the page: S2 below 0.2 mg HC/g masks Tmax; Tmax outside 350–600 °C; TOC below 0.5 wt % masks HI and OI; HI above 1000 mg HC/g TOC; OI above 200 mg CO<sub>2<\/sub>/g TOC; S1/TOC × 100 above 100 (oil saturation index); PI differing from S1/(S1 + S2) by more than 0.03; HI or OI differing from 100·S2/TOC or 100·S3/TOC by more than 5 %; TOC differing from PC + RC by more than 10 %; negative values; duplicate sample name or depth.", "Rows whose sample name matches the standards pattern are kept apart and shown as control charts."], "sources": [["Default thresholds", "Common practice, not a standard; adjust to your lab and your basin", "on the page"], ["Guidance on Tmax and S2", "Peters (1986), AAPG Bulletin 70(3), as cited in the page; not re-checked here", "on the page (not re-checked)"], ["HI, OI, PI, oil saturation index definitions", "Standard Rock-Eval definitions", "classical (references to add)"]], "validation": ["No validation against an independent implementation is recorded for this page."], "limits": ["Thresholds are screening aids, not geological limits. A flagged point stays visible as a grey cross unless you turn that off."]});
+</script>
+</body></html>

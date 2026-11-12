@@ -63,7 +63,7 @@ Lead Geoscientist at Beicip-Franlab. 15 years of petroleum systems assessment an
 
 ## Tools
 
-Personal side projects, built for fun. Access on request.
+Personal side projects, built for fun. Free to use in the browser; your data stays on your computer.
 
 <div class="grid cards" markdown>
 

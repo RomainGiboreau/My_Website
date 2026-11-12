@@ -1,57 +1,453 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>Protected page</title>
+<title>Biomarker ratios</title>
+<meta name="description" content="Biomarker ratios and plots from GC-MS peak areas or ready-made ratios: Pr/n-C17 vs Ph/n-C18, Pr/Ph vs DBT/P, sterane ternary, maturity ratios, depth profiles. Runs entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#eeece6;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e}
+
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
 html{color-scheme:light only}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 Inter,system-ui,sans-serif}
-form{width:min(92vw,360px);padding:0 4px}
-h1{font-family:'Space Grotesk',Inter,sans-serif;font-weight:700;font-size:1.2rem;margin:0 0 .25rem}
-p{margin:0 0 1rem;color:var(--mut);font-size:.9rem}
-.pwr{position:relative}
-.pwr input{padding-right:2.6rem}
-.eye{position:absolute;right:4px;top:4px;bottom:4px;width:2.2rem!important;margin:0!important;padding:0!important;background:transparent!important;border:0!important;color:var(--mut)!important;display:grid;place-items:center}
-.eye svg{width:20px;height:20px}
-input,button{font:inherit;width:100%;padding:.65rem .8rem;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--fg)}
-button{margin-top:.6rem;background:var(--acc);border-color:var(--acc);color:#f5f3ed;cursor:pointer}
-button:disabled{opacity:.6;cursor:wait}
-#err{min-height:1.4em;margin-top:.6rem;color:#a8623a;font-size:.88rem}
-a{color:var(--mut);font-size:.85rem}
-</style></head><body>
-<form id="f" style="display:none"><h1>Protected page</h1><p>Enter the password to open the biomarker tool.</p>
-<div class="pwr"><input id="pw" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Password" required>
-<button type="button" class="eye" id="eye" aria-label="Show password" title="Show / hide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-<button id="go">Unlock</button><div id="err" role="alert"></div>
-<a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></form>
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Biomarker ratios &amp; plots</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button class="pri" id="bCopy" title="Copy the ratio table (tab-separated) for Excel">Copy ratios</button>
+  <button id="bCsv">Ratios CSV</button><span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: your data never leave it. Give either ready-made ratios, or peak areas / heights from GC and GC-MS (the page computes the ratios), or both: a ratio found in the file is used as such, otherwise it is recomputed from the peaks. Plots appear for the ratios that are available.">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Data<i class="chev"></i></h2>
+  <div class="body"><textarea id="paste" rows="6" placeholder="Sample&#9;Depth&#9;Pr&#9;Ph&#9;nC17&#9;nC18&#9;Ts&#9;Tm&#10;…   or   Sample&#9;Pr/Ph&#9;Ts/Tm&#9;…" spellcheck="false"></textarea>
+  <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
+  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
+  <div class="msg" id="dataMsg">No data yet.</div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Columns<span class="tt" tabindex="0" data-tip="Columns are recognised from their names; reassign any of them. Peak names: Pr, Ph, nC17, nC18, Ts, Tm, C29 and C30 hopanes (H29, H30), gammacerane, oleanane, C31–C35 hopanes (S and R epimers for C31 and C32, totals for C33–C35), ααα 20R steranes C27, C28, C29 (St27, St28, St29), C29 ααα 20S, C29 αββ 20R and 20S, DBT, phenanthrene, 1-, 2-, 3- and 9-methylphenanthrene. All peaks of one kind must be in the same unit (area or height).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg" id="mapId"></div>
+   <details><summary style="cursor:pointer;font-size:.82rem;margin:6px 0">Ratios already in the file</summary><div class="pg" id="mapR"></div></details>
+   <details><summary style="cursor:pointer;font-size:.82rem;margin:6px 0">Peaks (areas or heights)</summary><div class="pg" id="mapP"></div></details></div></section>
+ <section class="panel"><h2><span class="n">3</span>Display<i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Colour by</span><select id="colby"><option value="group">Group</option><option value="depth">Depth</option></select></div></div></section>
+</aside>
+<main>
+ <div class="tabs"><button class="on" data-t="plots">Crossplots</button><button data-t="prof">Depth profiles</button><button data-t="free">Free crossplot</button><button data-t="tab">Ratios table</button></div>
+ <div class="legend" id="legend"></div>
+ <div class="pane on" id="t_plots"><div class="cards" id="cards"></div></div>
+ <div class="pane" id="t_prof"><div class="row" id="profSel" style="gap:4px 14px"></div><div class="cards"><div class="card wide"><h3>Depth profiles<span class="sp"></span><button data-png="cvProf">PNG</button></h3><canvas id="cvProf"></canvas></div></div></div>
+ <div class="pane" id="t_free"><div class="pg" style="max-width:560px"><span>X</span><select id="fx"></select><span>Y</span><select id="fy"></select></div><div class="cards"><div class="card wide"><h3>Free crossplot<span class="sp"></span><button data-png="cvFree">PNG</button></h3><canvas id="cvFree"></canvas></div></div></div>
+ <div class="pane" id="t_tab"><div class="msg" id="tabMsg"></div><div class="tw tall"><table id="ratT"></table></div></div>
+</main></div>
+
 <script>
-(()=>{
-const P={"s":"TlzrX4p2LA92hv1ydbk98A==","n":"uLrfJcyYmu7Vh9Ki","c":"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","i":600000};
-const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),K='rg_site_pw';
-async function unlock(pw){
-  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
-  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(P.s),iterations:P.i,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
-  const buf=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(P.n)},key,b64(P.c));
-  return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-}
-function show(html){document.open();document.write(html);document.close()}
-const f=document.getElementById('f'),eye=document.getElementById('eye'),pwi=document.getElementById('pw'),err=document.getElementById('err');
-eye.addEventListener('click',()=>{const sh=pwi.type==='password';pwi.type=sh?'text':'password';eye.setAttribute('aria-label',sh?'Hide password':'Show password');pwi.focus()});
-f.addEventListener('submit',async e=>{
-  e.preventDefault();const btn=document.getElementById('go');btn.disabled=true;err.textContent='';
-  let v=pwi.value,html=null;
-  try{html=await unlock(v)}catch(x){if(v!==v.trim()){v=v.trim();try{html=await unlock(v)}catch(y){}}}
-  if(html===null){err.textContent='Incorrect password.';btn.disabled=false;return}
-  try{sessionStorage.setItem(K,v)}catch(x){}
-  show(html)});
-(async()=>{
-  if(!window.crypto||!crypto.subtle){f.style.display='';err.textContent='Unsupported browser (HTTPS required).';return}
-  let v=null;try{v=sessionStorage.getItem(K)}catch(x){}
-  if(v){try{show(await unlock(v));return}catch(x){try{sessionStorage.removeItem(K)}catch(y){}}}
-  f.style.display='';pwi.focus()})();
-})();
-</script></body></html>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
+  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
+  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
+const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
+const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>banner(ok||'Copied.'),()=>fallbackCopy(t,ok));else fallbackCopy(t,ok)}
+function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
+const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
+document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
+function parseTable(text,minCols){
+  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
+  const has=c=>lines.some(l=>l.includes(c));let sep;
+  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
+  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
+  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
+  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
+const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+// ---- plotting engine ----------------------------------------------------------------
+const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
+function niceStep(r,n){const raw=r/n,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return(m<1.5?1:m<2.25?2:m<3.5?2.5:m<7.5?5:10)*p}
+function lin(lo,hi,n){const st=niceStep(hi-lo,n),a=Math.ceil(lo/st-1e-9)*st,t=[];for(let v=a;v<=hi+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t}
+function logt(lo,hi){const t=[];for(let e=Math.floor(Math.log10(lo));e<=Math.ceil(Math.log10(hi));e++)for(const m of[1,2,5]){const v=m*Math.pow(10,e);if(v>=lo*0.999&&v<=hi*1.001)t.push(v)}return t}
+const tickTxt=v=>(Math.abs(v)>=1e5||(Math.abs(v)<1e-2&&v!==0))?v.toExponential(0):String(+v.toPrecision(6));
+function tipEl(){let t=$('tip');if(!t){t=document.createElement('div');t.id='tip';document.body.appendChild(t)}return t}
+/* spec: {title, ylab, ylim, yrev, ylog, panels:[{xlab,xlim,xlog,pts:[{x,y,c,g(rey),info}],lines:[{x:[],y:[],c,w,dash,label}],vlines:[{v,c,label}],hlines:[{v,c,label}]}], sq(uare)} */
+function drawChart(cv,spec){
+  const dpr=window.devicePixelRatio||1,W=cv.clientWidth||600,H=cv.clientHeight||340;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  const P=spec.panels,np=P.length,L=58,R=10,T=spec.title?22:10,B=44,gap=np>1?10:0,pw=(W-L-R-gap*(np-1))/np,ph=H-T-B;
+  const fin=Number.isFinite;
+  // shared y range
+  let ys=[];for(const p of P){for(const q of p.pts)if(fin(q.y))ys.push(q.y);for(const l of p.lines||[])for(const v of l.y)if(fin(v))ys.push(v)}
+  let [y0,y1]=spec.ylim||[Math.min(...ys),Math.max(...ys)];if(!fin(y0)||!fin(y1)){y0=0;y1=1}if(y0===y1){y0-=1;y1+=1}
+  if(!spec.ylim){const pd=(y1-y0)*0.04;if(spec.ylog){y0/=1.15;y1*=1.15}else{y0-=pd;y1+=pd}}
+  const fy=spec.ylog?Math.log10:v=>v,ya=fy(y0),yb=fy(y1),py=v=>spec.yrev?T+(fy(v)-ya)/(yb-ya)*ph:T+ph-(fy(v)-ya)/(yb-ya)*ph;
+  x.font='11px Inter,sans-serif';x.textBaseline='middle';cv._hits=[];
+  if(spec.title){x.fillStyle='#232220';x.font='600 12px "Space Grotesk",Inter,sans-serif';x.textAlign='left';x.fillText(spec.title,L,10)}
+  P.forEach((p,k)=>{
+    const ox=L+k*(pw+gap);let xs=[];for(const q of p.pts)if(fin(q.x))xs.push(q.x);
+    let [x0,x1]=p.xlim||[Math.min(...xs),Math.max(...xs)];if(!fin(x0)||!fin(x1)){x0=0;x1=1}if(x0===x1){x0-=1;x1+=1}
+    if(!p.xlim){if(p.xlog){x0/=1.15;x1*=1.15}else{const pd=(x1-x0)*0.05;x0-=pd;x1+=pd}}
+    const fx=p.xlog?Math.log10:v=>v,xa=fx(x0),xb=fx(x1),px=v=>p.xrev?ox+pw-(fx(v)-xa)/(xb-xa)*pw:ox+(fx(v)-xa)/(xb-xa)*pw;
+    x.save();x.beginPath();x.rect(ox,T,pw,ph);x.clip();
+    // grid
+    const xt=p.xlog?logt(x0,x1):lin(x0,x1,Math.max(3,Math.floor(pw/70))),yt=spec.ylog?logt(y0,y1):lin(y0,y1,Math.max(3,Math.floor(ph/48)));
+    x.strokeStyle='#ece9df';x.lineWidth=1;x.beginPath();for(const t of xt){const u=Math.round(px(t))+.5;x.moveTo(u,T);x.lineTo(u,T+ph)}for(const t of yt){const u=Math.round(py(t))+.5;x.moveTo(ox,u);x.lineTo(ox+pw,u)}x.stroke();
+    for(const v of p.vlines||[]){const u=px(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(u,T);x.lineTo(u,T+ph);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,u+3,T+9)}}
+    for(const v of p.hlines||[]){const u=py(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(ox,u);x.lineTo(ox+pw,u);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,ox+3,u-7)}}
+    for(const l of p.lines||[]){x.strokeStyle=l.c||'#5c5a52';x.lineWidth=l.w||1.2;x.setLineDash(l.dash||[]);x.beginPath();let on=false,last=null,first=null;
+      for(let i=0;i<l.x.length;i++){if(!fin(l.x[i])||!fin(l.y[i])){on=false;continue}const a=px(l.x[i]),b=py(l.y[i]);if(on)x.lineTo(a,b);else x.moveTo(a,b);on=true;last=[a,b];if(!first)first=[a,b]}x.stroke();x.setLineDash([]);
+      if(l.label&&l.start&&first){x.fillStyle=l.c||'#5c5a52';x.textAlign='left';x.fillText(l.label,Math.max(first[0]+4,ox+4),Math.min(T+ph-8,first[1]-8))}else if(l.label&&last){x.fillStyle=l.c||'#5c5a52';x.textAlign='right';x.fillText(l.label,Math.min(last[0]-3,ox+pw-3),Math.max(T+8,last[1]-8))}}
+    // points: grey crosses first, then coloured
+    for(const q of p.pts){if(!q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y);x.strokeStyle='#9a968a';x.lineWidth=1.3;x.beginPath();x.moveTo(a-3,b-3);x.lineTo(a+3,b+3);x.moveTo(a+3,b-3);x.lineTo(a-3,b+3);x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    for(const q of p.pts){if(q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y),r=q.r||4;x.beginPath();x.arc(a,b,r,0,7);x.fillStyle=q.c||'#4a5a4e';x.fill();x.lineWidth=q.ring?2:1;x.strokeStyle=q.ring||'#232220';x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    x.restore();
+    x.strokeStyle='#8a8678';x.lineWidth=1;x.strokeRect(ox+.5,T+.5,pw,ph);
+    x.fillStyle='#5c5a52';x.textAlign='center';x.textBaseline='top';x.font='11px Inter,sans-serif';for(const t of xt){const u=px(t);if(u>=ox-1&&u<=ox+pw+1)x.fillText(tickTxt(t),u,T+ph+4)}
+    x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(p.xlab||'',ox+pw/2,T+ph+22);
+    if(k===0){x.textAlign='right';x.textBaseline='middle';x.fillStyle='#5c5a52';x.font='11px Inter,sans-serif';for(const t of yt){const u=py(t);if(u>=T-1&&u<=T+ph+1)x.fillText(tickTxt(t),ox-5,u)}
+      x.save();x.translate(12,T+ph/2);x.rotate(-Math.PI/2);x.textAlign='center';x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(spec.ylab||'',0,0);x.restore()}
+    x.textBaseline='middle'});
+  if(!cv._tip){cv._tip=true;cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=100;for(const h of cv._hits||[]){const d=(h.x-mx)**2+(h.y-my)**2;if(d<bd){bd=d;best=h}}
+      const t=tipEl();if(best&&best.i){t.innerHTML=best.i;t.style.display='block';t.style.left=Math.min(window.innerWidth-310,e.clientX+14)+'px';t.style.top=(e.clientY+14)+'px'}else t.style.display='none'});
+    cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
+function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)})}
+
+// =====================================================================================
+//  Biomarker ratios. Every ratio is either read from the file or recomputed from peak areas (or heights).
+//  Definitions are the usual ones; those that vary between authors are written in the label.
+// =====================================================================================
+const IDF=[{k:'id',label:'Sample',re:/^(sample|sampleid|samplename|echantillon|ech|id|name)/,text:true},{k:'depth',label:'Depth',re:/^(depth|prof|md|tvd)/},{k:'group',label:'Group / well / facies',re:/^(group|form|litho|well|puits|unit|facies|zone|age|family|oiltype|type)/,text:true}];
+// peaks
+const PK=[
+ ['pr','Pristane (Pr)',/^(pr|pristane)$/],['ph','Phytane (Ph)',/^(ph|phytane)$/],['nc17','n-C17',/^(nc17|c17|n17|nc17h|nalkane17)$/],['nc18','n-C18',/^(nc18|c18|n18|nc18h|nalkane18)$/],
+ ['ts','Ts (C27 18α-trisnorneohopane)',/^ts$/],['tm','Tm (C27 17α-trisnorhopane)',/^tm$/],['h29','C29 hopane (norhopane)',/^(h29|c29h|c29hop|c29hopane|c29norhopane|nor29h)$/],['h30','C30 hopane',/^(h30|c30h|c30hop|c30hopane|c30ab)$/],
+ ['gam','Gammacerane',/gamm/],['ol','Oleanane',/olean/],
+ ['h31s','C31 hopane 22S',/^(h31s|c31s|c3122s|hh31s)$/],['h31r','C31 hopane 22R',/^(h31r|c31r|c3122r|hh31r)$/],['h32s','C32 hopane 22S',/^(h32s|c32s|c3222s|hh32s)$/],['h32r','C32 hopane 22R',/^(h32r|c32r|c3222r|hh32r)$/],
+ ['h33','C33 hopanes (22S+22R)',/^(h33|c33|c33h|hh33)$/],['h34','C34 hopanes (22S+22R)',/^(h34|c34|c34h|hh34)$/],['h35','C35 hopanes (22S+22R)',/^(h35|c35|c35h|hh35)$/],
+ ['st27','C27 ααα 20R sterane',/^(st27|s27|c27|c27st|c27ster|c27aaar|c27r)$/],['st28','C28 ααα 20R sterane',/^(st28|s28|c28|c28st|c28ster|c28aaar|c28r)$/],['st29','C29 ααα 20R sterane',/^(st29|s29|c29st|c29ster|c29aaar|c29r)$/],
+ ['st29s','C29 ααα 20S sterane',/^(st29s|s29s|c29aaas|c29s)$/],['st29bbr','C29 αββ 20R sterane',/^(st29bbr|s29bbr|c29bbr)$/],['st29bbs','C29 αββ 20S sterane',/^(st29bbs|s29bbs|c29bbs)$/],
+ ['dbt','Dibenzothiophene (DBT)',/^dbt$/],['phen','Phenanthrene (P)',/^(p|phen|phenanthrene)$/],['mp1','1-Methylphenanthrene',/^(mp1|1mp|1methylphenanthrene)$/],['mp2','2-Methylphenanthrene',/^(mp2|2mp|2methylphenanthrene)$/],['mp3','3-Methylphenanthrene',/^(mp3|3mp|3methylphenanthrene)$/],['mp9','9-Methylphenanthrene',/^(mp9|9mp|9methylphenanthrene)$/]];
+const V=(o,k)=>o.v[k];
+const div=(a,b)=>isFinite(a)&&isFinite(b)&&b!==0?a/b:NaN;
+const hs=(o,n)=>{const s=o.v['h'+n+'s'],r=o.v['h'+n+'r'];return isFinite(s)&&isFinite(r)?s+r:NaN};
+// ratios: id, label, unit/note, file-name regex, calculation from peaks
+const RAT=[
+ {id:'prph',label:'Pr/Ph',re:/^(prph|pristanephytane)$/,calc:o=>div(V(o,'pr'),V(o,'ph'))},
+ {id:'prc17',label:'Pr/n-C17',re:/^(prnc17|prc17|prn17)$/,calc:o=>div(V(o,'pr'),V(o,'nc17'))},
+ {id:'phc18',label:'Ph/n-C18',re:/^(phnc18|phc18|phn18)$/,calc:o=>div(V(o,'ph'),V(o,'nc18'))},
+ {id:'tstm',label:'Ts/Tm',re:/^tstm$/,calc:o=>div(V(o,'ts'),V(o,'tm'))},
+ {id:'tsr',label:'Ts/(Ts+Tm)',re:/^tststm$/,calc:o=>div(V(o,'ts'),V(o,'ts')+V(o,'tm'))},
+ {id:'h29h30',label:'C29/C30 hopane',re:/^(h29h30|c29c30|c29c30h|c29c30hopane)$/,calc:o=>div(V(o,'h29'),V(o,'h30'))},
+ {id:'gam',label:'Gammacerane/C30 hopane',re:/^(gammaceraneindex|gammaceraneh30|gammacerane30|gih30|gi)$/,calc:o=>div(V(o,'gam'),V(o,'h30'))},
+ {id:'ole',label:'Oleanane/C30 hopane',re:/^(oleananeindex|oleananeh30|oih30|oi)$/,calc:o=>div(V(o,'ol'),V(o,'h30'))},
+ {id:'hhi',label:'Homohopane index C35/ΣC31–C35',re:/^(hhi|homohopaneindex)/,calc:o=>{const a=hs(o,31),b=hs(o,32),c=V(o,'h33'),d=V(o,'h34'),e=V(o,'h35');return div(e,a+b+c+d+e)}},
+ {id:'h31',label:'C31 hopane 22S/(22S+22R)',re:/^(c3122s22s22r|h3122s22s22r|c31s22s22r)$/,calc:o=>div(V(o,'h31s'),V(o,'h31s')+V(o,'h31r'))},
+ {id:'h32',label:'C32 hopane 22S/(22S+22R)',re:/^(c3222s22s22r|h3222s22s22r|c32s22s22r)$/,calc:o=>div(V(o,'h32s'),V(o,'h32s')+V(o,'h32r'))},
+ {id:'st20',label:'C29 sterane 20S/(20S+20R)',re:/^(c2920s20s20r|s2920s20s20r|c29s20s20r)$/,calc:o=>div(V(o,'st29s'),V(o,'st29s')+V(o,'st29'))},
+ {id:'stbb',label:'C29 sterane ββ/(ββ+αα)',re:/^(c29bbbbaa|c29bbbbaaa|s29bbbbaa|c29bbbbaa)$/,calc:o=>{const bb=V(o,'st29bbr')+V(o,'st29bbs'),aa=V(o,'st29')+V(o,'st29s');return div(bb,bb+aa)}},
+ {id:'pc27',label:'%C27 steranes',pct:true,re:/^(pc27|c27pct|c27pc|c27percent|pctc27)$/,calc:o=>100*div(V(o,'st27'),V(o,'st27')+V(o,'st28')+V(o,'st29'))},
+ {id:'pc28',label:'%C28 steranes',pct:true,re:/^(pc28|c28pct|c28pc|c28percent|pctc28)$/,calc:o=>100*div(V(o,'st28'),V(o,'st27')+V(o,'st28')+V(o,'st29'))},
+ {id:'pc29',label:'%C29 steranes',pct:true,re:/^(pc29|c29pct|c29pc|c29percent|pctc29)$/,calc:o=>100*div(V(o,'st29'),V(o,'st27')+V(o,'st28')+V(o,'st29'))},
+ {id:'dbtp',label:'DBT/P',re:/^(dbtp|dbtphen|dbtphenanthrene)$/,calc:o=>div(V(o,'dbt'),V(o,'phen'))},
+ {id:'mpi1',label:'MPI-1 = 1.5(2-MP+3-MP)/(P+1-MP+9-MP)',re:/^mpi1?$/,calc:o=>div(1.5*(V(o,'mp2')+V(o,'mp3')),V(o,'phen')+V(o,'mp1')+V(o,'mp9'))},
+ {id:'rc',label:'Rc = 0.6·MPI-1 + 0.4 (%, below Ro ≈ 1.35)',re:/^(rc|rcmpi|vrc)$/,calc:o=>0.6*o.r.mpi1+0.4,dep:'mpi1'}];
+const D={table:null,map:{},rows:[],groups:[],tab:'plots',dr:null};
+const isVal=(o,k)=>o.r&&isFinite(o.r[k]);
+// ---- columns
+function fillMap(){const t=D.table,used=new Set();D.map={};
+  const detect=(key,re)=>{let j=-1;for(let i=0;i<t.nc;i++){if(used.has(i))continue;if(re.test(normName(t.head[i]))){j=i;break}}if(j>=0)used.add(j);D.map[key]=j};
+  for(const f of IDF)detect(f.k,f.re);for(const r of RAT)detect('r_'+r.id,r.re);for(const [k,,re] of PK)detect('p_'+k,re);
+  const opt=key=>`<select data-m="${key}"><option value="-1">—</option>${t.head.map((h,i)=>`<option value="${i}"${D.map[key]===i?' selected':''}>${esc(h)}</option>`).join('')}</select>`;
+  $('mapId').innerHTML=IDF.map(f=>`<span>${f.label}</span>${opt(f.k)}`).join('');
+  $('mapR').innerHTML=RAT.map(r=>`<span>${esc(r.label)}</span>${opt('r_'+r.id)}`).join('');
+  $('mapP').innerHTML=PK.map(([k,l])=>`<span>${esc(l)}</span>${opt('p_'+k)}`).join('');
+  document.querySelectorAll('[data-m]').forEach(e=>e.onchange=()=>{D.map[e.dataset.m]=+e.value;build()})}
+function loadText(text){const t=parseTable(text,2);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillMap();build();return true}
+$('paste').addEventListener('input',()=>{clearTimeout(D.pt);D.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
+$('bOpen').onclick=()=>$('file').click();
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>3e6?r.result.slice(0,3e6):r.result;loadText(r.result)};r.readAsText(f);e.target.value=''};
+document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
+function build(){const t=D.table,M=D.map;if(!t)return;D.rows=[];
+  t.rows.forEach((r,n)=>{const o={n,raw:r,v:{},f:{},r:{},src:{}};
+    for(const f of IDF){const j=M[f.k];o[f.k]=j>=0?(f.text?(r[j]||'').trim():toN(r[j])):(f.text?'':NaN)}if(!o.id)o.id='#'+(n+1);
+    for(const [k] of PK){const j=M['p_'+k];o.v[k]=j>=0?toN(r[j]):NaN}
+    for(const R of RAT){const j=M['r_'+R.id];o.f[R.id]=j>=0?toN(r[j]):NaN}
+    D.rows.push(o)});
+  // percent-type ratios given as fractions
+  const pc=['pc27','pc28','pc29'];if(pc.every(k=>D.rows.some(o=>isFinite(o.f[k])))){const s=D.rows.map(o=>pc.reduce((a,k)=>a+o.f[k],0)).filter(isFinite);if(s.length&&s.filter(v=>v>0.9&&v<1.1).length>s.length/2)for(const o of D.rows)for(const k of pc)o.f[k]*=100}
+  let nd=0,nf=0,nc=0;
+  for(const R of RAT){for(const o of D.rows){let c=NaN;if(!R.dep||isFinite(o.r[R.dep]))c=R.calc(o);const f=o.f[R.id];
+      if(isFinite(f)){o.r[R.id]=f;o.src[R.id]='file';nf++;if(isFinite(c)&&Math.abs(f-c)>0.05*Math.abs(c)+1e-9){nd++;(o.diff=o.diff||[]).push(R.id)}}
+      else if(isFinite(c)){o.r[R.id]=c;o.src[R.id]='calc';nc++}}}
+  D.groups=[...new Set(D.rows.map(o=>o.group).filter(g=>g))];D.avail=RAT.filter(R=>D.rows.some(o=>isFinite(o.r[R.id])));
+  const ds=D.rows.map(o=>o.depth).filter(isFinite);D.dr=ds.length?[Math.min(...ds),Math.max(...ds)]:null;
+  const m=$('dataMsg');m.className='msg';m.textContent=`${D.rows.length} samples · ${D.avail.length} ratio(s) available (${nf} values read from the file, ${nc} computed from peaks)${nd?` · ${nd} file value(s) differ by more than 5 % from the value recomputed from the peaks`:''}`;
+  if(!D.avail.length){m.textContent+=' · no ratio can be formed: map the ratio or peak columns in section 2';m.className='msg err'}
+  buildSel();refresh()}
+// ---- colours
+const colorOf=o=>{if($('colby').value==='depth'&&D.dr&&isFinite(o.depth)){const t=(o.depth-D.dr[0])/((D.dr[1]-D.dr[0])||1),a=[74,90,78],b=[168,98,58];return`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t))})`}
+  return D.groups.length?PAL[Math.max(0,D.groups.indexOf(o.group))%PAL.length]:'#4a5a4e'};
+function legend(){let h='';if($('colby').value==='depth'&&D.dr)h=`<span><i style="background:#4a5a4e"></i>${fmt(D.dr[0])}</span><span>→</span><span><i style="background:#a8623a"></i>${fmt(D.dr[1])} (depth)</span>`;else if(D.groups.length)h=D.groups.map((g,i)=>`<span><i style="background:${PAL[i%PAL.length]}"></i>${esc(g)}</span>`).join('');$('legend').innerHTML=h}
+const lab=id=>RAT.find(r=>r.id===id).label;
+const info=o=>`<b>${esc(o.id)}</b>${o.group?' · '+esc(o.group):''}${isFinite(o.depth)?'<br>depth '+fmt(o.depth):''}`+D.avail.map(R=>isFinite(o.r[R.id])?`<br>${esc(R.label.split(' (')[0].split(' =')[0])} ${fmt(o.r[R.id])}`:'').join('');
+const mk=(fx,fy)=>{const out=[];for(const o of D.rows){const x=fx(o),y=fy(o);if(isFinite(x)&&isFinite(y))out.push({x,y,c:colorOf(o),info:info(o)})}return out};
+const has=(...ids)=>ids.every(i=>D.rows.some(o=>isFinite(o.r[i])));
+// ---- ternary
+function ternary(cv){const dpr=window.devicePixelRatio||1,W=cv.clientWidth||500,H=cv.clientHeight||340;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,W,H);cv._hits=[];
+  const s=Math.min(W-90,(H-70)*2/Math.sqrt(3)),h=s*Math.sqrt(3)/2,x0=(W-s)/2,y0=H-34;       // C27 bottom-left, C29 bottom-right, C28 top
+  const P=(a,b,c)=>{const t=a+b+c;a/=t;b/=t;c/=t;return[x0+s*(c+b/2),y0-h*b]};
+  x.strokeStyle='#ece9df';x.lineWidth=1;x.font='10px Inter,sans-serif';x.fillStyle='#8a8678';
+  for(let k=1;k<5;k++){const f=k/5;for(const [p,q] of [[P(1-f,f,0),P(0,f,1-f)],[P(f,0,1-f),P(f,1-f,0)],[P(1-f,0,f),P(0,1-f,f)]]){x.beginPath();x.moveTo(...p);x.lineTo(...q);x.stroke()}
+    x.textAlign='right';x.fillText(Math.round(f*100),...P(1-f,f,0).map((v,i)=>i?v+3:v-4));x.textAlign='center';x.fillText(Math.round(f*100),x0+s*f,y0+12)}
+  x.strokeStyle='#8a8678';x.beginPath();x.moveTo(...P(1,0,0));x.lineTo(...P(0,1,0));x.lineTo(...P(0,0,1));x.closePath();x.stroke();
+  x.fillStyle='#232220';x.font='600 12px Inter,sans-serif';x.textAlign='right';x.fillText('% C27',x0-8,y0+4);x.textAlign='left';x.fillText('% C29',x0+s+8,y0+4);x.textAlign='center';x.fillText('% C28',x0+s/2,y0-h-10);
+  x.font='10px Inter,sans-serif';x.fillStyle='#5c5a52';x.fillText('ticks: bottom = % C29, left = % C28',x0+s/2,y0+26);
+  for(const o of D.rows){const a=o.r.pc27,b=o.r.pc28,c=o.r.pc29;if(![a,b,c].every(isFinite)||a+b+c<=0)continue;const [px,py]=P(a,b,c);x.beginPath();x.arc(px,py,4.5,0,7);x.fillStyle=colorOf(o);x.fill();x.lineWidth=1;x.strokeStyle='#232220';x.stroke();cv._hits.push({x:px,y:py,i:info(o)})}
+  if(!cv._tip){cv._tip=true;cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=100;for(const q of cv._hits||[]){const d=(q.x-mx)**2+(q.y-my)**2;if(d<bd){bd=d;best=q}}const t=tipEl();if(best){t.innerHTML=best.i;t.style.display='block';t.style.left=Math.min(innerWidth-310,e.clientX+14)+'px';t.style.top=e.clientY+14+'px'}else t.style.display='none'});cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
+// ---- cards
+function renderCards(){const cards=[],add=(id,title,spec,fn)=>cards.push({id,title,spec,fn});
+  if(has('prc17','phc18'))add('c1','Pr/n-C17 vs Ph/n-C18',{ylab:'Pr/n-C17',panels:[{xlab:'Ph/n-C18',pts:mk(o=>o.r.phc18,o=>o.r.prc17)}]});
+  if(has('prph','dbtp'))add('c2','Pr/Ph vs DBT/P',{ylab:'DBT/P',ylog:true,panels:[{xlab:'Pr/Ph',xlog:true,pts:mk(o=>o.r.prph,o=>o.r.dbtp)}]});
+  if(has('pc27','pc28','pc29'))add('c3','Sterane distribution C27–C28–C29 (ααα 20R, %)',null,ternary);
+  if(has('st20','stbb'))add('c4','C29 sterane maturity: 20S/(20S+20R) vs ββ/(ββ+αα)',{ylab:'ββ/(ββ+αα)',panels:[{xlab:'20S/(20S+20R)',xlim:[0,0.7],pts:mk(o=>o.r.st20,o=>o.r.stbb),vlines:[{v:0.55,label:'~equilibrium'}]}]});
+  if(has('tsr','h32'))add('c5','Ts/(Ts+Tm) vs C32 22S/(22S+22R)',{ylab:'C32 22S/(22S+22R)',panels:[{xlab:'Ts/(Ts+Tm)',pts:mk(o=>o.r.tsr,o=>o.r.h32),hlines:[{v:0.6,label:'~equilibrium'}]}]});
+  else if(has('tstm','h32'))add('c5','Ts/Tm vs C32 22S/(22S+22R)',{ylab:'C32 22S/(22S+22R)',panels:[{xlab:'Ts/Tm',pts:mk(o=>o.r.tstm,o=>o.r.h32),hlines:[{v:0.6,label:'~equilibrium'}]}]});
+  if(has('h29h30','gam'))add('c6','C29/C30 hopane vs gammacerane index',{ylab:'Gammacerane/C30 hopane',panels:[{xlab:'C29/C30 hopane',pts:mk(o=>o.r.h29h30,o=>o.r.gam)}]});
+  if(has('mpi1','rc'))add('c7','MPI-1 vs Rc',{ylab:'Rc (%)',panels:[{xlab:'MPI-1',pts:mk(o=>o.r.mpi1,o=>o.r.rc)}]});
+  const box=$('cards');if(!cards.length){box.innerHTML='<div class="empty">'+(D.rows.length?'No standard plot can be drawn with the ratios available: use the Free crossplot tab, or map more columns.':'Load a table of ratios or peak areas.')+'</div>';return}
+  box.innerHTML=cards.map(c=>`<div class="card"><h3>${esc(c.title)}<span class="sp"></span><button data-png="${c.id}">PNG</button></h3><canvas id="${c.id}"></canvas></div>`).join('');
+  for(const c of cards)c.fn?c.fn($(c.id)):drawChart($(c.id),c.spec)}
+function buildSel(){const opts=D.avail.map(R=>`<option value="${R.id}">${esc(R.label)}</option>`).join('');
+  const fx=$('fx').value,fy=$('fy').value;$('fx').innerHTML=opts;$('fy').innerHTML=opts;if(D.avail.some(R=>R.id===fx))$('fx').value=fx;if(D.avail.length>1)$('fy').value=D.avail.some(R=>R.id===fy)&&fy!==$('fx').value?fy:D.avail[1].id;
+  const old=new Set([...document.querySelectorAll('#profSel input:checked')].map(e=>e.value)),first=old.size?old:new Set(D.avail.slice(0,4).map(R=>R.id));
+  $('profSel').innerHTML=D.avail.map(R=>`<label class="inl"><input type="checkbox" value="${R.id}" ${first.has(R.id)?'checked':''}>${esc(R.label.split(' (')[0].split(' =')[0])}</label>`).join('');
+  document.querySelectorAll('#profSel input').forEach(e=>e.onchange=refresh)}
+function renderProf(){const cv=$('cvProf'),R=D.rows.filter(o=>isFinite(o.depth)),ids=[...document.querySelectorAll('#profSel input:checked')].map(e=>e.value);
+  if(!R.length||!ids.length){const x=cv.getContext('2d');cv.width=cv.clientWidth;cv.height=cv.clientHeight;x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);x.fillStyle='#5c5a52';x.font='13px Inter,sans-serif';x.fillText(R.length?'Tick at least one ratio.':'Depth profiles need a depth column.',20,30);return}
+  drawChart(cv,{ylab:'Depth',yrev:true,panels:ids.map(id=>({xlab:lab(id).split(' (')[0].split(' =')[0].slice(0,26),pts:mk(o=>o.r[id],o=>o.depth)}))})}
+function renderFree(){const cv=$('cvFree'),a=$('fx').value,b=$('fy').value;if(!a||!b){return}
+  drawChart(cv,{ylab:lab(b),panels:[{xlab:lab(a),pts:mk(o=>o.r[a],o=>o.r[b])}]})}
+function renderTab(){const A=D.avail;$('tabMsg').textContent=A.length?'Values in italics are read from the file; the others are computed from the peaks. A ⚑ marks a file value that differs by more than 5 % from the value recomputed from the peaks.':'';
+  $('ratT').innerHTML=`<thead><tr><th class="l">Sample</th><th class="l">Group</th><th>Depth</th>${A.map(R=>`<th title="${esc(R.label)}">${esc(R.label.split(' (')[0].split(' =')[0])}</th>`).join('')}</tr></thead><tbody>`+
+   D.rows.map(o=>`<tr><td class="l">${esc(o.id)}</td><td class="l">${esc(o.group)}</td><td>${isFinite(o.depth)?fmt(o.depth):''}</td>${A.map(R=>{const v=o.r[R.id];return isFinite(v)?`<td${o.src[R.id]==='file'?' style="font-style:italic"':''}>${fmt(v)}${o.diff&&o.diff.includes(R.id)?' ⚑':''}</td>`:'<td>–</td>'}).join('')}</tr>`).join('')+'</tbody>'}
+let rq=0;function refresh(){if(!D.table)return;cancelAnimationFrame(rq);rq=requestAnimationFrame(()=>{legend();({plots:renderCards,prof:renderProf,free:renderFree,tab:renderTab})[D.tab]();$('exportMsg').textContent=''})}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{D.tab=b.dataset.t;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='t_'+D.tab));$('legend').style.display=D.tab==='tab'?'none':'';refresh()});
+['colby','fx','fy'].forEach(i=>$(i).addEventListener('change',refresh));
+window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(refresh,150)});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b){const c=$(b.dataset.png);if(c)pngOf(c,b.dataset.png+'.png')}});
+// ---- export
+function tsv(sep){const A=D.avail,L=[['Sample','Depth','Group'].concat(A.map(R=>R.label)).map(c=>csvCell(c,sep)).join(sep)];for(const o of D.rows)L.push([o.id,isFinite(o.depth)?o.depth:'',o.group].concat(A.map(R=>isFinite(o.r[R.id])?+o.r[R.id].toPrecision(6):'')).map(c=>csvCell(c,sep)).join(sep));return L.join('\n')+'\n'}
+$('bCsv').onclick=()=>{if(!D.avail||!D.avail.length)return banner('No ratio to export.',true);download('biomarker_ratios.csv',tsv(','))};
+$('bCopy').onclick=()=>{if(!D.avail||!D.avail.length)return banner('No ratio to export.',true);copyText(tsv('\t'),'Ratio table copied.')};
+// ---- example (synthetic): two families (marine, lacustrine) with maturity increasing with depth
+function example(){const r=rng(21),H=['Sample','Depth (m)','Group','Pr','Ph','nC17','nC18','Ts','Tm','H29','H30','Gamma','H31S','H31R','H32S','H32R','H33','H34','H35','St27','St28','St29','St29S','St29bbR','St29bbS','DBT','Phen','1-MP','2-MP','3-MP','9-MP','MPI-1'],L=[H.join('\t')],j=(v,s)=>v*(1+s*(r()-.5));
+  for(let i=0;i<24;i++){const mar=i%2===0,d=2000+i*60+r()*40,mat=1-Math.exp(-(d-1800)/900),a20=0.52*mat*(0.95+0.1*r()),bb=0.7*mat*(0.95+0.1*r()),s22=0.6*(1-Math.exp(-(d-1800)/600))*(0.97+0.06*r());
+    const pr=j(mar?1.0:2.4,.3)*20,ph=20,nc17=j(mar?26:30,.2),nc18=j(mar?28:20,.2),tsr=0.15+0.5*mat,tm=100,ts=tm*tsr/(1-tsr),h30=100,h29=100*j(mar?0.9:0.6,.2),gam=j(mar?8:25,.4);
+    const h31=60,h31s=h31*s22/(1)*1,h31r=h31-h31s,h32=40,h32s=h32*s22,h32r=h32-h32s,h33=j(22,.2),h34=j(14,.2),h35=j(mar?9:5,.3);
+    const st=(mar?[34,22,44]:[22,18,60]).map(v=>j(v,.15)),tot=st[0]+st[1]+st[2],s27=st[0]/tot*300,s28=st[1]/tot*300,s29=st[2]/tot*300,s29s=s29*a20/(1-a20),aa=s29+s29s,bbT=aa*bb/(1-bb),bbR=bbT*0.5,bbS=bbT*0.5;
+    const dbt=mar?j(30,.3):j(120,.3),phen=100,mp1=j(55,.1),mp2=j(70+60*mat,.1),mp3=j(80+60*mat,.1),mp9=j(50-10*mat,.1),mpi=1.5*(mp2+mp3)/(phen+mp1+mp9);
+    L.push([`${mar?'M':'L'}-${String(i+1).padStart(2,'0')}`,d.toFixed(0),mar?'Marine family':'Lacustrine family',pr.toFixed(1),ph.toFixed(1),nc17.toFixed(1),nc18.toFixed(1),ts.toFixed(1),tm.toFixed(1),h29.toFixed(1),h30.toFixed(1),gam.toFixed(1),h31s.toFixed(1),h31r.toFixed(1),h32s.toFixed(1),h32r.toFixed(1),h33.toFixed(1),h34.toFixed(1),h35.toFixed(1),s27.toFixed(1),s28.toFixed(1),s29.toFixed(1),s29s.toFixed(1),bbR.toFixed(1),bbS.toFixed(1),dbt.toFixed(1),phen.toFixed(1),mp1.toFixed(1),mp2.toFixed(1),mp3.toFixed(1),mp9.toFixed(1),mpi.toFixed(2)].join('\t'))}
+  $('paste').value=L.join('\n');loadText($('paste').value)}
+$('bExample').onclick=example;
+
+</script><script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Digitization',[['Plot digitizer','digitizer'],['Map digitizer','mapdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what": "Runs entirely in your browser: nothing you load leaves your machine. Biomarker ratios from GC and GC-MS peaks (or ready-made ratios), crossplots, steranes ternary, maturity indicators and depth profiles.", "method": ["Input: ready-made ratios, peak areas or heights, or both. A ratio found in the file is used as such, otherwise it is recomputed from the peaks. All peaks of one kind must be in the same unit.", "Ratios: Pr/Ph, Pr/n-C17, Ph/n-C18, Ts/Tm, Ts/(Ts + Tm), C29/C30 hopane, gammacerane/C30 hopane, oleanane/C30 hopane, homohopane index C35/ΣC31–C35, C31 and C32 hopane 22S/(22S + 22R), C29 sterane 20S/(20S + 20R) and ββ/(ββ + αα), %C27, %C28, %C29 steranes, DBT/P, MPI-1 = 1.5(2-MP + 3-MP)/(P + 1-MP + 9-MP), and Rc = 0.6·MPI-1 + 0.4 (%, below Ro ≈ 1.35).", "Plots: Pr/Ph against DBT/P, sterane ternary, Ts/(Ts + Tm) and Ts/Tm against C32 22S/(22S + 22R) with the ‘~equilibrium’ line at 0.6, gammacerane index, MPI-1 against Rc, depth profiles."], "sources": [["Ratio definitions, MPI-1 and Rc", "Standard geochemical practice; the formulas are those written on the page", "classical (references to add)"], ["‘~equilibrium’ lines: 0.6 for hopane 22S/(22S + 22R), 0.55 for C29 sterane 20S/(20S + 20R)", "A 2025 article in Frontiers in Earth Science (doi 10.3389/feart.2025.1536268) quotes about 60 % for homohopanes (Peters &amp; Moldowan 1993) and 0.52–0.55 for the C29 sterane ratio (Seifert &amp; Moldowan 1978); the originals were not read. The same article quotes 0.57–0.62 for ββ/(ββ + αα) (Peters &amp; Cassa 1994): no line is drawn on that axis", "published (second hand)"], ["Rc = 0.6·MPI-1 + 0.4", "Written in secondary articles, one attributing it to Radke (1988); MPI-1 itself is from Radke &amp; Welte (1983). The branch for Ro above about 1.35 % was not found", "published (second hand; second branch not found)"]], "validation": ["No validation against an independent implementation is recorded for this page."], "limits": ["Interpretation thresholds (facies, maturity) are not coded; the plots only show the data against the reference line.", "Rc = 0.6·MPI-1 + 0.4 holds only below Ro ≈ 1.35 %: MPI-1 reverses beyond, and the page applies the same line to every value."]});
+</script>
+</body></html>
