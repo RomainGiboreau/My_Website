@@ -212,23 +212,81 @@ html {
   z-index: -1;
   width: 100%;
   height: 100%;
+  animation: contour-drift 24s ease-in-out infinite alternate;
+}
+
+/* 1. Contours draw themselves in, inner ones first */
+.hero-contours .iso {
   fill: none;
   stroke: var(--bm-accent);
   stroke-width: 1.2;
   opacity: 0.3;
-  animation: contour-drift 24s ease-in-out infinite alternate;
 }
 
-/* Each contour draws itself in, inner ones first */
-.hero-contours path {
+.hero-contours .iso path {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
   animation: contour-draw 2.2s ease-out forwards;
   animation-delay: calc(var(--i) * 0.12s);
 }
 
+/* 2. Wells pop in: wildcat discovery, then two appraisal wells (delay in --d) */
+.hero-contours .well {
+  opacity: 0;
+  fill: none;
+  stroke: var(--md-default-fg-color);
+  stroke-width: 1.6;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: well-in 0.5s ease-out forwards;
+  animation-delay: var(--d);
+}
+
+.hero-contours .well .full {
+  fill: var(--md-default-fg-color);
+}
+
+.hero-contours text {
+  fill: var(--md-default-fg-color);
+  stroke: none;
+  font: 600 11px "Space Grotesk", sans-serif;
+}
+
+/* 3. Trap delineation: gas cap and oil leg fill in, GOC/OWC trace along contours */
+.hero-contours .contacts .gas,
+.hero-contours .contacts .oil,
+.hero-contours .contacts text {
+  opacity: 0;
+  animation: fade-in 1.4s ease-out 5.8s forwards;
+}
+
+.hero-contours .contacts .gas { fill: var(--bm-accent2); --to: 0.28; }
+.hero-contours .contacts .oil { fill: #6f8a5a; --to: 0.25; }
+.hero-contours .contacts text { --to: 0.9; }
+
+.hero-contours .contacts .goc,
+.hero-contours .contacts .owc {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: contour-draw 1.6s ease-in-out 5.6s forwards;
+}
+
+.hero-contours .contacts .goc { stroke: var(--bm-accent2); }
+.hero-contours .contacts .owc { stroke: #4f6b3c; }
+
 @keyframes contour-draw {
   to { stroke-dashoffset: 0; }
+}
+
+@keyframes well-in {
+  from { opacity: 0; transform: scale(0.2); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fade-in {
+  to { opacity: var(--to, 1); }
 }
 
 @keyframes contour-drift {
@@ -268,11 +326,18 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .hero-contours,
   .hero-contours path,
+  .hero-contours .well,
+  .hero-contours .contacts text,
   .md-typeset .grid.cards > ul > li {
     animation: none;
     stroke-dashoffset: 0;
     transition: none;
   }
+
+  .hero-contours .well,
+  .hero-contours .contacts text { opacity: 1; }
+  .hero-contours .contacts .gas { opacity: 0.28; }
+  .hero-contours .contacts .oil { opacity: 0.25; }
 }
 
 .md-typeset .hero h1 {
