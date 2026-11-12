@@ -5,6 +5,7 @@ site_url: https://RomainGiboreau.github.io/My_Website/
 theme:
   name: material
   favicon: assets/favicon.svg
+  logo: assets/logo.svg
   font:
     text: Inter
     code: JetBrains Mono
