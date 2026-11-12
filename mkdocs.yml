@@ -36,7 +36,8 @@ extra_javascript:
   - https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js
 
 extra_css:
-  - stylesheets/extra.css
+  # ponytail: bump ?v= when the CSS changes so browsers drop their cached copy
+  - stylesheets/extra.css?v=2
 
 # ponytail: placeholder page kept in the repo but not published until it has real content
 exclude_docs: |
