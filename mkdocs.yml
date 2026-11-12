@@ -38,7 +38,7 @@ extra_javascript:
 
 extra_css:
   # ponytail: bump ?v= when the CSS changes so browsers drop their cached copy
-  - stylesheets/extra.css?v=2
+  - stylesheets/extra.css?v=3
 
 # ponytail: placeholder page kept in the repo but not published until it has real content
 exclude_docs: |

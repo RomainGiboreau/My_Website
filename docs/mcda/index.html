@@ -167,7 +167,7 @@ main{min-width:0}
  <section class="panel"><h2><span class="n">1</span>Decision matrix<i class="chev"></i></h2>
   <div class="body"><textarea id="paste" rows="7" placeholder="Name&#9;Volume&#9;GOR&#9;Depth&#10;P1&#9;120&#9;450&#9;3200&#10;…" spellcheck="false"></textarea>
   <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
-  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bEx1" title="Five fictitious prospects, five criteria, GOR minimized: the case of the MCDA note">Example</button><button id="bEx2" title="Same data, GOR scored with a band-pass window (illustrative numbers)">Example (band)</button></div>
+  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bEx1" title="Five fictitious prospects, five criteria, GOR minimized: the case of the MCDA note">Example</button><button id="bEx2" title="Same data, GOR scored with a band-pass window (illustrative numbers)">Example (band)</button><span class="tt" tabindex="0" style="align-self:center" data-tip="Both examples load the same five prospects. Example: GOR scored lower is better. Example (band): GOR scored with an ideal window, 0 below 300, rising to 1 at 500, 1 from 500 to 900, falling to 0 at 1200 scf/bbl. Compare the two rankings to see how the scoring rule alone changes the result.">?</span></div>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
  <section class="panel"><h2><span class="n">2</span>Method<i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Standardization</span><select id="norm"><option value="minmax">min–max (0 to 1)</option><option value="vector">vector (x / ‖x‖)</option><option value="z">z-score</option><option value="none">none (raw units)</option></select>

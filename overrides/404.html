@@ -1,0 +1,59 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="dry-hole">
+  <svg class="rig" viewBox="0 0 600 340" role="img" aria-label="A drilling rig whose bit reaches the 404 Formation; the driller shouts: Stop drilling, we have an error 404.">
+    <!-- Strata -->
+    <rect class="l1" x="0" y="150" width="600" height="45"/>
+    <rect class="l2" x="0" y="195" width="600" height="45"/>
+    <rect class="l3" x="0" y="240" width="600" height="42"/>
+    <rect class="l4" x="0" y="282" width="600" height="58"/>
+    <text class="lname" x="590" y="177" text-anchor="end">Overburden</text>
+    <text class="lname" x="590" y="222" text-anchor="end">Seal</text>
+    <text class="lname" x="590" y="265" text-anchor="end">Reservoir?</text>
+    <text class="lname l404" x="590" y="318" text-anchor="end">404 Formation</text>
+    <line class="ground" x1="0" y1="150" x2="600" y2="150"/>
+
+    <!-- Depth track -->
+    <text class="depth" x="10" y="146">0 m</text>
+    <text class="depth td" x="10" y="304">TD 404 m</text>
+
+    <!-- Drill string below surface, then bit -->
+    <rect class="pipe" x="297" y="150" width="6" height="150"/>
+    <g class="bit"><path d="M292,150 L308,150 L300,162 Z"/></g>
+    <g class="spark">
+      <path d="M300,304 l-14,-8 M300,304 l14,-8 M300,304 l-18,4 M300,304 l18,4 M300,304 l0,12"/>
+    </g>
+
+    <!-- Derrick -->
+    <g class="derrick">
+      <path d="M262,150 L300,28 L338,150 M272,118 L328,118 M281,88 L319,88 M290,58 L310,58 M262,150 L328,118 L272,118 L319,88 L281,88 L310,58 L290,58"/>
+      <rect x="250" y="146" width="100" height="6" rx="1"/>
+      <line x1="300" y1="34" x2="300" y2="150" class="kelly"/>
+    </g>
+
+    <!-- Driller -->
+    <g class="driller">
+      <circle cx="400" cy="112" r="7"/>
+      <path class="hat" d="M391,109 a9,8 0 0 1 18,0 Z"/>
+      <path d="M400,119 L400,136 M400,136 L394,150 M400,136 L406,150 M400,124 L391,133"/>
+      <path class="arm" d="M400,124 L411,108"/>
+    </g>
+
+    <!-- Speech bubble -->
+    <g class="bubble">
+      <path d="M420,40 h160 a8,8 0 0 1 8,8 v34 a8,8 0 0 1 -8,8 h-138 l-20,16 l6,-16 h-8 a8,8 0 0 1 -8,-8 v-34 a8,8 0 0 1 8,-8 Z"/>
+      <text x="500" y="61" text-anchor="middle" class="shout">STOP DRILLING!</text>
+      <text x="500" y="79" text-anchor="middle">We have an error 404</text>
+    </g>
+  </svg>
+
+  <h1>Dry hole</h1>
+  <p>This page isn't at this depth. The link may be wrong, or the page has moved.</p>
+  <p>
+    <a class="md-button md-button--primary" href="{{ config.site_url }}">Back to the surface</a>
+    <a class="md-button" href="{{ config.site_url }}#tools">Tools</a>
+    <a class="md-button" href="{{ config.site_url }}contact/">Report it</a>
+  </p>
+</div>
+{% endblock %}

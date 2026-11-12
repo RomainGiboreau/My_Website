@@ -464,3 +464,120 @@ html {
   position: absolute;
   left: -9999px;
 }
+
+/* ---------- 404: the bit reaches the 404 Formation ---------- */
+.md-typeset .dry-hole {
+  text-align: center;
+}
+
+.md-typeset .dry-hole h1 {
+  margin: 0.8rem 0 0.4rem;
+  color: var(--md-default-fg-color);
+}
+
+.dry-hole .rig {
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+}
+
+.rig .l1 { fill: #e2ded3; }
+.rig .l2 { fill: #d6d1c2; }
+.rig .l3 { fill: #c9c4b6; }
+.rig .l4 { fill: #d9b9a0; }
+.rig .ground { stroke: var(--md-default-fg-color); stroke-width: 1.5; }
+.rig .lname,
+.rig .depth { font: 500 11px "Inter", sans-serif; fill: var(--md-default-fg-color--light); }
+.rig .l404,
+.rig .td { font-weight: 700; fill: var(--bm-accent2); }
+
+.rig .derrick { fill: none; stroke: var(--bm-accent); stroke-width: 2; stroke-linejoin: round; }
+.rig .derrick rect { fill: var(--bm-accent); }
+.rig .kelly { stroke: var(--md-default-fg-color); stroke-width: 3; }
+.rig .pipe { fill: var(--md-default-fg-color); }
+.rig .bit { fill: var(--bm-accent2); }
+.rig .spark { fill: none; stroke: var(--bm-accent2); stroke-width: 2; stroke-linecap: round; }
+
+.rig .driller { fill: none; stroke: var(--md-default-fg-color); stroke-width: 2; stroke-linecap: round; }
+.rig .driller circle { fill: #f3e2cf; }
+.rig .driller .hat { fill: var(--bm-accent2); stroke: none; }
+
+.rig .bubble path { fill: #fff; stroke: var(--md-default-fg-color); stroke-width: 1.5; }
+.rig .bubble text { font: 500 13px "Inter", sans-serif; fill: var(--md-default-fg-color); }
+.rig .bubble .shout { font: 700 15px "Space Grotesk", sans-serif; fill: var(--bm-accent2); }
+
+/* 1. Drill down (0–2.4 s) */
+.rig .pipe {
+  transform-box: view-box;
+  transform-origin: 300px 150px;
+  transform: scaleY(0);
+  animation: rig-drill 2.4s cubic-bezier(.4, 0, .6, 1) 0.4s forwards;
+}
+
+.rig .bit {
+  animation: rig-bit 2.4s cubic-bezier(.4, 0, .6, 1) 0.4s forwards;
+}
+
+@keyframes rig-drill { to { transform: scaleY(1); } }
+@keyframes rig-bit   { to { transform: translateY(150px); } }
+
+/* 2. Hit: derrick shakes, sparks flash */
+.rig .derrick {
+  animation: rig-shake 0.5s ease-in-out 2.8s 2;
+}
+
+.rig .spark {
+  opacity: 0;
+  animation: rig-spark 0.9s ease-out 2.8s forwards;
+}
+
+@keyframes rig-shake {
+  25% { transform: translateX(-2px) rotate(-0.6deg); }
+  75% { transform: translateX(2px) rotate(0.6deg); }
+}
+
+@keyframes rig-spark {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0.85; }
+}
+
+/* 3. Driller shouts and waves */
+.rig .bubble {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: 10% 100%;
+  animation: rig-pop 0.4s cubic-bezier(.3, 1.6, .5, 1) 3.1s forwards;
+}
+
+.rig .arm {
+  transform-box: view-box;
+  transform-origin: 400px 124px;
+  animation: rig-wave 0.6s ease-in-out 3.1s infinite alternate;
+}
+
+@keyframes rig-pop {
+  from { opacity: 0; transform: scale(0.3); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes rig-wave {
+  from { transform: rotate(-25deg); }
+  to   { transform: rotate(20deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rig .pipe,
+  .rig .bit,
+  .rig .derrick,
+  .rig .spark,
+  .rig .bubble,
+  .rig .arm {
+    animation: none;
+  }
+
+  .rig .pipe { transform: none; }
+  .rig .bit { transform: translateY(150px); }
+  .rig .spark,
+  .rig .bubble { opacity: 1; }
+}
