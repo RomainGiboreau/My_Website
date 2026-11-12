@@ -84,6 +84,8 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
 .tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
 .tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
 .tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+/* tooltip near the left edge (two-column layout): open to the right instead */
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
 .top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
 .top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .top .bar button{padding:.2rem .5rem;font-size:.8rem}
@@ -168,7 +170,7 @@ main{min-width:0}
  <section class="panel"><h2><span class="n">1</span>Decision matrix<i class="chev"></i></h2>
   <div class="body"><textarea id="paste" rows="7" placeholder="Name&#9;Volume&#9;GOR&#9;Depth&#10;P1&#9;120&#9;450&#9;3200&#10;…" spellcheck="false"></textarea>
   <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
-  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bEx1" title="Five fictitious prospects, five criteria, GOR minimized: the case of the MCDA note">Example</button><button id="bEx2" title="Same data, GOR scored with a band-pass window (illustrative numbers)">Example (band)</button><span class="tt" tabindex="0" style="align-self:center" data-tip="Both examples load the same five prospects. Example: GOR scored lower is better. Example (band): GOR scored with an ideal window, 0 below 300, rising to 1 at 500, 1 from 500 to 900, falling to 0 at 1200 scf/bbl. Compare the two rankings to see how the scoring rule alone changes the result.">?</span></div>
+  <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bEx1" title="Five fictitious prospects, five criteria, GOR minimized: the case of the MCDA note">Example</button><button id="bEx2" title="Same data, GOR scored with a band-pass window (illustrative numbers)">Example (band)</button><span class="tt tt-r" tabindex="0" style="align-self:center" data-tip="Both examples load the same five prospects. Example: GOR scored lower is better. Example (band): GOR scored with an ideal window, 0 below 300, rising to 1 at 500, 1 from 500 to 900, falling to 0 at 1200 scf/bbl. Compare the two rankings to see how the scoring rule alone changes the result.">?</span></div>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
  <section class="panel"><h2><span class="n">2</span>Method<i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Standardization</span><select id="norm"><option value="minmax">min–max (0 to 1)</option><option value="vector">vector (x / ‖x‖)</option><option value="z">z-score</option><option value="none">none (raw units)</option></select>
