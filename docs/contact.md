@@ -18,7 +18,7 @@ Spotted an error, have a question, or want to discuss something on this site? Le
   <label>Message
     <textarea name="message" rows="7" required></textarea>
   </label>
-  <input type="text" name="_gotcha" class="contact-trap" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <input type="text" name="_gotcha" class="contact-trap" style="position:absolute;left:-9999px" tabindex="-1" autocomplete="off" aria-hidden="true">
   <input type="hidden" name="_subject" value="Website contact form">
   <button type="submit" class="md-button md-button--primary">Send</button>
 </form>
