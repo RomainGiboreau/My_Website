@@ -1,3 +1,7 @@
+---
+description: Curated tools, libraries, datasets and references for petroleum systems analysis and basin modeling.
+---
+
 # Resources
 
 Tools, libraries, references and sites used across this site — kept here rather than scattered per page.
@@ -188,7 +192,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 
 ## Papers / Books
 
-*Livres et articles fondamentaux du domaine (Tissot & Welte, Allen & Allen, Wangen, Peters/Walters/Moldowan) sont couverts en version annotée et vérifiée dans la [bibliographie](bibliography/petroleum-systems-basin-modeling.md) — pas dupliqués ici.*
+*Livres et articles fondamentaux du domaine (Tissot & Welte, Allen & Allen, Wangen, Peters/Walters/Moldowan) sont couverts en version annotée et vérifiée dans la [bibliographie](bibliography.md) — pas dupliqués ici.*
 
 - [Global Crustal Thickness and Velocity Structure From Geostatistical Analysis of Seismic Data (Szwillus et al., 2019)](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2018JB016593) — Global · geostatistics · kriging · crustal structure
 - [New Insights Into the Crust and Lithospheric Mantle Structure of Africa (Globig et al., 2016)](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB012972) — Africa · crustal & lithospheric structure · thermal modeling

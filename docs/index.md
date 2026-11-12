@@ -1,4 +1,5 @@
 ---
+description: Romain Giboreau — petroleum systems analysis, basin modeling and applied AI for geoscience. Notes, talks, CV and tools.
 hide:
   - navigation
   - toc
@@ -44,7 +45,7 @@ hide:
 
 Lead Geoscientist at Beicip-Franlab. 15 years of petroleum systems assessment and basin modeling across 20+ basins on five continents, with a growing focus on applied AI/ML for geoscience workflows.
 
-[CV](cv.md){ .md-button .md-button--primary } [Notes](notes/index.md){ .md-button } [LinkedIn](https://www.linkedin.com/in/romain-giboreau){ .md-button }
+[CV](cv.md){ .md-button .md-button--primary } [Talks & publications](talks.md){ .md-button } [Notes](notes/index.md){ .md-button } [LinkedIn](https://www.linkedin.com/in/romain-giboreau){ .md-button }
 
 </div>
 
@@ -57,6 +58,8 @@ Lead Geoscientist at Beicip-Franlab. 15 years of petroleum systems assessment an
     **First EAGE Conference on Basin and Petroleum Systems Modeling, Houston — Wednesday 18 November.**
 
     *From Basin Modeling to Storage Fairway Mapping: AI-Assisted Smart Maps for Offshore Norway CCUS Screening* — Session VII (Basin modeling applications to the energy transition, Part I), 14:35–14:55. Presented by a colleague while I'm in Kuala Lumpur.
+
+    [All talks & publications](talks.md)
 
 ## Tools
 

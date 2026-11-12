@@ -356,3 +356,69 @@ html {
 .md-typeset .info > .admonition-title::before {
   background-color: var(--bm-accent);
 }
+
+/* ---------- Print (also used to generate cv.pdf in CI) ---------- */
+@media print {
+  .md-content__inner {
+    border-left: none;
+    background-image: none;
+    padding-left: 0;
+  }
+
+  @page {
+    margin: 14mm 16mm;
+  }
+
+  :root,
+  [data-md-color-scheme="default"] {
+    --md-default-bg-color: #fff;
+    --bm-bg-alt: #f4f3ef;
+  }
+
+  .md-typeset {
+    font-size: 0.6rem;
+  }
+
+  .md-typeset h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.4rem;
+    color: var(--md-default-fg-color);
+  }
+
+  .md-typeset h2 {
+    font-size: 0.95rem;
+    margin-top: 1.1rem;
+  }
+
+  .md-typeset h3 {
+    font-size: 0.75rem;
+    margin-top: 0.9rem;
+  }
+
+  .md-typeset hr {
+    display: none;
+  }
+
+  .md-typeset table:not([class]),
+  .md-typeset table:not([class]) th {
+    font-size: 0.55rem;
+  }
+
+  .md-typeset table:not([class]) td,
+  .md-typeset table:not([class]) th {
+    padding: 0.2rem 0.5rem;
+  }
+
+  .md-typeset li {
+    margin-bottom: 0.15em;
+  }
+
+  .md-typeset h2,
+  .md-typeset h3 {
+    break-after: avoid;
+  }
+
+  .md-typeset .cv-download {
+    display: none;
+  }
+}

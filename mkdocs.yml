@@ -37,6 +37,10 @@ extra_javascript:
 extra_css:
   - stylesheets/extra.css
 
+# ponytail: placeholder page kept in the repo but not published until it has real content
+exclude_docs: |
+  personal.md
+
 plugins:
   - search
   - tags:
@@ -45,6 +49,7 @@ plugins:
 nav:
   - Home: index.md
   - CV: cv.md
+  - Talks & publications: talks.md
   - Notes:
       - notes/index.md
       - notes/pandas_polars.md
@@ -54,25 +59,25 @@ nav:
       - resources/bibliography.md
   - Tools:
       - Digitization:
-          - Plot digitizer: https://RomainGiboreau.github.io/My_Website/digitizer/
-          - Map digitizer: https://RomainGiboreau.github.io/My_Website/mapdigitizer/
+          - Plot digitizer: digitizer/index.html
+          - Map digitizer: mapdigitizer/index.html
       - Mapping and spatial statistics:
-          - Map interpolation: https://RomainGiboreau.github.io/My_Website/gridding/
-          - Variogram: https://RomainGiboreau.github.io/My_Website/variogram/
-          - Convex & concave hulls: https://RomainGiboreau.github.io/My_Website/hull/
-          - Clustering: https://RomainGiboreau.github.io/My_Website/clustering/
+          - Map interpolation: gridding/index.html
+          - Variogram: variogram/index.html
+          - Convex & concave hulls: hull/index.html
+          - Clustering: clustering/index.html
       - Organic geochemistry:
-          - Rock-Eval QC: https://RomainGiboreau.github.io/My_Website/rockeval/
-          - Source rock potential: https://RomainGiboreau.github.io/My_Website/source/
-          - Thermal maturity: https://RomainGiboreau.github.io/My_Website/maturity/
-          - Biomarkers: https://RomainGiboreau.github.io/My_Website/biomarkers/
-          - Chromatogram: https://RomainGiboreau.github.io/My_Website/chromatogram/
-          - Ternary diagram: https://RomainGiboreau.github.io/My_Website/ternary/
+          - Rock-Eval QC: rockeval/index.html
+          - Source rock potential: source/index.html
+          - Thermal maturity: maturity/index.html
+          - Biomarkers: biomarkers/index.html
+          - Chromatogram: chromatogram/index.html
+          - Ternary diagram: ternary/index.html
       - Basin modelling and petrophysics:
-          - Compaction fit: https://RomainGiboreau.github.io/My_Website/compaction/
-          - BHT correction: https://RomainGiboreau.github.io/My_Website/bht/
-          - TR Cycles: https://RomainGiboreau.github.io/My_Website/tr-cycles/
+          - Compaction fit: compaction/index.html
+          - BHT correction: bht/index.html
+          - TR Cycles: tr-cycles/index.html
       - Decision support:
-          - MCDA (AHP & PROMETHEE): https://RomainGiboreau.github.io/My_Website/mcda/
-  - Chess: https://RomainGiboreau.github.io/My_Website/chess/
+          - MCDA (AHP & PROMETHEE): mcda/index.html
+  - Chess: chess/index.html
   - Tags: tags.md

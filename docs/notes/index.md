@@ -1,3 +1,7 @@
+---
+description: Notes by Romain Giboreau on petroleum systems, basin modeling methods and geoscience computing.
+---
+
 # Notes
 
 Positions on methods, cases with their real constraints, and things I'm still working through. Each note stands on its own.

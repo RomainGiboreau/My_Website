@@ -19,6 +19,12 @@ jobs:
           python-version: '3.12'
       - run: pip install mkdocs-material
       - run: mkdocs build
+      - name: Render CV as PDF
+        run: >
+          google-chrome --headless=new --disable-gpu --no-pdf-header-footer
+          --virtual-time-budget=5000 --print-to-pdf=site/cv.pdf
+          "file://$PWD/site/cv/index.html"
+      - run: test -s site/cv.pdf
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

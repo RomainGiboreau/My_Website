@@ -1,6 +1,12 @@
-# CV
+---
+description: CV of Romain Giboreau — lead geoscientist in petroleum systems assessment, basin modeling and applied AI, 15 years across 20+ basins.
+---
 
-Romain Giboreau — Lead Geoscientist, Petroleum Systems and Applied AI.
+# Romain Giboreau
+
+**Lead Geoscientist — Petroleum Systems and Applied AI**
+
+[Download PDF](https://RomainGiboreau.github.io/My_Website/cv.pdf){ .md-button .cv-download }
 
 15 years across petroleum systems assessment and basin modeling — conventional, unconventional, biogenic and biodegraded resources — with a growing focus on applied AI/ML for geoscience workflows. Work spans 20+ basins on five continents.
 
@@ -92,6 +98,8 @@ Validation testing of an internal geochemistry and PVT modeling software.
 
 ## Publications
 
+- Closing the Exploration Gap: Probabilistic Petroleum Systems Analysis from Basin to Prospect (APGCE 2026, Kuala Lumpur)
+- From Basin Modeling to Storage Fairway Mapping: AI-Assisted Smart Maps for Offshore Norway CCUS Screening (First EAGE Conference on Basin and Petroleum Systems Modeling, Houston, 2026)
 - Geospatial Machine Learning Framework for Subsurface Property Mapping: Application to Reservoir Quality Assessment and Carbon Storage (co-author, EAGE Digital 2026)
 - Enhancing Geoscience Document Mining with LLMs through GraphRAG Integration and Agentic Architectures (EAGE Digital 2025)
 - New Tools for New Challenges: Petroleum System Modeling of the Kurdish Foothills (co-author, 2018)
@@ -118,6 +126,7 @@ Validation testing of an internal geochemistry and PVT modeling software.
 ## Education
 
 **MSc — Petroleum Geosciences**, Henri Poincare University, Nancy · 2011
+
 **Engineering Degree**, National School of Geology (ENSG), Nancy · 2011
 
 **Certifications**
@@ -138,4 +147,4 @@ IBM Data Science Professional Certificate (2020). IFP Training curricula in petr
 
 ## Contact
 
-Present on LinkedIn. CV on request.
+[linkedin.com/in/romain-giboreau](https://www.linkedin.com/in/romain-giboreau)
