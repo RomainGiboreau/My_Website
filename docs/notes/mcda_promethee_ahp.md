@@ -174,4 +174,4 @@ None of this is a reason to avoid either method. It is a reason to document the 
 
 ---
 
-*These pages reflect my own understanding, built over time. Errors are mine, if you spot one, I'd like to hear about it.*
+*These pages reflect my own understanding, built over time. Errors are mine, if you spot one, [I'd like to hear about it](../contact.md).*

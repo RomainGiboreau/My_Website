@@ -119,4 +119,4 @@ Personal side projects, built for fun. Access on request.
 
 ---
 
-*These pages reflect my own understanding, built over time. Errors are mine — if you spot one, I'd like to hear about it.*
+*These pages reflect my own understanding, built over time. Errors are mine — if you spot one, [I'd like to hear about it](contact.md).*

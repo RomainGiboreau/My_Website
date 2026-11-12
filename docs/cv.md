@@ -147,4 +147,4 @@ IBM Data Science Professional Certificate (2020). IFP Training curricula in petr
 
 ## Contact
 
-[linkedin.com/in/romain-giboreau](https://www.linkedin.com/in/romain-giboreau)
+[linkedin.com/in/romain-giboreau](https://www.linkedin.com/in/romain-giboreau) · [contact form](https://RomainGiboreau.github.io/My_Website/contact/)
