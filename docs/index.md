@@ -49,15 +49,12 @@ Lead Geoscientist at Beicip-Franlab. 15 years of petroleum systems assessment an
 
 </div>
 
-!!! info "Upcoming talks — November 2026"
-    **APGCE 2026, Kuala Lumpur — Monday 16 & Tuesday 17 November.**
-    I'll be at the [Asia Petroleum Geoscience Conference & Exhibition](https://icep.com.my/apgce/conference/programme) both days. Come and say hello.
+!!! info "Last talks — November 2026"
+    **APGCE 2026, Kuala Lumpur — 17 November.**
+    *Closing the Exploration Gap: Probabilistic Petroleum Systems Analysis from Basin to Prospect* — Oral Session 9 (Basin Modelling and Reservoir Characterisation). Thanks to everyone who came by.
 
-    *Closing the Exploration Gap: Probabilistic Petroleum Systems Analysis from Basin to Prospect* — Oral Session 9 (Basin Modelling and Reservoir Characterisation), Tuesday 17 November, 9:00–9:20, MR 302–303.
-
-    **First EAGE Conference on Basin and Petroleum Systems Modeling, Houston — Wednesday 18 November.**
-
-    *From Basin Modeling to Storage Fairway Mapping: AI-Assisted Smart Maps for Offshore Norway CCUS Screening* — Session VII (Basin modeling applications to the energy transition, Part I), 14:35–14:55. Presented by a colleague while I'm in Kuala Lumpur.
+    **First EAGE Conference on Basin and Petroleum Systems Modeling, Houston — 18 November.**
+    *From Basin Modeling to Storage Fairway Mapping: AI-Assisted Smart Maps for Offshore Norway CCUS Screening* — Session VII (Basin modeling applications to the energy transition, Part I). Presented by a colleague.
 
     [All talks & publications](talks.md)
 
