@@ -12,7 +12,10 @@ W,H=320,200
 IMM,HEAVY,LIGHTO,COND,COND2,GAS,OILC='#e4e1d6','#2f5d34','#a9cf8c','#efc04f','#e8913a','#c8402f','#3f7a3a'
 HALO=' paint-order="stroke" stroke="#f5f3ed" stroke-width="3" stroke-linejoin="round"'
 def f1(v): return f'{v:.1f}'
-def path(pts): return 'M'+' L'.join(f'{f1(x)},{f1(y)}' for x,y in pts)
+def g1(v): s=f'{v:.1f}'.rstrip('0').rstrip('.'); return '0' if s=='-0' else s
+def path(pts):   # compact: implicit lineto, no trailing zeros, consecutive duplicates dropped
+    q=[f'{g1(x)},{g1(y)}' for x,y in pts]; q=[c for i,c in enumerate(q) if i==0 or c!=q[i-1]]
+    return 'M'+' '.join(q)
 def T(x,y,s,size=10,fill=MUT,anchor='start',weight=400,cls='',d=None,extra=''):
     c=f' class="{cls}"' if cls else ''; st=f' style="--d:{d}s"' if d is not None else ''
     return f'<text x="{f1(x)}" y="{f1(y)}" font-size="{size}" fill="{fill}" text-anchor="{anchor}" font-weight="{weight}"{c}{st}{extra}>{s}</text>'
@@ -206,7 +209,9 @@ steps=[(42,56,'HST',0,99),(41,72,'HST',0,99),(40,88,'HST',0,99),(39.5,104,'HST',
 SAND,SHALE,WATER='#e3c46f','#a4a79b','#dbe5e8'
 # moving sea level: the water body and sea-surface line translate in step with the deposits (CSS keyframes below);
 # drawn under the sediments so emerged shelf hides them. Without animation they sit at the final highstand.
-SL_END=steps[-1][0]; T6=lambda k:.2+k*.3+.3; DUR=T6(len(steps)-1)+.3
+DT=.18   # seconds between deposition steps (whole sequence ~3.2 s)
+tk=lambda k:round(.2+k*DT,2)
+SL_END=steps[-1][0]; T6=lambda k:tk(k)+.3; DUR=T6(len(steps)-1)+.3
 kf=[(0,44)]+[(T6(k),s[0]) for k,s in enumerate(steps)]
 kf.append((DUR,SL_END))   # hold the final highstand (a missing 100% frame would snap back)
 def keyframes(name,fn): return f'@keyframes {name}{{'+''.join(f'{t/DUR*100:.1f}%{{transform:{fn(k,s)}}}' for k,(t,s) in enumerate(kf))+'}'
@@ -215,34 +220,41 @@ S=[clino(40,44)]
 b+=f'<path d="{path(list(zip(X,S[0])))} L320,200 L0,200Z" fill="{LINE}"/>'
 defs='';body=''
 for k,(sl,xb,tr,fan,cap) in enumerate(steps):
+    if tr=='TST':   # transgressive shoreline sits where the rising sea meets the existing relief (onlap)
+        wet=[x for x,y in zip(X,S[-1]) if y<=sl+3]
+        if wet and wet[-1]<W-20: xb=wet[-1]+26
     new=[max(min(p,c),p-cap) for p,c in zip(S[-1],clino(xb,sl,fan))]
     S.append(new)
     # water-depth facies (vertical) + overlay for the muddy landward plain and the basin-floor fan (horizontal)
     defs+=f'<linearGradient id="g6v{k}" gradientUnits="userSpaceOnUse" x1="0" y1="{sl}" x2="0" y2="{sl+46}"><stop offset=".5" stop-color="{SAND}"/><stop offset="1" stop-color="{SHALE}"/></linearGradient>'
     ov=[(xb-75,SHALE,1),(xb-45,SHALE,0)]+([(xb+32,SAND,0),(xb+42,SAND,1),(xb+74,SAND,1),(xb+86,SAND,0)] if fan else [])
     defs+=f'<linearGradient id="g6h{k}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="{W}" y2="0">'+''.join(f'<stop offset="{max(0,min(1,x/W)):.3f}" stop-color="{c}" stop-opacity="{o}"/>' for x,c,o in ov)+'</linearGradient>'
-    poly=list(zip(X,new))+list(zip(X,S[-2]))[::-1]
+    # keep only the x-range where this step actually deposited (the rest has zero thickness)
+    on=[i for i in range(len(X)) if S[-2][i]-new[i]>.05]
+    if not on: print("empty step",k,file=sys.stderr); on=[0]
+    a,c=max(0,on[0]-1),min(len(X)-1,on[-1]+1)
+    top=list(zip(X,new))[a:c+1]; poly=top+list(zip(X,S[-2]))[a:c+1][::-1]
     defs+=f'<path id="p6_{k}" d="{path(poly)}Z"/>'
-    body+=f'<g{A("a-fade",round(.2+k*.3,2))}><use href="#p6_{k}" fill="url(#g6v{k})"/><use href="#p6_{k}" fill="url(#g6h{k})"/><path d="{path(list(zip(X,new)))}" fill="none" stroke="{MUT}" stroke-width=".45"/></g>'
+    body+=f'<g{A("a-fade",tk(k))}><use href="#p6_{k}" fill="url(#g6v{k})"/><use href="#p6_{k}" fill="url(#g6h{k})"/><path d="{path(top)}" fill="none" stroke="{MUT}" stroke-width=".45"/></g>'
 b+='<defs>'+defs+'</defs>'+body
 # key surfaces: sequence boundary (top of the first highstand) and maximum flooding surface (top of the transgression)
-b+=f'<path d="{path(list(zip(X,S[4])))}" fill="none" stroke="{GAS}" stroke-width="1.4"{A("a-fade",1.3)}/>'+T(4,S[4][2]+11,'SB',9,GAS,weight=700,cls='a-fade',d=1.3,extra=HALO)
-b+=f'<path d="{path(list(zip(X,S[13])))}" fill="none" stroke="{BLUE}" stroke-width="1.4"{A("a-fade",3.6)}/>'+T(4,S[13][2]-3,'MFS',9,BLUE,weight=700,cls='a-fade',d=3.6,extra=HALO)
+b+=f'<path d="{path(list(zip(X,S[4])))}" fill="none" stroke="{GAS}" stroke-width="1.4"{A("a-fade",tk(4))}/>'+T(4,S[4][2]+11,'SB',9,GAS,weight=700,cls='a-fade',d=tk(4),extra=HALO)
+b+=f'<path d="{path(list(zip(X,S[13])))}" fill="none" stroke="{BLUE}" stroke-width="1.4"{A("a-fade",tk(13))}/>'+T(4,S[13][2]-3,'MFS',9,BLUE,weight=700,cls='a-fade',d=tk(13),extra=HALO)
 # systems-tract labels at the thickest point of each group
 def lab(ks,name,col,d):
     th=[(sum(S[k][i]-S[k+1][i] for k in ks),i) for i in range(len(X))]; t,i=max(th)
     yt=(S[ks[0]][i]+S[ks[-1]+1][i])/2
     return T(X[i],yt+3.3,name,9,col,'middle',700,'a-fade',d,HALO)
-b+=lab([0,1,2,3],'HST',FG,1.4)+lab([4,5,6],'FSST',FG,2.2)+lab([7,8],'LST',FG,2.8)+lab([9,10,11,12],'TST',FG,3.7)+lab([13,14,15],'HST',FG,4.6)
+b+=lab([0,1,2,3],'HST',FG,tk(3))+lab([4,5,6],'FSST',FG,tk(6))+lab([7,8],'LST',FG,tk(8))+lab([9,10,11,12],'TST',FG,tk(12))+lab([13,14,15],'HST',FG,tk(15))
 # lowstand sea level for reference
-b+=f'<line x1="150" y1="86" x2="{W}" y2="86" stroke="{BLUE}" stroke-width=".8" stroke-dasharray="2 2"{A("a-fade",2.6)}/>'+T(314,83,'lowstand',8.5,BLUE,'end',cls='a-fade',d=2.6)
+b+=f'<line x1="150" y1="86" x2="{W}" y2="86" stroke="{BLUE}" stroke-width=".8" stroke-dasharray="2 2"{A("a-fade",tk(7))}/>'+T(314,83,'lowstand',8.5,BLUE,'end',cls='a-fade',d=tk(7))
 # inset: relative sea-level curve, drawn step by step in sync with the deposits
 ix0,ix1,iy0,iy1=228,310,40,64
 slx=lambda k:ix0+k/(len(steps)-1)*(ix1-ix0); sly=lambda sl:iy0+(sl-28)/(86-28)*(iy1-iy0)
 b+=f'<rect x="{ix0-26}" y="35" width="{ix1-ix0+32}" height="33" rx="3" fill="{PAPER}" stroke="{LINE}"/>'+T(ix0-22,49,'sea',8.5,MUT)+T(ix0-22,59,'level',8.5,MUT)
 b+=f'<line x1="{ix0}" y1="{iy1+1}" x2="{ix1}" y2="{iy1+1}" stroke="{LT}" stroke-width=".6"/>'
 for k in range(1,len(steps)):
-    b+=f'<path d="M{f1(slx(k-1))},{f1(sly(steps[k-1][0]))} L{f1(slx(k))},{f1(sly(steps[k][0]))}" stroke="{BLUE}" stroke-width="1.6" stroke-linecap="round" pathLength="1"{A("a-draw",round(.2+k*.3,2))}/>'
+    b+=f'<path d="M{f1(slx(k-1))},{f1(sly(steps[k-1][0]))} L{f1(slx(k))},{f1(sly(steps[k][0]))}" stroke="{BLUE}" stroke-width="1.6" stroke-linecap="round" pathLength="1"{A("a-draw",tk(k))}/>'
 # inset marker riding the sea-level curve, plus the keyframes for both moving parts
 b+=f'<circle cx="{f1(slx(len(steps)-1))}" cy="{f1(sly(SL_END))}" r="3" fill="{BLUE}" stroke="{PAPER}" class="a-sl6d"/>'
 fx=lambda i:slx(min(len(steps)-1,max(0,i-1)))-slx(len(steps)-1)
@@ -263,11 +275,13 @@ b=f'<rect x="0" y="0" width="{W}" height="{H}" fill="{PAPER}"/>'
 G=[(95,85,50,1.0),(215,118,55,.92),(150,40,38,-.5),(265,48,32,.5)]
 fz=lambda x,y:sum(a*math.exp(-((x-gx)**2+(y-gy)**2)/(2*s*s)) for gx,gy,s,a in G)
 cs=12.5
+diag={}
 for i in range(25):
     for j in range(16):
         x,y=i*cs+cs/2+2,j*cs+cs/2; v=fz(x,y)
         col='#ece9df' if v<.25 else '#cfd3c8' if v<.5 else '#9fae9c' if v<.72 else CU
-        b+=f'<rect x="{f1(i*cs+2)}" y="{f1(j*cs)}" width="{cs-1.2}" height="{cs-1.2}" fill="{col}"{A("a-fade",round((i+j)*.045,2))}/>'
+        diag.setdefault(i+j,[]).append(f'<rect x="{g1(i*cs+2)}" y="{g1(j*cs)}" width="11.3" height="11.3" fill="{col}"/>')
+for dg in sorted(diag): b+=f'<g{A("a-fade",round(dg*.045,2))}>'+''.join(diag[dg])+'</g>'
 random.seed(7)
 for k in range(12):
     x,y=random.uniform(15,190),random.uniform(12,150)
