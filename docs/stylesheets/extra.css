@@ -647,3 +647,111 @@ body:has(.hero) .md-grid {
   }
   .md-typeset .tool-cards p { font-size: 0.62rem; }
 }
+
+/* ---------- Expertise carousel (home page) ---------- */
+.md-typeset .xp {
+  position: relative;
+  margin: 0 0 1.5rem;
+}
+
+.md-typeset .xp-nav {
+  position: absolute;
+  top: -2.55rem;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.md-typeset .xp-count {
+  font: 600 0.7rem "Space Grotesk", Inter, sans-serif;
+  color: var(--md-default-fg-color--light);
+  margin-right: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.md-typeset .xp-nav button {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--bm-line);
+  background: var(--bm-bg-alt);
+  color: var(--bm-accent);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.md-typeset .xp-nav button:hover:not(:disabled) {
+  border-color: var(--bm-accent);
+}
+
+.md-typeset .xp-nav button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.md-typeset ol.xp-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 0.8rem) / 2);
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0 0 0.6rem;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.md-typeset ol.xp-track:focus-visible {
+  outline: 2px solid var(--bm-accent);
+  outline-offset: 2px;
+}
+
+.md-typeset ol.xp-track > li.xp-card {
+  margin: 0;
+  padding: 0.6rem 0.7rem 0.7rem;
+  scroll-snap-align: start;
+  background: var(--bm-bg-alt);
+  border: 1px solid var(--bm-line);
+  border-radius: 0.2rem;
+}
+
+.md-typeset .xp-img svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  background: #f5f3ed;
+  border: 1px solid var(--bm-line);
+  border-radius: 0.2rem;
+}
+
+.md-typeset .xp-num {
+  display: block;
+  margin-top: 0.55rem;
+  font: 600 0.62rem "Space Grotesk", Inter, sans-serif;
+  color: var(--bm-accent2);
+  letter-spacing: 0.04em;
+}
+
+.md-typeset .xp-card h3 {
+  margin: 0.1rem 0 0.3rem;
+  font-size: 0.85rem;
+}
+
+.md-typeset .xp-card p {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+@media screen and (max-width: 44.9375em) {
+  .md-typeset ol.xp-track { grid-auto-columns: 85%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset ol.xp-track { scroll-behavior: auto; }
+}
