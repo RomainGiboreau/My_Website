@@ -195,7 +195,13 @@ steps=[(42,56,'HST',0),(41,72,'HST',0),(40,88,'HST',0),(39.5,104,'HST',0),
        (52,124,'FSST',0),(66,144,'FSST',0),(80,162,'FSST',8),(86,176,'LST',13),(84,188,'LST',6),
        (70,176,'TST',0),(55,150,'TST',0),(41,124,'TST',0),(30,100,'TST',0),(29,124,'HST',0),(28.5,148,'HST',0)]
 SAND,SHALE,PLAIN,WATER='#e3c46f','#a4a79b','#c9bd95','#dbe5e8'
-b=f'<rect x="0" y="0" width="{W}" height="{H}" fill="{PAPER}"/><rect x="0" y="28.5" width="{W}" height="{FLOOR-28}" fill="{WATER}"/>'
+# moving sea level: the water body and sea-surface line translate in step with the deposits (CSS keyframes below);
+# drawn under the sediments so emerged shelf hides them. Without animation they sit at the final highstand.
+SL_END=steps[-1][0]; T6=lambda k:.2+k*.3+.3; DUR=T6(len(steps)-1)+.3
+kf=[(0,44)]+[(T6(k),s[0]) for k,s in enumerate(steps)]
+kf.append((DUR,SL_END))   # hold the final highstand (a missing 100% frame would snap back)
+def keyframes(name,fn): return f'@keyframes {name}{{'+''.join(f'{t/DUR*100:.1f}%{{transform:{fn(k,s)}}}' for k,(t,s) in enumerate(kf))+'}'
+b=f'<rect x="0" y="0" width="{W}" height="{H}" fill="{PAPER}"/><g class="a-sl6"><rect x="0" y="{SL_END}" width="{W}" height="{H}" fill="{WATER}"/><line x1="0" y1="{SL_END}" x2="{W}" y2="{SL_END}" stroke="{BLUE}" stroke-width="1.2" stroke-dasharray="5 3"/></g>'
 S=[clino(40,44)]
 b+=f'<path d="{path(list(zip(X,S[0])))} L320,200 L0,200Z" fill="{LINE}"/>'
 defs='';body=''
@@ -217,8 +223,7 @@ def lab(ks,name,col,d):
     yt=(S[ks[0]][i]+S[ks[-1]+1][i])/2
     return T(X[i],yt+3.3,name,9,col,'middle',700,'a-fade',d,HALO)
 b+=lab([0,1,2,3],'HST',FG,1.4)+lab([4,5,6],'FSST',FG,2.2)+lab([7,8],'LST',FG,2.8)+lab([9,10,11,12],'TST',FG,3.7)+lab([13,14],'HST',FG,4.4)
-# sea level: final highstand and the lowstand
-b+=f'<line x1="0" y1="28.5" x2="{W}" y2="28.5" stroke="{BLUE}" stroke-width="1" stroke-dasharray="5 3"/>'
+# lowstand sea level for reference
 b+=f'<line x1="150" y1="86" x2="{W}" y2="86" stroke="{BLUE}" stroke-width=".8" stroke-dasharray="2 2"{A("a-fade",2.6)}/>'+T(314,83,'lowstand',8.5,BLUE,'end',cls='a-fade',d=2.6)
 # inset: relative sea-level curve, drawn step by step in sync with the deposits
 ix0,ix1,iy0,iy1=228,310,40,64
@@ -227,6 +232,12 @@ b+=f'<rect x="{ix0-26}" y="35" width="{ix1-ix0+32}" height="33" rx="3" fill="{PA
 b+=f'<line x1="{ix0}" y1="{iy1+1}" x2="{ix1}" y2="{iy1+1}" stroke="{LT}" stroke-width=".6"/>'
 for k in range(1,len(steps)):
     b+=f'<path d="M{f1(slx(k-1))},{f1(sly(steps[k-1][0]))} L{f1(slx(k))},{f1(sly(steps[k][0]))}" stroke="{BLUE}" stroke-width="1.6" stroke-linecap="round" pathLength="1"{A("a-draw",round(.2+k*.3,2))}/>'
+# inset marker riding the sea-level curve, plus the keyframes for both moving parts
+b+=f'<circle cx="{f1(slx(len(steps)-1))}" cy="{f1(sly(SL_END))}" r="3" fill="{BLUE}" stroke="{PAPER}" class="a-sl6d"/>'
+fx=lambda i:slx(min(len(steps)-1,max(0,i-1)))-slx(len(steps)-1)
+b+=('<style>'+keyframes('xp-sl6',lambda i,s:f'translateY({s-SL_END:.1f}px)')+keyframes('xp-sl6d',lambda i,s:f'translate({fx(i):.1f}px,{sly(s)-sly(SL_END):.1f}px)')
+    +f'.xp-js .xp-card svg .a-sl6{{transform:translateY({44-SL_END:.1f}px)}}.xp-js .xp-card svg .a-sl6d{{transform:translate({fx(0):.1f}px,{sly(44)-sly(SL_END):.1f}px)}}'
+    +f'.xp-js .xp-card.in svg .a-sl6{{animation:xp-sl6 {DUR:.1f}s linear forwards}}.xp-js .xp-card.in svg .a-sl6d{{animation:xp-sl6d {DUR:.1f}s linear forwards}}</style>')
 # legend + scale bars
 b+=f'<g{A("a-fade",.1)}>'
 for k,(c,l) in enumerate([(SAND,'sand'),(SHALE,'shale'),(PLAIN,'coastal plain')]):
