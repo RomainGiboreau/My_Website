@@ -694,7 +694,7 @@ body:has(.hero) .md-grid {
 .md-typeset ol.xp-track {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: calc((100% - 0.8rem) / 2);
+  grid-auto-columns: calc((100% - 1.6rem) / 3);
   gap: 0.8rem;
   margin: 0;
   padding: 0 0 0.6rem;
@@ -748,9 +748,41 @@ body:has(.hero) .md-grid {
   line-height: 1.5;
 }
 
-@media screen and (max-width: 44.9375em) {
-  .md-typeset ol.xp-track { grid-auto-columns: 85%; }
+@media screen and (max-width: 59.9375em) {
+  .md-typeset ol.xp-track { grid-auto-columns: calc((100% - 0.8rem) / 2); }
 }
+
+@media screen and (max-width: 37.4375em) {
+  .md-typeset ol.xp-track { grid-auto-columns: 82%; }
+}
+
+/* Diagram animations: play when a card scrolls into view (.in, set by expertise.js).
+   Only active when the script added .xp-js, so without JS / with reduced motion
+   the diagrams are simply shown complete. */
+.md-typeset .xp svg .a-flow { stroke-dasharray: 5 4; }
+.xp-js .xp-card svg .a-draw { stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+.xp-js .xp-card svg .a-fade,
+.xp-js .xp-card svg .a-flow { opacity: 0; }
+.xp-js .xp-card svg .a-pop,
+.xp-js .xp-card svg .a-rise,
+.xp-js .xp-card svg .a-down { transform-box: fill-box; }
+.xp-js .xp-card svg .a-pop { transform: scale(0); transform-origin: center; }
+.xp-js .xp-card svg .a-rise { transform: scaleY(0); transform-origin: bottom; }
+.xp-js .xp-card svg .a-down { transform: scaleY(0); transform-origin: top; }
+
+.xp-js .xp-card.in svg .a-draw { animation: xp-draw 1.3s ease-out var(--d, 0s) forwards; }
+.xp-js .xp-card.in svg .a-fade { animation: xp-fade 0.6s ease var(--d, 0s) forwards; }
+.xp-js .xp-card.in svg .a-pop { animation: xp-grow 0.45s cubic-bezier(0.3, 1.5, 0.5, 1) var(--d, 0s) forwards; }
+.xp-js .xp-card.in svg .a-rise { animation: xp-grow 0.6s ease-out var(--d, 0s) forwards; }
+.xp-js .xp-card.in svg .a-down { animation: xp-grow 1.6s ease-in-out var(--d, 0s) forwards; }
+.xp-js .xp-card.in svg .a-flow {
+  animation: xp-fade 0.4s ease var(--d, 0s) forwards, xp-flow 0.8s linear var(--d, 0s) infinite;
+}
+
+@keyframes xp-draw { to { stroke-dashoffset: 0; } }
+@keyframes xp-fade { to { opacity: 1; } }
+@keyframes xp-grow { to { transform: none; } }
+@keyframes xp-flow { to { stroke-dashoffset: -9; } }
 
 @media (prefers-reduced-motion: reduce) {
   .md-typeset ol.xp-track { scroll-behavior: auto; }
