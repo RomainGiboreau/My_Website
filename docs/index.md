@@ -62,55 +62,153 @@ Lead Geoscientist at Beicip-Franlab. 15 years of petroleum systems assessment an
 
 Personal side projects, built for fun. Free to use in the browser; your data stays on your computer.
 
-<div class="grid cards" markdown>
+### :material-chart-scatter-plot: Digitization
 
--   :material-chart-scatter-plot: **Digitization**
+Pull numbers back out of published plots and maps.
 
-    ---
+<div class="grid cards tool-cards" markdown>
 
-    [Plot digitizer](digitizer/index.html) · [Map digitizer](mapdigitizer/index.html)
+-   [![Plot digitizer](assets/tools/digitizer.webp){ loading=lazy }](digitizer/index.html)
 
-    Pull numbers back out of published plots and maps.
+    [**Plot digitizer**](digitizer/index.html)
 
--   :material-map-outline: **Mapping & spatial statistics**
+    Calibrate the axes of a chart image, click or auto-extract points, export CSV.
 
-    ---
+-   [![Map digitizer](assets/tools/mapdigitizer.webp){ loading=lazy }](mapdigitizer/index.html)
 
-    [Map interpolation](gridding/index.html) · [Variogram](variogram/index.html) · [Convex & concave hulls](hull/index.html) · [Clustering](clustering/index.html)
+    [**Map digitizer**](mapdigitizer/index.html)
 
-    Gridding, spatial correlation and grouping of point data.
+    Turn a colour-coded map (e.g. a depth map) into a regular XY grid using its legend.
 
--   :material-flask-outline: **Organic geochemistry**
+</div>
 
-    ---
+### :material-map-outline: Mapping & spatial statistics
 
-    [Rock-Eval QC](rockeval/index.html) · [Source rock potential](source/index.html) · [Thermal maturity](maturity/index.html) · [Biomarkers](biomarkers/index.html) · [Chromatogram](chromatogram/index.html) · [Ternary diagram](ternary/index.html)
+Gridding, spatial correlation and grouping of point data.
 
-    Screening and interpreting source rock and oil data.
+<div class="grid cards tool-cards" markdown>
 
--   :material-layers-triple-outline: **Basin modelling & petrophysics**
+-   [![Map interpolation](assets/tools/gridding.webp){ loading=lazy }](gridding/index.html)
 
-    ---
+    [**Map interpolation**](gridding/index.html)
 
-    [Compaction fit](compaction/index.html) · [BHT correction](bht/index.html) · [TR cycles](tr-cycles/index.html)
+    Kriging, IDW, splines, TIN, minimum curvature, with cross-validation.
 
-    Inputs for burial and thermal history models.
+-   [![Variogram](assets/tools/variogram.webp){ loading=lazy }](variogram/index.html)
 
--   :material-scale-balance: **Decision support**
+    [**Variogram**](variogram/index.html)
 
-    ---
+    Directional variograms, variogram map, nested models and anisotropy.
 
-    [MCDA — AHP & PROMETHEE](mcda/index.html)
+-   [![Convex & concave hulls](assets/tools/hull.webp){ loading=lazy }](hull/index.html)
 
-    Ranking options against several criteria. [Background note](notes/mcda_promethee_ahp.md).
+    [**Convex & concave hulls**](hull/index.html)
 
--   :material-chess-knight: **Chess**
+    Convex hull and alpha shapes per group, with area, perimeter and WKT/GeoJSON export.
 
-    ---
+-   [![Clustering](assets/tools/clustering.webp){ loading=lazy }](clustering/index.html)
 
-    [Chess training](chess/index.html)
+    [**Clustering**](clustering/index.html)
 
-    A side project: game analysis and training.
+    k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow and PCA.
+
+</div>
+
+### :material-flask-outline: Organic geochemistry
+
+Screening and interpreting source rock and oil data.
+
+<div class="grid cards tool-cards" markdown>
+
+-   [![Rock-Eval QC](assets/tools/rockeval.webp){ loading=lazy }](rockeval/index.html)
+
+    [**Rock-Eval QC**](rockeval/index.html)
+
+    Automatic quality flags, HI–Tmax, HI–OI, S2–TOC, depth profiles and control charts.
+
+-   [![Source rock potential](assets/tools/source.webp){ loading=lazy }](source/index.html)
+
+    [**Source rock potential**](source/index.html)
+
+    Richness, kerogen quality, maturity, SPI, original TOC and transformation ratio.
+
+-   [![Thermal maturity](assets/tools/maturity.webp){ loading=lazy }](maturity/index.html)
+
+    [**Thermal maturity**](maturity/index.html)
+
+    EASY%Ro, Easy%RoDL, Basin%Ro and Lopatin TTI from a burial and temperature history.
+
+-   [![Biomarkers](assets/tools/biomarkers.webp){ loading=lazy }](biomarkers/index.html)
+
+    [**Biomarkers**](biomarkers/index.html)
+
+    Pr/n-C17 vs Ph/n-C18, Pr/Ph vs DBT/P, sterane ternary, maturity ratios.
+
+-   [![Chromatogram](assets/tools/chromatogram.webp){ loading=lazy }](chromatogram/index.html)
+
+    [**Chromatogram**](chromatogram/index.html)
+
+    Detect peaks, integrate areas above a baseline, label and export.
+
+-   [![Ternary diagram](assets/tools/ternary.webp){ loading=lazy }](ternary/index.html)
+
+    [**Ternary diagram**](ternary/index.html)
+
+    Ternary plots by group, with arithmetic and compositional centres.
+
+</div>
+
+### :material-layers-triple-outline: Basin modelling & petrophysics
+
+Inputs for burial and thermal history models.
+
+<div class="grid cards tool-cards" markdown>
+
+-   [![Compaction fit](assets/tools/compaction.webp){ loading=lazy }](compaction/index.html)
+
+    [**Compaction fit**](compaction/index.html)
+
+    Fit porosity–depth curves (Athy, hyperbolic, effective stress…) and decompact a layer.
+
+-   [![BHT correction](assets/tools/bht.webp){ loading=lazy }](bht/index.html)
+
+    [**BHT correction**](bht/index.html)
+
+    Horner, last-resort and Waples corrections, and geothermal gradient.
+
+-   [![TR cycles](assets/tools/tr-cycles.webp){ loading=lazy }](tr-cycles/index.html)
+
+    [**TR cycles**](tr-cycles/index.html)
+
+    Spectral analysis of sea-level or proxy series, candidate Milankovitch bands.
+
+</div>
+
+### :material-scale-balance: Decision support
+
+Ranking options against several criteria. [Background note](notes/mcda_promethee_ahp.md).
+
+<div class="grid cards tool-cards" markdown>
+
+-   [![MCDA — AHP & PROMETHEE](assets/tools/mcda.webp){ loading=lazy }](mcda/index.html)
+
+    [**MCDA — AHP & PROMETHEE**](mcda/index.html)
+
+    AHP weights with consistency ratio, PROMETHEE I and II, weight sensitivity.
+
+</div>
+
+### :material-chess-knight: Chess
+
+A side project.
+
+<div class="grid cards tool-cards" markdown>
+
+-   [![Chess training](assets/tools/chess.webp){ loading=lazy }](chess/index.html)
+
+    [**Chess training**](chess/index.html)
+
+    Game analysis and training.
 
 </div>
 

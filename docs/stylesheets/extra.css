@@ -606,3 +606,44 @@ body:has(.hero) .md-grid {
 .md-typeset .hero {
   min-height: 26vw;
 }
+
+/* ---------- Tool cards with thumbnails (home page) ---------- */
+.md-typeset .grid.cards.tool-cards {
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+
+.md-typeset .grid.cards.tool-cards > ul > li {
+  padding: 0.5rem 0.7rem 0.7rem;
+}
+
+.md-typeset .tool-cards img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 0.2rem;
+  border: 1px solid var(--bm-line);
+  margin-bottom: 0.2rem;
+}
+
+.md-typeset .tool-cards p {
+  margin: 0.35em 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.md-typeset .tool-cards p a strong {
+  font-size: 0.78rem;
+}
+
+/* Two tool cards per row on phones instead of one long column */
+@media screen and (max-width: 44.9375em) {
+  .md-typeset .grid.cards.tool-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+  .md-typeset .grid.cards.tool-cards > ul > li {
+    padding: 0.35rem 0.45rem 0.5rem;
+  }
+  .md-typeset .tool-cards p { font-size: 0.62rem; }
+}
