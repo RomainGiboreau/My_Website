@@ -8,6 +8,9 @@ are defined in docs/stylesheets/extra.css and triggered by docs/javascripts/expe
 import math,sys,random
 FG,MUT,LT,LINE,ACC,CU,GRN,BLUE,PAPER='#232220','#5c5a52','#8a8778','#c9c4b6','#4a5a4e','#a8623a','#4f6b3c','#4a6f8f','#f5f3ed'
 W,H=320,200
+# hydrocarbon phases: dark green (heavy oil) -> light green (light oil) -> yellow-orange (condensate) -> red (gas)
+IMM,HEAVY,LIGHTO,COND,COND2,GAS,OILC='#e4e1d6','#2f5d34','#a9cf8c','#efc04f','#e8913a','#c8402f','#3f7a3a'
+HALO=' paint-order="stroke" stroke="#f5f3ed" stroke-width="3" stroke-linejoin="round"'
 def f1(v): return f'{v:.1f}'
 def path(pts): return 'M'+' L'.join(f'{f1(x)},{f1(y)}' for x,y in pts)
 def T(x,y,s,size=10,fill=MUT,anchor='start',weight=400,cls='',d=None,extra=''):
@@ -34,25 +37,27 @@ def frame(x0,x1,y0,y1,xt,yt,xlab,ylab,xtop=False,grid=True):
     return b
 out=[]
 
-# ---------- 1. Petroleum system cross-section ----------
+# ---------- 1. Petroleum system cross-section (two-phase trap) ----------
 X=list(range(30,321,4))
 def h(x,y0,A=30): return y0-A*math.exp(-((x-222)/50)**2)+0.12*(222-x)
 ys=[58,80,96,124,140]
 fills=['#ece9df','#cfd3c8','#e6d6b0','#d9d5c8','#4f4d47','#c9c4b6']
 top=[(x,14) for x in X]; bot=[(x,186) for x in X]
 L=[top]+[[(x,h(x,y)) for x in X] for y in ys]+[bot]
-b=marker('m1',CU)+'<clipPath id="xc1"><rect x="30" y="14" width="290" height="172"/></clipPath><g clip-path="url(#xc1)">'
+b=marker('m1g',GAS)+marker('m1o',OILC)+'<clipPath id="xc1"><rect x="30" y="14" width="290" height="172"/></clipPath><g clip-path="url(#xc1)">'
 for i in range(len(L)-1): b+=f'<path d="{path(L[i]+L[i+1][::-1])}Z" fill="{fills[i]}"/>'
 for i in range(1,len(L)-1): b+=f'<path d="{path(L[i])}" fill="none" stroke="{MUT}" stroke-width=".6"/>'
 res=[(x,h(x,ys[1])) for x in X]+[(x,h(x,ys[2])) for x in X][::-1]
-crest=min(h(x,ys[1]) for x in X); owc=crest+14
-b+=f'<clipPath id="xc1b"><path d="{path(res)}Z"/></clipPath><g clip-path="url(#xc1b)"><rect x="30" y="{f1(crest-2)}" width="290" height="{f1(owc-crest+2)}" fill="{CU}"{A("a-down",1.6)}/></g>'
-# expulsion + carrier-bed migration along reservoir mid-line
+crest=min(h(x,ys[1]) for x in X); goc=crest+7; owc=crest+15
+b+=f'<clipPath id="xc1b"><path d="{path(res)}Z"/></clipPath><g clip-path="url(#xc1b)">'
+b+=f'<rect x="30" y="{f1(goc)}" width="290" height="{f1(owc-goc)}" fill="{OILC}"{A("a-down",1.5)}/>'
+b+=f'<rect x="30" y="{f1(crest-2)}" width="290" height="{f1(goc-crest+2)}" fill="{GAS}"{A("a-down",2.3)}/></g>'
+# expulsion: deeper (more mature) kitchen gives gas, shallower one gives oil; both migrate up the carrier bed
 mid=lambda x:(h(x,ys[1])+h(x,ys[2]))/2
-for sx in (60,110):
-    b+=f'<path d="M{sx},{f1(h(sx,ys[3])-1)} L{sx},{f1(mid(sx)+3)}" stroke="{CU}" stroke-width="1.6" fill="none"{A("a-flow",.3)}/>'
-mig=[(x,mid(x)) for x in range(50,214,4)]
-b+=f'<path d="{path(mig)}" stroke="{CU}" stroke-width="1.8" fill="none" marker-end="url(#m1)"{A("a-flow",.6)}/>'
+for sx,col,dl in ((92,GAS,.3),(140,OILC,.3)):
+    b+=f'<path d="M{sx},{f1(h(sx,ys[3])-1)} L{sx},{f1(mid(sx)+3)}" stroke="{col}" stroke-width="1.8" fill="none"{A("a-flow",dl)}/>'
+b+=f'<path d="{path([(x,mid(x)-2.6) for x in range(92,214,4)])}" stroke="{GAS}" stroke-width="1.8" fill="none" marker-end="url(#m1g)"{A("a-flow",.6)}/>'
+b+=f'<path d="{path([(x,mid(x)+2.6) for x in range(140,214,4)])}" stroke="{OILC}" stroke-width="1.8" fill="none" marker-end="url(#m1o)"{A("a-flow",.6)}/>'
 b+='</g>'
 # depth axis + scale bar
 dz=lambda km:14+km*40
@@ -61,74 +66,98 @@ for km in range(0,5): b+=f'<line x1="27" y1="{dz(km)}" x2="30" y2="{dz(km)}" str
 b+=f'<text x="9" y="100" font-size="9.5" fill="{LT}" text-anchor="middle" transform="rotate(-90 9 100)">depth (km)</text>'
 b+=f'<rect x="242" y="170" width="70" height="13" rx="2" fill="{PAPER}" opacity=".9"/><line x1="248" y1="178" x2="288" y2="178" stroke="{FG}" stroke-width="2"/>'+T(292,181.5,'10 km',9,FG)
 b+=T(36,h(36,ys[0])+14,'seal',10,FG)+T(36,h(36,ys[1])+12.5,'reservoir',10,FG)+T(36,h(36,ys[3])+12,'source rock',10,PAPER)
-b+=T(238,crest-8,'trap',11,CU,weight=700,cls='a-fade',d=2.4)+T(150,h(150,ys[4])+13,'kitchen',10,PAPER,cls='a-fade',d=.2)
-out.append(svg(b,'Cross-section of a petroleum system: expulsion from the source rock, migration along the carrier bed and filling of an anticlinal trap'))
+b+=T(222,crest-8,'two-phase trap',10.5,FG,'middle',700,'a-fade',2.6)+T(116,h(116,ys[4])+13,'kitchen',10,PAPER,'middle',cls='a-fade',d=.2)
+b+=f'<g{A("a-fade",.1)}><rect x="36" y="20" width="96" height="16" rx="3" fill="{PAPER}" opacity=".9"/><rect x="42" y="24" width="9" height="8" fill="{GAS}"/>'+T(55,31.5,'gas',9.5,FG)+f'<rect x="80" y="24" width="9" height="8" fill="{OILC}"/>'+T(93,31.5,'oil',9.5,FG)+'</g>'
+out.append(svg(b,'Cross-section of a petroleum system: gas from the deeper kitchen and oil from the shallower one migrate along the carrier bed into a two-phase trap, gas cap over oil leg'))
 
 # ---------- 2. Burial history ----------
 x0,x1,y0,y1=40,310,30,190
 ax=lambda a:x0+(150-a)/150*(x1-x0); ay=lambda d:y0+d/5*(y1-y0)
 b=frame(x0,x1,y0,y1,[(ax(a),str(a)) for a in (150,100,50,0)],[(ay(d),str(d)) for d in range(6)],'age (Ma)','depth (km)',xtop=True,grid=False)
-b+=f'<rect x="{x0}" y="{f1(ay(2.7))}" width="{x1-x0}" height="{f1(ay(4.3)-ay(2.7))}" fill="{CU}" opacity=".2"{A("a-fade",1.8)}/>'
-b+=f'<rect x="{x0}" y="{f1(ay(4.3))}" width="{x1-x0}" height="{f1(y1-ay(4.3))}" fill="{BLUE}" opacity=".14"{A("a-fade",1.9)}/>'
 Hs=[(150,4.7),(118,3.8),(92,3.0),(66,2.15),(40,1.3),(16,.55)]
 curves=[[(ax(t),ay(D*((Aa-t)/Aa)**.72)) for t in [Aa-i*Aa/40 for i in range(41)]] for Aa,D in Hs]
 tones=['#d9d5c8','#e6d6b0','#cfd3c8','#e6d6b0','#d9d5c8','#e6d6b0']
 for i,c in enumerate(curves):
     nxt=curves[i+1] if i+1<len(curves) else [(x1,y0)]
     poly=c+([(x1,ay(Hs[i+1][1]))] if i+1<len(curves) else [])+nxt[::-1]
-    b+=f'<path d="{path(poly)}Z" fill="{tones[i]}" opacity=".85"{A("a-fade",.4+i*.22)}/>'
+    b+=f'<path d="{path(poly)}Z" fill="{tones[i]}"{A("a-fade",.4+i*.22)}/>'
+# hydrocarbon windows: heavy -> light oil (dark -> light green), condensate (yellow-orange), gas (red)
+dw=[(2.5,HEAVY),(3.3,LIGHTO),(3.75,COND),(4.2,COND2),(4.55,GAS),(5,GAS)]
+b+=f'<defs><linearGradient id="g2fl" gradientUnits="userSpaceOnUse" x1="0" y1="{f1(ay(2.5))}" x2="0" y2="{y1}">'
+for d,c in dw: b+=f'<stop offset="{(ay(d)-ay(2.5))/(y1-ay(2.5)):.3f}" stop-color="{c}"/>'
+b+='</linearGradient></defs>'
+b+=f'<rect x="{x0}" y="{f1(ay(2.5))}" width="{x1-x0}" height="{f1(y1-ay(2.5))}" fill="url(#g2fl)" fill-opacity=".55"{A("a-fade",1.8)}/>'
 for i,c in enumerate(curves): b+=f'<path d="{path(c)}" fill="none" stroke="{MUT}" stroke-width=".9" pathLength="1"{A("a-draw",i*.22)}/>'
 b+=f'<line x1="{x0}" y1="{y0}" x2="{x1}" y2="{y0}" stroke="{FG}" stroke-width=".9"/>'
-b+=T(x1-4,ay(2.7)+13,'oil window',10.5,CU,'end',700,'a-fade',2.1)+T(x1-4,ay(4.3)+13,'gas',10,BLUE,'end',600,'a-fade',2.2)
-out.append(svg(b,'Burial history: sediment layers subsiding through the oil and gas windows over 150 million years'))
+for k,(d,lab) in enumerate([(2.85,'heavy oil'),(3.45,'light oil'),(4.0,'condensate'),(4.8,'gas')]):
+    b+=T(x1-4,ay(d)+3.5,lab,9.5,FG,'end',700,'a-fade',2.1+k*.1,HALO)
+out.append(svg(b,'Burial history: sediment layers subsiding through the heavy oil, light oil, condensate and gas windows over 150 million years'))
 
-# ---------- 3. HI vs Tmax with maturity (vitrinite) zones ----------
+# ---------- 3. HI vs Tmax over hydrocarbon-generation zones ----------
 x0,x1,y0,y1=42,306,34,166
 tx=lambda t:x0+(t-400)/100*(x1-x0); hy=lambda v:y1-v/1000*(y1-y0)
-b=''
-zones=[(400,435,'#ece9df','immature'),(435,445,'#dfe6cf',''),(445,450,'#c9d8b4',''),(450,470,'#dfe6cf',''),(470,500,'#d8e0e6','gas')]
-for i,(a,c,col,lab) in enumerate(zones): b+=f'<rect x="{f1(tx(a))}" y="{y0}" width="{f1(tx(c)-tx(a))}" height="{y1-y0}" fill="{col}"{A("a-fade",i*.12)}/>'
-b+=T((tx(445)+tx(470))/2+6,y0+13,'oil window',10,GRN,'middle',700,'a-fade',.6)
-b+=T((tx(400)+tx(435))/2,y1-7,'immature',9.5,MUT,'middle',600,'a-fade',.6)+T((tx(470)+tx(500))/2,y0+13,'gas',9.5,BLUE,'middle',700,'a-fade',.6)
+roT=lambda ro:(ro+7.16)/0.018   # Jarvie et al. (2001): %Ro = 0.018 Tmax - 7.16
+st=[(400,IMM),(roT(.6),IMM),(roT(.6),HEAVY),(roT(.95),LIGHTO),(roT(1.1),COND),(roT(1.25),COND2),(roT(1.4),GAS),(500,GAS)]
+b=f'<defs><linearGradient id="g3fl" gradientUnits="userSpaceOnUse" x1="{x0}" y1="0" x2="{x1}" y2="0">'
+for t,c in st: b+=f'<stop offset="{(t-400)/100:.3f}" stop-color="{c}"/>'
+b+='</linearGradient></defs>'
+b+=f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="url(#g3fl)" fill-opacity=".6"{A("a-fade",0)}/>'
 b+=frame(x0,x1,y0,y1,[(tx(t),str(t)) for t in (400,425,450,475,500)],[(hy(v),str(v)) for v in (0,250,500,750,1000)],'Tmax (°C)','HI (mg HC/g TOC)')
 # vitrinite reflectance scale on top
-for t,ro in [(435,'0.6'),(450,'1.0'),(470,'1.35')]:
-    b+=f'<line x1="{f1(tx(t))}" y1="{y0}" x2="{f1(tx(t))}" y2="{y0-3}" stroke="{FG}" stroke-width=".9"/>'+T(tx(t),y0-5,ro,9,MUT,'middle')
-b+=f'<line x1="{x0}" y1="{y0}" x2="{x1}" y2="{y0}" stroke="{FG}" stroke-width=".9"/>'+T(x1,y0-5,'%Ro',9,LT,'end')
-for name,H0,Tm,w,col,lx in [('I',900,447,3.2,GRN,421),('II',640,452,6.5,ACC,421),('III',270,462,11,CU,421)]:
-    pts=[(tx(t),hy(H0/(1+math.exp((t-Tm)/w)))) for t in [404+i*0.8 for i in range(120)]]
-    b+=f'<path d="{path(pts)}" fill="none" stroke="{col}" stroke-width="1.8" pathLength="1"{A("a-draw",.7)}/>'
-    b+=T(tx(lx),hy(H0)-5,'Type '+name,10,col,weight=700,cls='a-fade',d=1.6)
+for ro in (0.6,0.8,1.0,1.3,1.6):
+    t=roT(ro); b+=f'<line x1="{f1(tx(t))}" y1="{y0}" x2="{f1(tx(t))}" y2="{y0-3}" stroke="{FG}" stroke-width=".9"/>'+T(tx(t),y0-5,f'{ro:g}',9,MUT,'middle')
+b+=f'<line x1="{x0}" y1="{y0}" x2="{x1}" y2="{y0}" stroke="{FG}" stroke-width=".9"/>'+T(x0,y0-5,'%Ro',9,LT,'start')
+for name,H0,Tm,w in [('I',900,447,3.2),('II',640,452,6.5),('III',270,462,11)]:
+    pts=path([(tx(t),hy(H0/(1+math.exp((t-Tm)/w)))) for t in [404+i*0.8 for i in range(120)]])
+    b+=f'<path d="{pts}" fill="none" stroke="{PAPER}" stroke-width="4" stroke-linecap="round" pathLength="1"{A("a-draw",.6)}/>'
+    b+=f'<path d="{pts}" fill="none" stroke="{FG}" stroke-width="1.7" pathLength="1"{A("a-draw",.6)}/>'
+    b+=T(tx(410),hy(H0)+13,'Type '+name,10,FG,weight=700,cls='a-fade',d=1.5)
 random.seed(3)
 pts=[]
 for k in range(24):
     t=random.uniform(424,468); v=640/(1+math.exp((t-452)/6.5))*random.uniform(.8,1.15)
     pts.append((t,v))
 for k,(t,v) in enumerate(sorted(pts)):
-    b+=f'<circle cx="{f1(tx(t))}" cy="{f1(hy(v))}" r="3" fill="{ACC}" fill-opacity=".75" stroke="{FG}" stroke-width=".5"{A("a-pop",1.9+k*.06)}/>'
-out.append(svg(b,'Hydrogen index against Tmax with kerogen type curves and maturity zones from vitrinite reflectance'))
-
-# ---------- 4. Pressure-depth ----------
-x0,x1,y0,y1=40,310,30,190
-px=lambda p:x0+p/120*(x1-x0); dy=lambda d:y0+d/5*(y1-y0)
-b=frame(x0,x1,y0,y1,[(px(p),str(p)) for p in (0,30,60,90,120)],[(dy(d),str(d)) for d in range(6)],'pressure (MPa)','depth (km)',xtop=True)
-ds=2.4
-b+=f'<rect x="{x0}" y="{f1(dy(ds)-6)}" width="{x1-x0}" height="6" fill="{MUT}" opacity=".35"{A("a-fade",.2)}/>'+T(x1-3,dy(ds)-9,'seal',9.5,MUT,'end',cls='a-fade',d=.2)
-pp=[]
-for i in range(81):
-    d=i*5/80
-    p=10*d if d<=ds else 10*d+(1-math.exp(-(d-ds)/0.9))*(20.5*d-10*d)
-    pp.append((px(p),dy(d)))
-over=[q for q in pp if q[1]>=dy(ds)]
-b+=f'<path d="{path(over+[(px(10*((y-y0)/(y1-y0)*5)),y) for x,y in over][::-1])}Z" fill="{CU}" opacity=".2"{A("a-fade",1.6)}/>'
-b+=f'<path d="M{px(0)},{dy(0)} L{f1(px(50))},{dy(5)}" stroke="{BLUE}" stroke-width="1.5" pathLength="1"{A("a-draw",.1)}/>'
-b+=f'<path d="M{px(0)},{dy(0)} L{f1(px(115))},{dy(5)}" stroke="{MUT}" stroke-width="1.5" pathLength="1"{A("a-draw",.1)}/>'
-b+=f'<path d="{path(pp)}" fill="none" stroke="{CU}" stroke-width="2.2" pathLength="1"{A("a-draw",.6)}/>'
-b+=T(px(57),dy(4.75),'overpressure',10.5,CU,'middle',700,'a-fade',2)
-b+=f'<g{A("a-fade",.3)}><rect x="214" y="38" width="92" height="46" rx="3" fill="{PAPER}" stroke="{LINE}"/>'
-for k,(col,lab) in enumerate([(BLUE,'hydrostatic'),(MUT,'lithostatic'),(CU,'pore pressure')]): b+=f'<line x1="220" y1="{49+k*13}" x2="234" y2="{49+k*13}" stroke="{col}" stroke-width="2"/>'+T(239,52.5+k*13,lab,9.5,FG)
+    b+=f'<circle cx="{f1(tx(t))}" cy="{f1(hy(v))}" r="3" fill="{PAPER}" stroke="{FG}" stroke-width=".9"{A("a-pop",1.9+k*.06)}/>'
+b+=f'<g{A("a-fade",.4)}><rect x="236" y="40" width="66" height="70" rx="3" fill="{PAPER}" fill-opacity=".92" stroke="{LINE}"/>'
+for k,(c,lab) in enumerate([(IMM,'immature'),(HEAVY,'heavy oil'),(LIGHTO,'light oil'),(COND,'condensate'),(GAS,'gas')]):
+    b+=f'<rect x="242" y="{46+k*12.4}" width="9" height="9" fill="{c}" stroke="{LINE}" stroke-width=".5"/>'+T(255,54+k*12.4,lab,9,FG)
 b+='</g>'
-out.append(svg(b,'Pressure against depth: pore pressure departing from hydrostatic below a seal, toward lithostatic'))
+out.append(svg(b,'Hydrogen index against Tmax with kerogen type curves over the hydrocarbon-generation zones, heavy oil to light oil, condensate and gas, with a vitrinite reflectance scale'))
+
+# ---------- 4. Pressure-depth through a two-phase trap ----------
+x0,x1,y0,y1=40,310,30,190
+P0,P1,D0,D1=10,60,1.0,3.5
+px=lambda p:x0+(p-P0)/(P1-P0)*(x1-x0); dy=lambda d:y0+(d-D0)/(D1-D0)*(y1-y0)
+b=frame(x0,x1,y0,y1,[(px(p),str(p)) for p in (10,20,30,40,50,60)],[(dy(d),f'{d:.1f}') for d in (1,1.5,2,2.5,3,3.5)],'pressure (MPa)','depth (km)',xtop=True)
+st,sb,goc,fwl=1.9,2.1,2.45,2.8          # seal top/base (= crest), gas-oil contact, free-water level
+gw,go,gg,gf,dP=10,7.5,2.0,16.8,8.0       # gradients (MPa/km) water, oil, gas, fracture; overpressure below the seal
+pw=lambda d:gw*d+dP
+p_fwl=pw(fwl); p_goc=p_fwl-go*(fwl-goc); p_cr=p_goc-gg*(goc-sb)
+b+=f'<rect x="{x0}" y="{f1(dy(sb))}" width="{x1-x0}" height="{f1(dy(goc)-dy(sb))}" fill="{GAS}" fill-opacity=".16"{A("a-fade",.3)}/>'
+b+=f'<rect x="{x0}" y="{f1(dy(goc))}" width="{x1-x0}" height="{f1(dy(fwl)-dy(goc))}" fill="{OILC}" fill-opacity=".16"{A("a-fade",.3)}/>'
+b+=f'<rect x="{x0}" y="{f1(dy(st))}" width="{x1-x0}" height="{f1(dy(sb)-dy(st))}" fill="{MUT}" fill-opacity=".4"{A("a-fade",.2)}/>'+T(x0+4,dy(2.0)+3.3,'seal',9.5,FG,weight=600,cls='a-fade',d=.2)
+for d,lab in ((goc,'GOC'),(fwl,'FWL')): b+=f'<line x1="{x0}" y1="{f1(dy(d))}" x2="{x1}" y2="{f1(dy(d))}" stroke="{MUT}" stroke-width=".6" stroke-dasharray="2 2"{A("a-fade",.3)}/>'+T(x0+4,dy(d)-2.5,lab,9,FG,weight=600,cls='a-fade',d=.3)
+b+=f'<path d="M{f1(px(gw*D0))},{dy(D0)} L{f1(px(gw*D1))},{dy(D1)}" stroke="{BLUE}" stroke-width="1.4" pathLength="1"{A("a-draw",.1)}/>'
+b+=f'<path d="M{f1(px(gf*D0))},{dy(D0)} L{f1(px(gf*D1))},{dy(D1)}" stroke="{MUT}" stroke-width="1.4" pathLength="1"{A("a-draw",.1)}/>'
+# water pressure: hydrostatic above the seal, overpressured below; extrapolated (dashed) through the hydrocarbon column
+b+=f'<path d="{path([(px(gw*D0),dy(D0)),(px(gw*st),dy(st)),(px(pw(sb)),dy(sb))])}" fill="none" stroke="{FG}" stroke-width="2" pathLength="1"{A("a-draw",.5)}/>'
+b+=f'<path d="M{f1(px(pw(sb)))},{f1(dy(sb))} L{f1(px(p_fwl))},{f1(dy(fwl))}" stroke="{FG}" stroke-width="1" stroke-dasharray="3 2"{A("a-fade",1.2)}/>'
+b+=f'<path d="M{f1(px(p_fwl))},{f1(dy(fwl))} L{f1(px(pw(D1)))},{dy(D1)}" stroke="{FG}" stroke-width="2" pathLength="1"{A("a-draw",1.0)}/>'
+# hydrocarbon gradients built up from the free-water level
+b+=f'<path d="M{f1(px(p_fwl))},{f1(dy(fwl))} L{f1(px(p_goc))},{f1(dy(goc))}" stroke="{OILC}" stroke-width="3" stroke-linecap="round" pathLength="1"{A("a-draw",1.4)}/>'
+b+=f'<path d="M{f1(px(p_goc))},{f1(dy(goc))} L{f1(px(p_cr))},{f1(dy(sb))}" stroke="{GAS}" stroke-width="3" stroke-linecap="round" pathLength="1"{A("a-draw",2.1)}/>'
+# seal margin at the crest: gas pressure vs fracture pressure
+pf=gf*sb; yc=dy(sb)
+b+=f'<g{A("a-fade",3)}><line x1="{f1(px(p_cr)+2)}" y1="{f1(yc)}" x2="{f1(px(pf)-1)}" y2="{f1(yc)}" stroke="{CU}" stroke-width="1.4"/><line x1="{f1(px(pf)-1)}" y1="{f1(yc-3)}" x2="{f1(px(pf)-1)}" y2="{f1(yc+3)}" stroke="{CU}" stroke-width="1.4"/></g>'
+b+=T(px(pf)+9,yc+1,'seal margin',9,CU,weight=700,cls='a-fade',d=3)
+b+=T(px(gf*2.3)+10,dy(2.3)+3,f'gas {gg:g} MPa/km',9,GAS,weight=700,cls='a-fade',d=2.6,extra=HALO)
+b+=T(px(gf*2.65)+10,dy(2.65)+3,f'oil {go:g} MPa/km',9,'#2f6b2f',weight=700,cls='a-fade',d=2.0,extra=HALO)
+b+=T(px(pw(3.25))+7,dy(3.25)+3,f'water {gw:g} MPa/km',9,FG,weight=700,cls='a-fade',d=2.0,extra=HALO)
+b+=f'<g{A("a-fade",.3)}><rect x="200" y="38" width="106" height="46" rx="3" fill="{PAPER}" stroke="{LINE}"/>'
+for k,(col,lab) in enumerate([(BLUE,'hydrostatic'),(MUT,'fracture (Shmin)'),(FG,'pore pressure')]): b+=f'<line x1="206" y1="{49+k*13}" x2="220" y2="{49+k*13}" stroke="{col}" stroke-width="2"/>'+T(225,52.5+k*13,lab,9.5,FG)
+b+='</g>'
+out.append(svg(b,'Pressure against depth through a two-phase trap below a seal: gas and oil gradients from the free-water level, overpressured water, and the seal margin against fracture pressure'))
 
 # ---------- 5. Prospect evaluation ----------
 x0,x1,y0,y1=42,310,16,166
@@ -147,25 +176,64 @@ for k,(lab,p,z) in enumerate([('P90',.9,-1.2816),('P50',.5,0),('P10',.1,1.2816)]
 b+=f'<g{A("a-fade",3)}><rect x="236" y="26" width="66" height="24" rx="3" fill="{PAPER}" stroke="{ACC}"/></g>'+T(269,42,'POS 32 %',10.5,ACC,'middle',700,'a-fade',3)
 out.append(svg(b,'Volume distribution and exceedance curve with P90, P50 and P10 and the probability of success'))
 
-# ---------- 6. Clinoforms (forward stratigraphic model) ----------
-X=list(range(0,321,4))
-b=f'<rect x="0" y="0" width="{W}" height="{H}" fill="#dfe6e6"/>'
-sea=40
-b+=f'<line x1="0" y1="{sea}" x2="{W}" y2="{sea}" stroke="{BLUE}" stroke-width="1" stroke-dasharray="5 3"/>'+T(314,sea-5,'sea level',9.5,BLUE,'end')
-def surf(k):
-    xb=40+30*k; tp=sea+16-1.7*k
-    return [(x,tp+(168-tp)/(1+math.exp(-(x-xb-20)/10))) for x in X]
-S=[[(x,176) for x in X]]+[surf(k) for k in range(8)]
-cols=['#d9d5c8','#e6d6b0']*4
-for k in range(1,len(S)):
-    b+=f'<g{A("a-fade",.2+k*.32)}><path d="{path(S[k]+S[k-1][::-1])}Z" fill="{cols[k-1]}"/><path d="{path(S[k])}" fill="none" stroke="{MUT}" stroke-width=".7"/></g>'
-b+=f'<rect x="0" y="176" width="{W}" height="24" fill="{LINE}"/>'
-b+=marker('m6',CU)+f'<path d="M14,{sea-14} L84,{sea-14}" stroke="{CU}" stroke-width="1.6" pathLength="1" marker-end="url(#m6)"{A("a-draw",.2)}/>'+T(90,sea-10.5,'progradation',10,CU,weight=600)
-b+=T(10,sea+32,'shelf',10.5,FG,weight=700)+T(214,128,'slope',10.5,FG,weight=700)+T(310,170,'basin',10,FG,'end',700)
-# scale bars
-b+=f'<line x1="14" y1="190" x2="74" y2="190" stroke="{FG}" stroke-width="2"/>'+T(80,193.5,'10 km',9.5,FG)
-b+=f'<line x1="300" y1="{sea}" x2="300" y2="{sea+40}" stroke="{FG}" stroke-width="2"/>'+T(296,sea+24,'100 m',9.5,FG,'end')
-out.append(svg(b,'Forward stratigraphic model: clinoforms prograding from shelf to basin'))
+# ---------- 6. Forward stratigraphic model: one sea-level cycle ----------
+# Each step deposits a clinoform with its topset at sea level and shelf break at xb; the new surface
+# only builds up (min in screen y), so falling sea level gives downstepping wedges and a basin-floor fan,
+# rising sea level gives backstepping, then highstand progradation resumes.
+X=list(range(0,321,3)); FLOOR=172
+sig=lambda z:1/(1+math.exp(-z))
+def clino(xb,sl,fan=0):
+    zt=sl+3; r=[]
+    for x in X:
+        top=zt+0.04*(x-xb)
+        y=top+(FLOOR-top)*sig((x-xb-16)/8.5)
+        if fan: y-=fan*math.exp(-((x-xb-58)/22)**2)
+        r.append(min(y,FLOOR))
+    return r
+steps=[(42,56,'HST',0),(41,72,'HST',0),(40,88,'HST',0),(39.5,104,'HST',0),
+       (52,124,'FSST',0),(66,144,'FSST',0),(80,162,'FSST',8),(86,176,'LST',13),(84,188,'LST',6),
+       (70,176,'TST',0),(55,150,'TST',0),(41,124,'TST',0),(30,100,'TST',0),(29,124,'HST',0),(28.5,148,'HST',0)]
+SAND,SHALE,PLAIN,WATER='#e3c46f','#a4a79b','#c9bd95','#dbe5e8'
+b=f'<rect x="0" y="0" width="{W}" height="{H}" fill="{PAPER}"/><rect x="0" y="28.5" width="{W}" height="{FLOOR-28}" fill="{WATER}"/>'
+S=[clino(40,44)]
+b+=f'<path d="{path(list(zip(X,S[0])))} L320,200 L0,200Z" fill="{LINE}"/>'
+defs='';body=''
+for k,(sl,xb,tr,fan) in enumerate(steps):
+    new=[min(p,c) for p,c in zip(S[-1],clino(xb,sl,fan))]
+    S.append(new)
+    stops=[(xb-70,PLAIN),(xb-46,SAND),(xb-2,SAND),(xb+20,SHALE)]
+    if fan: stops+=[(xb+30,SHALE),(xb+40,SAND),(xb+76,SAND),(xb+92,SHALE)]
+    defs+=f'<linearGradient id="g6_{k}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="{W}" y2="0">'+''.join(f'<stop offset="{max(0,min(1,x/W)):.3f}" stop-color="{c}"/>' for x,c in stops)+'</linearGradient>'
+    poly=list(zip(X,new))+list(zip(X,S[-2]))[::-1]
+    body+=f'<g{A("a-fade",round(.2+k*.3,2))}><path d="{path(poly)}Z" fill="url(#g6_{k})"/><path d="{path(list(zip(X,new)))}" fill="none" stroke="{MUT}" stroke-width=".45"/></g>'
+b+='<defs>'+defs+'</defs>'+body
+# key surfaces: sequence boundary (top of the first highstand) and maximum flooding surface (top of the transgression)
+b+=f'<path d="{path(list(zip(X,S[4])))}" fill="none" stroke="{GAS}" stroke-width="1.4"{A("a-fade",1.3)}/>'+T(4,S[4][2]+11,'SB',9,GAS,weight=700,cls='a-fade',d=1.3,extra=HALO)
+b+=f'<path d="{path(list(zip(X,S[13])))}" fill="none" stroke="{BLUE}" stroke-width="1.4"{A("a-fade",3.6)}/>'+T(4,S[13][2]-3,'MFS',9,BLUE,weight=700,cls='a-fade',d=3.6,extra=HALO)
+# systems-tract labels at the thickest point of each group
+def lab(ks,name,col,d):
+    th=[(sum(S[k][i]-S[k+1][i] for k in ks),i) for i in range(len(X))]; t,i=max(th)
+    yt=(S[ks[0]][i]+S[ks[-1]+1][i])/2
+    return T(X[i],yt+3.3,name,9,col,'middle',700,'a-fade',d,HALO)
+b+=lab([0,1,2,3],'HST',FG,1.4)+lab([4,5,6],'FSST',FG,2.2)+lab([7,8],'LST',FG,2.8)+lab([9,10,11,12],'TST',FG,3.7)+lab([13,14],'HST',FG,4.4)
+# sea level: final highstand and the lowstand
+b+=f'<line x1="0" y1="28.5" x2="{W}" y2="28.5" stroke="{BLUE}" stroke-width="1" stroke-dasharray="5 3"/>'
+b+=f'<line x1="150" y1="86" x2="{W}" y2="86" stroke="{BLUE}" stroke-width=".8" stroke-dasharray="2 2"{A("a-fade",2.6)}/>'+T(314,83,'lowstand',8.5,BLUE,'end',cls='a-fade',d=2.6)
+# inset: relative sea-level curve, drawn step by step in sync with the deposits
+ix0,ix1,iy0,iy1=228,310,40,64
+slx=lambda k:ix0+k/(len(steps)-1)*(ix1-ix0); sly=lambda sl:iy0+(sl-28)/(86-28)*(iy1-iy0)
+b+=f'<rect x="{ix0-26}" y="35" width="{ix1-ix0+32}" height="33" rx="3" fill="{PAPER}" stroke="{LINE}"/>'+T(ix0-22,49,'sea',8.5,MUT)+T(ix0-22,59,'level',8.5,MUT)
+b+=f'<line x1="{ix0}" y1="{iy1+1}" x2="{ix1}" y2="{iy1+1}" stroke="{LT}" stroke-width=".6"/>'
+for k in range(1,len(steps)):
+    b+=f'<path d="M{f1(slx(k-1))},{f1(sly(steps[k-1][0]))} L{f1(slx(k))},{f1(sly(steps[k][0]))}" stroke="{BLUE}" stroke-width="1.6" stroke-linecap="round" pathLength="1"{A("a-draw",round(.2+k*.3,2))}/>'
+# legend + scale bars
+b+=f'<g{A("a-fade",.1)}>'
+for k,(c,l) in enumerate([(SAND,'sand'),(SHALE,'shale'),(PLAIN,'coastal plain')]):
+    b+=f'<rect x="{6+k*44}" y="8" width="9" height="9" fill="{c}" stroke="{MUT}" stroke-width=".4"/>'+T(18+k*44,16,l,9,FG)
+b+='</g>'
+b+=f'<line x1="10" y1="190" x2="70" y2="190" stroke="{FG}" stroke-width="2"/>'+T(76,193.5,'10 km',9,FG)
+b+=f'<line x1="308" y1="176" x2="308" y2="196" stroke="{FG}" stroke-width="2"/>'+T(304,189,'50 m',9,FG,'end')
+out.append(svg(b,'Forward stratigraphic model through one relative sea-level cycle: highstand progradation, falling-stage downstepping, lowstand fan and wedge, transgressive backstepping, with shoreface sand passing basinward into shale'))
 
 # ---------- 7. CCUS screening map ----------
 b=f'<rect x="0" y="0" width="{W}" height="{H}" fill="{PAPER}"/>'
