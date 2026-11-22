@@ -140,8 +140,9 @@ b+=f'<rect x="{x0}" y="{f1(dy(st))}" width="{x1-x0}" height="{f1(dy(sb)-dy(st))}
 for d,lab in ((goc,'GOC'),(fwl,'FWL')): b+=f'<line x1="{x0}" y1="{f1(dy(d))}" x2="{x1}" y2="{f1(dy(d))}" stroke="{MUT}" stroke-width=".6" stroke-dasharray="2 2"{A("a-fade",.3)}/>'+T(x0+4,dy(d)-2.5,lab,9,FG,weight=600,cls='a-fade',d=.3)
 b+=f'<path d="M{f1(px(gw*D0))},{dy(D0)} L{f1(px(gw*D1))},{dy(D1)}" stroke="{BLUE}" stroke-width="1.4" pathLength="1"{A("a-draw",.1)}/>'
 b+=f'<path d="M{f1(px(gf*D0))},{dy(D0)} L{f1(px(gf*D1))},{dy(D1)}" stroke="{MUT}" stroke-width="1.4" pathLength="1"{A("a-draw",.1)}/>'
-# water pressure: hydrostatic above the seal, overpressured below; extrapolated (dashed) through the hydrocarbon column
-b+=f'<path d="{path([(px(gw*D0),dy(D0)),(px(gw*st),dy(st)),(px(pw(sb)),dy(sb))])}" fill="none" stroke="{FG}" stroke-width="2" pathLength="1"{A("a-draw",.5)}/>'
+# pore pressure: hydrostatic above the seal, rising through the seal to the gas pressure at the crest (continuous profile);
+# the water gradient is extrapolated (dashed) through the hydrocarbon column to show the buoyancy pressure
+b+=f'<path d="{path([(px(gw*D0),dy(D0)),(px(gw*st),dy(st)),(px(p_cr),dy(sb))])}" fill="none" stroke="{FG}" stroke-width="2" pathLength="1"{A("a-draw",.5)}/>'
 b+=f'<path d="M{f1(px(pw(sb)))},{f1(dy(sb))} L{f1(px(p_fwl))},{f1(dy(fwl))}" stroke="{FG}" stroke-width="1" stroke-dasharray="3 2"{A("a-fade",1.2)}/>'
 b+=f'<path d="M{f1(px(p_fwl))},{f1(dy(fwl))} L{f1(px(pw(D1)))},{dy(D1)}" stroke="{FG}" stroke-width="2" pathLength="1"{A("a-draw",1.0)}/>'
 # hydrocarbon gradients built up from the free-water level
