@@ -13,8 +13,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       # Pinned to the versions tested locally; bump deliberately (MkDocs 2.0 is not compatible yet)
@@ -26,7 +26,7 @@ jobs:
           --virtual-time-budget=5000 --print-to-pdf=site/cv.pdf
           "file://$PWD/site/cv/index.html"
       - run: test -s site/cv.pdf
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -38,4 +38,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
