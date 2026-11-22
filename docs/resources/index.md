@@ -33,8 +33,8 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Platte River Associates — Downloads](https://www.platte.com/software/downloads/) — PRA basin modelling software (BasinMod, etc.)
 - [OG-PROBE](https://www.msfmaker08.com/ogprobe.htm) — hydrocarbon geochemistry database and analysis
 - [workollab/pvt-lab](https://github.com/workollab/pvt-lab) — cubic-EOS PVT in the browser (flash, phase envelope, CCE/DL)
-- [GoExplore Consulting — Freeware](https://www.goexplore.consulting/install-software) — outils gratuits exploration
-- [MRST — Gallery (SINTEF)](https://www.sintef.no/projectweb/mrst/gallery/) — MATLAB Reservoir Simulation Toolbox · exemples
+- [GoExplore Consulting — Freeware](https://www.goexplore.consulting/install-software) — free exploration software
+- [MRST — Gallery (SINTEF)](https://www.sintef.no/projectweb/mrst/gallery/) — MATLAB Reservoir Simulation Toolbox · examples
 - [open-darts](https://gitlab.com/open-darts) — flow/thermal simulator for porous media · open-source
 - [OpenGoSim Cirrus](https://docs.opengosim.com/cirrus/manual/introduction.html) — reservoir simulator (PFLOTRAN-based) · documentation
 - [RUNSPEC — OPM Flow specs](https://runspec.io/preview/specs#opmflow) — online OPM Flow simulation platform
@@ -44,9 +44,9 @@ Tools, libraries, references and sites used across this site — kept here rathe
 
 - [E-POS](https://lhjelm-e-pos.streamlit.app/) — evidence supported probability of success · Streamlit (L. Hjelm)
 - [SCOPE-HC](https://scope-hc.streamlit.app/) — Streamlit (L. Hjelm)
-- [WellVolPOS](https://wellvolpos.streamlit.app/) — volumes stochastiques & POS par puits · Streamlit · [repo](https://github.com/lhjelm-dk/WellVolPOS)
+- [WellVolPOS](https://wellvolpos.streamlit.app/) — stochastic volumes & POS per well · Streamlit · [repo](https://github.com/lhjelm-dk/WellVolPOS)
 - [drisk — Prospect Evaluation](https://nick-dorsch.github.io/drisk/examples/prospect-evaluation.html) — probabilistic prospect evaluation · Python
-- [Pyrus (P. Kirkham)](https://pkirkham.github.io/pyrus/) — suite d'outils oil & gas
+- [Pyrus (P. Kirkham)](https://pkirkham.github.io/pyrus/) — oil & gas tool suite
 - [Oil-Gas Volumetric Calculator](https://github.com/el-sa3eedy/Oil-Gas-Volumetric-Calculator/releases/tag/V1) — volumetric calculation
 
 ### Stratigraphy & landscape
@@ -60,24 +60,24 @@ Tools, libraries, references and sites used across this site — kept here rathe
 ### Wells, logs & seismic
 
 - [Petrocurve — Well Log Viewer](https://petrocurve.com/app) — online well log viewer
-- [Rocky Mountain Seismic — LAS viewer](https://www.rmseismic.com/lasviewer.html) — visualiseur LAS
+- [Rocky Mountain Seismic — LAS viewer](https://www.rmseismic.com/lasviewer.html) — LAS viewer
 - [GeolOil](https://geoloil.com/products.php) — petrophysics · Windows/Mac/Linux
 - [PredictLog](https://predictlog.streamlit.app/) — Streamlit
-- [welleng](https://github.com/jonnymaserati/welleng) — outils wells/drilling engineering · Python
+- [welleng](https://github.com/jonnymaserati/welleng) — well/drilling engineering tools · Python
 - [segy-qc-toolkit](https://github.com/RahatNaqvi/segy-qc-toolkit) — SEG-Y file QC
 - [SEG-Y geometry-application](https://github.com/RahatNaqvi/geometry-application) — geometry application for SEG-Y seismic data
 - [Faultwise](https://faultwise.app/) — fault analysis
 - [ADFN-GUI](https://github.com/ahmadmehri/ADFN-GUI) — graphical interface for ADFNE (discrete fracture networks)
 - [Geocosm](https://geocosm.net/) — rock property prediction · commercial
 - [XGeoscience](https://xgeoscience.no/) — commercial
-- [CrowdField](https://www.crowdfield.net/) — outils & workflows subsurface
+- [CrowdField](https://www.crowdfield.net/) — subsurface tools & workflows
 - [GeoSapienAI](https://geosapien.ai/ai) — geoscience AI · commercial
 - [Strabo (LGND)](https://lgnd.ai/resources/strabo) — geo-similarity engine for Earth observation data
 
 ### Hydrogeology & geophysics
 
 - [AquiferLab](https://github.com/jov-labs/AquiferLab) — interactive groundwater modelling lab
-- [Raven — Utilities](https://raven.uwaterloo.ca/Utilities.html) — framework hydrologique (Univ. Waterloo)
+- [Raven — Utilities](https://raven.uwaterloo.ca/Utilities.html) — hydrological modelling framework (Univ. Waterloo)
 - [pyCSAMT](https://pycsamt.org/) — electromagnetic geophysics (CSAMT) · Python
 - [QuickField](https://www.quickfield.ai/) — finite element simulation
 
@@ -106,7 +106,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [segyio (Equinor)](https://github.com/equinor/segyio) — fast SEG-Y read/write · Python
 - [GeoST (Deltares)](https://deltares-research.github.io/geost/index.html) — Python interface for subsurface data (boreholes, CPT)
 - [rockphypy](https://pypi.org/project/rockphypy/) — rock physics · Python
-- [spopt](https://pysal.org/spopt/index.html) — optimisation spatiale (PySAL)
+- [spopt](https://pysal.org/spopt/index.html) — spatial optimisation (PySAL)
 - [city2graph](https://github.com/c2g-dev/city2graph) — geospatial relations → graphs for GNNs
 - [StepMix](https://github.com/Labo-Lacourse/stepmix) — mixture / latent class models, scikit-learn API
 - [docTR](https://github.com/mindee/doctr) — document OCR · deep learning
@@ -115,10 +115,10 @@ Tools, libraries, references and sites used across this site — kept here rathe
 ### Physics-informed ML
 
 - [DeepXDE](https://github.com/lululxvi/deepxde) — PINN, scientific machine learning
-- [NVIDIA PhysicsNeMo](https://github.com/NVIDIA/physicsnemo) — framework deep learning physics-AI
+- [NVIDIA PhysicsNeMo](https://github.com/NVIDIA/physicsnemo) — physics-AI deep learning framework
 - [NeuralPDE.jl](https://github.com/SciML/NeuralPDE.jl) — PINN solvers for PDEs · Julia
 - [PINA](https://github.com/mathLab/PINA) — physics-informed neural networks
-- [IDRLnet](https://github.com/idrl-lab/idrlnet) — toolbox PINN · Python
+- [IDRLnet](https://github.com/idrl-lab/idrlnet) — PINN toolbox · Python
 
 ---
 
@@ -127,8 +127,8 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Artificial Analysis](https://artificialanalysis.ai/) — model & API provider benchmarks
 - [OpenCode](https://opencode.ai/docs/fr) — open-source coding agent
 - [9router](https://github.com/decolua/9router) — routing coding agents to multiple providers
-- [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — passerelle IA MIT, un endpoint multi-fournisseurs
-- [deepagents (LangChain)](https://github.com/langchain-ai/deepagents) — harness d'agents
+- [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — MIT-licensed AI gateway, one endpoint for multiple providers
+- [deepagents (LangChain)](https://github.com/langchain-ai/deepagents) — agent harness
 - [ECC](https://github.com/affaan-m/ecc) — agent harness optimisation (skills, instincts)
 - [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) — engineering skills for coding agents
 - [Claude Code best practice](https://github.com/shanraisshan/claude-code-best-practice) — from vibe coding to agentic engineering
@@ -141,7 +141,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 
 ### Knowledge graphs & RAG
 
-- [LLM Wiki (nashsu)](https://github.com/nashsu/llm_wiki) — application desktop : documents → wiki LLM
+- [LLM Wiki (nashsu)](https://github.com/nashsu/llm_wiki) — desktop app: documents → LLM wiki
 - [OpenWiki (LangChain)](https://www.langchain.com/blog/introducing-openwiki-an-open-source-agent-for-repo-documentation) — repository documentation agent
 - [Graphify](https://github.com/Graphify-Labs/graphify) — codebase, docs, diagrams → knowledge graph
 - [Semantica](https://github.com/semantica-agi/semantica) — graph-native context infrastructure
@@ -156,7 +156,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Unsloth](https://github.com/unslothai/unsloth) — LLM fine-tuning and local inference
 - [AirLLM](https://github.com/lyogavin/airllm) — 70B inference on a 4 GB GPU
 - [train-llm-from-scratch](https://github.com/FareedKhan-dev/train-llm-from-scratch) — train a small LLM yourself
-- [Segment Anything Model explained (Encord)](https://encord.com/blog/segment-anything-model-explained/) — SAM, segmentation d'images
+- [Segment Anything Model explained (Encord)](https://encord.com/blog/segment-anything-model-explained/) — SAM, image segmentation
 - [pipecat](https://github.com/pipecat-ai/pipecat) — voice and multimodal agents
 - [HyperFrames](https://github.com/heygen-com/hyperframes) — HTML → video, built for agents
 - [awesome-lightpanda](https://github.com/lightpanda-io/awesome-lightpanda) — headless browser for agents · curated list
@@ -176,16 +176,16 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Geosciences LibreTexts](https://geo.libretexts.org/) — open-access geoscience textbooks
 - [Rapid Geology — Videos](https://www.rapidgeology.com/videos.html) — geology videos
 - [Fluvial-deltaic-shallow marine sedimentology – Miocene, Sunda Shelf](https://www.youtube.com/watch?v=ArOz68JoDeg) — YouTube
-- [Dry Gas Depletion P/Z Calculation](https://www.youtube.com/watch?v=p4Luy4ZuFyk) — YouTube · tableur
+- [Dry Gas Depletion P/Z Calculation](https://www.youtube.com/watch?v=p4Luy4ZuFyk) — YouTube · spreadsheet
 - [Data-driven modeling & scientific computing (N. Kutz)](https://github.com/nathankutz/ScientificComputing) — book code
 - [Understanding LSTM Networks (colah)](https://colah.github.io/posts/2015-08-Understanding-LSTMs/) — LSTM · introductory
 - [An Artificial Neural Network with Backpropagation in 6 Steps](https://mres.uni-potsdam.de/2025/09/08/an-artificial-neural-network-with-backpropagation-in-6-steps/) — MATLAB & Python (Univ. Potsdam)
 - [XGBoost Tips and Tricks (C. Deotte, Kaggle)](https://www.kaggle.com/writeups/cdeotte/xgboost-tips-and-tricks#3310814) — gradient boosting
 - [Graph Theory — Mathematics for ML](https://ml-notes.akkefa.com/en/latest/graph/introduction.html) — graph theory
-- [Interactive ML Learning Platform](https://www.interactive-ml.com/) — ML interactif
-- [JoinAI — AI & ML coding problems](https://www.joinai.com/problems) — exercices
+- [Interactive ML Learning Platform](https://www.interactive-ml.com/) — interactive ML
+- [JoinAI — AI & ML coding problems](https://www.joinai.com/problems) — exercises
 - [Python Graph Gallery](https://python-graph-gallery.com/all-charts/) — catalogue of Python charts
-- [Git Quest](https://git-quest.appminds.fr/) — apprendre Git
+- [Git Quest](https://git-quest.appminds.fr/) — learn Git
 - [Projets IA](https://www.youtube.com/@ProjetsIA) — YouTube channel (in French)
 
 ---
@@ -208,7 +208,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Fault Impact on Hydrocarbon Migration — 2D Complex Modelling of the North Perth Basin (EarthDoc, 2017)](https://www.earthdoc.org/content/papers/10.3997/2214-4609.201700616) — Australia · faults and migration · 2D modelling
 - [What are we risking and why is it important? (GeoExpro)](https://geoexpro.com/what-are-we-risking-and-why-is-it-important/) — risking · prospect evaluation
 - [Why dual-phase systems demand a new assessment approach (GeoExpro)](https://geoexpro.com/why-dual-phase-systems-demand-a-new-assessment-approach/) — prospect evaluation · dual-phase systems
-- ["Prospect risking is easy"! (L. Hjelm, LinkedIn)](https://www.linkedin.com/pulse/prospect-risking-easy-lars-hjelm-xlkpe/) — risking · billet
+- ["Prospect risking is easy"! (L. Hjelm, LinkedIn)](https://www.linkedin.com/pulse/prospect-risking-easy-lars-hjelm-xlkpe/) — risking · post
 - [The Uncertainty in the Transformation Ratio and its Impact on Oil and Gas Exploration (R. Aguilera, LinkedIn)](https://www.linkedin.com/pulse/uncertainty-transformation-ratio-its-impact-oil-gas-roberto-aguilera/) — transformation ratio · uncertainty · post
 - [Reaktoro vs PHREEQC (N. Jacquemet)](https://geochemical-modeling.com/phreeqc-studies/reaktoro_phreeqc_comparison/reaktoro_phreeqc_comparison.html) — geochemical modelling · code comparison
 - [Bayes in Business and Engineering (dorschblog)](https://nick-dorsch.github.io/blog/posts/bayes_in_business/) — Bayesian inference · post
@@ -230,7 +230,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [EarthScan — Insights](https://www.earthscan.io/v2/insights/the-overburden-is-the-asset-aramco-subsurface-stack-transition-zone) — vendor technical blog (AI for energy) · critical analysis of the Aramco-Ma'aden JV (transferring a seismic corpus from petroleum to minerals)
 - [Seismic Data Storage 101 (Medium, The Shadow Observer, 2026)](https://medium.com/@TheShadowObserver/seismic-data-storage-101-formats-compression-and-archival-strategy-63d6f873a7a9) — SEG-Y, OpenVDS, MDIO, OSDU · well referenced, written by an AI/business generalist rather than a domain expert
 - [dorschblog](https://nick-dorsch.github.io/blog/) — probability, prospect evaluation · personal blog
-- [Upstream Notebook (P. Kirkham)](https://pkirkham.github.io/analysis/) — analyses upstream · blog personnel
+- [Upstream Notebook (P. Kirkham)](https://pkirkham.github.io/analysis/) — upstream analyses · personal blog
 
 ### People
 
@@ -273,10 +273,10 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [s-Ink — Lithosphere Thickness Map](https://s-ink.org/lithosphere-thickness-map) — Global · lithosphere thickness · accessible science graphics
 - [s-Ink — Sediment Thickness (GlobSed)](https://s-ink.org/sediment-thickness) — Global oceans · sediment thickness
 - [IRIS EMC — CRUST1.0](https://ds.iris.edu/ds/products/emc-crust10/) — Global · crustal model, 1°×1° grid
-- [HyDRA — Database of Geological Properties for EU Porous Reservoir Gas Storage Sites](https://zenodo.org/records/17787644) — Europe · 134 sites · underground hydrogen storage geological database (depth, lithology, porosity, permeability) · pertinent corpus H₂ bibliographie
+- [HyDRA — Database of Geological Properties for EU Porous Reservoir Gas Storage Sites](https://zenodo.org/records/17787644) — Europe · 134 sites · underground hydrogen storage geological database (depth, lithology, porosity, permeability) · relevant to the H₂ bibliography
 - [Open Well Data Sources (A. McDonald)](https://www.andymcdonald.scot/data/) — Global · list of open well data sources
 - [PetroData Repository](https://sumpalabs.com/petrodb/) — petroleum data in Parquet format
-- [CarbonStorage.io](https://carbonstorage.io/) — Global · projets CCUS & analytics
+- [CarbonStorage.io](https://carbonstorage.io/) — Global · CCUS projects & analytics
 - [Knowing Earth — Maps and Figures](https://www.knowing.earth/maps-and-figures.html) — maps and figures
 
 ---
@@ -288,7 +288,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [SEG Wiki](https://wiki.seg.org/wiki/Main_Page) — Global · geophysics reference
 - [dGB Earth Sciences — Library](https://dgbes.com/library/) — Global · OpendTect documentation, ML in seismic interpretation, tutorials
 - [Geologic TimeScale Foundation](https://timescalefoundation.org/index.html) — Global · geologic time scale · stratigraphic information
-- [NW European Stratigraphic Lexica](https://timescalefoundation.org/resources/NW_Europe_Lex/litho/balder.php) — NW Europe · lexique lithostratigraphique
-- [SLB Resource Library](https://www.slb.com/resource-library) — Global · documentation technique vendeur
+- [NW European Stratigraphic Lexica](https://timescalefoundation.org/resources/NW_Europe_Lex/litho/balder.php) — NW Europe · lithostratigraphic lexicon
+- [SLB Resource Library](https://www.slb.com/resource-library) — Global · vendor technical documentation
 - [IGI — Basin & Petroleum Systems Modelling](https://igiltd.com/energy/consultancy/basin-and-petroleum-systems-modelling) — geochemistry & BPSM consultancy
 - [Petro Shine](https://petroshine.com/) — to be assessed
