@@ -237,6 +237,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Zoltán Sylvester](https://github.com/zsylvester) — GitHub · stratigraphy, quantitative sedimentology
 - [Guillaume Rongier](https://github.com/grongier) — GitHub · geomodelling
 - [wenrongcao](https://github.com/wenrongcao) — GitHub
+- [Larry Syu-Heng Lai](https://www.geolarrylai.com/index.html) — personal site · quantitative sedimentology & stratigraphy, open-source Python/Rust tools (core correlation, backstripping, well-log QC, topography) · reference for site design
 
 ---
 
