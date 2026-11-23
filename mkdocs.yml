@@ -39,11 +39,18 @@ extra_javascript:
 
 extra_css:
   # ponytail: bump ?v= when the CSS changes so browsers drop their cached copy
-  - stylesheets/extra.css?v=10
+  - stylesheets/extra.css?v=11
 
 # ponytail: placeholder page kept in the repo but not published until it has real content
 exclude_docs: |
   personal.md
+
+# ponytail: printable CV, rendered to cv.pdf in CI; not linked from the nav
+not_in_nav: |
+  cv-print.md
+
+hooks:
+  - hooks/cv.py
 
 plugins:
   - search

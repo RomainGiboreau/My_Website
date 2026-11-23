@@ -1,0 +1,208 @@
+# Single source for the CV. Rendered by hooks/cv.py into docs/cv.md (web) and docs/cv-print.md (PDF).
+# Text fields are Markdown.
+
+name: Romain Giboreau
+headline: Lead Geoscientist — Petroleum Systems and Applied AI
+pdf: https://RomainGiboreau.github.io/My_Website/cv.pdf
+summary: >-
+  15 years across petroleum systems assessment and basin modeling — conventional, unconventional,
+  biogenic and biodegraded resources — with a growing focus on applied AI/ML for geoscience
+  workflows. Work spans 20+ basins on five continents.
+
+# Web page only (key-figure tiles)
+figures:
+  - [15, years]
+  - [20+, basins]
+  - [5, continents]
+  - [8, publications]
+
+experience:
+  - title: Lead Geoscientist — Petroleum Systems and Applied AI
+    org: Beicip-Franlab
+    years: 2019 – present
+    text:
+      - >-
+        Petroleum systems assessments across 20+ basins on five continents — source rock analysis,
+        kinetic modeling, thermal and pressure modeling, burial history reconstruction, play fairway
+        analysis, seismic interpretation, and petrophysical integration. Volumetric uncertainty
+        (P10/P50/P90) and Probability of Success for prospect ranking. Construction of global basin
+        opportunity databases.
+    highlights:
+      - name: JDA2 Basin AI — PETRONAS.
+        text: >-
+          Partnership between PETRONAS, Beicip-Franlab and AFED Digital integrating machine learning
+          into forward stratigraphic modelling (FSM) as part of petroleum systems assessment. Project
+          lead for Beicip-Franlab's side of the work — planning, client relations and deliverable
+          validation on Beicip's scope.
+
+  - title: R&D Geoscience Specialist — Machine Learning and Data Science
+    org: IFPen
+    years: "2024"
+    note: 50/50 split with the Beicip-Franlab role above
+    text:
+      - >-
+        Contributed to LLM, GraphRAG and agentic workflows built to extract geological insight from
+        unstructured datasets — data collection, prompt design, testing and proposed improvements.
+    highlights:
+      - name: Datamix (IFPen Tellus programme).
+        text: >-
+          Built geospatial ML pipelines for CCS/CCUS subsurface property mapping and multi-criteria
+          storage-site selection (scikit-learn, pandas, geopandas, numpy), as a public deliverable of
+          the Datamix R&D project under IFPen's Tellus programme.
+
+  - title: Exploration Software Manager
+    org: Beicip-Franlab
+    years: 2016 – 2018
+    text:
+      - >-
+        Team lead for the exploration software development group — project planning, client
+        communication, and software development validation. Drove internal promotion strategies for
+        exploration software products.
+
+  - title: Exploration Software Engineer
+    org: Beicip-Franlab
+    years: 2012 – 2016
+    text:
+      - >-
+        Technical documentation for new and existing software features and workflows; client support
+        for major IOCs and NOCs; user feedback collection feeding the development roadmap.
+    list_title: "Major software contributions:"
+    list:
+      - Lithosphere module (2016)
+      - Updated geochemistry library
+      - KronosFlow — first official release (2018)
+      - New DionisosFlow calculator (2018)
+      - TemisFlow robustness and ergonomics policy (2017 – 2019)
+      - Compositional framework for bulk kinetics (2025)
+
+  - title: Geomodeling Specialist
+    org: Paradigm France
+    years: "2012"
+    text:
+      - >-
+        Structural geology workflows for subsurface model building; seismic interpretation and fault
+        modelling in complex structural settings.
+
+  - title: Biomarker analysis — UMR Nancy
+    years: "2011"
+    text:
+      - Biomarker analysis and stratigraphic correlation on Paris Basin wells.
+
+  - title: Internship
+    org: TotalEnergies
+    years: "2011"
+    text:
+      - Validation testing of an internal geochemistry and PVT modeling software.
+
+projects:
+  - name: Algerian Sahara Synthesis
+    url: https://algerian-sahara-synthesis.com/
+    text: >-
+      multi-client GIS synthesis of the Algerian Sahara platform; play fairway analysis and
+      petroleum system modeling from Cambrian to Triassic series
+  - name: Melrhir–Touggourt–North Berkine Synthesis
+    url: https://algerian-melrhir-touggourt-synthesis.com/
+    text: >-
+      multi-client GIS synthesis; GDE maps, petroleum system modeling and exploration risk maps,
+      Ordovician to Cretaceous
+  - name: 2019 South Eastern Newfoundland resource assessment
+    url: https://oilconl.com/licensing-rounds/2019-south-eastern-newfoundland-region-nl-01-sen/
+    text: >-
+      Carson-Bonnition and Salar basins; petroleum system model behind the public atlas,
+      Beicip-Franlab as contractor to OilCo NL
+  - name: West Sarawak multi-client study
+    url: https://malaysia-west-sarawak-multiclient-study.com/
+    text: offshore West Sarawak resource assessment and prospectivity atlas *(minor contribution)*
+
+basins:
+  core:
+    - name: Algerian Sahara platform
+      text: >-
+        Ahnet, Timimoun, Reggane, Chott Melrhir, Berkine, Oued Mya, Benoud Trough, Bechar. Palaeozoic
+        and Triassic petroleum systems, conventional and unconventional; play fairway analysis and
+        multi-client synthesis work.
+    - name: Gulf of Mexico
+      text: US and Mexican sides. Prospect studies, trap integrity, pressure prediction.
+    - name: Offshore Newfoundland & Labrador
+      text: Carson-Bonnition and Salar. Petroleum system modeling behind a public resource assessment.
+    - name: Orange Basin
+      text: Namibia and South Africa.
+    - name: Guyana–Suriname Basin
+      suffix: ", Suriname sector"
+      text: west of the Demerara Plateau, 2023.
+    - name: Santos, Campos and Pelotas
+      text: offshore Brazil.
+    - name: Mozambique Channel
+      text: basin-wide study.
+    - name: Papua New Guinea
+      text: Bismarck Sea.
+  also:
+    - region: Africa
+      items: ["Ghadames, Murzuq, Sirte and Kufra (Libya)", Kafra (Niger), offshore Morocco,
+              Mauritania–Senegal margin, nearshore Ivory Coast, Kwanza (Angola), Lamu and Anza (Kenya)]
+    - region: Americas
+      items: ["Moab, Utah"]
+    - region: Europe
+      items: [North Sea]
+    - region: Asia
+      items: [Kurdish Foothills (Iraq), Caspian Sea, "South Urals, Kazakhstan side", Karachi Arch (Pakistan),
+              Messoyakha (West Siberia), Krishna–Godavari and Assam (India), Malay–Thai Basin,
+              Sarawak and Sabah (Malaysia), Cuu Long (Vietnam), offshore Myanmar, Tarim (China)]
+    - region: Oceania
+      items: [Bonaparte (Australia), Taranaki (New Zealand)]
+
+publications:
+  - title: "Closing the Exploration Gap: Probabilistic Petroleum Systems Analysis from Basin to Prospect"
+    venue: APGCE 2026, Kuala Lumpur
+  - title: "From Basin Modeling to Storage Fairway Mapping: AI-Assisted Smart Maps for Offshore Norway CCUS Screening"
+    venue: First EAGE Conference on Basin and Petroleum Systems Modeling, Houston, 2026
+  - title: "Geospatial Machine Learning Framework for Subsurface Property Mapping: Application to Reservoir Quality Assessment and Carbon Storage"
+    venue: co-author, EAGE Digital 2026
+  - title: Enhancing Geoscience Document Mining with LLMs through GraphRAG Integration and Agentic Architectures
+    venue: EAGE Digital 2025
+  - title: "New Tools for New Challenges: Petroleum System Modeling of the Kurdish Foothills"
+    venue: co-author, 2018
+  - title: Fault Impact on Hydrocarbon Migration — 2D Complex Modelling of the North Perth Basin Petroleum Systems, Australia
+    venue: 79th EAGE Conference and Exhibition, 2017
+  - title: Petroleum system modeling in structurally complex settings — new technical capabilities
+    venue: co-author, conference paper in Russian, 2016
+  - title: Impact of Structural Complexity on Migration Pathways — Basin Modelling Study Based on a Natural Example, Northern Termination of the Moab Fault (USA)
+    venue: co-author, 2015
+
+skills:
+  - domain: Basin modeling
+    tools: [TemisFlow, KronosFlow, DionisosFlow, PetroMod, Zetaware, Cougar]
+  - domain: Subsurface interpretation
+    tools: [Petrel, GOCAD-Skua, Decision Space, EasyTrace]
+  - domain: Scientific computing
+    tools: ["Python (pandas, NumPy, SciPy, matplotlib, geopandas, Jupyter)"]
+  - domain: Machine learning
+    tools: [scikit-learn, XGBoost, pyKrige, pyDecision]
+  - domain: AI / LLM
+    tools: [LangChain, LlamaIndex, RAG, GraphRAG, ChromaDB]
+  - domain: Mapping
+    tools: [ArcGIS, QGIS]
+  - domain: Documentation
+    tools: [Markdown, MkDocs, Git]
+
+education:
+  - degree: MSc — Petroleum Geosciences
+    school: Henri Poincare University, Nancy
+    year: "2011"
+  - degree: Engineering Degree
+    school: National School of Geology (ENSG), Nancy
+    year: "2011"
+certifications: >-
+  IBM Data Science Professional Certificate (2020). IFP Training curricula in petrophysics,
+  sedimentology and sequence stratigraphy, and structural geology (2013–2020).
+
+# level: 1–4, web indicator only
+languages:
+  - [French, Native, 4]
+  - [English, Fluent, 3]
+  - [German, Basic, 1]
+  - [Vietnamese, Basic, 1]
+
+contact: >-
+  [linkedin.com/in/romain-giboreau](https://www.linkedin.com/in/romain-giboreau) ·
+  [contact form](https://RomainGiboreau.github.io/My_Website/contact/)

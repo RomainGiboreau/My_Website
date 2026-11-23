@@ -24,7 +24,7 @@ jobs:
         run: >
           google-chrome --headless=new --disable-gpu --no-pdf-header-footer
           --virtual-time-budget=5000 --print-to-pdf=site/cv.pdf
-          "file://$PWD/site/cv/index.html"
+          "file://$PWD/site/cv-print/index.html"
       - run: test -s site/cv.pdf
       - uses: actions/upload-pages-artifact@v5
         with:
