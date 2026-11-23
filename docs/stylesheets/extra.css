@@ -1011,3 +1011,6 @@ body:has(.hero) .md-grid {
 .md-typeset .cv-key { width: 0.6rem; height: 0.6rem; border-radius: 50%; display: inline-block; margin-left: 0.6rem; }
 .md-typeset .cv-key-core { background: var(--bm-accent2); }
 .md-typeset .cv-key-also { background: var(--bm-accent); }
+.md-typeset a.cv-year:hover { background: var(--bm-accent); color: #fff; }
+.md-typeset a.cv-pub { color: var(--md-default-fg-color); }
+.md-typeset a.cv-pub:hover { color: var(--bm-accent); }

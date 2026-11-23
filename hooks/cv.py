@@ -5,6 +5,7 @@ docs/cv-print.md  -> sober Markdown, printed to cv.pdf in CI
 Both pages contain only front matter and the marker below; content lives in the YAML.
 """
 import html
+import json
 import re
 from pathlib import Path
 
@@ -125,7 +126,8 @@ def render_web(d):
         ) + "</div>"]
 
     o += ["## Publications", '<ul class="cv-pubs">' + "".join(
-        f'<li><span class="cv-year">{pub_year(p["venue"])}</span><div><strong>{inline(p["title"])}</strong>'
+        f'<li><a class="cv-year" href="../talks/#{pub_year(p["venue"])}">{pub_year(p["venue"])}</a>'
+        f'<div><a class="cv-pub" href="../talks/#{pub_year(p["venue"])}"><strong>{inline(p["title"])}</strong></a>'
         f'<span class="cv-venue">{inline(re.sub(r",?\s*\b\d{4}\b", "", p["venue"]))}</span></div></li>'
         for p in d["publications"]) + "</ul>"]
 
@@ -147,9 +149,22 @@ def render_web(d):
     return "\n\n".join(o) + "\n"
 
 
-def on_page_markdown(markdown_src, page, **_):
+def person_jsonld(d, page_url):
+    """schema.org Person for search engines (printed in <head> by overrides/main.html)."""
+    links = re.findall(r"\((https?://[^)]+)\)", d["contact"])
+    return json.dumps({"@context": "https://schema.org", "@type": "Person", "name": d["name"],
+                       "jobTitle": d["headline"], "url": page_url,
+                       "sameAs": [u for u in links if "linkedin" in u]}, ensure_ascii=False)
+
+
+def on_page_markdown(markdown_src, page, config, **_):
     render = {"cv.md": render_web, "cv-print.md": render_print}.get(page.file.src_uri)
-    return markdown_src.replace(MARKER, render(load())) if render else markdown_src
+    if not render:
+        return markdown_src
+    d = load()
+    if render is render_web:
+        page.meta["jsonld"] = person_jsonld(d, config["site_url"] + page.url)
+    return markdown_src.replace(MARKER, render(d))
 
 
 if __name__ == "__main__":
@@ -163,4 +178,5 @@ if __name__ == "__main__":
     for s in musts:
         assert s in prt, s
         assert html.escape(s, quote=False) in web or inline(s) in web, s
+    assert json.loads(person_jsonld(d, "x"))["sameAs"], "LinkedIn link missing from contact"
     print("ok")

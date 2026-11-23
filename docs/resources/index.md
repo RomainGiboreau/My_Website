@@ -238,6 +238,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Guillaume Rongier](https://github.com/grongier) — GitHub · geomodelling
 - [wenrongcao](https://github.com/wenrongcao) — GitHub
 - [Larry Syu-Heng Lai](https://www.geolarrylai.com/index.html) — personal site · quantitative sedimentology & stratigraphy, open-source Python/Rust tools (core correlation, backstripping, well-log QC, topography) · reference for site design
+- [Lars Hjelm](https://github.com/lhjelm-dk?tab=repositories) — GitHub · prospect risking & resource apps (POS gridding, evidence-supported POS, petroleum system event chart, HC & CO₂ volumetrics, Monte Carlo) · Python/Streamlit
 
 ---
 
