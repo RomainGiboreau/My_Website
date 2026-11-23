@@ -70,6 +70,25 @@ def chips(items):
     return '<ul class="cv-chips">' + "".join(f"<li>{inline(x)}</li>" for x in items) + "</ul>"
 
 
+TOP = 84  # same projection as scripts/world_svg.py: x = lon + 180, y = TOP - lat
+
+
+def points(at):
+    return at if isinstance(at[0], list) else [at]
+
+
+def world_map(d):
+    b, at = d["basins"], d["map"]
+    dots = [(c["name"], "core", 3) for c in b["core"]] + [(x, "also", 1.8) for r in b["also"] for x in r["items"]]
+    circles = "".join(
+        f'<circle class="cv-dot-{kind}" cx="{lon + 180:g}" cy="{TOP - lat:g}" r="{r}"><title>{html.escape(name)}</title></circle>'
+        for name, kind, r in dots for lon, lat in points(at[name]))
+    return ('<figure class="cv-map"><svg viewBox="0 0 360 142" role="img" aria-label="World map of basins worked">'
+            '<image href="../assets/world-land.svg" width="360" height="142"/>' + circles + "</svg>"
+            '<figcaption><span class="cv-key cv-key-core"></span>Core areas '
+            '<span class="cv-key cv-key-also"></span>Also worked</figcaption></figure>')
+
+
 def render_web(d):
     o = [f"# {d['name']}",
          f'<p class="cv-headline">{inline(d["headline"])}</p>',
@@ -97,7 +116,7 @@ def render_web(d):
         f'<span>{inline(p["text"])}</span></a>' for p in d["projects"]) + "</div>"]
 
     b = d["basins"]
-    o += ["## Basins", "### Core areas", '<div class="cv-cards cv-basins">' + "".join(
+    o += ["## Basins", world_map(d), "### Core areas", '<div class="cv-cards cv-basins">' + "".join(
         f'<div class="cv-card"><strong>{inline(c["name"])}{inline(c.get("suffix", ""))}</strong>'
         f'<span>{inline(c["text"])}</span></div>' for c in b["core"]) + "</div>",
         "### Also worked",
@@ -139,6 +158,8 @@ if __name__ == "__main__":
     web, prt = render_web(d), render_print(d)
     musts = [j["title"] for j in d["experience"]] + [p["url"] for p in d["projects"]] \
         + [c["name"] for c in d["basins"]["core"]] + [s["domain"] for s in d["skills"]]
+    names = [c["name"] for c in d["basins"]["core"]] + [x for r in d["basins"]["also"] for x in r["items"]]
+    assert set(names) == set(d["map"]), set(names) ^ set(d["map"])  # every basin on the map, no stray point
     for s in musts:
         assert s in prt, s
         assert html.escape(s, quote=False) in web or inline(s) in web, s

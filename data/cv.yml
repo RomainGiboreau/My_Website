@@ -206,3 +206,37 @@ languages:
 contact: >-
   [linkedin.com/in/romain-giboreau](https://www.linkedin.com/in/romain-giboreau) ·
   [contact form](https://RomainGiboreau.github.io/My_Website/contact/)
+
+# Web map only: [lon, lat] per basin name above (core names and "also" items, spelled identically).
+# Approximate basin centres; a list of points for entries covering two areas.
+map:
+  Algerian Sahara platform: [3, 29]
+  Gulf of Mexico: [-91, 25]
+  Offshore Newfoundland & Labrador: [-50, 47]
+  Orange Basin: [15, -29]
+  Guyana–Suriname Basin: [-55, 7.5]
+  Santos, Campos and Pelotas: [-44, -26]
+  Mozambique Channel: [41, -18]
+  Papua New Guinea: [146, -4]
+  Ghadames, Murzuq, Sirte and Kufra (Libya): [17, 27]
+  Kafra (Niger): [13, 16.5]
+  offshore Morocco: [-11, 31]
+  Mauritania–Senegal margin: [-17.5, 16]
+  nearshore Ivory Coast: [-4.5, 5]
+  Kwanza (Angola): [13, -9.5]
+  Lamu and Anza (Kenya): [40, 0]
+  Moab, Utah: [-109.5, 38.6]
+  North Sea: [3, 57]
+  Kurdish Foothills (Iraq): [44.5, 35.5]
+  Caspian Sea: [51, 41]
+  South Urals, Kazakhstan side: [57, 50]
+  Karachi Arch (Pakistan): [68, 25.5]
+  Messoyakha (West Siberia): [82, 69]
+  Krishna–Godavari and Assam (India): [[82, 16], [94, 26.5]]
+  Malay–Thai Basin: [103, 7]
+  Sarawak and Sabah (Malaysia): [[111, 2.5], [116, 6]]
+  Cuu Long (Vietnam): [107.5, 10]
+  offshore Myanmar: [94, 17]
+  Tarim (China): [83, 39.5]
+  Bonaparte (Australia): [128, -13]
+  Taranaki (New Zealand): [174, -39.5]
