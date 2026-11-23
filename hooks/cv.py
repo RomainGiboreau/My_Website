@@ -30,8 +30,9 @@ def meta(job):
     return " · ".join(x for x in (job.get("years"), job.get("note")) if x)
 
 
-def pub_year(venue):
-    return re.findall(r"\b\d{4}\b", venue)[-1]
+def pub_line(p):
+    """One-line venue used by the CV and the PDF: 'venue · role'."""
+    return " · ".join(x for x in (p["venue"], p.get("role")) if x)
 
 
 # ---------- print: today's plain layout ----------
@@ -54,7 +55,7 @@ def render_print(d):
           "**Also worked**",
           "\n".join(f"- {r['region']} — {'; '.join(r['items'])}" for r in b["also"])]
     o += ["---", "## Publications",
-          "\n".join(f"- {p['title']} ({p['venue']})" for p in d["publications"])]
+          "\n".join(f"- {p['title']} ({pub_line(p)})" for p in d["publications"])]
     o += ["---", "## Skills",
           "| Domain | Tools |\n|---|---|\n" + "\n".join(f"| {s['domain']} | {', '.join(s['tools'])} |" for s in d["skills"])]
     o += ["---", "## Education"]
@@ -119,9 +120,9 @@ def render_web(d):
         ) + "</div>"]
 
     o += ["## Publications", '<ul class="cv-pubs">' + "".join(
-        f'<li><a class="cv-year" href="../talks/#{pub_year(p["venue"])}">{pub_year(p["venue"])}</a>'
-        f'<div><a class="cv-pub" href="../talks/#{pub_year(p["venue"])}"><strong>{inline(p["title"])}</strong></a>'
-        f'<span class="cv-venue">{inline(re.sub(r",?\s*\b\d{4}\b", "", p["venue"]))}</span></div></li>'
+        f'<li><a class="cv-year" href="../talks/#{p["year"]}">{p["year"]}</a>'
+        f'<div><a class="cv-pub" href="../talks/#{p["year"]}"><strong>{inline(p["title"])}</strong></a>'
+        f'<span class="cv-venue">{inline(re.sub(r",?\s*\b\d{4}\b", "", pub_line(p)))}</span></div></li>'
         for p in d["publications"]) + "</ul>"]
 
     o += ["## Skills", '<div class="cv-regions">' + "".join(
@@ -142,6 +143,39 @@ def render_web(d):
     return "\n\n".join(o) + "\n"
 
 
+LINK_NAMES = {"abstract": "Abstract", "slides": "Slides", "doi": "DOI", "paper": "Paper"}
+
+
+def render_talks(d):
+    """Talks & publications page: themes overview, then one timeline per year (## YYYY anchors used by the CV)."""
+    pubs = d["publications"]
+    years = [p["year"] for p in pubs]
+    themes = {}
+    for p in pubs:
+        for t in p.get("themes", []):
+            themes[t] = themes.get(t, 0) + 1
+    o = ["# Talks & publications",
+         '<div class="cv-figures">'
+         f'<div><b>{len(pubs)}</b><span>contributions</span></div>'
+         f'<div><b>{min(years)}–{max(years)}</b><span>period</span></div></div>',
+         '<ul class="cv-chips talks-themes">' + "".join(
+             f"<li>{html.escape(t)} <b>{n}</b></li>" for t, n in sorted(themes.items(), key=lambda x: -x[1])) + "</ul>"]
+    for year in dict.fromkeys(years):
+        items = []
+        for p in (p for p in pubs if p["year"] == year):
+            badges = ('<span class="talk-badge">Oral</span>' if p.get("type") == "oral" else "") + (
+                f'<span class="talk-badge talk-badge-alt">{html.escape(p["role"].capitalize())}</span>' if p.get("role") else "")
+            where = " · ".join(x for x in (p["venue"], p.get("date")) if x)
+            links = "".join(f'<a class="md-button" href="{html.escape(u)}">{LINK_NAMES.get(k, k.title())} ↗</a>'
+                            for k, u in (p.get("links") or {}).items())
+            items.append("<li>" + (f'<p class="talk-badges">{badges}</p>' if badges else "")
+                         + f'<h3>{inline(p["title"])}</h3><p class="cv-venue">{inline(where)}</p>'
+                         + (chips(p["themes"]) if p.get("themes") else "")
+                         + (f'<p class="talk-links">{links}</p>' if links else "") + "</li>")
+        o += [f"## {year}", '<ol class="cv-timeline">' + "".join(items) + "</ol>"]
+    return "\n\n".join(o) + "\n"
+
+
 def person_jsonld(d, page_url):
     """schema.org Person for search engines (printed in <head> by overrides/main.html)."""
     links = re.findall(r"\((https?://[^)]+)\)", d["contact"])
@@ -151,7 +185,7 @@ def person_jsonld(d, page_url):
 
 
 def on_page_markdown(markdown_src, page, config, **_):
-    render = {"cv.md": render_web, "cv-print.md": render_print}.get(page.file.src_uri)
+    render = {"cv.md": render_web, "cv-print.md": render_print, "talks.md": render_talks}.get(page.file.src_uri)
     if not render:
         return markdown_src
     d = load()
@@ -171,5 +205,8 @@ if __name__ == "__main__":
     for s in musts:
         assert s in prt, s
         assert html.escape(s, quote=False) in web or inline(s) in web, s
+    talks = render_talks(d)
+    for p in d["publications"]:
+        assert p["title"] in prt and inline(p["title"]) in talks and f"## {p['year']}" in talks, p["title"]
     assert json.loads(person_jsonld(d, "x"))["sameAs"], "LinkedIn link missing from contact"
     print("ok")

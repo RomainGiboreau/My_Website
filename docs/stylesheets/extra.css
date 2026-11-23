@@ -801,7 +801,7 @@ body:has(.hero) .md-grid {
 
 .md-typeset .cv-figures {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
   gap: 0.6rem;
   margin: 1.4rem 0 0.4rem;
 }
@@ -1009,3 +1009,24 @@ body:has(.hero) .md-grid {
 .md-typeset a.cv-year:hover { background: var(--bm-accent); color: #fff; }
 .md-typeset a.cv-pub { color: var(--md-default-fg-color); }
 .md-typeset a.cv-pub:hover { color: var(--bm-accent); }
+
+/* Talks page (rendered from data/cv.yml publications by hooks/cv.py) */
+.md-typeset .talks-themes { margin: 1rem 0 0.4rem; }
+.md-typeset .talks-themes b { color: var(--bm-accent2); margin-left: 0.2rem; }
+.md-typeset .talk-badges { display: flex; gap: 0.35rem; margin: 0 0 0.2rem; }
+
+.md-typeset .talk-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.05rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--bm-accent2);
+  color: #fff;
+}
+
+.md-typeset .talk-badge-alt { background: transparent; color: var(--md-default-fg-color--light); border: 1px solid var(--bm-line); }
+.md-typeset .talk-links { margin: 0.5rem 0 0; }
+.md-typeset .talk-links .md-button { font-size: 0.62rem; padding: 0.2em 0.9em; }
+.md-typeset ol.cv-timeline ul.cv-chips { margin-left: 0; }

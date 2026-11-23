@@ -151,23 +151,53 @@ basins:
     - region: Oceania
       items: [Bonaparte (Australia), Taranaki (New Zealand)]
 
+# Publications and talks: rendered on the CV (compact list + PDF) and on the Talks page (docs/talks.md).
+# venue: shown as written; year: grouping and Talks anchors; type: oral (badge) when known;
+# role: co-author / presented by a co-author; links: {abstract: url, slides: url, doi: url} when available.
 publications:
   - title: "Closing the Exploration Gap: Probabilistic Petroleum Systems Analysis from Basin to Prospect"
     venue: APGCE 2026, Kuala Lumpur
+    year: 2026
+    date: 17 November
+    type: oral
+    themes: [Petroleum systems, Uncertainty]
   - title: "From Basin Modeling to Storage Fairway Mapping: AI-Assisted Smart Maps for Offshore Norway CCUS Screening"
     venue: First EAGE Conference on Basin and Petroleum Systems Modeling, Houston, 2026
+    year: 2026
+    date: 18 November
+    type: oral
+    role: presented by a co-author
+    themes: [Basin modeling, AI / ML, CCUS]
   - title: "Geospatial Machine Learning Framework for Subsurface Property Mapping: Application to Reservoir Quality Assessment and Carbon Storage"
-    venue: co-author, EAGE Digital 2026
+    venue: EAGE Digital 2026
+    year: 2026
+    role: co-author
+    themes: [AI / ML, CCUS]
   - title: Enhancing Geoscience Document Mining with LLMs through GraphRAG Integration and Agentic Architectures
     venue: EAGE Digital 2025
+    year: 2025
+    themes: [AI / ML, LLM]
   - title: "New Tools for New Challenges: Petroleum System Modeling of the Kurdish Foothills"
-    venue: co-author, 2018
+    venue: AAPG ACE 2018, Salt Lake City
+    year: 2018
+    role: co-author
+    themes: [Basin modeling, Structural]
+    links: {abstract: "https://www.searchanddiscovery.com/abstracts/html/2018/ace2018/abstracts/2854398.html"}
   - title: Fault Impact on Hydrocarbon Migration — 2D Complex Modelling of the North Perth Basin Petroleum Systems, Australia
     venue: 79th EAGE Conference and Exhibition, 2017
+    year: 2017
+    themes: [Basin modeling, Structural]
   - title: Petroleum system modeling in structurally complex settings — new technical capabilities
-    venue: co-author, conference paper in Russian, 2016
+    venue: conference paper in Russian, 2016
+    year: 2016
+    role: co-author
+    themes: [Basin modeling, Structural]
   - title: Impact of Structural Complexity on Migration Pathways — Basin Modelling Study Based on a Natural Example, Northern Termination of the Moab Fault (USA)
-    venue: co-author, 2015
+    venue: AAPG ICE 2015, Melbourne
+    year: 2015
+    role: co-author
+    themes: [Basin modeling, Structural]
+    links: {abstract: "https://www.searchanddiscovery.com/abstracts/html/2015/90217ice/abstracts/2209895.html"}
 
 skills:
   - domain: Basin modeling
