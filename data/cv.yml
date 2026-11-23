@@ -208,16 +208,17 @@ contact: >-
   [contact form](https://RomainGiboreau.github.io/My_Website/contact/)
 
 # Web map only: [lon, lat] per basin name above (core names and "also" items, spelled identically).
+# Core areas also carry a short label and its side of the dot (above/below/left/right).
 # Approximate basin centres; a list of points for entries covering two areas.
 map:
-  Algerian Sahara platform: [3, 29]
-  Gulf of Mexico: [-91, 25]
-  Offshore Newfoundland & Labrador: [-50, 47]
-  Orange Basin: [15, -29]
-  Guyana–Suriname Basin: [-55, 7.5]
-  Santos, Campos and Pelotas: [-44, -26]
-  Mozambique Channel: [41, -18]
-  Papua New Guinea: [146, -4]
+  Algerian Sahara platform: {at: [3, 29], label: Algerian Sahara, pos: above}
+  Gulf of Mexico: {at: [-91, 25], label: Gulf of Mexico, pos: left}
+  Offshore Newfoundland & Labrador: {at: [-50, 47], label: Newfoundland, pos: right}
+  Orange Basin: {at: [15, -29], label: Orange Basin, pos: left}
+  Guyana–Suriname Basin: {at: [-55, 7.5], label: Guyana–Suriname, pos: right}
+  Santos, Campos and Pelotas: {at: [-44, -26], label: Santos–Campos–Pelotas, pos: left}
+  Mozambique Channel: {at: [41, -18], label: Mozambique Channel, pos: right}
+  Papua New Guinea: {at: [146, -4], label: Papua New Guinea, pos: above}
   Ghadames, Murzuq, Sirte and Kufra (Libya): [17, 27]
   Kafra (Niger): [13, 16.5]
   offshore Morocco: [-11, 31]

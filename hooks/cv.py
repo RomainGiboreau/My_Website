@@ -74,20 +74,26 @@ def chips(items):
 TOP = 84  # same projection as scripts/world_svg.py: x = lon + 180, y = TOP - lat
 
 
-def points(at):
-    return at if isinstance(at[0], list) else [at]
+# label side -> (dx, dy, text-anchor), in map units
+SIDES = {"above": (0, -4, "middle"), "below": (0, 7, "middle"), "left": (-4, 1.8, "end"), "right": (4, 1.8, "start")}
 
 
 def world_map(d):
-    b, at = d["basins"], d["map"]
-    dots = [(c["name"], "core", 3) for c in b["core"]] + [(x, "also", 1.8) for r in b["also"] for x in r["items"]]
-    circles = "".join(
-        f'<circle class="cv-dot-{kind}" cx="{lon + 180:g}" cy="{TOP - lat:g}" r="{r}"><title>{html.escape(name)}</title></circle>'
-        for name, kind, r in dots for lon, lat in points(at[name]))
+    """One colour for every basin; core areas are named on the map instead of colour-coded."""
+    circles, labels = [], []
+    for name, at in d["map"].items():
+        if isinstance(at, dict):
+            (lon, lat), (dx, dy, anchor) = at["at"], SIDES[at["pos"]]
+            x, y = lon + 180, TOP - lat
+            labels.append(f'<text x="{x + dx:g}" y="{y + dy:g}" text-anchor="{anchor}">{html.escape(at["label"])}</text>')
+            pts = [at["at"]]
+        else:
+            pts = at if isinstance(at[0], list) else [at]
+        circles += [f'<circle cx="{lon + 180:g}" cy="{TOP - lat:g}" r="2.2"><title>{html.escape(name)}</title></circle>'
+                    for lon, lat in pts]
     return ('<figure class="cv-map"><svg viewBox="0 0 360 142" role="img" aria-label="World map of basins worked">'
-            '<image href="../assets/world-land.svg" width="360" height="142"/>' + circles + "</svg>"
-            '<figcaption><span class="cv-key cv-key-core"></span>Core areas '
-            '<span class="cv-key cv-key-also"></span>Also worked</figcaption></figure>')
+            '<image href="../assets/world-land.svg" width="360" height="142"/>'
+            + "".join(circles) + "".join(labels) + "</svg></figure>")
 
 
 def render_web(d):

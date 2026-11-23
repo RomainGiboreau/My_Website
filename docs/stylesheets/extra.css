@@ -1004,13 +1004,15 @@ body:has(.hero) .md-grid {
 /* CV world map (web only) */
 .md-typeset .cv-map { display: block; width: 100%; max-width: none; margin: 1rem 0 0.4rem; }
 .md-typeset .cv-map svg { width: 100%; height: auto; display: block; background: var(--md-default-bg-color); border: 1px solid var(--bm-line); border-radius: 0.2rem; }
-.md-typeset .cv-dot-core { fill: var(--bm-accent2); stroke: #fff; stroke-width: 0.6; }
-.md-typeset .cv-dot-also { fill: var(--bm-accent); stroke: #fff; stroke-width: 0.4; }
+.md-typeset .cv-map circle { fill: var(--bm-accent2); stroke: #fff; stroke-width: 0.5; }
 .md-typeset .cv-map circle:hover { stroke: var(--md-default-fg-color); }
-.md-typeset .cv-map figcaption { display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.65rem; color: var(--md-default-fg-color--light); }
-.md-typeset .cv-key { width: 0.6rem; height: 0.6rem; border-radius: 50%; display: inline-block; margin-left: 0.6rem; }
-.md-typeset .cv-key-core { background: var(--bm-accent2); }
-.md-typeset .cv-key-also { background: var(--bm-accent); }
+.md-typeset .cv-map text {
+  font: 600 5px "Inter", sans-serif;
+  fill: var(--md-default-fg-color);
+  stroke: var(--md-default-bg-color);
+  stroke-width: 1.2px;
+  paint-order: stroke;
+}
 .md-typeset a.cv-year:hover { background: var(--bm-accent); color: #fff; }
 .md-typeset a.cv-pub { color: var(--md-default-fg-color); }
 .md-typeset a.cv-pub:hover { color: var(--bm-accent); }
