@@ -159,6 +159,50 @@ test('line breaks that match the swapped size: swapped reported, layout fix not 
   const w = Z.write(z, FIXDEF()); assert.ok(!w.log.some(l => /Rewrote the data/.test(l)), w.log.join('\n'));
 });
 
+// ---- review findings (regressions)
+test('R1: trailing commas on header lines are tolerated (warning at most)', () => {
+  const t = CLEAN.replace('@EXAMPLE, GRID, 4', '@EXAMPLE, GRID, 4,').replace('15, 1.0E+30, , 7, 1', '15, 1.0E+30, , 7, 1,').replace('3, 4, 0.0, 300.0, 0.0, 200.0', '3, 4, 0.0, 300.0, 0.0, 200.0,');
+  const f = run(t).f; assert.notEqual(Z.verdict(f), 'fail', rules(f).join(', '));
+});
+test('R2: values filling the whole field width (glued) are cut by width', () => {
+  const v = []; for (let c = 0; c < 4; c++) for (let r = 0; r < 3; r++) v.push((-13344 - c * 3 - r).toFixed(7));
+  const lines = []; for (let c = 0; c < 4; c++) lines.push(v.slice(c * 3, c * 3 + 3).join(''));
+  const t = '@G, GRID, 4\n14, 1.0E+30, , 7, 1\n3, 4, 0.0, 300.0, 0.0, 200.0\n0.0, 0.0, 0.0\n@\n' + lines.join('\n') + '\n';
+  const { z, f } = run(t);
+  assert.notEqual(Z.verdict(f), 'fail', rules(f).join(', '));
+  assert.equal(Z.value(z, 2, 3), -13355);
+});
+test('R3: continuously wrapped data is not taken for swapped rows/columns', () => {
+  const vals = []; for (let c = 0; c < 10; c++) for (let r = 0; r < 7; r++) vals.push(fmt(100 + r + c));
+  const L = []; for (let i = 0; i < vals.length; i += 5) L.push(vals.slice(i, i + 5).join(''));
+  const t = '@G, GRID, 5\n15, 1.0E+30, , 7, 1\n7, 10, 0.0, 900.0, 0.0, 600.0\n0.0, 0.0, 0.0\n@\n' + L.join('\n') + '\n';
+  const { z, f } = run(t); const r = rules(f);
+  assert.ok(!r.includes('geo.swapped') && r.includes('data.breaks'), r.join(', '));
+  assert.ok(Z.write(z, FIXDEF()).log.some(l => /Rewrote the data/.test(l)));
+});
+test('R4: comment or blank lines inside the data are reported', () => has(CLEAN.replace('   1100.0000000', '! note\n\n   1100.0000000'), 'data.inner'));
+test('R5: missing closing @ is fixable', () => {
+  const { z, f } = run(CLEAN.replace(/\n@\n/, '\n'));
+  assert.equal(f.find(x => x.rule === 'hdr.at').fix, 'header');
+  const f2 = Z.check(Z.parse(Z.write(z, FIXDEF()).text, 'r5')); assert.deepEqual([...ew(f2).map(x => x.rule)], []);
+});
+test('R6: data values written with a leading + are data, not an RMS line', () => {
+  const t = CLEAN.split('\n@\n'); const d = t[1].replace(/ {2}(\d)/g, ' +$1');
+  const { z, f } = run(t[0] + '\n@\n' + d); assert.ok(!rules(f).includes('data.count'), rules(f).join(', ')); assert.equal(Z.value(z, 0, 0), 1000);
+});
+test('R7: Fortran D exponents are read as numbers', () => {
+  const { z, f } = run(CLEAN.replace('   1000.0000000', '   1.000000D+03')); assert.ok(!rules(f).includes('data.nonnumeric'), rules(f).join(', ')); assert.equal(Z.value(z, 0, 0), 1000);
+});
+test('R8: widening the field with the header fix off changes only the width', () => {
+  const t = WRAP.split('\n@\n'); const vals = t[1].trim().split(/\s+/); vals[3] = '2012.00000000000001';
+  const bad = t[0].replace('15, 1.0E+30, , 7, 1', '15,1.0E+30,,7,1') + '\n@\n' + vals.join(' ') + '\n';
+  const out = Z.write(Z.parse(bad, 'b'), ['layout']).text; assert.ok(/^20,1\.0E\+30,,7,1\r?$/m.test(out), out.split('\n').slice(0, 3).join(' | '));
+});
+test('R10: check does not modify the parsed file', () => {
+  const z = Z.parse(WRAP.replace('5, 3, 1000.0, 1100.0, 2000.0, 2200.0', '3, 5, 1000.0, 1100.0, 2000.0, 2200.0'), 's');
+  const k0 = Object.keys(z).join(); Z.check(z); assert.equal(Object.keys(z).join(), k0);
+});
+
 // ---- batch
 test('batch: same name, different geometry', () => {
   const r = rules(Z.checkBatch([Z.parse(CLEAN, 'a'), Z.parse(CLEAN.replace('0.0, 200.0', '0.0, 100.0'), 'b')]));
