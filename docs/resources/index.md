@@ -62,6 +62,8 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Petrocurve — Well Log Viewer](https://petrocurve.com/app) — online well log viewer
 - [Rocky Mountain Seismic — LAS viewer](https://www.rmseismic.com/lasviewer.html) — LAS viewer
 - [GeolOil](https://geoloil.com/products.php) — petrophysics · Windows/Mac/Linux
+- [Petrolib](https://petrolibs.com/documentation/docPages/overview.html) — formation evaluation · Python (`pip install petrolib`) · Vsh, porosity, Sw (Archie/Simandoux), pay summary, Pickett/N-D crossplots
+- [OpenPetro — Tools](https://openpetro.ai/tools/) — free in-browser petrophysics calculators (Vsh, Archie sensitivity, Passey ΔlogR TOC, MICP saturation-height, AVO, flow units) · OpenPetro LLC
 - [PredictLog](https://predictlog.streamlit.app/) — Streamlit
 - [welleng](https://github.com/jonnymaserati/welleng) — well/drilling engineering tools · Python
 - [segy-qc-toolkit](https://github.com/RahatNaqvi/segy-qc-toolkit) — SEG-Y file QC
