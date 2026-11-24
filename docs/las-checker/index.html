@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LAS checker</title>
+</head><body>
+<script id="las-core">
+/* LAS checker core: parse / check / write. No DOM access; exposed as window.LAS. */
+(function(W){
+const F=(sev,rule,line,msg,fix)=>({sev,rule,line:line==null?null:line,msg,fix:fix||null});
+const NUM=/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+const TEXT_NULL=/^(na|n\/a|#n\/a|nan|null|\(null\)|inf|-inf|\+inf|-1\.#ind|-1\.#inf|-1\.#io|1\.#inf|-+)$/i;
+const NUM_NULL=[-999.25,-999,-9999,-99999,9999.25,999.25,-999.99,9999,32767,-32767,2147483647,-2147483648];
+const INDEX=/^(DEPT|DEPTH|MD|TDEP|TIME|ETIM|INDEX)$/i;
+const up=s=>String(s||'').toUpperCase();
+
+// Split "MNEM.UNIT  VALUE : DESCRIPTION". Mnemonic ends at the first dot, unit at the first
+// whitespace after it; the description starts at the first colon preceded by whitespace (so colons
+// inside units/values such as hh:mm or 23:15 survive), else at the last colon.
+function splitHeader(s){
+  const t=s.replace(/^\s+/,'');
+  const d=t.indexOf('.'),c0=t.indexOf(':');
+  if(d<0||(c0>=0&&c0<d)){ // no dot before the description
+    if(c0<0)return null;
+    return {mnem:t.slice(0,c0).trim(),unit:'',value:'',desc:t.slice(c0+1).trim(),nodot:true};
+  }
+  const mnem=t.slice(0,d).trim();let rest=t.slice(d+1),unit='';
+  const sp=rest.search(/\s/);
+  if(sp<0){unit=rest;rest=''}else{unit=rest.slice(0,sp);rest=rest.slice(sp)}
+  let ci=rest.search(/\s:/);ci=ci>=0?ci+1:rest.lastIndexOf(':');
+  // unit with a colon swallowed the delimiter ("UNIT:desc"): only when nothing follows
+  if(ci<0&&unit.includes(':')&&!rest.trim()){const k=unit.indexOf(':');rest=' '+unit.slice(k);unit=unit.slice(0,k);ci=1}
+  if(unit==='1000'&&/^\s+LBF\b/i.test(rest)){unit='1000 LBF';rest=rest.replace(/^\s+LBF/i,'');ci=rest.search(/\s:/);ci=ci>=0?ci+1:rest.lastIndexOf(':')}
+  const value=(ci<0?rest:rest.slice(0,ci)).trim(),desc=ci<0?'':rest.slice(ci+1).trim();
+  return {mnem,unit,value,desc,nocolon:ci<0};
+}
+
+function parse(text,name){
+  const las={name:name||'file.las',findings:[],sections:[],ver:{},well:[],curves:[],params:[],other:[],rows:[],data:[],nVersion:0};
+  const P=(...a)=>las.findings.push(F(...a));
+  las.bom=text.charCodeAt(0)===0xFEFF;if(las.bom)text=text.slice(1);
+  las.crOnly=/\r(?!\n)/.test(text)&&!/\n/.test(text);
+  const lines=text.split(/\r\n|\n|\r/);if(lines.length&&lines[lines.length-1]==='')lines.pop();
+  las.lines=lines;
+  // sections
+  let cur=null;
+  lines.forEach((l,i)=>{const t=l.trim();if(t[0]==='~'){
+    if(cur)cur.end=i;cur={tag:up(t[1]||''),title:t.slice(1).trim(),start:i,end:lines.length};las.sections.push(cur)}});
+  if(!las.sections.length)return las;
+  las.nVersion=las.sections.filter(s=>s.tag==='V').length;
+  const first=t=>las.sections.find(s=>s.tag===t);
+  const items=(sec,into)=>{if(!sec)return;for(let i=sec.start+1;i<sec.end;i++){const l=lines[i],t=l.trim();
+    if(!t||t[0]==='#')continue;const h=splitHeader(l);
+    if(!h||!h.mnem){las.findings.push(F('E','hdr.parse',i+1,`Line cannot be read as MNEM.UNIT VALUE : DESCRIPTION: “${t.slice(0,60)}”`));continue}
+    h.line=i+1;h.raw=l;into.push(h)}};
+  const V=[];items(first('V'),V);las.vItems=V;
+  for(const h of V)las.ver[up(h.mnem)]=h.value;
+  items(first('W'),las.well);items(first('C'),las.curves);items(first('P'),las.params);
+  const ver=parseFloat(las.ver.VERS);
+  // LAS 1.2 ~W layout: value in the description for the text items
+  const txt=['COMP','WELL','FLD','LOC','SRVC','DATE','PROV','CNTY','STAT','CTRY','UWI','API'];
+  const w12=las.well.filter(h=>txt.includes(up(h.mnem))&&!h.value&&h.desc).length;
+  las.layout12=w12>=3||(ver===1.2&&w12>=1);
+  if(las.layout12)for(const h of las.well)if(txt.includes(up(h.mnem))&&!h.value){h.value=h.desc;h.desc='';h.from12=true}
+  // ~A
+  const A=first('A');if(!A)return las;
+  las.wrapped=up(las.ver.WRAP)==='YES';
+  const nc=las.curves.length,nullTok=(las.well.find(h=>up(h.mnem)==='NULL')||{}).value;
+  las.nullStr=nullTok;las.nullVal=NUM.test(nullTok||'')?+nullTok:NaN;
+  const tok=s=>s.trim().split(/[\s,]+/).filter(Boolean);
+  const mkRow=(line,tokens,lineCount)=>{const vals=tokens.map(x=>NUM.test(x)?+x:NaN);
+    const ok=tokens.length===nc&&tokens.every(x=>NUM.test(x)||TEXT_NULL.test(x));
+    las.rows.push({line,tokens,vals,ok,lineCount:lineCount||1})};
+  las.aComments=[];
+  if(!las.wrapped){
+    for(let i=A.start+1;i<A.end;i++){const t=lines[i].trim();if(!t)continue;if(t[0]==='#'){las.aComments.push(i+1);continue}mkRow(i+1,tok(t))}
+  }else{
+    let buf=null,start=0,cnt=0;las.wrapIssues=[];
+    for(let i=A.start+1;i<A.end;i++){const t=lines[i].trim();if(!t)continue;if(t[0]==='#'){las.aComments.push(i+1);continue}
+      if(lines[i].length>80)las.wrapIssues.push([i+1,'line longer than 80 characters']);
+      const tk=tok(t);
+      if(!buf){buf=tk.slice();start=i+1;cnt=1;if(tk.length!==1)las.wrapIssues.push([i+1,'index value is not alone on its line'])}
+      else{buf.push(...tk);cnt++}
+      if(nc&&buf.length>=nc){mkRow(start,buf,cnt);buf=null}}
+    if(buf)mkRow(start,buf,cnt);
+  }
+  las.data=las.rows.filter(r=>r.ok).map(r=>r.vals);
+  return las;
+}
+
+const isNull=(las,v)=>!isFinite(v)||v===las.nullVal;
+const median=a=>{if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+const fmtN=v=>String(+(+v).toPrecision(10));
+
+// index statistics shared by check() and write()
+function indexInfo(las){
+  const idx=las.data.map(r=>r[0]).filter(v=>!isNull(las,v));
+  const d=[];for(let i=1;i<idx.length;i++)d.push(idx[i]-idx[i-1]);
+  const md=median(d),tol=Math.abs(md)*1e-3||1e-6;
+  const regular=d.length>0&&d.every(x=>Math.abs(x-md)<=tol);
+  const jitter=d.length?Math.max(...d.map(x=>Math.abs(x-md))):0;
+  return {idx,d,step:md,regular,jitter,first:idx[0],last:idx[idx.length-1]};
+}
+
+W.LAS={parse,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
+})(window);
+</script>
+</body></html>
