@@ -65,3 +65,23 @@ and a deep-water fan with 3 wells.
 
 ## Left to the builder
 Palette details, noise implementation, exact scanning steps, page layout within the site style.
+
+## Library upgrade (24 Nov 2026, branch gde-library)
+- **Systems** (gde-core `templates`, `groups`): 17 templates in six groups shown as option groups —
+  Continental (fluvial, aeolian / erg), Coastal & deltaic (tide-dominated delta / estuary, wave-dominated
+  delta, river-dominated delta), Shelf & carbonate (wave-dominated shoreface–shelf, rimmed platform, ramp,
+  mixed carbonate–siliciclastic shelf, glaciomarine ice shelf), Deep water (mixed, sand-rich and mud-rich
+  fans, slope apron / mass-transport), Lacustrine (rift lake, shallow lake / playa), Custom. Each has
+  `group`, `scale` [km lo, hi], default `fan`, optional channel defaults `ch`, and `refs`
+  [item, source, status]; the Method & sources page builds one table per system from them.
+- **Widths**: anchored on what was read this session (Prélat et al. 2010 lobe sizes, Gorsline 1987 fan size
+  classes, shelf/slope averages, Harris, Moore & Wilson 1985 Florida reef tract and lagoon, Domack &
+  Harris 1998 grounding-line zones, Burchette & Wright 1992 via a summary); everything else tagged “memory”.
+- **Matching**: exact name, name parts and aliases, then the same without lithology words, then the longest
+  alias contained as whole words (ties match nothing). No alias shared by two belts of a template (tested).
+- **Scale note** (`scaleHint`): map larger side < lo/4 or > 4·hi → a note in panel 3 and the verdict.
+- **Model file** (`saveModel` / `openModel`, format “gde-model” v1) and the last custom belt list in
+  localStorage (try/catch).
+- **Channels** (`channels`, `makeChannels`): sinuous ribbons inside host belts, one routed through each well
+  in the channel belt (code n + 1, outside the calibration), others spread and moved off other wells.
+- **Examples**: #delta, #fan, #estuary, #ramp, #lake, each honouring every well without warping.
