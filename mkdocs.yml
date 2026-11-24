@@ -68,6 +68,8 @@ nav:
       - resources/index.md
       - resources/bibliography.md
   - Tools:
+      - Data preparation:
+          - LAS checker: las-checker/index.html
       - Digitization:
           - Plot digitizer: digitizer/index.html
           - Map digitizer: mapdigitizer/index.html

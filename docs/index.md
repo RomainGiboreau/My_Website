@@ -78,6 +78,20 @@ Lead Geoscientist at Beicip-Franlab. 15 years of petroleum systems assessment an
 
 Personal side projects, built for fun. Free to use in the browser; your data stays on your computer.
 
+### :material-file-check-outline: Data preparation
+
+QC of transmitted files before loading them.
+
+<div class="grid cards tool-cards" markdown>
+
+-   [![LAS checker](assets/tools/las-checker.webp){ loading=lazy }](las-checker/index.html)
+
+    [**LAS checker**](las-checker/index.html)
+
+    Check LAS well log files against the format conventions, list every problem, download a corrected copy.
+
+</div>
+
 ### :material-chart-scatter-plot: Digitization
 
 Pull numbers back out of published plots and maps.
