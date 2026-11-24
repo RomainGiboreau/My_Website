@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Map digitizer</title>
 <link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/mapdigitizer/">
-<meta name="description" content="Extract a regular XY grid of values from a map image with a continuous property (e.g. a depth map) using its colour legend. Runs entirely in your browser.">
+<meta name="description" content="Extract a regular XY grid from a colour-filled map image using its legend: values of a continuous property (e.g. a depth map, colour bar) or class codes of a discrete one (e.g. a facies map, colour boxes). Runs entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -84,6 +84,15 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
 .tools .sep{width:1px;background:var(--line);margin:0 2px}
 .dpanel{margin-top:12px}
 .stage{position:sticky;top:8px}
+[hidden]{display:none!important}
+.cls{display:grid;grid-template-columns:30px 1fr 56px 22px;gap:4px;align-items:center;font-size:.8rem;margin:3px 0}
+.cls input{width:100%}.cls button{padding:0 4px;line-height:1.2}
+.cls.hd{color:var(--mut);font-size:.72rem;margin:6px 0 0}
+.cls input[type=color]{width:30px;height:24px;padding:1px;border:1px solid var(--line);border-radius:4px;background:var(--bg);cursor:pointer}
+#clsRes table{margin-top:6px;border:1px solid var(--line)}
+#clsRes td:nth-child(3),#clsRes th:nth-child(3){text-align:left}
+#clsRes tbody tr{cursor:default}
+#clsRes .sw{width:14px;height:14px}
 </style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head><body>
 <div class="top"><h1>Map digitizer</h1>
@@ -93,19 +102,22 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <button id="bCsv">XYZ CSV</button>
   <button id="bMat" title="Matrix CSV: one row per y (top = ymax), one column per x">Matrix CSV</button>
   <button id="bGrd" title="Surfer ASCII grid (DSAA), empty nodes = 1.70141e38">Surfer .grd</button>
+  <button id="bZmap" title="ZMAP+ grid of class codes, legend in ! comment lines, empty nodes = 1E+30" hidden>ZMAP+</button>
   <span class="msg" id="exportMsg"></span>
-  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the images are never uploaded. The value of each grid node is read from its colour by matching it to the colour legend (CIE Lab distance), then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes.">?</span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the images are never uploaded. The value of each grid node is read from its colour by matching it to the colour legend (CIE Lab distance), then the median over a small pixel window is kept (colour bar) or the majority class of the window (colour boxes). Colours that do not match the legend (text, white background, contour lines) give empty nodes. With colour boxes the exports hold the class code; the CSV is x, y, code, class and always omits the empty nodes; the ZMAP+ grid lists the classes as ! code = name comment lines.">?</span>
  </div>
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
 <aside class="side">
  <section class="panel"><h2><span class="n">1</span>Map image<span class="tt" tabindex="0" data-tip="Open a file, drop it on the canvas, or paste a screenshot with Ctrl+V. The map should be a flat colour-filled map (no perspective). The image never leaves your browser.">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="row"><button class="pri" id="bOpen">Open map…</button><button id="bExample">Try an example</button></div>
+  <div class="body"><div class="row"><button class="pri" id="bOpen">Open map…</button><button id="bExample">Try an example</button><button id="bExFac" title="Synthetic facies map with a legend of colour boxes (discrete classes)">Facies example</button></div>
   <input type="file" id="file" accept="image/*" hidden><input type="file" id="fileLeg" accept="image/*" hidden>
   </div>
  </section>
- <section class="panel"><h2><span class="n">2</span>Legend<span class="tt" tabindex="0" data-tip="Only the two ends of the colour bar are needed: click its minimum end, type its value, then click its maximum end and type its value. The colours in between are read from the bar pixels along the line joining the two ends, and the values in between are interpolated (linear or log). Add an intermediate tick only if the bar is not linear. The legend can be inside the map image or in a separate image.">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="row"><label class="inl">Legend in <select id="legSrc"><option value="same">the map image</option><option value="sep">a separate image</option></select></label><button id="bOpenLeg" hidden>Open legend…</button></div>
+ <section class="panel"><h2><span class="n">2</span>Legend<span class="tt" tabindex="0" data-tip="Colour bar (continuous property, e.g. depth): only the two ends of the bar are needed: click its minimum end, type its value, then click its maximum end and type its value. The colours in between are read from the bar pixels along the line joining the two ends, and the values in between are interpolated (linear or log). Add an intermediate tick only if the bar is not linear. Colour boxes (discrete classes, e.g. facies, lithology, depositional environment): click each box of the legend to add a class; each class has a colour, a name and an integer code. The legend can be inside the map image or in a separate image.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><label class="inl">Legend type <select id="legType"><option value="cont">Colour bar (continuous)</option><option value="disc">Colour boxes (discrete classes)</option></select></label></div>
+  <div class="row"><label class="inl">Legend in <select id="legSrc"><option value="same">the map image</option><option value="sep">a separate image</option></select></label><button id="bOpenLeg" hidden>Open legend…</button></div>
+  <div id="legCont">
   <div class="row"><label class="inl">Value scale <select id="vs"><option value="lin">linear</option><option value="log">log</option></select></label></div>
   <div class="tick"><span>Min</span><button id="bMin">Click end</button><input type="text" id="vMin" placeholder="value" aria-label="Minimum value"><span class="sw" id="swMin"></span></div>
   <div class="tick"><span>Max</span><button id="bMax">Click end</button><input type="text" id="vMax" placeholder="value" aria-label="Maximum value"><span class="sw" id="swMax"></span></div>
@@ -113,6 +125,14 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <div class="row"><button id="bMid">+ intermediate tick</button><button id="bTickClear">Reset legend</button></div>
   <canvas class="lut" id="lutC" width="300" height="14"></canvas>
   <div class="msg" id="lutMsg"></div>
+  </div>
+  <div id="legDisc" hidden>
+  <div class="row"><button id="bCls" title="Then click inside each colour box of the legend">+ Add class</button><button id="bDetect">Detect colours</button><span class="tt" tabindex="0" data-tip="Add class: click inside a colour box of the legend (the colour is the average of a 5 × 5 pixel window); the tool stays armed to click the next box, press Esc or the button again to stop. Detect colours: proposes the dominant colours of the drawn region (or of the grid area, or of the whole map), each covering at least 1 % of it; delete the background, text and line colours. To merge two colours into one class, give them the same code.">?</span></div>
+  <div class="cls hd"><span></span><span>Class name</span><span>Code</span><span></span></div>
+  <div id="clsList"></div>
+  <div class="row"><button id="bClsClear">Reset classes</button></div>
+  <div class="msg" id="clsMsg"></div>
+  </div>
   </div>
  </section>
  <section class="panel"><h2><span class="n">3</span>Map coordinates<span class="tt" tabindex="0" data-tip="Add control points: click a spot of the map whose coordinates you know (a corner, a graticule crossing, a labelled tick), then type its X and Y in the two boxes. 2 points are enough if the map is not rotated (they must differ in both X and Y); 3 or more points fit a full affine transform by least squares and handle rotation. Without any control point, the grid is defined in image pixels (y downward).">?</span><i class="chev"></i></h2>
@@ -131,9 +151,11 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <div class="body"><label class="inl">Colour tolerance <input type="range" id="tol" min="2" max="40" value="12"><span id="tolV" style="width:28px;text-align:right">12</span></label>
   <div class="row"><label class="inl">Window ± <input type="number" id="win" min="0" max="15" value="2" style="width:52px">px</label>
    <label class="inl">Min. matching <input type="number" id="minf" min="1" max="100" value="30" style="width:56px">%</label></div>
+  <div class="row" id="rowFill" hidden><label class="inl"><input type="checkbox" id="fillGaps" checked>Fill small gaps</label><span class="tt" tabindex="0" data-tip="One pass after the extraction: an empty node takes the class shared by at least 5 of its 8 neighbours (read from the grid before filling). It closes the holes left by labels, well symbols and lines without growing the classes into the empty areas.">?</span></div>
   <div class="row"><button class="pri" id="bExtract">Extract grid</button></div>
   <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label><label class="inl"><input type="checkbox" id="showU">Unmatched pixels</label></div>
-  <div class="msg" id="exMsg"></div></div>
+  <div class="msg" id="exMsg"></div>
+  <div id="clsRes"></div></div>
  </section>
 </aside>
 <main>
@@ -146,7 +168,7 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <canvas id="loupe" width="150" height="150"></canvas>
   <div class="ro" id="ro">—</div>
  </div>
- <div class="dpanel"><div class="tw"><table><thead><tr><th>#</th><th id="thX">X</th><th id="thY">Y</th><th>Value</th></tr></thead><tbody id="tb"></tbody></table></div></div>
+ <div class="dpanel"><div class="tw"><table><thead><tr><th>#</th><th id="thX">X</th><th id="thY">Y</th><th id="thV">Value</th></tr></thead><tbody id="tb"></tbody></table></div></div>
 </main>
 </div>
 <script id="md-discrete-core">
@@ -275,7 +297,7 @@ function setImage(doc,img){
 }
 function afterLoad(doc){
   if(doc===S.map){S.R=null;S.region=null;$('drop').style.display='none'}
-  if(doc===LD())resetTicks();
+  if(doc===LD()){resetTicks();resetCls()}
   fit();recal();buildLUT();renderTable();$('exMsg').textContent=''}
 function loadFile(f,target){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();
   i.onload=()=>{const doc=target==='leg'&&S.sep?S.leg:S.map;setImage(doc,i);URL.revokeObjectURL(u);afterLoad(doc)};i.src=u}
@@ -289,7 +311,7 @@ $('stage').addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfe
 document.addEventListener('paste',e=>{if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type==='text')return;
   for(const it of e.clipboardData.items)if(it.type.startsWith('image/')){loadFile(it.getAsFile(),curTarget());e.preventDefault();return}});
 $('legSrc').onchange=e=>{S.sep=e.target.value==='sep';$('bOpenLeg').hidden=!S.sep;['vsep','vMap','vLeg'].forEach(i=>$(i).hidden=!S.sep);
-  resetTicks();setView('map');buildLUT();draw()};
+  resetTicks();resetCls();clsChanged();setView('map');buildLUT();draw()};
 function setView(v){if(v==='leg'&&!S.sep)v='map';const ch=S.view!==v;S.view=v;$('vMap').classList.toggle('on',v==='map');$('vLeg').classList.toggle('on',v==='leg');if(ch)fit()}  // refit only when the view really changes: arming a tool must not reset the user's zoom/pan
 
 $('vMap').onclick=()=>setView('map');$('vLeg').onclick=()=>setView('leg');
@@ -317,8 +339,32 @@ function makeExample(){
   g.strokeStyle='#000';g.strokeRect(bx+.5,py0+.5,bw,ph-1);g.fillStyle='#000';
   for(let k=0;k<=4;k++){const z=zmin+k*400,yy=py0+ph-1-k/4*(ph-1);g.beginPath();g.moveTo(bx+bw,yy+.5);g.lineTo(bx+bw+5,yy+.5);g.stroke();g.fillText(z,bx+bw+8,yy+4)}
   return{canvas:c,geo:{px0,py0,pw,ph,bx,bw,zmin,zmax}}}
-$('bExample').onclick=()=>{const e=makeExample();const i=new Image();i.onload=()=>{S.sep=false;$('legSrc').value='same';$('bOpenLeg').hidden=true;['vsep','vMap','vLeg'].forEach(k=>$(k).hidden=true);setView('map');
+$('bExample').onclick=()=>{const e=makeExample();const i=new Image();i.onload=()=>{setMode('cont');S.sep=false;$('legSrc').value='same';$('bOpenLeg').hidden=true;['vsep','vMap','vLeg'].forEach(k=>$(k).hidden=true);setView('map');
   setImage(S.map,i);window.EXGEO=e.geo;afterLoad(S.map)};i.src=e.canvas.toDataURL('image/png')};
+// discrete example: synthetic depositional-environment map with a legend of colour boxes
+const FAC=[['Basin floor',[52,84,148]],['Slope',[86,140,196]],['Shelf',[150,205,200]],['Shoreface',[242,184,104]],['Coastal plain',[182,212,120]],['Fluvial channel',[240,232,96]]];
+function facAt(x,y){const s=y+7*Math.sin(x/11)+4*Math.cos(x/23+y/9)-.12*x;
+  const k=s<14?0:s<26?1:s<37?2:s<46?3:4;return k===4&&Math.abs(y-(53+3*Math.sin(x/7)))<1.6?5:k}
+function makeFacies(){
+  const W=720,H=420,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);
+  const px0=60,py0=30,pw=500,ph=300,im=g.createImageData(pw,ph);
+  for(let j=0;j<ph;j++)for(let i=0;i<pw;i++){const x=(i+.5)/pw*100,y=60-(j+.5)/ph*60,q=FAC[facAt(x,y)][1],o=(j*pw+i)*4;im.data[o]=q[0];im.data[o+1]=q[1];im.data[o+2]=q[2];im.data[o+3]=255}
+  g.putImageData(im,px0,py0);
+  g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1;     // graticule, wells and labels to test robustness
+  for(let x=0;x<=100;x+=20){g.beginPath();g.moveTo(px0+x/100*pw+.5,py0);g.lineTo(px0+x/100*pw+.5,py0+ph);g.stroke()}
+  for(let y=0;y<=60;y+=20){const yy=py0+ph-y/60*ph;g.beginPath();g.moveTo(px0,yy+.5);g.lineTo(px0+pw,yy+.5);g.stroke()}
+  g.fillStyle='#000';g.font='12px sans-serif';
+  [[18,44,'W-1'],[47,31,'W-2'],[71,12,'W-3'],[88,51,'W-4']].forEach(([x,y,n])=>{const sx=px0+x/100*pw,sy=py0+ph-y/60*ph;g.beginPath();g.arc(sx,sy,3.5,0,7);g.fill();g.fillText(n,sx+6,sy-4)});
+  g.strokeStyle='#000';g.strokeRect(px0+.5,py0+.5,pw,ph);
+  for(let x=0;x<=100;x+=20)g.fillText(x,px0+x/100*pw-8,py0+ph+16);
+  for(let y=0;y<=60;y+=20)g.fillText(y,px0-24,py0+ph-y/60*ph+4);
+  g.fillText('X (km)',px0+pw/2-20,py0+ph+34);
+  const bx=px0+pw+18,boxes=[];g.font='600 12px sans-serif';g.fillText('Environment',bx,py0+8);g.font='12px sans-serif';
+  FAC.slice().reverse().forEach(([n,q],k)=>{const y=py0+24+k*28;g.fillStyle=`rgb(${q.join(',')})`;g.fillRect(bx,y,28,18);g.strokeStyle='#000';g.strokeRect(bx+.5,y+.5,27,17);g.fillStyle='#000';g.fillText(n,bx+36,y+13);boxes.push({name:n,rgb:q,cx:bx+14,cy:y+9})});
+  return{canvas:c,geo:{px0,py0,pw,ph,boxes:boxes.reverse()}}}
+$('bExFac').onclick=()=>{const e=makeFacies();const i=new Image();i.onload=()=>{setMode('disc');S.sep=false;$('legSrc').value='same';$('bOpenLeg').hidden=true;['vsep','vMap','vLeg'].forEach(k=>$(k).hidden=true);setView('map');
+  setImage(S.map,i);window.EXGEO=e.geo;afterLoad(S.map);banner('Facies example: press “+ Add class” and click each colour box of the legend (or “Detect colours”), name the classes, then calibrate with two corners (0, 0) and (100, 60) and extract.')};i.src=e.canvas.toDataURL('image/png')};
 
 // ---------- view ----------
 function size(){const r=$('stage').getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);return{w:r.width,h:r.height,dpr}}
@@ -383,13 +429,67 @@ function match(r,g,b,tol2){const key=(r<<16)|(g<<8)|b;let c=lutCache.get(key);
     c=[bi,best];lutCache.set(key,c)}
   return c[1]<=tol2?c[0]:-1}
 
+// ---------- discrete legend (colour boxes -> classes) ----------
+S.mode='cont';S.cls=[];               // S.cls: {rgb:[r,g,b], name, code, p:[x,y]|null, doc}
+const DISC=()=>S.mode==='disc';
+let DL=null,dCache=new Map();         // DL: colours grouped by code (same code = merged class)
+const escA=t=>esc(t).replace(/"/g,'&quot;');
+const hex=c=>'#'+c.map(v=>v.toString(16).padStart(2,'0')).join(''),unhex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function buildDL(){dCache=new Map();const E=S.cls.filter(c=>Number.isInteger(c.code));
+  if(!E.length||E.length<S.cls.length){DL=null;return}
+  const codes=[...new Set(E.map(c=>c.code))].sort((a,b)=>a-b),gi=new Map(codes.map((c,i)=>[c,i]));
+  const G=codes.map(code=>{const m=E.filter(c=>c.code===code);return{code,name:(m.find(c=>c.name.trim())||{name:''}).name.trim()||'Class '+code,rgb:m[0].rgb}});
+  DL={G,labs:E.map(c=>MDD.lab(...c.rgb)),grp:E.map(c=>gi.get(c.code))}}
+function dInfo(r,g,b){const key=(r<<16)|(g<<8)|b;let c=dCache.get(key);
+  if(!c){const l=MDD.lab(r,g,b),q=MDD.nearest(l,DL.labs);c={g:DL.grp[q.i],d2:q.d2,l,gd:null};dCache.set(key,c)}
+  return c}
+const dMatch=(r,g,b,tol2)=>{const c=dInfo(r,g,b);return c.d2<=tol2?c.g:-1};
+function gdOf(c){if(!c.gd){c.gd=new Float32Array(DL.G.length).fill(Infinity);   // squared distance to the nearest colour of each class (tie-break)
+  DL.labs.forEach((q,k)=>{const a=c.l[0]-q[0],b=c.l[1]-q[1],e=c.l[2]-q[2],d=a*a+b*b+e*e,gk=DL.grp[k];if(d<c.gd[gk])c.gd[gk]=d})}return c.gd}
+const nextCode=()=>S.cls.reduce((m,c)=>Number.isInteger(c.code)&&c.code>=m?c.code+1:m,1);
+function renderCls(){$('clsList').innerHTML=S.cls.map((c,i)=>`<div class="cls"><input type="color" data-k="${i}" data-a="rgb" value="${hex(c.rgb)}" aria-label="Colour ${i+1}" title="rgb(${c.rgb.join(', ')})"><input type="text" data-k="${i}" data-a="name" value="${escA(c.name)}" placeholder="Class ${Number.isInteger(c.code)?c.code:''} name" aria-label="Colour ${i+1} class name"><input type="number" step="1" data-k="${i}" data-a="code" value="${Number.isInteger(c.code)?c.code:''}" aria-label="Colour ${i+1} code"><button data-d="${i}" title="Remove">×</button></div>`).join('');clsMsg()}
+function clsMsg(){const m=$('clsMsg');m.className='msg';
+  if(!S.cls.length){m.textContent='Click each colour box of the legend (+ Add class), or press Detect colours.';return}
+  if(!DL){m.textContent='Every colour needs an integer code.';m.className='msg err';return}
+  const mg=S.cls.length-DL.G.length;m.textContent=`${S.cls.length} colour${S.cls.length>1?'s':''} → ${DL.G.length} class${DL.G.length>1?'es':''}`+(mg?` (${mg} merged by a shared code)`:'')}
+function clsChanged(){buildDL();clsMsg();updU();if(S.R&&S.R.disc){renderClsRes();renderTable()}draw()}
+function resetCls(){S.cls=[];if(S.tool==='cls')setTool(null);renderCls();buildDL()}
+$('clsList').addEventListener('input',e=>{const k=e.target.dataset.k;if(k==null)return;const c=S.cls[+k],a=e.target.dataset.a;
+  if(a==='rgb'){c.rgb=unhex(e.target.value);e.target.title=`rgb(${c.rgb.join(', ')})`}else if(a==='code')c.code=e.target.value.trim()===''?NaN:Math.round(num(e.target.value));else c.name=e.target.value;
+  clsChanged()});
+$('clsList').addEventListener('click',e=>{const d=e.target.dataset.d;if(d==null)return;S.cls.splice(+d,1);renderCls();clsChanged()});
+$('bClsClear').onclick=()=>{resetCls();clsChanged()};
+function addClassAt(D,ix,iy){const rgb=MDD.avg(D.imgData.data,D.w,D.h,ix,iy,2),tol2=(+$('tol').value)**2;
+  if(DL){const q=MDD.nearest(MDD.lab(...rgb),DL.labs);if(q.d2<=tol2){const c=S.cls.filter(c=>Number.isInteger(c.code))[q.i];banner(`This colour is within the colour tolerance of class ${c.code}${c.name?' ('+c.name+')':''}: the two will compete for the same pixels. Give them the same code to merge them.`,true)}}
+  S.cls.push({rgb,name:'',code:nextCode(),p:[ix,iy],doc:D});renderCls();clsChanged()}
+$('bCls').onclick=()=>{if(S.tool==='cls'){setTool(null);return}if(!LD().img){banner(S.sep?'Open the legend image first.':'Open a map first.',true);return}setView(S.sep?'leg':'map');setTool('cls')};
+$('bDetect').onclick=()=>{const D=S.map;if(!D.img){banner('Open a map first.',true);return}
+  let box=null,src='the drawn region';
+  if(S.region)box={...S.region};
+  else if(['gx0','gx1','gy0','gy1','gdx','gdy'].every(i=>$(i).value.trim()!=='')&&!gridSpec().err){const g=gridSpec(),G=GEO(),xe=g.x0+(g.nx-1)*g.dx,ye=g.y0+(g.ny-1)*g.dy,c=[[g.x0,g.y0],[xe,g.y0],[g.x0,ye],[xe,ye]].map(p=>G.inv(p[0],p[1]));
+    box={x0:Math.min(...c.map(p=>p[0])),x1:Math.max(...c.map(p=>p[0]))+1,y0:Math.min(...c.map(p=>p[1])),y1:Math.max(...c.map(p=>p[1]))+1};src='the grid area'}
+  if(!box){box={x0:0,y0:0,x1:D.w,y1:D.h};src='the whole map (draw a region in section 4 to restrict it)'}
+  const tol=+$('tol').value,P=MDD.detect(D.imgData.data,D.w,D.h,box,{minShare:.01,mergeDist:Math.max(6,tol),max:16});let add=0;
+  for(const q of P){if(DL&&MDD.nearest(MDD.lab(...q.rgb),DL.labs).d2<=tol*tol)continue;S.cls.push({rgb:q.rgb,name:'',code:nextCode(),p:null,doc:null});add++;buildDL()}
+  renderCls();clsChanged();
+  if(add)banner(`${add} colour${add>1?'s':''} proposed from ${src}. Name them, delete the background, text and line colours, and give two colours the same code to merge them.`);
+  else banner(P.length?'No new colour: every dominant colour is already a class.':'No dominant colour found.',!P.length)};
+function setMode(m){S.mode=m;$('legType').value=m;const d=m==='disc';
+  $('legCont').hidden=d;$('legDisc').hidden=!d;$('rowFill').hidden=!d;$('bZmap').hidden=!d;$('skipNaN').parentElement.hidden=d;
+  $('bCopy').textContent=d?'Copy table':'Copy XYZ';$('bCopy').title=d?'Copy x, y, code, class as tab-separated text (empty nodes omitted), ready to paste into Excel':'Copy x, y, value as tab-separated text, ready to paste into Excel';
+  $('bCsv').textContent=d?'CSV (code, class)':'XYZ CSV';$('bCsv').title=d?'x, y, code, class; empty nodes are omitted':'';
+  if(S.tool==='tick'||S.tool==='cls')setTool(null);
+  S.R=null;$('exMsg').textContent='';renderClsRes();renderTable();computeU()}
+$('legType').onchange=e=>setMode(e.target.value);
+
 // ---------- unmatched-pixel overlay ----------
 let uC=null,uT=null;
 function updU(){clearTimeout(uT);uT=setTimeout(computeU,120)}
-function computeU(){uC=null;if(!$('showU').checked||!LUT||!S.map.img){draw();return}
+function computeU(){uC=null;if(!$('showU').checked||!(DISC()?DL:LUT)||!S.map.img){draw();return}
+  const pm=DISC()?dMatch:match;
   const D=S.map,d=D.imgData.data,tol2=(+$('tol').value)**2,c=document.createElement('canvas');c.width=D.w;c.height=D.h;
   const x=c.getContext('2d'),im=x.createImageData(D.w,D.h);
-  for(let k=0;k<D.w*D.h;k++){const o=4*k;if(match(d[o],d[o+1],d[o+2],tol2)<0){im.data[o]=214;im.data[o+1]=59;im.data[o+2]=50;im.data[o+3]=150}}
+  for(let k=0;k<D.w*D.h;k++){const o=4*k;if(pm(d[o],d[o+1],d[o+2],tol2)<0){im.data[o]=214;im.data[o+1]=59;im.data[o+2]=50;im.data[o+3]=150}}
   x.putImageData(im,0,0);uC=c;draw()}
 // ---------- drawing ----------
 function marker(g,x,y,col,lab,r=7){g.strokeStyle=col;g.lineWidth=2;g.beginPath();g.moveTo(x-r,y);g.lineTo(x+r,y);g.moveTo(x,y-r);g.lineTo(x,y+r);g.stroke();
@@ -417,10 +517,11 @@ function draw(){
   if(isMap&&S.R&&$('showN').checked){const R=S.R,G=GEO();ctx.lineWidth=1;
     const rad=Math.max(1.5,Math.min(5,Math.min(R.dx,R.dy)*0+3));
     for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const k=j*R.nx+i,p=G.inv(R.x0+i*R.dx,R.y0+j*R.dy),[x,y]=toScr(p[0],p[1]);if(x<-5||y<-5||x>W+5||y>H+5)continue;
-      const id=R.idx[k];ctx.beginPath();ctx.arc(x,y,rad,0,7);
-      if(id<0){ctx.strokeStyle='#d63b32';ctx.stroke()}else{ctx.fillStyle=`rgb(${R.lut.rgb[3*id]},${R.lut.rgb[3*id+1]},${R.lut.rgb[3*id+2]})`;ctx.fill();ctx.strokeStyle='#232220';ctx.stroke()}}}
+      const id=R.disc?R.cls[k]:R.idx[k];ctx.beginPath();ctx.arc(x,y,rad,0,7);
+      if(id<0){ctx.strokeStyle='#d63b32';ctx.stroke()}else{ctx.fillStyle=R.disc?`rgb(${R.groups[id].rgb.join(',')})`:`rgb(${R.lut.rgb[3*id]},${R.lut.rgb[3*id+1]},${R.lut.rgb[3*id+2]})`;ctx.fill();ctx.strokeStyle='#232220';ctx.stroke()}}}
   if(isMap)S.cal.pts.forEach((q,i)=>{if(q.p){const [x,y]=toScr(q.p[0],q.p[1]);marker(ctx,x,y,'#1f5fbf','P'+(i+1),9)}});
-  if(D===LD()){const mn=S.T.min.p,mx=S.T.max.p;
+  if(DISC())S.cls.forEach(c=>{if(c.p&&c.doc===D){const [x,y]=toScr(c.p[0],c.p[1]);ctx.fillStyle=`rgb(${c.rgb.join(',')})`;ctx.fillRect(x-5,y-5,10,10);ctx.strokeStyle='#232220';ctx.lineWidth=1;ctx.strokeRect(x-5.5,y-5.5,11,11);ctx.fillStyle='#232220';ctx.font='600 11px Inter,sans-serif';ctx.fillText(Number.isInteger(c.code)?c.code:'?',x+9,y+4)}});
+  else if(D===LD()){const mn=S.T.min.p,mx=S.T.max.p;
     if(mn&&mx){const a=toScr(...mn),b=toScr(...mx);ctx.strokeStyle='rgba(168,98,58,.9)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([])}
     tickList().forEach(([k,t])=>{const [x,y]=toScr(t.p[0],t.p[1]);marker(ctx,x,y,'#a8623a',(k==='min'?'min':k==='max'?'max':'T'+(+k.slice(1)+1))+(t.v!==''?' = '+t.v:''),7)})}
 }
@@ -435,7 +536,7 @@ function drawLoupe(ix,iy){const D=CUR();
   lg.strokeStyle='#fff';lg.beginPath();lg.arc(cx,cy,4,0,7);lg.stroke()}
 
 // ---------- tools & pointer ----------
-function setTool(t){S.tool=t;$('bMin').classList.toggle('on',t==='tick'&&S.tickTarget==='min');$('bMax').classList.toggle('on',t==='tick'&&S.tickTarget==='max');[['bCal','cal'],['tRegion','region']].forEach(([id,n])=>$(id).classList.toggle('on',n===t));cv.style.cursor=t?'crosshair':'grab'}
+function setTool(t){S.tool=t;$('bMin').classList.toggle('on',t==='tick'&&S.tickTarget==='min');$('bMax').classList.toggle('on',t==='tick'&&S.tickTarget==='max');[['bCal','cal'],['tRegion','region'],['bCls','cls']].forEach(([id,n])=>$(id).classList.toggle('on',n===t));cv.style.cursor=t?'crosshair':'grab'}
 $('tRegion').onclick=()=>{if(!S.map.img)return;setView('map');setTool('region')};
 function hitCal(sx,sy){if(CUR()!==S.map)return -1;for(let i=0;i<S.cal.pts.length;i++){const q=S.cal.pts[i];if(!q.p)continue;const [x,y]=toScr(q.p[0],q.p[1]);if(Math.hypot(x-sx,y-sy)<=10)return i}return -1}
 function tickList(){return[['min',S.T.min],['max',S.T.max],...S.T.mid.map((t,i)=>['m'+i,t])].filter(a=>a[1].p)}
@@ -451,6 +552,7 @@ cv.addEventListener('pointerdown',e=>{
     else if(k==='max'){S.T.max.p=p;setTool(null);renderTicks();buildLUT();$('vMax').focus()}
     else if(k&&k[0]==='m'){const t=S.T.mid[+k.slice(1)];if(t){t.p=p;setTool(null);renderTicks();buildLUT();const inp=$('tickList').querySelector(`input[data-i="${k.slice(1)}"]`);if(inp)inp.focus()}}
     return}
+  if(S.tool==='cls'){addClassAt(D,ix,iy);return}
   if(S.tool==='region'){drag={k:'region',x:ix,y:iy};S.region={x0:ix,y0:iy,x1:ix,y1:iy};return}
   const c=hitCal(sx,sy);if(c>=0){drag={k:'cal',i:c};return}
   const t=hitTick(sx,sy);if(t){drag={k:'tick',t};return}
@@ -477,7 +579,8 @@ document.addEventListener('keydown',e=>{const tag=document.activeElement.tagName
 document.addEventListener('keyup',e=>{if(e.code==='Space')S.space=false});
 function readout(ix,iy){const D=CUR();let t=`px ${ix.toFixed(1)}, ${iy.toFixed(1)}`;
   if(D===S.map&&CAL&&!CAL.err){const [x,y]=CAL.f([ix,iy]);t+=`  →  x ${fmt(x)}, y ${fmt(y)}`}
-  if(D===S.map&&LUT&&ix>=0&&iy>=0&&ix<D.w&&iy<D.h){const o=(Math.floor(iy)*D.w+Math.floor(ix))*4,id=match(D.imgData.data[o],D.imgData.data[o+1],D.imgData.data[o+2],(+$('tol').value)**2);if(id>=0)t+=`  ·  value ≈ ${fmt(LUT.val[id])}`}
+  if(D===S.map&&DISC()&&DL&&ix>=0&&iy>=0&&ix<D.w&&iy<D.h){const o=(Math.floor(iy)*D.w+Math.floor(ix))*4,g=dMatch(D.imgData.data[o],D.imgData.data[o+1],D.imgData.data[o+2],(+$('tol').value)**2);if(g>=0)t+=`  ·  class ${DL.G[g].code} ${DL.G[g].name}`}
+  else if(D===S.map&&LUT&&ix>=0&&iy>=0&&ix<D.w&&iy<D.h){const o=(Math.floor(iy)*D.w+Math.floor(ix))*4,id=match(D.imgData.data[o],D.imgData.data[o+1],D.imgData.data[o+2],(+$('tol').value)**2);if(id>=0)t+=`  ·  value ≈ ${fmt(LUT.val[id])}`}
   $('ro').textContent=t}
 
 // ---------- grid bounds ----------
@@ -499,11 +602,13 @@ $('tol').oninput=e=>{$('tolV').textContent=e.target.value;updU()};
 $('bExtract').onclick=()=>{
   const m=$('exMsg');m.className='msg';
   if(!S.map.img){m.textContent='Open a map first.';m.className='msg err';banner('Open a map first.',true);return}
-  if(!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';banner('Define the colour legend first (section 2): click the min and max ends of the colour bar and type their values.',true);return}
+  if(DISC()&&!DL){const e=S.cls.length?'Every colour of the legend needs an integer code (section 2).':'Define the classes first (section 2): click each colour box of the legend with “+ Add class”, or press “Detect colours”.';m.textContent=e;m.className='msg err';banner(e,true);return}
+  if(!DISC()&&!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';banner('Define the colour legend first (section 2): click the min and max ends of the colour bar and type their values.',true);return}
   if(S.cal.pts.length&&(!CAL||CAL.err)){const e='Calibration incomplete: '+(CAL&&CAL.err?CAL.err:'fix the control points')+' Fix it, or press Reset to work in image pixels.';m.textContent=e;m.className='msg err';banner(e,true);return}
   if(['gx0','gx1','gy0','gy1','gdx','gdy'].some(i=>$(i).value.trim()===''))autoGrid();
   const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';$('gMsg').textContent=g.err;banner(g.err,true);return}
   const D=S.map,d=D.imgData.data,G=GEO(),tol2=(+$('tol').value)**2,w=Math.max(0,Math.min(15,Math.round(+$('win').value||0))),minN=Math.max(1,Math.ceil((+$('minf').value||30)/100*(2*w+1)**2));
+  if(DISC()){extractDisc(g,D,G,tol2,w,minN);return}
   const idx=new Int16Array(g.nx*g.ny).fill(-1),buf=new Int16Array((2*w+1)**2);let ok=0,vmin=Infinity,vmax=-Infinity,sum=0;
   for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){
     const p=G.inv(g.x0+i*g.dx,g.y0+j*g.dy),cx=Math.round(p[0]-.5),cy=Math.round(p[1]-.5);let n=0;
@@ -520,14 +625,41 @@ $('bExtract').onclick=()=>{
   else if(share<.5){m.className='msg err';banner(`Only ${Math.round(share*100)} % of the nodes matched the legend. Raise the colour tolerance, tick “Unmatched pixels” to see what is rejected, or keep the grid inside the coloured area.`,true)}
   else banner(`${ok} of ${idx.length} nodes extracted (${fmt(vmin)} → ${fmt(vmax)}). Check the Raster / Nodes overlays, then export from the top bar.`);
   renderTable();draw()};
-function zOf(k){const R=S.R,id=R.idx[k];return id<0?NaN:R.lut.val[id]}
-function renderTable(){const R=S.R;$('thX').textContent=R&&R.px?'X (px)':'X';$('thY').textContent=R&&R.px?'Y (px)':'Y';
+function extractDisc(g,D,G,tol2,w,minN){
+  const m=$('exMsg'),d=D.imgData.data,nG=DL.G.length,cnt=new Int32Array(nG),none=new Float32Array(nG);
+  let cls=new Int16Array(g.nx*g.ny).fill(-1);
+  for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){
+    const p=G.inv(g.x0+i*g.dx,g.y0+j*g.dy),cx=Math.round(p[0]-.5),cy=Math.round(p[1]-.5);let n=0;cnt.fill(0);
+    for(let v=-w;v<=w;v++){const y=cy+v;if(y<0||y>=D.h)continue;for(let u=-w;u<=w;u++){const x=cx+u;if(x<0||x>=D.w)continue;const o=(y*D.w+x)*4;if(d[o+3]<200)continue;
+      const q=dMatch(d[o],d[o+1],d[o+2],tol2);if(q>=0){cnt[q]++;n++}}}
+    let gd=none;if(n>=minN&&cx>=0&&cy>=0&&cx<D.w&&cy<D.h){const o=(cy*D.w+cx)*4;gd=gdOf(dInfo(d[o],d[o+1],d[o+2]))}
+    cls[j*g.nx+i]=MDD.vote(cnt,n,minN,gd)}
+  let filled=0;if($('fillGaps').checked){const f=MDD.fillGaps(cls,g.nx,g.ny,5);for(let k=0;k<f.length;k++)if(f[k]!==cls[k])filled++;cls=f}
+  const counts=new Array(nG).fill(0);let ok=0;for(const c of cls)if(c>=0){counts[c]++;ok++}
+  const groups=DL.G.map(x=>({...x})),pres=groups.filter((x,i)=>counts[i]).map(x=>x.code);
+  const rc=document.createElement('canvas');rc.width=g.nx;rc.height=g.ny;const rx=rc.getContext('2d'),im=rx.createImageData(g.nx,g.ny);
+  for(let k=0;k<cls.length;k++){const c=cls[k];if(c>=0){const q=groups[c].rgb;im.data[4*k]=q[0];im.data[4*k+1]=q[1];im.data[4*k+2]=q[2];im.data[4*k+3]=255}}
+  rx.putImageData(im,0,0);
+  S.R={...g,disc:true,cls,groups,counts,canvas:rc,ok,filled,vmin:pres.length?Math.min(...pres):NaN,vmax:pres.length?Math.max(...pres):NaN,px:!!G.px};
+  const share=ok/cls.length,nc=pres.length;
+  m.textContent=ok?`${ok} / ${cls.length} nodes classified · ${nc} class${nc>1?'es':''} present`+(filled?` · ${filled} filled from their neighbours`:''):'No node matched a class: increase the tolerance or check the class colours.';
+  if(!ok){m.className='msg err';banner('No node matched a legend class. Raise the colour tolerance, or check the class colours against the map.',true)}
+  else if(share<.5){m.className='msg err';banner(`Only ${Math.round(share*100)} % of the nodes matched a class. Raise the colour tolerance, add the missing classes, tick “Unmatched pixels” to see what is rejected, or keep the grid inside the coloured area.`,true)}
+  else banner(`${ok} of ${cls.length} nodes classified into ${nc} class${nc>1?'es':''}. Check the Raster / Nodes overlays, then export from the top bar.`);
+  renderClsRes();renderTable();draw()}
+const legendOf=R=>R.groups.map(gr=>{const c=DL&&DL.G.find(x=>x.code===gr.code);return[gr.code,c?c.name:gr.name]});   // live names: classes can be renamed after the extraction
+function renderClsRes(){const R=S.R,el=$('clsRes');if(!R||!R.disc){el.innerHTML='';return}
+  const nm=new Map(legendOf(R));
+  el.innerHTML='<table><thead><tr><th></th><th>Code</th><th>Class</th><th>Nodes</th><th>%</th></tr></thead><tbody>'+R.groups.map((gr,i)=>`<tr><td><span class="sw" style="background:rgb(${gr.rgb.join(',')})"></span></td><td>${gr.code}</td><td>${esc(nm.get(gr.code))}</td><td>${R.counts[i]}</td><td>${R.ok?(100*R.counts[i]/R.ok).toFixed(1):'—'}</td></tr>`).join('')+'</tbody></table><div class="note">% = share of the non-empty nodes, i.e. the area share of each class on the regular grid.</div>'}
+function gridOut(R){return{name:'classes',nx:R.nx,ny:R.ny,x0:R.x0,y0:R.y0,dx:R.dx,dy:R.dy,codes:Array.from(R.cls,c=>c<0?null:R.groups[c].code),legend:legendOf(R)}}
+function zOf(k){const R=S.R;if(R.disc){const c=R.cls[k];return c<0?NaN:R.groups[c].code}const id=R.idx[k];return id<0?NaN:R.lut.val[id]}
+function renderTable(){const R=S.R;$('thX').textContent=R&&R.px?'X (px)':'X';$('thY').textContent=R&&R.px?'Y (px)':'Y';$('thV').textContent=DISC()?'Class':'Value';
   if(!R){$('tb').innerHTML='';return}
-  let h='',n=0;for(let j=0;j<R.ny&&n<400;j++)for(let i=0;i<R.nx&&n<400;i++,n++){const k=j*R.nx+i;h+=`<tr><td>${k+1}</td><td>${fmt(R.x0+i*R.dx)}</td><td>${fmt(R.y0+j*R.dy)}</td><td>${fmt(zOf(k))}</td></tr>`}
+  const nm=R.disc?new Map(legendOf(R)):null;let h='',n=0;for(let j=0;j<R.ny&&n<400;j++)for(let i=0;i<R.nx&&n<400;i++,n++){const k=j*R.nx+i;const z=zOf(k);h+=`<tr><td>${k+1}</td><td>${fmt(R.x0+i*R.dx)}</td><td>${fmt(R.y0+j*R.dy)}</td><td>${R.disc?(isFinite(z)?z+' · '+esc(nm.get(z)):'—'):fmt(z)}</td></tr>`}
   if(R.nx*R.ny>n)h+=`<tr><td colspan="4">… ${R.nx*R.ny-n} more nodes (all are exported)</td></tr>`;$('tb').innerHTML=h}
 
 // ---------- export ----------
-function xyz(sep){const R=S.R,skip=$('skipNaN').checked,L=[['x','y','value'].join(sep)];
+function xyz(sep){if(S.R.disc)return MDD.csv(gridOut(S.R),sep);const R=S.R,skip=$('skipNaN').checked,L=[['x','y','value'].join(sep)];
   for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);if(skip&&!isFinite(z))continue;L.push([+(R.x0+i*R.dx).toPrecision(10),+(R.y0+j*R.dy).toPrecision(10),isFinite(z)?+z.toPrecision(8):''].join(sep))}
   return L.join('\n')}
 function matrix(){const R=S.R,L=['y\\x,'+Array.from({length:R.nx},(_,i)=>+(R.x0+i*R.dx).toPrecision(10)).join(',')];
@@ -537,12 +669,13 @@ function grd(){const R=S.R,L=['DSAA',`${R.nx} ${R.ny}`,`${+R.x0.toPrecision(10)}
 function dl(text,name,type){const b=new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast(name+' downloaded.')}
 const need=()=>{if(!S.R||!S.R.ok){toast('Nothing to export: extract the grid first.');return false}return true};
 $('bCopy').onclick=async()=>{if(!need())return;const t=xyz('\t');try{await navigator.clipboard.writeText(t);}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}toast('Copied — paste into Excel.')};
-$('bCsv').onclick=()=>{if(need())dl(xyz(','),'map_xyz.csv','text/csv')};
+$('bCsv').onclick=()=>{if(need())dl(xyz(','),S.R.disc?'map_classes.csv':'map_xyz.csv','text/csv')};
+$('bZmap').onclick=()=>{if(need()&&S.R.disc)dl(MDD.zmap(gridOut(S.R)),'map_classes.zmap','text/plain')};
 $('bMat').onclick=()=>{if(need())dl(matrix(),'map_matrix.csv','text/csv')};
 $('bGrd').onclick=()=>{if(need())dl(grd(),'map_grid.grd','text/plain')};
 $('showR').onchange=$('showN').onchange=draw;$('showU').onchange=computeU;
-window.DG={S,buildCal,get LUT(){return LUT},get CAL(){return CAL},imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
-recal();size();draw();
+window.DG={S,buildCal,get LUT(){return LUT},get CAL(){return CAL},get DL(){return DL},addClass:(x,y)=>addClassAt(CUR(),x,y),setMode,imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
+renderCls();recal();size();draw();
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
 (function(D){
@@ -621,6 +754,6 @@ recal();size();draw();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what": "Runs entirely in your browser: nothing you load leaves your machine. Read a continuous property from a colour-filled map image and its colour legend, on a regular grid in map coordinates.", "method": ["Legend: click the minimum and maximum ends of the colour bar and type their values; the colours in between are read from the bar pixels along the line joining the two ends, with linear or log interpolation. Intermediate ticks only if the bar is not linear.", "Each grid node is matched to the legend by CIE Lab colour distance, then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes. Settings: colour tolerance (maximum CIE Lab distance; about 2 is barely visible, 10 clearly different), window half-size in pixels, and minimum share of matching pixels in the window.", "Georeferencing: 2 control points are enough if the map is not rotated; 3 or more fit a full affine transform by least squares and handle rotation. Without control points the grid is defined in image pixels (y downward).", "Grid: regular, nodes xmin, xmin + dx, … up to xmax (same for y)."], "sources": [["CIE Lab colour distance, affine least-squares transform", "Standard methods; no specific reference", "classical"]], "validation": ["No validation against an independent implementation is recorded for this page."], "limits": ["The map must be a flat colour-filled map without perspective."]});
+({"what": "Runs entirely in your browser: nothing you load leaves your machine. Read a continuous property (colour bar legend) or a discrete property such as facies, lithology or depositional environment (legend of colour boxes) from a colour-filled map image, on a regular grid in map coordinates.", "date": "24 November 2026", "method": ["Legend: click the minimum and maximum ends of the colour bar and type their values; the colours in between are read from the bar pixels along the line joining the two ends, with linear or log interpolation. Intermediate ticks only if the bar is not linear.", "Each grid node is matched to the legend by CIE Lab colour distance, then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes. Settings: colour tolerance (maximum CIE Lab distance; about 2 is barely visible, 10 clearly different), window half-size in pixels, and minimum share of matching pixels in the window.", "Georeferencing: 2 control points are enough if the map is not rotated; 3 or more fit a full affine transform by least squares and handle rotation. Without control points the grid is defined in image pixels (y downward).", "Grid: regular, nodes xmin, xmin + dx, … up to xmax (same for y).", "Discrete legend (colour boxes): each class is a colour sampled as the mean of a 5 × 5 pixel window inside a legend box (editable), a name and an integer code. Colours sharing a code are merged into one class. “Detect colours” proposes the dominant colours of the region: 15-bit colour histogram, bins merged greedily from the most frequent within the colour tolerance (minimum 6) in CIE Lab, kept when they cover at least 1 % of the region (16 at most).", "Discrete node assignment: every pixel of the window is matched to the nearest class colour (CIE Lab distance) within the colour tolerance; the node takes the majority class (mode), not the median, which has no meaning for classes. A tie goes to the tied class whose colour is nearest to the centre pixel. Below the minimum share of matching pixels the node is empty.", "Fill small gaps (option, on by default): one pass after the extraction, an empty node takes the class shared by at least 5 of its 8 neighbours, counted on the grid before filling, so holes left by labels and symbols close without the classes growing into empty areas.", "Discrete exports: CSV x, y, code, class with the empty nodes omitted; ZMAP+ grid of codes, legend in “! code = name” comment lines, header “@name, GRID, 5” / “15, 1E+30, , 0, 1” / rows, columns, xmin, xmax, ymin, ymax / “0.0, 0.0, 0.0” / “@”, then the values column by column from the upper-left node (ymax) downwards, each column starting on a new line, 5 values of width 15 per line, empty nodes 1E+30. The Matrix CSV and Surfer grid hold the codes too."], "sources": [["CIE Lab colour distance, affine least-squares transform", "Standard methods; no specific reference", "classical"], ["Majority (mode) filter, 8-neighbour gap filling, histogram colour quantisation", "Standard image-processing methods; no specific reference", "classical"], ["ZMAP+ grid layout", "Format as used by common geoscience software; no formal specification consulted", "memory"]], "validation": ["No validation against an independent implementation is recorded for this page.", "Discrete mode: self-check script scripts/mapdigitizer_discrete_test.mjs (majority vote, Lab matching with tolerance, gap filling, ZMAP+ and CSV writers, colour detection). On the built-in facies example (6 classes, 1 km grid, 101 × 61 nodes), 99.9 % of the nodes are classified and 99.3 % of them match the class used to draw the map; the differences are nodes on class boundaries."], "limits": ["The map must be a flat colour-filled map without perspective.", "Discrete mode outputs a grid of class codes only: no polygon (shapefile, outline) output.", "Anti-aliased class boundaries mix two colours: these pixels match neither class or the wrong one, so nodes on boundaries can be empty or misclassified; a window of ± 2 px or more and the majority vote reduce it.", "Hatched, dotted or patterned fills are not supported: each class must be one flat colour (several colours can be merged under one code, but a pattern is not recognised as such).", "Classes with very close colours (CIE Lab distance below the tolerance) compete for the same pixels: lower the tolerance or merge them."]});
 </script>
 </body></html>

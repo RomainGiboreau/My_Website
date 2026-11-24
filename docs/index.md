@@ -108,7 +108,7 @@ Pull numbers back out of published plots and maps.
 
     [**Map digitizer**](mapdigitizer/index.html)
 
-    Turn a colour-coded map (e.g. a depth map) into a regular XY grid using its legend.
+    Turn a colour-coded map into a regular XY grid using its legend: values from a colour bar (e.g. a depth map) or class codes from colour boxes (e.g. a facies map).
 
 </div>
 
