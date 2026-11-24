@@ -149,6 +149,60 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
  <div class="dpanel"><div class="tw"><table><thead><tr><th>#</th><th id="thX">X</th><th id="thY">Y</th><th>Value</th></tr></thead><tbody id="tb"></tbody></table></div></div>
 </main>
 </div>
+<script id="md-discrete-core">
+/* Discrete legend (colour boxes -> class codes): pure logic, no DOM. Tested by scripts/mapdigitizer_discrete_test.mjs */
+(function(){
+const lab=(r,g,b)=>{const f=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)};
+  const R=f(r),G=f(g),B=f(b);
+  let X=(R*.4124564+G*.3575761+B*.1804375)/.95047,Y=(R*.2126729+G*.7151522+B*.072175),Z=(R*.0193339+G*.119192+B*.9503041)/1.08883;
+  const h=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;X=h(X);Y=h(Y);Z=h(Z);return[116*Y-16,500*(X-Y),200*(Y-Z)]};
+// nearest class colour (squared CIE76 distance)
+function nearest(l,labs){let i=-1,d2=Infinity;for(let k=0;k<labs.length;k++){const q=labs[k],a=l[0]-q[0],b=l[1]-q[1],c=l[2]-q[2],d=a*a+b*b+c*c;if(d<d2){d2=d;i=k}}return{i,d2}}
+function match(l,labs,tol2){const r=nearest(l,labs);return r.i>=0&&r.d2<=tol2?r.i:-1}
+// majority (mode) of the window; ties -> the tied class nearest to the centre pixel colour; too few matching pixels -> -1
+function vote(counts,matched,minN,centreD2){if(!matched||matched<minN)return -1;
+  let best=-1,bi=-1;for(let k=0;k<counts.length;k++){const c=counts[k];if(c>best||(c===best&&c>0&&centreD2[k]<centreD2[bi])){best=c;bi=k}}
+  return best>0?bi:-1}
+// one pass: an empty node (<0) takes the class shared by >= need of its 8 neighbours (read from the original grid)
+function fillGaps(g,nx,ny,need=5){const o=g.slice(),cnt=new Map();
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const k=j*nx+i;if(g[k]>=0)continue;cnt.clear();
+    for(let v=-1;v<=1;v++){const y=j+v;if(y<0||y>=ny)continue;for(let u=-1;u<=1;u++){const x=i+u;if((!u&&!v)||x<0||x>=nx)continue;const c=g[y*nx+x];if(c>=0)cnt.set(c,(cnt.get(c)||0)+1)}}
+    for(const [c,n] of cnt)if(n>=need){o[k]=c;break}}
+  return o}
+const crd=v=>String(+(+v).toPrecision(10));
+const oneLine=s=>String(s??'').replace(/[\r\n\t]+/g,' ');
+// ZMAP+ grid of codes. G={name,nx,ny,x0,y0,dx,dy,codes (k=j*nx+i, j=0 at ymin; null = empty),legend:[[code,name]]}
+function zmap(G){const nm=String(G.name||'grid').replace(/[^A-Za-z0-9_.-]+/g,'_').replace(/^_+|_+$/g,'')||'grid';
+  const L=(G.legend||[]).map(([c,n])=>`! ${c} = ${oneLine(n)}`);
+  L.push(`@${nm}, GRID, 5`,'15, 1E+30, , 0, 1',`${G.ny}, ${G.nx}, ${crd(G.x0)}, ${crd(G.x0+(G.nx-1)*G.dx)}, ${crd(G.y0)}, ${crd(G.y0+(G.ny-1)*G.dy)}`,'0.0, 0.0, 0.0','@');
+  for(let i=0;i<G.nx;i++){let line='',n=0;
+    for(let j=G.ny-1;j>=0;j--){const v=G.codes[j*G.nx+i];line+=(v==null||!isFinite(v)?'1E+30':String(v)).padStart(15);if(++n===5){L.push(line);line='';n=0}}
+    if(n)L.push(line)}
+  return L.join('\n')+'\n'}
+// x,y,code,class; empty nodes are omitted
+function csv(G,sep=','){const nm=new Map(G.legend||[]),q=s=>{s=oneLine(s);return sep===','&&/[",]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=[['x','y','code','class'].join(sep)];
+  for(let j=0;j<G.ny;j++)for(let i=0;i<G.nx;i++){const v=G.codes[j*G.nx+i];if(v==null||!isFinite(v))continue;L.push([crd(G.x0+i*G.dx),crd(G.y0+j*G.dy),v,q(nm.get(v))].join(sep))}
+  return L.join('\n')}
+// mean colour of the (2r+1)^2 window around (x,y), clipped to the image
+function avg(d,w,h,x,y,r){x=Math.round(x);y=Math.round(y);let n=0,R=0,G=0,B=0;
+  for(let v=-r;v<=r;v++){const yy=y+v;if(yy<0||yy>=h)continue;for(let u=-r;u<=r;u++){const xx=x+u;if(xx<0||xx>=w)continue;const o=(yy*w+xx)*4;R+=d[o];G+=d[o+1];B+=d[o+2];n++}}
+  return n?[Math.round(R/n),Math.round(G/n),Math.round(B/n)]:[0,0,0]}
+// dominant colours: 15-bit histogram, bins merged greedily (most frequent first) within mergeDist in Lab, kept if share >= minShare
+function detect(d,w,h,box,opt={}){const minShare=opt.minShare??.01,md2=(opt.mergeDist??12)**2,max=opt.max??16;
+  const x0=Math.max(0,Math.floor(box.x0)),y0=Math.max(0,Math.floor(box.y0)),x1=Math.min(w,Math.ceil(box.x1)),y1=Math.min(h,Math.ceil(box.y1));
+  const st=Math.max(1,Math.floor(Math.sqrt((x1-x0)*(y1-y0)/1e6))),H=new Float64Array(32768*4);let tot=0;
+  for(let y=y0;y<y1;y+=st)for(let x=x0;x<x1;x+=st){const o=(y*w+x)*4;if(d[o+3]<200)continue;const k=((d[o]>>3)<<10|(d[o+1]>>3)<<5|(d[o+2]>>3))*4;H[k]++;H[k+1]+=d[o];H[k+2]+=d[o+1];H[k+3]+=d[o+2];tot++}
+  if(!tot)return[];
+  const bins=[];for(let k=0;k<32768;k++)if(H[4*k])bins.push(k);bins.sort((a,b)=>H[4*b]-H[4*a]);
+  const C=[];
+  for(const k of bins){const n=H[4*k],l=lab(H[4*k+1]/n,H[4*k+2]/n,H[4*k+3]/n);let c=null;
+    for(const q of C){const a=l[0]-q.l[0],b=l[1]-q.l[1],e=l[2]-q.l[2];if(a*a+b*b+e*e<=md2){c=q;break}}
+    if(!c)C.push(c={l,n:0,R:0,G:0,B:0});c.n+=n;c.R+=H[4*k+1];c.G+=H[4*k+2];c.B+=H[4*k+3]}
+  return C.filter(c=>c.n/tot>=minShare).sort((a,b)=>b.n-a.n).slice(0,max).map(c=>({rgb:[Math.round(c.R/c.n),Math.round(c.G/c.n),Math.round(c.B/c.n)],share:c.n/tot}))}
+window.MDD={lab,nearest,match,vote,fillGaps,zmap,csv,avg,detect};
+})();
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
