@@ -126,7 +126,7 @@ Pull numbers back out of published plots and maps.
 
 ### :material-map-outline: Mapping & spatial statistics
 
-Gridding, spatial correlation and grouping of point data.
+Gridding, spatial correlation, grouping of point data and depositional environment maps.
 
 <div class="grid cards tool-cards" markdown>
 
@@ -153,6 +153,12 @@ Gridding, spatial correlation and grouping of point data.
     [**Clustering**](clustering/index.html)
 
     k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow and PCA.
+
+-   [![GDE map generator](assets/tools/gdemap.webp){ loading=lazy }](gdemap/index.html)
+
+    [**GDE map generator**](gdemap/index.html)
+
+    Gross depositional environment map from a few wells and a depositional model, calibrated on the wells; polygons and grid exports.
 
 </div>
 
