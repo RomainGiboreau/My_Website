@@ -121,6 +121,60 @@ test('a truncated row does not make the step irregular', () => {
   assert.ok(!rules(f).includes('well.step'), rules(f).join(', '));
 });
 
+test('large file (200k rows) checks and writes without stack overflow', () => {
+  const rows = []; for (let i = 0; i < 200000; i++) rows.push(`${(1000 + i * 0.25).toFixed(2)} ${50 + i % 37} 2.45 ${i % 2 ? 25 : 0.2} ${10 + i % 11}`);
+  const las = LAS.parse(withData(rows.join('\n') + '\n'), 'big.las');
+  const f = LAS.check(las);
+  assert.ok(rules(f).includes('plaus.range'));
+  assert.ok(LAS.write(las, defaults()).text.length > 1e6);
+});
+
+const W12 = `~VERSION INFORMATION
+ VERS.                 1.20:   CWLS LOG ASCII STANDARD -VERSION 1.20
+ WRAP.                  NO:   ONE LINE PER DEPTH STEP
+~WELL INFORMATION BLOCK
+ STRT.M        1000.0000:
+ STOP.M        1001.0000:
+ STEP.M           0.2500:
+ NULL.         -999.2500:
+ COMP.             COMPANY:   ANY OIL COMPANY INC.
+ WELL.                WELL:   ANY ET AL 12-34-12-34
+ FLD .               FIELD:   WILDCAT
+ LOC .            LOCATION:   12-34-12-34W5
+ PROV.            PROVINCE:   ALBERTA
+ SRVC.     SERVICE COMPANY:   ANY LOGGING COMPANY INC.
+ DATE.            LOG DATE:   13-DEC-86
+ UWI .      UNIQUE WELL ID:   100123401234W500
+~CURVE INFORMATION
+ DEPT.M                     :   1  DEPTH
+ GR  .GAPI                  :   2  GAMMA RAY
+` + CLEAN.slice(CLEAN.indexOf('~A')).replace(/^(\S+\s+\S+).*$/gm, '$1').replace('~A  DEPT', '~A');
+test('LAS 1.2 file with the label in the value slot reads the data after the colon', () => {
+  const las = LAS.parse(W12, 'old.las');
+  assert.equal(las.well.find(h => h.mnem === 'WELL').value, 'ANY ET AL 12-34-12-34');
+  assert.equal(las.well.find(h => h.mnem === 'UWI').value, '100123401234W500');
+  assert.deepEqual([...ew(LAS.check(las)).map(x => x.rule)], []);
+  const las2 = LAS.parse(LAS.write(las, defaults()).text, 'o2.las');
+  assert.equal(las2.ver.VERS, '2.0');
+  const w2 = las2.well.find(h => h.mnem === 'WELL');
+  assert.equal(w2.value, 'ANY ET AL 12-34-12-34'); assert.equal(w2.desc, 'WELL');
+});
+test('LAS 2.0 file written with the 1.2 label layout is flagged', () => {
+  has(W12.replace('1.20:   CWLS LOG ASCII STANDARD -VERSION 1.20', '2.0 :   CWLS LOG ASCII STANDARD -VERSION 2.0'), 'ver.layout');
+});
+
+test('write does not modify the parsed file (fixes can be unticked)', () => {
+  const las = LAS.parse(BROKEN, 'b.las');
+  const n0 = LAS.check(las).length;
+  LAS.write(las, defaults());
+  const { log } = LAS.write(las, []);
+  assert.equal(log.length, 0, log.join('\n'));
+  assert.equal(las.well.find(h => h.mnem === 'STEP').value, '0.0000');
+  assert.equal(LAS.check(las).length, n0);
+  const o = LAS.parse(W12, 'o.las'); LAS.write(o, defaults());
+  assert.equal(o.well.find(h => h.mnem === 'WELL').desc, 'WELL');
+});
+
 // ---- batch
 test('batch: same WELL different UWI, overlapping runs, mixed depth units', () => {
   const a = LAS.parse(CLEAN, 'a.las'), b = LAS.parse(CLEAN.replace('NO-1234', 'NO-9999'), 'b.las');
