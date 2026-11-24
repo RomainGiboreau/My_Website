@@ -187,7 +187,7 @@ function write(z,fixIds){
     if(z.iEnd<0)log.push('Header: added the closing “@”.');
   }else{
     for(let i=z.i0;i<=hEnd;i++)out.push(lines[i]);
-    if(width!==z.width&&z.hdr.l2)out[z.hdr.l2.line-1]=l2line()  // out[] holds the original lines up to here}
+    if(width!==z.width&&z.hdr.l2)out[z.hdr.l2.line-1]=l2line()}  // out[] holds the original lines up to here
   // ---- data
   if(relayout){if(z.rms)out.push(lines[z.rms-1]);
     for(let c=0,k=0;c<z.ncols;c++)for(let r=0;r<z.nrows;r+=z.npl){const e=Math.min(z.npl,z.nrows-r);let s='';for(let j=0;j<e;j++)s+=tok[k++].padStart(width);out.push(s)}}
