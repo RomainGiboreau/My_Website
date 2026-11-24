@@ -1,5 +1,131 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>ZMAP checker</title></head><body>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZMAP checker</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/zmap-checker/">
+<meta name="description" content="QC of ZMAP+ grid files before loading: header, column-major data, fixed-width fields, value count, null markers, half-cell and swapped-axis geometry, with a corrected file. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
 <script id="zmap-core">
 /* ZMAP checker core: parse / check / write ZMAP+ grids. No DOM access; exposed as window.ZMAP.
    Format notes and sources: specs/2026-11-24-zmap-research.md */
@@ -101,9 +227,12 @@ function check(z){
   if(nn.length)P('E','data.nonnumeric',z.tokLine[nn[0]],`Non-numeric value(s) “${[...new Set(nn.slice(0,50).map(k=>z.tok[k]))].slice(0,4).join('”, “')}” on lines ${lineList([...new Set(nn.map(k=>z.tokLine[k]))])}.`);
   const npl=z.npl,over=z.dataLines.filter(d=>d.n>npl);
   if(npl>0&&over.length)P('E','data.perline',over[0].line,`${over.length} line(s) hold more than ${npl} values (nodes per line in the header).`,'layout');
-  if(npl>0&&countOk&&!over.length){let k=0,bad=-1;
-    outer:for(let c=0;c<z.ncols;c++)for(let r=0;r<z.nrows;r+=npl){const e=Math.min(npl,z.nrows-r),d=z.dataLines[k++];if(!d||d.n!==e){bad=d?d.line:-1;break outer}}
-    if(bad!==-1||k!==z.dataLines.length)P('W','data.breaks',bad>0?bad:null,`Line breaks do not follow the columns: each column of ${z.nrows} values should start on a new line, ${npl} values per line.`,'layout')}
+  // does the line pattern follow columns of nr values? returns the first line that breaks it, 0 if it fits
+  const breaksAt=(nr,nc)=>{let k=0;for(let c=0;c<nc;c++)for(let r=0;r<nr;r+=npl){const e=Math.min(npl,nr-r),d=z.dataLines[k++];if(!d||d.n!==e)return d?d.line:-1}return k===z.dataLines.length?0:-1};
+  if(npl>0&&countOk&&!over.length){const bad=breaksAt(z.nrows,z.ncols);
+    if(bad&&z.nrows!==z.ncols&&!breaksAt(z.ncols,z.nrows)){z.swapByBreaks=true;
+      P('W','geo.swapped',l3.line,`The data lines follow columns of ${z.ncols} values, not ${z.nrows}: the header probably gives rows and columns the wrong way round (rows come first). The data are not rewritten until the header is fixed.`)}
+    else if(bad)P('W','data.breaks',bad>0?bad:null,`Line breaks do not follow the columns: each column of ${z.nrows} values should start on a new line, ${npl} values per line.`,'layout')}
   if(Number.isInteger(z.width)&&z.width>0){
     const badw=z.dataLines.filter(d=>d.len%z.width);let wide=0;for(let k=0;k<n;k++)if(z.tok[k].length>z.width)wide++;
     if(badw.length||wide)P('W','data.width',(badw[0]||{}).line,`Fixed-width layout broken (${z.width} characters per value)${badw.length?`: ${badw.length} line(s) whose length is not a multiple of ${z.width}`:''}${wide?`; ${wide} value(s) wider than the field`:''}. Readers that cut fields by width (GDAL) misread them.`,'layout')}
@@ -122,7 +251,7 @@ function check(z){
       const ha=[ex/z.ncols,ey/z.nrows],sw=[ex/(z.nrows-1),ey/(z.ncols-1)];
       if(isRound(ha[0])&&isRound(ha[1]))c.push(['geo.halfcell',Math.abs(ha[0]-ha[1]),`Node spacing ${fmtN(z.dx)} × ${fmtN(z.dy)} is not round, but the extent divided by the number of cells gives ${fmtN(ha[0])} × ${fmtN(ha[1])}: the extent is probably given at the cell edges (GDAL default). Node-based readers place the grid half a cell off.`]);
       if(z.nrows!==z.ncols&&isRound(sw[0])&&isRound(sw[1]))c.push(['geo.swapped',Math.abs(sw[0]-sw[1]),`Spacing ${fmtN(z.dx)} × ${fmtN(z.dy)} is not round, but swapping rows and columns gives ${fmtN(sw[0])} × ${fmtN(sw[1])}: rows and columns are probably swapped in the header (rows come first).`]);
-      c.sort((a,b)=>a[1]-b[1]);if(c.length)P('W',c[0][0],l3.line,c[0][2])}
+      c.sort((a,b)=>a[1]-b[1]);if(c.length&&!(z.swapByBreaks&&c[0][0]==='geo.swapped'))P('W',c[0][0],l3.line,c[0][2])}
     if(Math.abs(z.dx-z.dy)>1e-6*Math.max(Math.abs(z.dx),Math.abs(z.dy)))P('I','geo.aniso',l3.line,`Cells are not square: dx = ${fmtN(z.dx)}, dy = ${fmtN(z.dy)}.`)}
   // ---- plausibility
   if(countOk){let nv=0,mn=Infinity,mx=-Infinity;for(let k=0;k<n;k++){const v=z.values[k];if(isNull(z,v))continue;nv++;if(v<mn)mn=v;if(v>mx)mx=v}
@@ -165,7 +294,9 @@ function write(z,fixIds){
     if(c){tokChanged=true;log.push(`Replaced ${c} other null marker(s) by ${z.nullText}.`)}}
   const want=z.l3ok?z.nrows*z.ncols:NaN,countOk=tok.length===want&&z.npl>0;
   const tabsInData=z.dataLines.some(d=>z.lines[d.i].includes('\t'));
-  const relayout=countOk&&((on.has('layout')&&(has('data.perline')||has('data.breaks')||has('data.width')))||tokChanged||(tabsInData&&on.has('tabs')));
+  const swapped=has('geo.swapped');
+  if(swapped&&on.has('layout')&&(has('data.perline')||has('data.width')))log.push('Data not rewritten: rows and columns look swapped in the header; fix the header first.');
+  const relayout=countOk&&!swapped&&((on.has('layout')&&(has('data.perline')||has('data.breaks')||has('data.width')))||tokChanged||(tabsInData&&on.has('tabs')));
   let width=z.width;
   if(relayout){let mx=0;for(const x of tok)if(x.length>mx)mx=x.length;
     if(!(Number.isInteger(width)&&width>0&&width<40)||mx+1>width){const w2=Math.min(39,Math.max(mx+1,Number.isInteger(width)?width:15));if(w2!==width)log.push(`Field width ${z.width} → ${w2} so that every value fits.`);width=w2}
@@ -200,5 +331,367 @@ function write(z,fixIds){
 
 W.ZMAP={parse,check,verdict,checkBatch,FIXES,write,value,isNull,isRound,fmtN,NUM,NULL_LIKE};
 })(window);
+</script>
+<style>
+/* ZMAP checker page: verdict first, problems in plain words, details in tabs */
+.layout{grid-template-columns:300px minmax(0,1fr)}
+main{min-width:0}
+.side .drop{position:static;pointer-events:auto;display:block;margin-top:2px;border:2px dashed var(--line);border-radius:8px;padding:12px 10px;text-align:center;color:var(--mut);font-size:.8rem}
+body.dragging .side .drop,body.dragging .intro .dz{border-color:var(--acc);background:rgba(74,90,78,.08)}
+.flist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.flist li{display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);cursor:pointer;font-size:.82rem;min-width:0}
+.flist li:hover{border-color:var(--acc)}
+.flist li.sel{border-color:var(--acc);box-shadow:inset 3px 0 0 var(--acc);background:#fff}
+.flist li .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.flist li small{color:var(--mut);white-space:nowrap}
+.flist li button{padding:0 .35rem;font-size:.72rem;border-color:transparent;background:transparent;color:var(--mut)}
+.flist li button:hover{color:var(--acc2);border-color:var(--line)}
+.st{width:10px;height:10px;border-radius:50%;flex:none;background:#8c8a80}
+.st.pass{background:#4a5a4e}.st.warn{background:#c2924a}.st.fail{background:#a8623a}
+.fx{display:flex;gap:6px;align-items:flex-start;font-size:.8rem;margin:5px 0;cursor:pointer}.fx input{margin-top:3px}.fx small{color:var(--mut);margin-left:auto;white-space:nowrap}
+
+/* empty state */
+.intro{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px 30px;max-width:900px}
+.intro h2{font:700 1.7rem/1.2 "Space Grotesk",Inter,sans-serif;margin:0 0 8px}
+.intro p{color:var(--mut);max-width:62ch;margin:0 0 18px}
+.intro .dz{border:2px dashed var(--line);border-radius:10px;padding:26px 18px;text-align:center;margin-bottom:22px}
+.intro .dz .row{justify-content:center;margin-top:10px}
+.intro .dz button{padding:.45rem 1rem;font-size:.9rem}
+.intro dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px 26px;margin:0}
+.intro dt{font:600 .9rem "Space Grotesk",Inter,sans-serif;margin-bottom:2px}
+.intro dd{margin:0;color:var(--mut);font-size:.82rem}
+
+/* verdict */
+.verdict{display:grid;grid-template-columns:auto 1fr auto;gap:6px 18px;align-items:center;background:#fff;border:1px solid var(--line);border-left:8px solid var(--vc);border-radius:10px;padding:16px 20px;--vc:#4a5a4e}
+.verdict.warn{--vc:#c2924a}.verdict.fail{--vc:#a8623a}
+.verdict svg{width:40px;height:40px;color:var(--vc);grid-row:1/3}
+.verdict h2{font:700 1.45rem/1.2 "Space Grotesk",Inter,sans-serif;margin:0}
+.verdict .sub{color:var(--mut);font-size:.88rem;grid-column:2}
+.verdict .act{grid-row:1/3;grid-column:3;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.verdict .act button{padding:.5rem 1rem;font-size:.9rem}
+.verdict .act a{font-size:.78rem;color:var(--acc);cursor:pointer}
+.facts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 22px;margin:10px 0 0;padding-top:10px;border-top:1px solid var(--alt);font-size:.82rem}
+.facts div{display:flex;gap:6px}.facts dt{color:var(--mut)}.facts dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
+.across{margin:12px 0 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.across h3{font:600 .9rem "Space Grotesk",Inter,sans-serif;margin:0 0 4px}
+.across p{margin:3px 0;font-size:.82rem}
+
+/* problems */
+.grp{margin-top:18px}
+.grp>h3{font:600 1rem "Space Grotesk",Inter,sans-serif;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.grp>h3 .c{font:600 .75rem Inter,sans-serif;background:var(--alt);border-radius:9px;padding:0 7px;color:var(--mut)}
+.pb{background:#fff;border:1px solid var(--line);border-left:4px solid var(--pc,#8c8a80);border-radius:8px;padding:9px 12px;margin:6px 0;display:grid;grid-template-columns:1fr auto;gap:2px 14px}
+.pb.E{--pc:#a8623a}.pb.W{--pc:#c2924a}
+.pb b{font-weight:600;font-size:.88rem}
+.pb p{margin:0;font-size:.82rem;color:var(--fg);grid-column:1;overflow-wrap:anywhere}
+.pb .meta{grid-column:1;font-size:.74rem;color:var(--mut);display:flex;gap:12px;flex-wrap:wrap}
+.pb .meta a{color:var(--acc);cursor:pointer;text-decoration:underline}
+.pb .fixit{grid-column:2;grid-row:1/4;align-self:center;font-size:.78rem;display:flex;gap:5px;align-items:center;white-space:nowrap;color:var(--acc);cursor:pointer}
+.pb .fixit.off{color:var(--mut)}
+.allgood{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px;color:var(--mut);font-size:.86rem;margin-top:14px}
+
+/* details tabs */
+.det{margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px 10px}
+.tabs{display:flex;gap:4px;margin:0 0 8px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.tabs button{padding:.3rem .8rem;border-color:transparent;background:transparent}
+.tabs button.on{background:#fff;border-color:var(--line);box-shadow:none;font-weight:600}
+.pane{display:none}.pane.on{display:block}
+.trk{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px;position:relative}
+.trk canvas{display:block;height:520px}
+#trkRo{font-size:.78rem;color:var(--mut);min-height:1.3em;margin:4px 2px 0;font-variant-numeric:tabular-nums}
+#tH td,#tH th{text-align:left;vertical-align:top}
+.htabs{display:flex;gap:4px;margin-bottom:6px}.htabs button{padding:.05rem .5rem;font-size:.76rem}
+.src{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;background:#fff;border:1px solid var(--line);border-radius:6px;max-height:460px;overflow:auto;white-space:pre;margin:0}
+.src .ln{display:block;padding:0 8px 0 0}
+.src .ln i{display:inline-block;width:5.5em;padding-right:10px;margin-right:8px;text-align:right;color:#9a968a;font-style:normal;border-right:1px solid var(--alt);user-select:none}
+.src .ln.E{background:rgba(168,98,58,.16)}.src .ln.W{background:rgba(194,146,74,.16)}.src .ln.I{background:rgba(140,138,128,.12)}
+.src .ln.tgt{outline:2px solid var(--acc);outline-offset:-2px}
+.srcbar{display:flex;gap:8px;align-items:center;font-size:.8rem;margin-bottom:6px;flex-wrap:wrap}
+.srcbar input{width:90px}
+.log{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px 10px;max-height:360px;overflow:auto;margin:0}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,li:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.verdict{grid-template-columns:auto 1fr}.verdict .act{grid-row:auto;grid-column:1/-1;align-items:flex-start}.pb{grid-template-columns:1fr}.pb .fixit{grid-column:1;grid-row:auto}}
+</style>
+
+<style>
+.sev{display:inline-block;width:18px;text-align:center;border-radius:3px;font-weight:700;font-size:.72rem;color:#f5f3ed;background:#8c8a80}.sev.E{background:#a8623a}.sev.W{background:#c2924a}
+.mapw{background:#fff;border:1px solid var(--line);border-radius:6px;position:relative}
+.mapw canvas{display:block;width:100%;height:520px}
+#mapRo{font-size:.78rem;color:var(--mut);min-height:1.3em;margin:4px 2px 0;font-variant-numeric:tabular-nums}
+#tH td,#tH th{text-align:left}
+</style>
+<div class="top"><h1>ZMAP checker</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button id="bAll" disabled title="One corrected file per loaded file, with the corrections ticked">All corrected files</button>
+  <button id="bCsv" disabled title="Every problem of every file, one line each">Report (CSV)</button><span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs in your browser: the files are read in memory and never uploaded. Each ZMAP+ grid is checked against the format as written by the common packages (header, column-major data, fixed-width fields, value count) and for geometry slips (half-cell extent, rows and columns swapped). Mechanical problems can be fixed in a downloaded copy; grid values are never changed unless you tick the null-marker correction.">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2>Files<i class="chev"></i></h2>
+  <div class="body"><div class="drop">Drop ZMAP+ files here or anywhere on the page</div>
+  <input type="file" id="file" accept=".zmap,.zmp,.dat,.grd,.txt,.asc,text/*" multiple hidden>
+  <div class="row"><button class="pri" id="bOpen">Add files…</button><button id="bExample">Example</button><button id="bClear" title="Remove every file">Clear</button></div>
+  <ul class="flist" id="flist"></ul></div></section>
+ <section class="panel collapsed"><h2>Corrections<span class="tt" tabindex="0" data-tip="What the corrected file changes. They apply to the downloaded copy only; the loaded file is untouched. You can also tick or untick a correction directly on a problem. The number is how many problems of the selected file each correction solves.">?</span><i class="chev"></i></h2>
+  <div class="body"><div id="fixes"></div>
+  <div class="note">Geometry (half-cell extent, swapped rows and columns) and the Z sign are reported, never changed.</div></div></section>
+</aside>
+<main id="main"></main></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';b.setAttribute('role','status');document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+const CP1252=(()=>{const d=new TextDecoder('windows-1252'),m=new Map();for(let b=0;b<256;b++)m.set(d.decode(new Uint8Array([b])),b);return m})();
+function encode(text,enc){if(enc!=='windows-1252')return new TextEncoder().encode(text);const o=new Uint8Array(text.length);for(let i=0;i<text.length;i++){const b=CP1252.get(text[i]);o[i]=b==null?63:b}return o}
+function download(name,data,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+
+const T={'file.read':'The file could not be read','file.notzmap':'This is not a ZMAP+ file','file.nongrid':'ZMAP+ file, but not a grid','file.bom':'Invisible byte-order mark at the start','file.eol':'Old Mac line endings','file.tabs':'Tab characters','file.nonascii':'Special characters (°, µ, accents…)','file.utf16':'File encoded in UTF-16',
+ 'hdr.gridcase':'Grid keyword in lower case','hdr.at':'Header markers “@” missing or extra','hdr.l1':'First header line malformed','hdr.l2':'Second header line malformed','hdr.emptyfield':'Empty header field written “,,”','hdr.nullblank':'Null value given only as text','hdr.width':'Invalid field width','hdr.decimals':'Decimals not smaller than the field width','hdr.startcol':'Unusual start column','hdr.l3':'Grid size and extent line malformed','hdr.size':'Invalid number of rows or columns','hdr.extent':'Extent inverted or empty','hdr.l4':'Fourth header line missing or malformed','hdr.l4values':'Fourth header line not zero','hdr.inner':'Blank or extra lines inside the header','hdr.rms':'Roxar RMS line after the header',
+ 'data.count':'Number of values does not match the grid size','data.comma':'Comma used as decimal separator','data.nonnumeric':'Text in the data','data.perline':'Too many values on a line','data.breaks':'Line breaks do not follow the columns','data.width':'Fixed-width layout broken','data.nodecimal':'Values without a decimal point','data.nulltext':'Null nodes written differently','data.nulls':'Other null markers than the declared one','data.allnull':'Empty grid','data.nullshare':'Mostly null grid','data.constant':'Constant grid',
+ 'geo.halfcell':'Extent probably given at the cell edges','geo.swapped':'Rows and columns probably swapped','geo.aniso':'Cells are not square','plaus.zsign':'Check the Z sign',
+ 'batch.name':'Same grid name in several files','batch.geometry':'Grids with different geometry'};
+const GRP={E:'Blocking',W:'To review',I:'For information'};
+
+const S={files:[],sel:-1,tab:'map',fixes:new Set(ZMAP.FIXES.filter(f=>f.defaultOn).map(f=>f.id)),batch:[],target:null};
+const cur=()=>S.files[S.sel];
+function written(x){const k=[...S.fixes].sort().join();if(x._wk!==k){x._w=ZMAP.write(x.z,[...S.fixes]);x._wk=k}return x._w}
+function addText(name,text,enc,extra){
+  let z,f;try{z=ZMAP.parse(text,name);f=ZMAP.check(z)}catch(e){z={name,at:[],lines:[],tok:[],values:new Float64Array(0)};f=[{sev:'E',rule:'file.read',line:null,msg:e.message,fix:null}]}
+  if(extra)f.unshift(extra);
+  S.files.push({name,z,f,enc,v:ZMAP.verdict(f)})}
+async function readFiles(list){
+  const fs=[...list];if(!fs.length)return;const n0=S.files.length;
+  for(const file of fs){try{const buf=new Uint8Array(await file.arrayBuffer());let text,enc='utf-8',extra=null;
+      if((buf[0]===0xFF&&buf[1]===0xFE)||(buf[0]===0xFE&&buf[1]===0xFF)){text=new TextDecoder(buf[0]===0xFF?'utf-16le':'utf-16be').decode(buf);
+        extra={sev:'W',rule:'file.utf16',line:null,msg:'The file is UTF-16 (two bytes per character); readers expect ASCII. The corrected file is written as UTF-8.',fix:null}}
+      else try{text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(buf)}catch(e){text=new TextDecoder('windows-1252').decode(buf);enc='windows-1252'}
+      addText(file.name,text,enc,extra)}catch(e){banner(`${file.name}: ${e.message}`,true)}}
+  S.sel=n0<S.files.length?n0:S.sel;refresh()}
+$('bOpen').onclick=()=>$('file').click();$('file').onchange=e=>{readFiles(e.target.files);e.target.value=''};
+$('bClear').onclick=()=>{S.files=[];S.sel=-1;refresh()};
+addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('dragging')});
+addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging')});
+addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('dragging');readFiles(e.dataTransfer.files)});
+
+function refresh(){
+  S.batch=S.files.length>1?ZMAP.checkBatch(S.files.map(x=>x.z)):[];
+  ['bAll','bCsv'].forEach(id=>$(id).disabled=!S.files.length);
+  if(S.sel>=S.files.length)S.sel=S.files.length-1;
+  drawList();drawFixes();drawMain()}
+function drawList(){
+  $('flist').innerHTML=S.files.map((x,i)=>{const n=x.f.filter(f=>f.sev!=='I').length;
+    return `<li tabindex="0" data-i="${i}" class="${i===S.sel?'sel':''}" title="${esc(x.name)}"><span class="st ${x.v}"></span><span class="nm">${esc(x.name)}</span><small>${x.v==='pass'?'ready':n+' to fix'}</small><button data-rm="${i}" aria-label="Remove ${esc(x.name)}">✕</button></li>`}).join('');
+  $('flist').querySelectorAll('li').forEach(li=>{const go=()=>{S.sel=+li.dataset.i;S.target=null;drawList();drawFixes();drawMain()};li.onclick=e=>{if(e.target.dataset.rm!=null){S.files.splice(+e.target.dataset.rm,1);if(S.sel>=+e.target.dataset.rm)S.sel--;if(S.sel<0&&S.files.length)S.sel=0;refresh();return}go()};li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}})}
+function drawFixes(){const fl=cur()?cur().f:[];
+  $('fixes').innerHTML=ZMAP.FIXES.map(x=>{const n=fl.filter(f=>f.fix===x.id).length;
+    return `<label class="fx"><input type="checkbox" data-id="${x.id}" ${S.fixes.has(x.id)?'checked':''}><span>${esc(x.label)}</span><small>${n||''}</small></label>`}).join('');
+  $('fixes').querySelectorAll('input').forEach(i=>i.onchange=()=>setFix(i.dataset.id,i.checked))}
+function setFix(id,on){on?S.fixes.add(id):S.fixes.delete(id);drawFixes();drawMain(true)}
+
+const ICON={pass:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 20.5l5.5 5.5L29 14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ warn:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4L37 34H3z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M20 15v9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="currentColor"/></svg>',
+ fail:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M13.5 13.5l13 13M26.5 13.5l-13 13" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>'};
+const N=ZMAP.fmtN;
+function drawMain(keep){
+  const x=cur();
+  if(!x){$('main').innerHTML=`<section class="intro"><h2>Is this ZMAP grid ready to load?</h2>
+    <p>Drop the ZMAP+ grids you received. Each one is checked against the format, gets a clear verdict and the list of problems with their line, and a corrected copy when the problems are mechanical.</p>
+    <div class="dz"><b>Drop ZMAP+ files here</b><br><span style="color:var(--mut);font-size:.84rem">several at once is fine — nothing is uploaded</span>
+    <div class="row"><button class="pri" id="bOpen2">Choose files…</button><button id="bEx2">Try the example</button></div></div>
+    <dl><div><dt>Header</dt><dd>The two “@” markers, grid keyword, nodes per line, field width, null value, rows, columns and extent.</dd></div>
+    <div><dt>Data</dt><dd>Value count, column-by-column line breaks, fixed-width fields, text or commas in numbers, other null markers.</dd></div>
+    <div><dt>Geometry</dt><dd>Extent given at the cell edges (half-cell shift), rows and columns swapped, non-square cells.</dd></div>
+    <div><dt>Across files</dt><dd>Same grid name twice, grids that do not share the same geometry.</dd></div></dl></section>`;
+    $('bOpen2').onclick=()=>$('file').click();$('bEx2').onclick=example;return}
+  const f=x.f,z=x.z,cnt=s=>f.filter(y=>y.sev===s).length,E=cnt('E'),Wn=cnt('W');
+  const fixable=f.filter(y=>y.fix&&S.fixes.has(y.fix)).length,log=z.at.length?written(x).log:[];
+  const title={pass:'Ready to load',warn:`Loads, with ${Wn} point${Wn>1?'s':''} to review`,fail:`Will not load cleanly: ${E} blocking problem${E>1?'s':''}`}[x.v];
+  const sub=x.v==='pass'?'No problem found by the checks.':(fixable?`${fixable} problem${fixable>1?'s are':' is'} fixed automatically in the corrected file.`:'Nothing here can be fixed automatically: see the details below.');
+  let nn=0;for(let k=0;k<z.tok.length;k++)if(ZMAP.isNull(z,z.values[k]))nn++;
+  const facts=[['Grid',z.label||'—'],['Rows × columns',z.l3ok?`${z.nrows} × ${z.ncols}`:'—'],['Spacing',z.l3ok?`${N(z.dx)} × ${N(z.dy)}`:'—'],['X',z.l3ok?`${N(z.xmin)} – ${N(z.xmax)}`:'—'],['Y',z.l3ok?`${N(z.ymin)} – ${N(z.ymax)}`:'—'],['Null',z.nullText||'—'],['Null nodes',z.tok.length?Math.round(100*nn/z.tok.length)+' %':'—']];
+  let h=`<section class="verdict ${x.v}" aria-live="polite">${ICON[x.v]}<h2>${esc(title)}</h2><div class="sub">${esc(x.name)} — ${esc(sub)}</div>
+    <div class="act"><button class="pri" id="bOne" ${z.at.length?'':'disabled'}>Download corrected file</button><a id="aChanges" tabindex="0">${log.length?log.length+' change'+(log.length>1?'s':'')+' — see them':'no change needed'}</a></div>
+    <dl class="facts">${facts.map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section>`;
+  const bt=S.batch.filter(b=>b.file.includes(x.name));
+  if(bt.length)h+=`<section class="across"><h3>Across the loaded files</h3>${bt.map(b=>`<p><span class="sev ${b.sev}">${b.sev}</span> <b>${esc(T[b.rule]||b.rule)}</b> — ${esc(b.msg)}</p>`).join('')}</section>`;
+  for(const s of ['E','W','I']){const it=f.filter(y=>y.sev===s).sort((a,b)=>(a.line||0)-(b.line||0));if(!it.length)continue;
+    h+=`<section class="grp"><h3>${GRP[s]}<span class="c">${it.length}</span></h3>`+it.map(y=>`<div class="pb ${s}"><b>${esc(T[y.rule]||y.rule)}</b><p>${esc(y.msg)}</p>
+      <div class="meta">${y.line?`<a data-line="${y.line}" tabindex="0">line ${y.line}</a>`:''}<span>${esc(y.rule)}</span></div>
+      ${y.fix?`<label class="fixit ${S.fixes.has(y.fix)?'':'off'}"><input type="checkbox" data-fix="${y.fix}" ${S.fixes.has(y.fix)?'checked':''}>Fix in the corrected file</label>`:''}</div>`).join('')+'</section>'}
+  if(!f.length)h+='<div class="allgood">Every check passed. You can load this grid as it is.</div>';
+  h+=`<section class="det" id="det"><div class="tabs" role="tablist">${[['map','Map'],['header','Header'],['text','File text'],['changes','Changes']].map(([k,n])=>`<button role="tab" data-tab="${k}" class="${S.tab===k?'on':''}">${n}</button>`).join('')}</div>
+    <div class="pane" data-p="map"><div class="mapw"><canvas id="cvM"></canvas></div><div id="mapRo">Move over the map to read the values.</div></div>
+    <div class="pane" data-p="header"><div class="tw" id="tH" style="max-height:440px"></div></div>
+    <div class="pane" data-p="text"><div class="srcbar">Go to line <input type="number" id="goLine" min="1"> <span style="color:var(--mut)">Lines with a problem are shaded.</span></div><pre class="src" id="src"></pre></div>
+    <div class="pane" data-p="changes"><pre class="log" id="log"></pre></div></section>`;
+  const y0=keep?scrollY:null;$('main').innerHTML=h;if(y0!=null)scrollTo(0,y0);
+  $('bOne').onclick=()=>{if(exportOne(x))$('exportMsg').textContent='Saved '+fixedName(x.name)};
+  $('aChanges').onclick=()=>openTab('changes');$('aChanges').onkeydown=e=>{if(e.key==='Enter')openTab('changes')};
+  $('main').querySelectorAll('[data-fix]').forEach(c=>c.onchange=()=>setFix(c.dataset.fix,c.checked));
+  $('main').querySelectorAll('[data-line]').forEach(a=>{const go=()=>{S.target=+a.dataset.line;openTab('text')};a.onclick=go;a.onkeydown=e=>{if(e.key==='Enter')go()}});
+  $('det').querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>openTab(b.dataset.tab,true));
+  $('goLine').onchange=e=>{S.target=+e.target.value;drawSource()};
+  openTab(S.tab,false,true)}
+function openTab(t,noScroll,silent){S.tab=t;const d=$('det');if(!d)return;
+  d.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('on',b.dataset.tab===t);b.setAttribute('aria-selected',b.dataset.tab===t)});
+  d.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.dataset.p===t));
+  if(t==='map')drawMap();if(t==='header')drawHeader();if(t==='text')drawSource();if(t==='changes')drawLog();
+  if(!silent&&!noScroll)d.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}
+function drawHeader(){const x=cur();if(!x||!$('tH'))return;const z=x.z;if(!z.at.length){$('tH').innerHTML='<div class="empty">No ZMAP+ header.</div>';return}
+  const t2=z.hdr.l2?z.hdr.l2.tok:[],rows=[['Grid name',z.label,z.hdr.l1.line],['Type',z.type,z.hdr.l1.line],['Nodes per line',z.hdr.l1.tok[2],z.hdr.l1.line],
+    ['Field width',t2[0],z.hdr.l2&&z.hdr.l2.line],['Null value',t2[1],z.hdr.l2&&z.hdr.l2.line],['Null text',t2[2],z.hdr.l2&&z.hdr.l2.line],['Decimals',t2[3],z.hdr.l2&&z.hdr.l2.line],['Start column',t2[4],z.hdr.l2&&z.hdr.l2.line],
+    ['Rows',z.nrows,z.hdr.l3&&z.hdr.l3.line],['Columns',z.ncols,z.hdr.l3&&z.hdr.l3.line],['X min',z.xmin,z.hdr.l3&&z.hdr.l3.line],['X max',z.xmax,z.hdr.l3&&z.hdr.l3.line],['Y min',z.ymin,z.hdr.l3&&z.hdr.l3.line],['Y max',z.ymax,z.hdr.l3&&z.hdr.l3.line],
+    ['Fourth line',z.hdr.l4?z.hdr.l4.tok.join(', '):'missing',z.hdr.l4&&z.hdr.l4.line],['Node spacing (dx, dy)',z.l3ok?`${N(z.dx)}, ${N(z.dy)}`:'—',null],['Comments',(z.comments||[]).filter(Boolean).join(' | ')||'—',null]];
+  $('tH').innerHTML='<table><thead><tr><th>Field</th><th>Value</th><th>Line</th></tr></thead><tbody>'+rows.map(r=>`<tr><td>${r[0]}</td><td>${esc(r[1]==null||r[1]===''?'—':r[1])}</td><td>${r[2]||''}</td></tr>`).join('')+'</tbody></table>'}
+function drawLog(){const x=cur();if(!x||!$('log'))return;if(!x.z.at.length){$('log').textContent='Not a ZMAP+ file: nothing to write.';return}
+  const {log}=written(x);$('log').textContent=log.length?log.join('\n'):'No change: the corrected file is the same as the original (apart from Windows line endings).'}
+function drawSource(){const x=cur(),el=$('src');if(!x||!el)return;const L=x.z.lines||[];
+  const mark=new Map();for(const f of x.f)if(f.line&&!mark.has(f.line))mark.set(f.line,f.sev);
+  const tgt=S.target||1,a=Math.max(0,tgt-60),b=Math.min(L.length,a+400);
+  el.innerHTML=(a>0?`<span class="ln"><i>…</i>${a} line(s) above</span>`:'')+L.slice(a,b).map((t,k)=>{const n=a+k+1;return `<span class="ln ${mark.get(n)||''} ${n===S.target?'tgt':''}" id="L${n}"><i>${n}</i>${esc(t)||' '}</span>`}).join('')+(b<L.length?`<span class="ln"><i>…</i>${L.length-b} more line(s)</span>`:'');
+  const t=$('L'+tgt);if(t&&S.target)el.scrollTop=t.offsetTop-el.clientHeight/3}
+
+// ---- map: one pixel per node (nearest-neighbour scaled), sequential colour ramp, nulls transparent
+const RAMP=[[34,57,82],[46,103,122],[73,146,134],[139,178,120],[214,196,112],[196,121,72],[140,58,46]];
+function ramp(t){t=Math.max(0,Math.min(1,t))*(RAMP.length-1);const i=Math.min(RAMP.length-2,Math.floor(t)),f=t-i,a=RAMP[i],b=RAMP[i+1];return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f]}
+function drawMap(){const x=cur(),cv=$('cvM');if(!x||!cv)return;const z=x.z,r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;
+  cv.width=r.width*dpr;cv.height=r.height*dpr;const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle='#fff';g.fillRect(0,0,r.width,r.height);
+  g.font='12px Inter,system-ui,sans-serif';g.fillStyle='#5c5a52';
+  const nr=z.nrows,nc=z.ncols;
+  if(!z.l3ok||!(nr>=2&&nc>=2)||z.tok.length<nr*nc){g.fillText(z.at.length?'The grid cannot be drawn: size or value count is wrong (see the problems).':'Not a ZMAP+ grid.',16,26);cv.onmousemove=null;return}
+  let mn=Infinity,mx=-Infinity;for(let k=0;k<nr*nc;k++){const v=z.values[k];if(ZMAP.isNull(z,v))continue;if(v<mn)mn=v;if(v>mx)mx=v}
+  if(!isFinite(mn)){g.fillText('Every node is null.',16,26);return}if(mn===mx){mn-=1;mx+=1}
+  const img=new ImageData(nc,nr);for(let c=0;c<nc;c++)for(let rr=0;rr<nr;rr++){const v=z.values[c*nr+rr],o=(rr*nc+c)*4;if(ZMAP.isNull(z,v))continue;const col=ramp((v-mn)/(mx-mn));img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=255}
+  const off=document.createElement('canvas');off.width=nc;off.height=nr;off.getContext('2d').putImageData(img,0,0);
+  // keep the map aspect: x and y in the same units
+  const L=70,R=90,T=16,B=40,aw=r.width-L-R,ah=r.height-T-B,ex=z.xmax-z.xmin,ey=z.ymax-z.ymin,s=Math.min(aw/ex,ah/ey),w=ex*s,hh=ey*s,x0=L+(aw-w)/2,y0=T+(ah-hh)/2;
+  g.imageSmoothingEnabled=false;
+  // nodes sit on the cell centres: the image spans half a cell beyond the extent
+  const hx=w/(nc-1)/2,hy=hh/(nr-1)/2;g.save();g.beginPath();g.rect(x0-hx,y0-hy,w+2*hx,hh+2*hy);g.clip();g.drawImage(off,x0-hx,y0-hy,w+2*hx,hh+2*hy);g.restore();
+  g.strokeStyle='#5c5a52';g.strokeRect(x0-hx+.5,y0-hy+.5,w+2*hx,hh+2*hy);
+  g.fillStyle='#5c5a52';g.textAlign='center';for(let k=0;k<=4;k++){const xv=z.xmin+ex*k/4;g.fillText(N(+xv.toPrecision(7)),x0+w*k/4,y0+hh+hy+16)}
+  g.textAlign='right';for(let k=0;k<=4;k++){const yv=z.ymax-ey*k/4;g.fillText(N(+yv.toPrecision(7)),x0-hx-6,y0+hh*k/4+4)}
+  // colour bar
+  const bx=r.width-R+28,by=T+10,bh=Math.min(260,ah-20);for(let i=0;i<bh;i++){const c=ramp(1-i/bh);g.fillStyle=`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`;g.fillRect(bx,by+i,14,1)}
+  g.strokeStyle='#c9c4b6';g.strokeRect(bx+.5,by+.5,14,bh);g.fillStyle='#5c5a52';g.textAlign='left';g.fillText(N(+mx.toPrecision(5)),bx+18,by+8);g.fillText(N(+mn.toPrecision(5)),bx+18,by+bh);
+  cv.onmousemove=e=>{const q=cv.getBoundingClientRect(),px=e.clientX-q.left,py=e.clientY-q.top,c=Math.round((px-x0)/w*(nc-1)),rr=Math.round((py-y0)/hh*(nr-1));
+    if(c<0||c>=nc||rr<0||rr>=nr){$('mapRo').textContent='Move over the map to read the values.';return}
+    const v=z.values[c*nr+rr];$('mapRo').textContent=`x ${N(z.xmin+c*z.dx)}   y ${N(z.ymax-rr*z.dy)}   row ${rr+1}, column ${c+1}   z ${ZMAP.isNull(z,v)?'null':N(+v.toPrecision(7))}`};
+  cv.onmouseleave=()=>{$('mapRo').textContent='Move over the map to read the values.'}}
+addEventListener('resize',()=>{if(S.tab==='map')drawMap()});
+
+const fixedName=n=>n.replace(/(\.\w+)?$/,'_checked.zmap');
+function exportOne(x){if(!x.z.at.length){banner(`${x.name}: not a ZMAP+ file, nothing to write.`,true);return false}
+  download(fixedName(x.name),encode(written(x).text,x.enc),'text/plain');return true}
+$('bAll').onclick=async()=>{let n=0;for(const x of S.files){if(exportOne(x))n++;await new Promise(r=>setTimeout(r,350))}$('exportMsg').textContent=`Saved ${n} file(s)`};
+$('bCsv').onclick=()=>{// cells starting with = + - @ are prefixed so a spreadsheet does not run them as formulas
+  const q=s=>{s=String(s==null?'':s);if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=['file,severity,line,rule,problem,details,correction,corrected_in_download'];
+  for(const x of S.files)for(const f of x.f)L.push([x.name,GRP[f.sev],f.line||'',f.rule,T[f.rule]||'',f.msg,f.fix||'',f.fix&&S.fixes.has(f.fix)?'yes':''].map(q).join(','));
+  for(const b of S.batch)L.push([b.file,GRP[b.sev],'',b.rule,T[b.rule]||'',b.msg,'',''].map(q).join(','));
+  download('zmap_check_report.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved zmap_check_report.csv'};
+
+// ---- example: a clean time grid and a depth grid with defects (rows/columns swapped, ",,", other null marker)
+function zfile(o){const nr=o.nr,nc=o.nc,L=[];
+  for(let c=0;c<nc;c++){const col=[];for(let r=0;r<nr;r++){const xx=c/(nc-1),yy=1-r/(nr-1);let v=o.f(xx,yy);if(o.hole&&Math.hypot(xx-.75,yy-.3)<.12)v=null;col.push(v==null?o.nullTok:v.toFixed(7))}
+    for(let i=0;i<nr;i+=o.npl)L.push(col.slice(i,i+o.npl).map(s=>s.padStart(15)).join(''))}
+  return `!\n! ${o.name} - synthetic example\n!\n@${o.name}, GRID, ${o.npl}\n${o.l2}\n${o.hdrRows}, ${o.hdrCols}, ${o.x0}, ${o.x1}, ${o.y0}, ${o.y1}\n0.0, 0.0, 0.0\n@\n${L.join('\n')}\n`}
+function example(){
+  const dome=(a,b)=>(x,y)=>a-b*Math.exp(-((x-.45)**2+(y-.55)**2)/.08)-120*x+(Math.sin(9*x)+Math.cos(7*y))*6;
+  const t1=zfile({name:'TOP_RESERVOIR_TWT',nr:41,nc:61,npl:5,nullTok:'1.0000000E+30',l2:'15, 1.0000000E+30, , 7, 1',hdrRows:41,hdrCols:61,x0:'450000.0',x1:'456000.0',y0:'6780000.0',y1:'6784000.0',f:dome(2350,180),hole:true});
+  let t2=zfile({name:'TOP_RESERVOIR_DEPTH',nr:41,nc:61,npl:5,nullTok:'1.0000000E+30',l2:'15,1.0000000E+30,,7,1',hdrRows:61,hdrCols:41,x0:'450000.0',x1:'456000.0',y0:'6780000.0',y1:'6784000.0',f:dome(2480,210),hole:true});
+  t2=t2.replace(/(\n\s+\d+\.\d+)(\s+\d+\.\d+)/,'$1       -99999.0');   // a node written with another null marker
+  S.files=[];S.sel=0;addText('top_reservoir_twt.zmap',t1,'utf-8');addText('top_reservoir_depth.zmap',t2,'utf-8');refresh();
+  banner('Example: two synthetic grids; the depth grid has deliberate defects.')}
+$('bExample').onclick=example;
+
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+refresh();
+if(location.hash==='#example')example();  // shareable link to the example
+window.DG={S,refresh,addText};
+</script>
+
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker']]],['Digitization',[['Plot digitizer','digitizer'],['Map digitizer','mapdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what": "Runs entirely in your browser: the files are read in memory and never uploaded. Quality control of transmitted ZMAP+ grid files before loading them in an interpretation package: a file that follows the format passes with nothing to do; otherwise every problem is listed with its line, and the mechanical ones can be fixed in a downloaded copy.", "method": ["Format as read here: “!” comment lines, then a header between two “@” markers — “@name, GRID, nodes per line”; “field width, null value, null text, decimals, start column”; “rows, columns, xmin, xmax, ymin, ymax” (rows first); “0.0, 0.0, 0.0”; “@”. Data column by column from the upper-left node (ymax) downwards, columns left to right, each column starting on a new line, at most “nodes per line” values per line, fixed-width fields.", "Node spacing: dx = (xmax − xmin)/(columns − 1), dy = (ymax − ymin)/(rows − 1). When this spacing is not round (a multiple of 0.01) but the extent divided by the number of cells is, the extent is probably given at the cell edges (GDAL default, “pixel is area”) and node-based readers shift the grid by half a cell; when swapping rows and columns gives a round spacing, the two numbers are probably swapped. Both are reported, never changed.", "Checks, by severity: E = import fails or data is wrong (not ZMAP+, non-grid ZMAP+ file, missing or extra “@”, malformed header lines, invalid size or extent, wrong value count, text or comma decimals, too many values on a line, empty grid); W = non-conforming, imports with risk (BOM, tabs, lower-case GRID, “,,”, null only as text, missing fourth line, blank lines in the header, line breaks not following the columns, fixed width broken, values without decimal point, other null markers, half-cell or swapped geometry); I = worth a look (fourth line not zero, null written differently, non-square cells, mostly null or constant grid, depth grid with positive values).", "Fixes, applied to the downloaded copy only: byte-order mark, line endings, tabs, header rewritten in the standard form, data rewritten column by column at the declared nodes per line with right-justified fixed-width fields (values copied as text, field widened when a value does not fit). Replacing other null markers by the header null changes values and is off by default."], "sources": [["Header layout, column-major order from the upper-left node, column line breaks, implied decimals", "D. Baker, description of the ZMAP+ grid format, gdal-dev mailing list, June 2011 (cited by the GDAL ZMap driver as its informal specification)", "published"], ["Reader constraints: 3/5/6 header tokens, “,,” dropped, width < 40, start column 1, fixed-width slicing, pixel-is-area default", "GDAL ZMap driver documentation and source (zmapdataset.cpp)", "published"], ["Rows first on the third line (checked on two real files where only rows-first gives a round spacing); node registration", "zmapio, xtgeo, resqpy readers and writers; real headers posted online", "published"], ["Half-cell shift of GDAL-written grids in node-based readers", "zmapio issue #6; GDAL ZMAP_PIXEL_IS_POINT option", "published"], ["Non-grid ZMAP+ types (CNTR, DATA, FALT, VERT, TEXT)", "Safe Software FME ZMAP reader documentation; Migris MigriX user guide", "published"], ["Petrel counts Z positive upwards", "AASPI surface import documentation (University of Oklahoma)", "published (second hand)"], ["Petrel's exact export header and its import error messages", "No public Schlumberger documentation found", "not retrieved"], ["Meaning of the fourth header line", "Undocumented in every public source; real files have non-zero first values", "not retrieved"]], "validation": ["Self-check script (scripts/zmap_check_test.mjs): a clean grid with one line per column and one with wrapped columns pass with no error or warning; one broken variant per rule; round trips of the writer (each fix resolves its problems, values identical, no fix = identical file, the loaded file is never modified); a 1000 × 1000 grid."], "limits": ["Grids only: ZMAP+ point, line, fault and contour files are recognised but not checked.", "Rotated grids do not exist in ZMAP+; a rotated surface must be resampled before export.", "The coordinate system is not stored in ZMAP+ and cannot be checked.", "“Round spacing” means a multiple of 0.01: grids in degrees with odd spacings may miss the half-cell and swapped-axis hints."], "date": "24 November 2026"});
 </script>
 </body></html>

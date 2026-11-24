@@ -150,6 +150,15 @@ test('large grid (1000 x 1000) checks and writes', () => {
   assert.ok(Z.write(z, FIXDEF()).text.length > 1e7);
 });
 
+test('line breaks that match the swapped size: swapped reported, layout fix not applied', () => {
+  // data written for 5 rows x 3 cols (2 per line, column breaks), header says 3 rows x 5 cols
+  const t = WRAP.replace('5, 3, 1000.0, 1100.0, 2000.0, 2200.0', '3, 5, 1000.0, 1100.0, 2000.0, 2200.0');
+  const z = Z.parse(t, 's'), f = Z.check(z), sw = f.find(x => x.rule === 'geo.swapped');
+  assert.ok(sw, rules(f).join(', '));
+  assert.ok(!f.some(x => x.rule === 'data.breaks' && x.fix), 'breaks still fixable');
+  const w = Z.write(z, FIXDEF()); assert.ok(!w.log.some(l => /Rewrote the data/.test(l)), w.log.join('\n'));
+});
+
 // ---- batch
 test('batch: same name, different geometry', () => {
   const r = rules(Z.checkBatch([Z.parse(CLEAN, 'a'), Z.parse(CLEAN.replace('0.0, 200.0', '0.0, 100.0'), 'b')]));

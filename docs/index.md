@@ -90,6 +90,12 @@ QC of transmitted files before loading them.
 
     Check LAS well log files against the format conventions, list every problem, download a corrected copy.
 
+-   [![ZMAP checker](assets/tools/zmap-checker.webp){ loading=lazy }](zmap-checker/index.html)
+
+    [**ZMAP checker**](zmap-checker/index.html)
+
+    Check ZMAP+ grids: header, value count, column layout, half-cell or swapped geometry; download a corrected copy.
+
 </div>
 
 ### :material-chart-scatter-plot: Digitization
