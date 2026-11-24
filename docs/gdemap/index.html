@@ -1,13 +1,187 @@
-<!doctype html><html><head><title>GDE map generator</title></head><body><div class="top"><h1>GDE map generator</h1></div>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDE map generator</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/gdemap/">
+<meta name="description" content="Draw a gross depositional environment (GDE) map from the environments interpreted at a few wells and an a-priori depositional model (shelf, delta, deep-water fan, carbonate platform, fluvial). Exports PNG, IRAP lines, GeoJSON, ZMAP+. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0;position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+main{min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.grid3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid3 input,.grid3 select{width:100%;min-width:0}
+.pg{display:grid;grid-template-columns:118px 1fr;gap:5px 8px;align-items:center;font-size:.82rem;margin:6px 0}
+.pg input,.pg select{width:100%;min-width:0}
+.pg .two{display:flex;gap:6px;align-items:center}.pg .two input[type=range]{flex:1}.pg .two input[type=number]{width:78px;flex:none}
+input[type=range]{accent-color:var(--acc)}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:8px}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.side .tt::after{right:auto;left:-120px}
+.panel h2 .tt::after{left:auto;right:-6px}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+[hidden]{display:none!important}
+/* wells list */
+.wl{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.wr{display:grid;grid-template-columns:1fr 66px 66px;gap:3px;align-items:center;font-size:.78rem;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.wr input,.wr select{font-size:.76rem;padding:.12rem .3rem;min-width:0;width:100%}
+.wr select{grid-column:1/3}
+.wr button{padding:0 .4rem;font-size:.74rem;justify-self:end}
+.wr.bad{border-color:var(--acc2);box-shadow:inset 3px 0 0 var(--acc2)}
+.wr.bad select{border-color:var(--acc2);color:var(--acc2)}
+/* belts editor */
+.bl{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.br{display:grid;grid-template-columns:26px 1fr 54px 20px 20px 20px;gap:3px;align-items:center;font-size:.78rem}
+.br input{font-size:.76rem;padding:.12rem .3rem;min-width:0;width:100%}
+.br input[type=color]{width:26px;height:24px;padding:1px;border:1px solid var(--line);border-radius:4px;background:var(--bg);cursor:pointer}
+.br button{padding:0;font-size:.72rem;line-height:1.5;height:22px}
+.br.hd{color:var(--mut);font-size:.7rem}
+/* main */
+.intro{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px 30px;max-width:940px}
+.intro h2{font:700 1.7rem/1.2 "Space Grotesk",Inter,sans-serif;margin:0 0 8px}
+.intro p{color:var(--mut);max-width:66ch;margin:0 0 16px}
+.intro .dz{border:2px dashed var(--line);border-radius:10px;padding:22px 18px;text-align:center;margin-bottom:22px}
+.intro .dz .row{justify-content:center;margin-top:10px}
+.intro .dz button{padding:.45rem 1rem;font-size:.9rem}
+body.dragging .intro .dz{border-color:var(--acc);background:rgba(74,90,78,.08)}
+.intro dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px 26px;margin:0}
+.intro dt{font:600 .9rem "Space Grotesk",Inter,sans-serif;margin-bottom:2px}
+.intro dd{margin:0;color:var(--mut);font-size:.82rem}
+.verdict{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:center;background:#fff;border:1px solid var(--line);border-left:8px solid var(--vc);border-radius:10px;padding:10px 16px;margin-bottom:10px;--vc:#4a5a4e}
+.verdict.warn{--vc:#c2924a}.verdict.none{--vc:#8c8a80}
+.verdict svg{width:32px;height:32px;color:var(--vc);grid-row:1/3}
+.verdict h2{font:700 1.15rem/1.25 "Space Grotesk",Inter,sans-serif;margin:0}
+.verdict .sub{color:var(--mut);font-size:.84rem}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(460px,68vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ro{position:absolute;right:8px;bottom:8px;max-width:210px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums;pointer-events:none}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.pop{position:absolute;z-index:5;background:var(--card);border:1px solid var(--acc);border-radius:8px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:.8rem;width:230px}
+.pop .row{margin:4px 0}.pop input,.pop select{width:100%}
+.dpanel{margin-top:12px}
+.tw{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:4px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(--mut)}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.25);vertical-align:-1px;margin-right:5px}
+.yes{color:#2e7d32;font-weight:700}.no{color:#c62828;font-weight:700}
+.cal{font-size:.78rem;margin-top:6px}.cal p{margin:3px 0}.cal .c{color:var(--acc2)}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>GDE map generator</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button class="pri" id="bPng" title="The map as drawn, with legend, wells, scale bar and coordinates (PNG, 2000 px wide)">PNG</button>
+  <button id="bIrap" title="IRAP Classic lines (ASCII) for Petrel: x y z per vertex, z = belt code, each ring closed and followed by 999.000000 999.000000 999.000000; holes are separate rings">IRAP lines</button>
+  <button id="bGeo" title="GeoJSON FeatureCollection, one Polygon (with holes) per feature, properties code, class (belt), area, perimeter">GeoJSON</button>
+  <button id="bPcsv" title="One row per polygon vertex: polygon, ring, ring_type, code, class, vertex, x, y">Polygons CSV</button>
+  <button id="bZmap" title="ZMAP+ grid of belt codes at the export cell size, legend in ! comment lines">ZMAP+</button>
+  <button id="bGcsv" title="x, y, code, belt at every node of the export grid">Grid CSV</button>
+  <button id="bWcsv" title="The wells check table">Wells CSV</button>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs in your browser: nothing is uploaded. The polygons and grids are computed at the export cell size of panel 1 (the map on screen uses a coarser preview grid of at most 250 000 cells). Belt codes: 1 = most proximal belt, then in the order of the legend.">?</span>
+ </div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Map extent and grid<span class="tt" tabindex="0" data-tip="Rectangle of the map in your coordinates (projected, e.g. metres; the scale bar assumes metres). The export cell size sets the grid of the ZMAP+ / CSV exports and the resolution of the polygons. “Fit to wells” puts the wells inside with a margin of 40 % of their spread.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="grid3"><span>xmin</span><input type="number" id="ex0" step="any"><span>xmax</span><input type="number" id="ex1" step="any">
+   <span>ymin</span><input type="number" id="ey0" step="any"><span>ymax</span><input type="number" id="ey1" step="any">
+   <span>cell</span><input type="number" id="ecell" step="any" min="0" title="Export cell size, map units"><span></span><button id="bFitExt">Fit to wells</button></div>
+  <div class="msg" id="extMsg"></div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Wells<span class="tt" tabindex="0" data-tip="Paste a table with one well per line: name, x, y, environment (tab, semicolon, comma or space separated; a header line is skipped). The environment is matched to the belts of the model regardless of case, punctuation and plurals; a name that does not match is flagged and can be fixed with its drop-down. You can also click “Add on map” and click where the well is. Drag a well on the map to move it.">?</span><i class="chev"></i></h2>
+  <div class="body"><textarea id="wTxt" rows="4" placeholder="name, x, y, environment&#10;W-1, 12500, 8400, delta front"></textarea>
+  <div class="row"><button class="pri" id="bWApply">Use this table</button><button id="bWAdd" title="Then click on the map where the well is">+ Add on map</button><button id="bWClear">Remove all</button></div>
+  <div class="msg" id="wMsg"></div>
+  <div class="wl" id="wList"></div></div></section>
+ <section class="panel"><h2><span class="n">3</span>Depositional model<span class="tt" tabindex="0" data-tip="The a-priori depositional system: an ordered list of belts from proximal to distal with relative widths. Linear geometry: belts parallel to the shoreline, perpendicular to the transport azimuth. Radial geometry (delta, fan): belts are arcs around the source point inside the fan opening angle and close back to the source as rounded lobes beyond it; further out, either the most distal belt (deep-water fan) or belts continuing along strike, from which the lobe protrudes (delta). Belt span: distance from the source to the start of the most distal belt before calibration. Irregularity: seeded smooth noise added to the proximal–distal distance, so boundaries look natural; the same seed always gives the same map.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Template</span><select id="mTpl"></select></div>
+  <div class="br hd"><span></span><span>Belt (proximal → distal)</span><span>Width</span><span></span><span></span><span></span></div>
+  <div class="bl" id="bList"></div>
+  <div class="row"><button id="bBAdd">+ Add belt</button><span class="msg" id="bMsg" style="margin-left:auto"></span></div>
+  <div class="pg"><span>Geometry</span><select id="mGeom"><option value="linear">Linear (shoreline-parallel)</option><option value="radial">Radial (delta, fan)</option></select>
+   <span>Transport azimuth</span><span class="two"><input type="range" id="mAzR" min="0" max="360" step="1"><input type="number" id="mAz" step="any" title="Degrees clockwise from north, towards the distal belts"></span>
+   <span>Source X, Y</span><span class="two"><input type="number" id="mSx" step="any" style="width:50%;flex:1"><input type="number" id="mSy" step="any" style="width:50%;flex:1"></span>
+   <span class="rad">Fan angle</span><span class="two rad"><input type="range" id="mFanR" min="20" max="200" step="1"><input type="number" id="mFan" step="any" min="5" max="340" title="Full opening angle, degrees"></span>
+   <span class="rad">Outside the fan</span><select id="mOut" class="rad" title="What lies beside the fan opening"><option value="distal">Most distal belt (fan)</option><option value="strike">Belts along strike (delta)</option></select>
+   <span class="rad strk">Lobe protrusion</span><input type="number" id="mPro" class="rad strk" step="any" min="0" title="How far the lobe tip stands out from the belts along strike, map units">
+   <span>Belt span</span><input type="number" id="mSpan" step="any" min="0" title="Distance from the source to the start of the most distal belt, before calibration on the wells">
+   <span>Irregularity</span><span class="two"><input type="range" id="mAmpR" min="0" max="100" step="1"><input type="number" id="mAmp" step="any" min="0" title="Amplitude: typical largest shift of a boundary, map units (0 = straight belts)"></span>
+   <span>Wavelength</span><input type="number" id="mWl" step="any" min="0" title="Size of the bumps along the boundaries, map units">
+   <span>Seed</span><span class="two"><input type="number" id="mSeed" step="1" style="flex:1"><button id="bSeed" title="Another seed: another, equally likely, set of boundary shapes">New</button></span></div>
+  </div></section>
+ <section class="panel"><h2><span class="n">4</span>Calibration<span class="tt" tabindex="0" data-tip="Each boundary is placed between the wells of the belts on either side: at its prior position when it falls there, otherwise in the middle of the gap. Boundaries with wells on one side only keep the prior widths, scaled like the calibrated ones. Auto-fit scans the transport azimuth (and, in radial geometry, the source point) for the largest number of wells in the right order, then the widest gaps. Wells that still contradict the order can be honoured by local warping: a smooth bump of the proximal–distal distance around them (Gaussian, radius below, no effect beyond 3 radii), drawn as a dashed circle.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button class="pri" id="bFit">Auto-fit direction</button><label class="inl rad"><input type="checkbox" id="fitSrc" checked>also the source</label></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="wOn">Local warping for conflicting wells</label></div>
+  <div class="pg"><span>Warping radius</span><input type="number" id="wR" step="any" min="0"></div>
+  <div class="cal" id="calMsg"></div></div></section>
+</aside>
+<main>
+ <section class="intro" id="intro"><h2>A GDE map from a few wells</h2>
+  <p>Give the depositional environment interpreted at one or several wells and the depositional system you expect. The conceptual model draws the belts, the wells calibrate them — the way a GDE map is drawn by hand — and every well is checked: honoured or not, and how far from a boundary.</p>
+  <div class="dz"><b>Drop a wells table here</b><br><span style="color:var(--mut);font-size:.84rem">name, x, y, environment — text or CSV, nothing is uploaded</span>
+   <div class="row"><button class="pri" id="iDelta">Example: delta, 4 wells</button><button id="iFan">Example: deep-water fan, 3 wells</button><button id="iBlank">Start from a template</button><button id="iOpen">Open a file…</button></div></div>
+  <dl><div><dt>Conceptual belts</dt><dd>Wave-dominated shelf, river-dominated delta, deep-water fan, carbonate platform, fluvial, or your own list of belts.</dd></div>
+   <div><dt>Calibrated on the wells</dt><dd>Boundaries placed between wells of successive belts; transport direction and source fitted automatically.</dd></div>
+   <div><dt>Natural boundaries</dt><dd>Seeded smooth irregularity, reproducible; optional local warping for a well that breaks the order.</dd></div>
+   <div><dt>Ready for the project</dt><dd>PNG, IRAP lines for Petrel, GeoJSON, polygons CSV, ZMAP+ grid of belt codes, wells check table.</dd></div></dl></section>
+ <div id="work" hidden>
+  <section class="verdict none" id="verdict" aria-live="polite"></section>
+  <div class="stage" id="stage"><canvas id="cv"></canvas><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
+   <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pNo">Cancel</button></div></div></div>
+  <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th>X</th><th>Y</th><th class="l">Environment (given)</th><th class="l">Belt on the map</th><th>Honoured</th><th>To nearest boundary</th><th class="l">Note</th></tr></thead><tbody id="tb"></tbody></table></div></div>
+ </div>
+</main>
+</div>
+<input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
 <script id="gde-core">
 /* GDE map generator core: conceptual belts on a proximal-distal coordinate, calibrated on wells. Pure logic, no DOM; window.GDE.
    Tested by scripts/gde_test.mjs. Polygon tracing, shared-arc simplification and the IRAP / GeoJSON / CSV writers are copied from
    the Discrete map digitizer (docs/discretemap/index.html, md-discrete-core). */
 (function(){
-const RAD=Math.PI/180,TAPER=15;
+const RAD=Math.PI/180,TAPER=35;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 // ---------- templates: belts proximal -> distal, relative widths, conventional GDE colours ----------
-const T=(name,geom,belts)=>({name,geom,belts:belts.map(([n,c,w,al])=>({name:n,color:c,w,alias:al||[]}))});
+const T=(name,geom,belts,outside)=>({name,geom,outside:outside||'distal',belts:belts.map(([n,c,w,al])=>({name:n,color:c,w,alias:al||[]}))});
 const templates={
  shelf:T('Wave-dominated shelf','linear',[
   ['Coastal plain','#b8c978',1.6,['coastal','alluvial plain','strandplain','continental']],
@@ -22,7 +196,7 @@ const templates={
   ['Prodelta','#c8dcc0',1.5,['pro delta']],
   ['Shelf','#a9d3ec',2.5,['offshore shelf','offshore','open shelf']],
   ['Slope','#6c9fcd',1.5,['continental slope']],
-  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]]),
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]],'strike'),
  fan:T('Deep-water fan','radial',[
   ['Slope / canyon','#97a9bd',2,['upper slope','feeder canyon','slope channel']],
   ['Channel–levee complex','#e7a043',2.5,['channel levee','channel levee system','channel','leveed channel','inner fan']],
@@ -63,7 +237,7 @@ function parseWells(text){const wells=[],errors=[];
 // ---------- model ----------
 function makeModel(key,o={}){const t=templates[key]||templates.shelf;
   const M={template:templates[key]?key:'shelf',belts:t.belts.map(b=>({name:b.name,color:b.color,w:b.w,alias:b.alias.slice()})),geom:t.geom,
-    az:90,src:[0,0],fan:90,span:10000,noise:{amp:0,wl:5000,seed:1},warp:{on:true,R:2000},ext:{xmin:0,xmax:20000,ymin:0,ymax:20000},cell:100};
+    az:90,src:[0,0],fan:90,span:10000,outside:t.outside,protrude:3000,noise:{amp:0,wl:5000,seed:1},warp:{on:true,R:2000},ext:{xmin:0,xmax:20000,ymin:0,ymax:20000},cell:100};
   for(const k in o)M[k]=o[k];
   M.noise=Object.assign({amp:0,wl:5000,seed:1},o.noise||{});M.warp=Object.assign({on:true,R:2000},o.warp||{});
   return M}
@@ -72,14 +246,14 @@ function prior(M){const w=M.belts.map(b=>Math.max(1e-9,+b.w||1)),n1=w.length-1,c
   for(let k=0;k<n1;k++){s+=w[k];c.push(s)}
   const f=n1?(+M.span||1)/c[n1-1]:1;return c.map(v=>v*f)}
 // proximal-distal coordinate: linear = projection on the transport azimuth (clockwise from north) from the source point;
-// radial = distance from the source inside the fan opening, tapered over TAPER degrees beyond it, +Infinity (most distal belt) outside
-const smooth=u=>u*u*(3-2*u);
+// radial = distance from the source inside the fan opening; beyond it d = r / (1 - u^2), u = angle beyond the opening / TAPER, so every
+// boundary closes back to the source as a rounded lobe (distal belts wrap around proximal ones); +Infinity (most distal belt) beyond TAPER.
+// outside = 'strike': d = min(radial d, projection + protrude): a lobe protruding by `protrude` from belts that continue along strike
 function dBase(M,x,y){const a=M.az*RAD,ux=Math.sin(a),uy=Math.cos(a),dx=x-M.src[0],dy=y-M.src[1];
-  if(M.geom!=='radial')return dx*ux+dy*uy;
+  const pr=dx*ux+dy*uy;if(M.geom!=='radial')return pr;
   const r=Math.hypot(dx,dy);if(r===0)return 0;
-  const e=Math.acos(clamp((dx*ux+dy*uy)/r,-1,1))/RAD-M.fan/2;
-  if(e<=0)return r;if(e>=TAPER)return Infinity;
-  return r+smooth(e/TAPER)*3*Math.max(1,+M.span||1)}
+  const e=Math.acos(clamp(pr/r,-1,1))/RAD-M.fan/2,u=e/TAPER,dr=e<=0?r:e>=TAPER?Infinity:r/(1-u*u);
+  return M.outside==='strike'?Math.min(dr,pr+(+M.protrude||0)):dr}
 // seeded 3D gradient noise (improved Perlin noise with a seeded permutation)
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 const PCACHE=new Map();
@@ -369,10 +543,10 @@ function gridCsv(G,sep=','){const nm=new Map(G.legend||[]),q=s=>{s=oneLine(s);re
   return L.join('\n')}
 // ---------- examples ----------
 const examples={
- delta:{title:'River-dominated delta, 4 wells',M:makeModel('delta',{az:128,src:[3000,28500],fan:120,span:36000,noise:{amp:1600,wl:9000,seed:7},warp:{on:true,R:4000},
+ delta:{title:'River-dominated delta, 4 wells',M:makeModel('delta',{az:165,src:[12000,30000],fan:50,span:32000,outside:'strike',protrude:9000,noise:{amp:1500,wl:8000,seed:7},warp:{on:true,R:4000},
    ext:{xmin:0,xmax:40000,ymin:0,ymax:30000},cell:100}),
-   wells:[{name:'Delta-1',x:9200,y:23800,env:'Delta plain'},{name:'Delta-2',x:15400,y:21300,env:'Delta front'},{name:'Delta-3',x:13600,y:13900,env:'Prodelta'},{name:'Delta-4',x:27500,y:17200,env:'Shelf'}]},
- fan:{title:'Deep-water fan, 3 wells',M:makeModel('fan',{az:182,src:[24000,44000],fan:76,span:44000,noise:{amp:1800,wl:10000,seed:11},warp:{on:true,R:5000},
+   wells:[{name:'Delta-1',x:14500,y:24600,env:'Delta plain'},{name:'Delta-2',x:18900,y:20200,env:'Delta front'},{name:'Delta-3',x:14900,y:13700,env:'Prodelta'},{name:'Delta-4',x:30200,y:19500,env:'Shelf'}]},
+ fan:{title:'Deep-water fan, 3 wells',M:makeModel('fan',{az:182,src:[25000,39500],fan:40,span:34500,noise:{amp:1800,wl:9000,seed:11},warp:{on:true,R:5000},
    ext:{xmin:0,xmax:50000,ymin:0,ymax:40000},cell:100}),
    wells:[{name:'Fan-1',x:24600,y:28500,env:'Channel-levee complex'},{name:'Fan-2',x:16800,y:17500,env:'Proximal lobes'},{name:'Fan-3',x:30500,y:7000,env:'Distal lobes'}]}};
 window.GDE={templates,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
@@ -381,7 +555,299 @@ window.GDE={templates,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perl
 
 </script>
 <script>
+/* GDE map generator page: inputs -> GDE.build -> preview polygons -> canvas; wells check, exports */
+if(/[?&]debug\b/.test(location.search))window.addEventListener('error',e=>{document.title='ERR '+e.message+' @'+e.lineno});
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cv=$('cv'),ctx=cv.getContext('2d');
+const S={M:null,wells:[],mod:null,P:null,tool:null,drag:null,started:false,full:null,hover:null};
+const clone=o=>JSON.parse(JSON.stringify(o));
+const fmtN=v=>{if(!isFinite(v))return'—';const a=Math.abs(v);return a>=1e4?Math.round(v).toLocaleString('en-US'):String(+(+v).toPrecision(6))};
+const fmtLen=v=>!isFinite(v)?'—':Math.abs(v)>=1000?(v/1000).toFixed(Math.abs(v)>=1e5?0:1)+' km':Math.round(v)+' m';
+const numv=id=>{const v=parseFloat(String($(id).value).replace(',','.'));return isFinite(v)?v:NaN};
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},3500)}
+let banT=null;function banner(m,err){const b=$('banner');b.textContent=m;b.className='banner'+(err?' err':'');b.hidden=false;clearTimeout(banT);banT=setTimeout(()=>{b.hidden=true},err?8000:4500)}
 
+// ---------- model inputs ----------
+for(const [k,t] of Object.entries(GDE.templates)){const o=document.createElement('option');o.value=k;o.textContent=t.name+(t.geom==='radial'?' (radial)':'');$('mTpl').appendChild(o)}
+const blankModel=()=>GDE.makeModel('shelf',{ext:{xmin:0,xmax:20000,ymin:0,ymax:15000},cell:50,src:[0,7500],az:90,span:16000,noise:{amp:700,wl:5000,seed:3},warp:{on:true,R:2500}});
+const diag=()=>{const e=S.M.ext;return Math.hypot(e.xmax-e.xmin,e.ymax-e.ymin)};
+function syncInputs(){const M=S.M,e=M.ext;
+  $('ex0').value=e.xmin;$('ex1').value=e.xmax;$('ey0').value=e.ymin;$('ey1').value=e.ymax;$('ecell').value=M.cell;
+  $('mTpl').value=M.template;$('mGeom').value=M.geom;
+  syncAz();syncSrc();$('mFan').value=M.fan;$('mFanR').value=M.fan;$('mSpan').value=+(+M.span).toPrecision(8);
+  const amax=Math.max(1,+(diag()*.12).toPrecision(2));$('mAmpR').max=amax;$('mAmpR').step=amax/100;
+  $('mAmp').value=M.noise.amp;$('mAmpR').value=M.noise.amp;$('mWl').value=M.noise.wl;$('mSeed').value=M.noise.seed;
+  $('wOn').checked=!!M.warp.on;$('wR').value=M.warp.R;
+  $('mOut').value=M.outside||'distal';$('mPro').value=+(+M.protrude||0).toPrecision(8);
+  document.querySelectorAll('.rad').forEach(x=>x.style.display=M.geom==='radial'?'':'none');
+  document.querySelectorAll('.strk').forEach(x=>{if(M.geom==='radial')x.style.display=M.outside==='strike'?'':'none'})}
+function syncAz(){$('mAz').value=+(+S.M.az).toFixed(1);$('mAzR').value=S.M.az}
+function syncSrc(){$('mSx').value=Math.round(S.M.src[0]);$('mSy').value=Math.round(S.M.src[1])}
+const on=(id,ev,f)=>$(id).addEventListener(ev,f);
+function extFromInputs(){const v=['ex0','ex1','ey0','ey1'].map(numv),c=numv('ecell');
+  if(v.some(x=>!isFinite(x))||!(v[1]>v[0])||!(v[3]>v[2])){$('extMsg').textContent='xmax must be larger than xmin and ymax larger than ymin.';$('extMsg').className='msg err';return}
+  S.M.ext={xmin:v[0],xmax:v[1],ymin:v[2],ymax:v[3]};if(c>0)S.M.cell=c;if(S.started)size();schedule()}
+['ex0','ex1','ey0','ey1','ecell'].forEach(id=>on(id,'change',extFromInputs));
+on('mGeom','change',()=>{S.M.geom=$('mGeom').value;syncInputs();schedule()});
+on('mAzR','input',()=>{S.M.az=+$('mAzR').value;syncAz();schedule(true)});
+on('mAz','input',()=>{const v=numv('mAz');if(isFinite(v)){S.M.az=((v%360)+360)%360;$('mAzR').value=S.M.az;schedule()}});
+on('mSx','change',()=>{const v=numv('mSx');if(isFinite(v)){S.M.src=[v,S.M.src[1]];schedule()}});
+on('mSy','change',()=>{const v=numv('mSy');if(isFinite(v)){S.M.src=[S.M.src[0],v];schedule()}});
+on('mFanR','input',()=>{S.M.fan=+$('mFanR').value;$('mFan').value=S.M.fan;schedule(true)});
+on('mFan','input',()=>{const v=numv('mFan');if(v>=5&&v<=340){S.M.fan=v;$('mFanR').value=v;schedule()}});
+on('mOut','change',()=>{S.M.outside=$('mOut').value;if(S.M.outside==='strike'&&!(S.M.protrude>0))S.M.protrude=Math.round(.3*S.M.span);syncInputs();schedule()});
+on('mPro','input',()=>{const v=numv('mPro');if(v>=0){S.M.protrude=v;schedule()}});
+on('mSpan','input',()=>{const v=numv('mSpan');if(v>0){S.M.span=v;schedule()}});
+on('mAmpR','input',()=>{S.M.noise.amp=+$('mAmpR').value;$('mAmp').value=+(+S.M.noise.amp).toPrecision(4);schedule(true)});
+on('mAmp','input',()=>{const v=numv('mAmp');if(v>=0){S.M.noise.amp=v;$('mAmpR').value=v;schedule()}});
+on('mWl','input',()=>{const v=numv('mWl');if(v>0){S.M.noise.wl=v;schedule()}});
+on('mSeed','input',()=>{const v=numv('mSeed');if(isFinite(v)){S.M.noise.seed=Math.round(v);schedule()}});
+on('bSeed','click',()=>{S.M.noise.seed=1+Math.floor(Math.random()*99999);$('mSeed').value=S.M.noise.seed;schedule()});
+on('wOn','change',()=>{S.M.warp.on=$('wOn').checked;schedule()});
+on('wR','input',()=>{const v=numv('wR');if(v>0){S.M.warp.R=v;schedule()}});
+on('mTpl','change',()=>{const k=$('mTpl').value,t=GDE.templates[k];
+  if(k!=='custom'){S.M.belts=clone(t.belts);S.M.geom=t.geom;S.M.outside=t.outside;if(t.outside==='strike'&&!(S.M.protrude>0))S.M.protrude=Math.round(.3*S.M.span)}
+  S.M.template=k;rematch();renderBelts();syncInputs();schedule()});
+
+// ---------- belts editor ----------
+function beltsEdited(){if(S.M.template!=='custom'){S.M.template='custom';$('mTpl').value='custom'}}
+function renderBelts(){const B=S.M.belts;
+  $('bList').innerHTML=B.map((b,i)=>`<div class="br" data-i="${i}"><input type="color" value="${esc(b.color)}" data-k="color" aria-label="Colour"><input type="text" value="${esc(b.name)}" data-k="name" aria-label="Belt name"><input type="number" value="${b.w}" step="any" min="0" data-k="w" aria-label="Relative width" title="Relative width (the most distal belt is open-ended)"><button data-a="up" title="Move up (more proximal)" ${i?'':'disabled'}>↑</button><button data-a="dn" title="Move down (more distal)" ${i<B.length-1?'':'disabled'}>↓</button><button data-a="del" title="Remove" ${B.length>2?'':'disabled'}>×</button></div>`).join('');
+  $('bList').querySelectorAll('.br').forEach(r=>{const i=+r.dataset.i;
+    r.querySelectorAll('input').forEach(inp=>inp.addEventListener(inp.type==='color'?'input':'change',()=>{const k=inp.dataset.k,b=S.M.belts[i];
+      if(k==='w'){const v=parseFloat(inp.value);if(!(v>0)){inp.value=b.w;return}b.w=v}
+      else if(k==='name'){const nv=inp.value.trim()||b.name;S.wells.forEach(w=>{if(w.b===i)w.env=nv});b.name=nv;b.alias=[];rematch()}
+      else b[k]=inp.value;
+      beltsEdited();schedule()}));
+    r.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{const B=S.M.belts,a=bt.dataset.a;
+      if(a==='del'){S.wells.forEach(w=>{if(w.b===i)w.b=-1});B.splice(i,1)}
+      else{const j=a==='up'?i-1:i+1;[B[i],B[j]]=[B[j],B[i]]}
+      beltsEdited();rematch(true);renderBelts();schedule()})})}
+on('bBAdd','click',()=>{const B=S.M.belts;B.splice(B.length-1,0,{name:'New belt '+B.length,color:'#d8cfa8',w:1,alias:[]});beltsEdited();rematch(true);renderBelts();schedule()});
+
+// ---------- wells ----------
+// keep the belt chosen by hand (b set, env = its name); a removed belt leaves the well unmatched
+function rematch(keepB){for(const w of S.wells){if(keepB&&w.b===-1&&w.manual)continue;w.b=GDE.matchBelt(w.env,S.M.belts)}}
+function wellsTable(){return'name\tx\ty\tenvironment\n'+S.wells.map(w=>[w.name,w.x,w.y,w.env].join('\t')).join('\n')}
+function applyTable(text){const r=GDE.parseWells(text);
+  if(!r.wells.length){$('wMsg').textContent=r.errors[0]||'No well found: one line per well, name, x, y, environment.';$('wMsg').className='msg err';return false}
+  S.wells=r.wells.map(w=>({...w,b:GDE.matchBelt(w.env,S.M.belts)}));
+  const un=S.wells.filter(w=>w.b<0).length;
+  $('wMsg').className='msg'+(un||r.errors.length?' err':'');
+  $('wMsg').textContent=`${S.wells.length} well${S.wells.length>1?'s':''} read.`+(un?` ${un} environment${un>1?'s':''} not matched to a belt: choose ${un>1?'them':'it'} below.`:'')+(r.errors.length?' '+r.errors.length+' line(s) skipped: '+r.errors[0]:'');
+  start();renderWells();schedule();return true}
+on('bWApply','click',()=>applyTable($('wTxt').value));
+on('bWClear','click',()=>{S.wells=[];$('wTxt').value='';$('wMsg').textContent='';renderWells();schedule()});
+on('bWAdd','click',()=>setTool(S.tool==='add'?null:'add'));
+function setTool(t){S.tool=t;$('bWAdd').classList.toggle('on',t==='add');cv.style.cursor=t==='add'?'crosshair':'';if(t==='add'){start();banner('Click on the map where the well is.')}}
+function renderWells(syncTxt=true){const B=S.M.belts;
+  $('wList').innerHTML=S.wells.map((w,i)=>`<div class="wr${w.b<0?' bad':''}" data-i="${i}"><input type="text" value="${esc(w.name)}" data-k="name" aria-label="Well name"><input type="number" step="any" value="${w.x}" data-k="x" aria-label="X"><input type="number" step="any" value="${w.y}" data-k="y" aria-label="Y">
+    <select data-k="b" aria-label="Environment">${w.b<0?`<option value="-1" selected>⚠ “${esc(w.env||'?')}” — choose a belt</option>`:''}${B.map((b,k)=>`<option value="${k}"${k===w.b?' selected':''}>${esc(b.name)}</option>`).join('')}</select><button data-a="del" title="Remove this well">Remove</button></div>`).join('');
+  $('wList').querySelectorAll('.wr').forEach(r=>{const w=S.wells[+r.dataset.i];
+    r.querySelectorAll('input,select').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.k;
+      if(k==='name')w.name=inp.value.trim()||w.name;
+      else if(k==='b'){w.b=+inp.value;w.env=S.M.belts[w.b].name;w.manual=true;r.classList.remove('bad')}
+      else{const v=parseFloat(inp.value);if(isFinite(v))w[k]=v}
+      $('wTxt').value=wellsTable();schedule()}));
+    r.querySelector('[data-a=del]').onclick=()=>{S.wells.splice(+r.dataset.i,1);renderWells();schedule()}});
+  if(syncTxt)$('wTxt').value=S.wells.length?wellsTable():''}
+on('bFitExt','click',()=>{if(!S.wells.length){$('extMsg').textContent='No well yet.';$('extMsg').className='msg err';return}
+  const xs=S.wells.map(w=>w.x),ys=S.wells.map(w=>w.y),sx=Math.max(...xs)-Math.min(...xs),sy=Math.max(...ys)-Math.min(...ys),s=Math.max(sx,sy,1000);
+  const mx=Math.max(.4*sx,.25*s),my=Math.max(.4*sy,.25*s),r=v=>Math.round(v/100)*100;
+  S.M.ext={xmin:r(Math.min(...xs)-mx),xmax:r(Math.max(...xs)+mx),ymin:r(Math.min(...ys)-my),ymax:r(Math.max(...ys)+my)};syncInputs();if(S.started)size();schedule()});
+
+// ---------- calibration ----------
+on('bFit','click',()=>{const radial=S.M.geom==='radial',f=GDE.fitAzimuth(S.M,S.wells,{source:radial&&$('fitSrc').checked});
+  if(f.msg){banner(f.msg,true);return}
+  S.M.az=f.az;if(radial&&$('fitSrc').checked)S.M.src=f.src;syncAz();syncSrc();schedule();
+  banner(`Transport azimuth ${f.az.toFixed(1)}°${radial&&$('fitSrc').checked?`, source at ${fmtN(f.src[0])}, ${fmtN(f.src[1])}`:''}: ${f.count} of ${f.n} wells in the right order.`,f.count<f.n)});
+
+// ---------- compute ----------
+let tmr=0;
+function schedule(fast){if(!S.started)return;clearTimeout(tmr);if(fast){compute(true);tmr=setTimeout(()=>compute(false),260)}else tmr=setTimeout(()=>compute(false),90)}
+function previewCell(max){const e=S.M.ext;return Math.max(S.M.cell||0,Math.sqrt((e.xmax-e.xmin)*(e.ymax-e.ymin)/max))}
+function compute(fast){if(!(S.M.belts.length>=2))return;
+  S.mod=GDE.build(S.M,S.wells,{dist:!fast});S.full=null;
+  S.P=GDE.polygons(S.mod,S.M.ext,previewCell(fast?60000:250000),{stride:fast?2:3,minArea:fast?2:4,tol:.7});
+  draw();
+  if(!fast){renderCheck();renderVerdict();renderCal();
+    const e=S.M.ext,nx=Math.floor((e.xmax-e.xmin)/S.M.cell+1e-9)+1,ny=Math.floor((e.ymax-e.ymin)/S.M.cell+1e-9)+1;
+    $('extMsg').className='msg';$('extMsg').textContent=`Export grid ${nx} × ${ny} nodes (${(nx*ny).toLocaleString('en-US')}); map preview cell ${fmtN(previewCell(250000))}.`;
+    $('bMsg').textContent=S.M.template==='custom'?'custom belts':''}}
+function start(){if(S.started)return;S.started=true;$('intro').hidden=true;$('work').hidden=false;size();compute(false)}
+
+// ---------- drawing ----------
+function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p;return(f<1.5?1:f<3.5?2:f<7.5?5:10)*p}
+function layout(W,H){const e=S.M.ext,leg=W>=640?210:0,m={l:66,r:14+leg,t:14,b:40},ew=e.xmax-e.xmin,eh=e.ymax-e.ymin;
+  const k=Math.min((W-m.l-m.r)/ew,(H-m.t-m.b)/eh),ox=m.l+((W-m.l-m.r)-ew*k)/2,oy=m.t+((H-m.t-m.b)-eh*k)/2;
+  return{k,ox,oy,ew,eh,leg,W,H,X:x=>ox+(x-e.xmin)*k,Y:y=>oy+(e.ymax-y)*k,ix:px=>e.xmin+(px-ox)/k,iy:py=>e.ymax-(py-oy)/k}}
+function arrowGeom(L){const a=S.M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(S.M.src[0]),sy=L.Y(S.M.src[1]);
+  return{sx,sy,hx:sx+Math.sin(a)*len,hy:sy-Math.cos(a)*len,a,len}}
+function halo(c,t,x,y,col){c.lineWidth=3.2;c.strokeStyle='rgba(255,255,255,.92)';c.lineJoin='round';c.strokeText(t,x,y);c.fillStyle=col||'#232220';c.fillText(t,x,y)}
+function render(c,W,H,P,opt={}){const L=layout(W,H),e=S.M.ext,mod=S.mod,B=S.M.belts;
+  c.fillStyle='#fff';c.fillRect(0,0,W,H);
+  const x0=L.X(e.xmin),y0=L.Y(e.ymax),mw=L.ew*L.k,mh=L.eh*L.k;
+  c.save();c.beginPath();c.rect(x0,y0,mw,mh);c.clip();
+  const paths=P.map(p=>{const pa=new Path2D();for(const r of [p.outer,...p.holes]){r.forEach((q,i)=>i?pa.lineTo(L.X(q[0]),L.Y(q[1])):pa.moveTo(L.X(q[0]),L.Y(q[1])));pa.closePath()}return pa});
+  P.forEach((p,i)=>{const col=(B[p.code-1]||{}).color||'#ccc';c.fillStyle=col;c.fill(paths[i],'evenodd');c.strokeStyle=col;c.lineWidth=.8;c.stroke(paths[i])});
+  c.strokeStyle='rgba(35,34,32,.55)';c.lineWidth=1;c.lineJoin='round';paths.forEach(pa=>c.stroke(pa));
+  // warping radius
+  if(mod&&mod.warp.wells.length){c.setLineDash([6,4]);c.strokeStyle='rgba(168,98,58,.9)';c.lineWidth=1.4;
+    for(const i of mod.warp.wells){const w=mod.wells[i];c.beginPath();c.arc(L.X(w.x),L.Y(w.y),mod.warp.R*L.k,0,2*Math.PI);c.stroke()}c.setLineDash([])}
+  // source, fan opening and transport arrow (fan rays clipped to the map, arrow and source drawn on top, unclipped)
+  const A=arrowGeom(L);
+  if(S.M.geom==='radial'){c.setLineDash([5,5]);c.strokeStyle='rgba(35,34,32,.45)';c.lineWidth=1.2;const rl=Math.hypot(mw,mh);
+    for(const s of [-1,1]){const b=A.a+s*S.M.fan/2*Math.PI/180;c.beginPath();c.moveTo(A.sx,A.sy);c.lineTo(A.sx+Math.sin(b)*rl,A.sy-Math.cos(b)*rl);c.stroke()}c.setLineDash([])}
+  c.restore();c.save();
+  c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(A.sx,A.sy);c.lineTo(A.hx,A.hy);c.stroke();
+  c.strokeStyle='#232220';c.lineWidth=2.4;c.beginPath();c.moveTo(A.sx,A.sy);c.lineTo(A.hx,A.hy);c.stroke();
+  const hd=11,ha=.45;c.fillStyle='#232220';c.beginPath();c.moveTo(A.hx,A.hy);
+  c.lineTo(A.hx-hd*Math.sin(A.a-ha),A.hy+hd*Math.cos(A.a-ha));c.lineTo(A.hx-hd*Math.sin(A.a+ha),A.hy+hd*Math.cos(A.a+ha));c.closePath();c.fill();
+  if(opt.handles!==false){c.fillStyle='rgba(255,255,255,.85)';c.strokeStyle='#232220';c.lineWidth=1.2;c.beginPath();c.arc(A.hx,A.hy,5,0,2*Math.PI);c.fill();c.stroke()}
+  c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(A.sx,A.sy,7,0,2*Math.PI);c.fill();c.stroke();
+  c.font='600 12px Inter,system-ui,sans-serif';c.textBaseline='middle';c.textAlign='left';
+  halo(c,S.M.geom==='radial'?'Source':'Reference point',A.sx+11,A.sy+13,'#7a4527');
+  // wells
+  if(mod)for(const w of mod.check){const x=L.X(w.x),y=L.Y(w.y);
+    c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(x,y,5.5,0,2*Math.PI);c.fill();c.stroke();
+    c.fillStyle='#232220';c.beginPath();c.arc(x,y,1.6,0,2*Math.PI);c.fill();
+    c.font='600 12px Inter,system-ui,sans-serif';halo(c,w.name,x+9,y-9);const tw=c.measureText(w.name).width;
+    c.font='700 13px Inter,system-ui,sans-serif';halo(c,w.honoured?'✓':'✗',x+12+tw,y-9,w.honoured?'#2e7d32':'#c62828')}
+  // north arrow
+  c.fillStyle='#232220';const nx=x0+mw-22,ny=y0+14;c.beginPath();c.moveTo(nx,ny);c.lineTo(nx+6,ny+16);c.lineTo(nx,ny+12);c.lineTo(nx-6,ny+16);c.closePath();c.fill();
+  c.font='700 11px Inter,system-ui,sans-serif';c.textAlign='center';halo(c,'N',nx,ny+26);
+  // scale bar
+  const sl=niceStep(L.ew/5),sp=sl*L.k,bx=x0+14,by=y0+mh-16;
+  c.fillStyle='rgba(255,255,255,.85)';c.fillRect(bx-6,by-18,sp+12+8,28);
+  c.fillStyle='#232220';c.fillRect(bx,by,sp/2,5);c.strokeStyle='#232220';c.lineWidth=1;c.strokeRect(bx,by,sp,5);
+  c.font='500 11px Inter,system-ui,sans-serif';c.textAlign='center';c.fillStyle='#232220';c.fillText(sl>=1000?`${sl/1000} km`:`${sl} m`,bx+sp/2,by-8);
+  c.restore();
+  // frame and coordinates
+  c.strokeStyle='#232220';c.lineWidth=1;c.strokeRect(x0+.5,y0+.5,mw,mh);
+  c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';
+  const tx=niceStep(L.ew/(mw/110)),ty=niceStep(L.eh/(mh/70));
+  c.textAlign='center';c.textBaseline='top';
+  for(let v=Math.ceil(e.xmin/tx)*tx;v<=e.xmax+1e-9;v+=tx){const x=L.X(v);c.beginPath();c.moveTo(x,y0+mh);c.lineTo(x,y0+mh+5);c.stroke();c.fillText(fmtN(v),x,y0+mh+7)}
+  c.textAlign='right';c.textBaseline='middle';
+  for(let v=Math.ceil(e.ymin/ty)*ty;v<=e.ymax+1e-9;v+=ty){const y=L.Y(v);c.beginPath();c.moveTo(x0,y);c.lineTo(x0-5,y);c.stroke();c.fillText(fmtN(v),x0-7,y)}
+  c.textAlign='center';c.textBaseline='top';c.fillText('X',x0+mw/2,y0+mh+22);c.save();c.translate(12,y0+mh/2);c.rotate(-Math.PI/2);c.textBaseline='middle';c.fillText('Y',0,0);c.restore();
+  // legend
+  if(L.leg){let lx=W-L.leg+6,ly=y0+4;const lw=L.leg-12;c.textAlign='left';c.textBaseline='top';
+    c.fillStyle='#232220';c.font='600 13px "Space Grotesk",Inter,sans-serif';c.fillText('GDE belts',lx,ly);ly+=18;
+    c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText('proximal → distal',lx,ly);ly+=17;
+    B.forEach((b,i)=>{c.fillStyle=b.color;c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.5)';c.strokeRect(lx+.5,ly+.5,17,12);
+      c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';
+      const words=`${i+1}  ${b.name}`.split(' ');let line='',yy=ly;
+      for(const wd of words){const tst=line?line+' '+wd:wd;if(c.measureText(tst).width>lw-26&&line){c.fillText(line,lx+24,yy);line=wd;yy+=14}else line=tst}
+      c.fillText(line,lx+24,yy);ly=yy+20});
+    ly+=6;c.font='600 12px Inter,system-ui,sans-serif';c.fillStyle='#232220';
+    c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(lx+9,ly+7,5,0,2*Math.PI);c.fill();c.stroke();
+    c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';c.fillText('Well',lx+24,ly);c.fillStyle='#2e7d32';c.font='700 12px Inter';c.fillText('✓',lx+60,ly);
+    c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('honoured',lx+72,ly+1);ly+=17;
+    c.fillStyle='#c62828';c.font='700 12px Inter';c.fillText('✗',lx+60,ly);c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('not honoured',lx+72,ly+1);ly+=20;
+    c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.fill();c.stroke();
+    c.strokeStyle='#232220';c.lineWidth=2;c.beginPath();c.moveTo(lx+16,ly+7);c.lineTo(lx+40,ly+7);c.stroke();
+    c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';c.fillText(S.M.geom==='radial'?'Source, transport':'Transport direction',lx+46,ly);ly+=20;
+    if(mod&&mod.warp.wells.length){c.setLineDash([5,3]);c.strokeStyle='#a8623a';c.lineWidth=1.4;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.stroke();c.setLineDash([]);
+      c.fillStyle='#232220';c.fillText('Warping radius',lx+24,ly);ly+=20}
+    c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';ly+=4;
+    const tpl=S.M.template==='custom'?'Custom belts':GDE.templates[S.M.template].name;
+    for(const s of [tpl+', '+(S.M.geom==='radial'?`radial, fan ${fmtN(S.M.fan)}°`:'linear'),`azimuth ${(+S.M.az).toFixed(0)}°, seed ${S.M.noise.seed}`])
+      {c.fillText(s,lx,ly);ly+=14}}}
+function fitStage(){const st=$('stage'),w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,h=Math.round((w-80-leg)*(e.ymax-e.ymin)/(e.xmax-e.xmin)+56);st.style.height=Math.max(380,Math.min(h,Math.round(innerHeight*.84)))+'px'}
+function size(){fitStage();const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
+function draw(){if(!S.started||!S.P)return;const d=devicePixelRatio||1,r=cv.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);render(ctx,r.width,r.height,S.P)}
+window.addEventListener('resize',()=>{if(S.started){size();draw()}});
+
+// ---------- map interaction: drag source, arrow head and wells; add wells ----------
+const RO0='Hover the map to read the belt';
+const evp=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+const curL=()=>{const r=cv.getBoundingClientRect();return layout(r.width,r.height)};
+function hit(px,py){const L=curL(),A=arrowGeom(L),d=(x,y)=>Math.hypot(px-x,py-y);
+  if(S.mod)for(let i=S.wells.length-1;i>=0;i--){const w=S.wells[i];if(d(L.X(w.x),L.Y(w.y))<=8)return{k:'well',i}}
+  if(d(A.hx,A.hy)<=10)return{k:'head'};if(d(A.sx,A.sy)<=10)return{k:'src'};return null}
+cv.addEventListener('pointerdown',e=>{const [px,py]=evp(e),L=curL();
+  if(S.tool==='add'){openPop(px,py,L.ix(px),L.iy(py));return}
+  const h=hit(px,py);if(!h)return;S.drag=h;cv.setPointerCapture(e.pointerId);e.preventDefault()});
+cv.addEventListener('pointermove',e=>{const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py);
+  if(S.drag){const h=S.drag;
+    if(h.k==='src'){S.M.src=[x,y];syncSrc()}
+    else if(h.k==='head'){const sx=L.X(S.M.src[0]),sy=L.Y(S.M.src[1]);S.M.az=((Math.atan2(px-sx,sy-py)*180/Math.PI)+360)%360;syncAz()}
+    else{const w=S.wells[h.i];w.x=Math.round(x);w.y=Math.round(y)}
+    schedule(true);return}
+  const h=hit(px,py);cv.style.cursor=S.tool==='add'?'crosshair':h?(h.k==='head'?'grab':'move'):'';
+  const e2=S.M.ext;if(S.mod&&x>=e2.xmin&&x<=e2.xmax&&y>=e2.ymin&&y<=e2.ymax)$('ro').textContent=`x ${fmtN(x)}, y ${fmtN(y)} — ${S.M.belts[S.mod.beltAt(x,y)].name}`;else $('ro').textContent=RO0});
+cv.addEventListener('pointerup',()=>{if(S.drag){const k=S.drag.k;S.drag=null;if(k==='well')renderWells();schedule()}});
+function openPop(px,py,x,y){const p=$('pop'),st=$('stage').getBoundingClientRect();p.hidden=false;
+  p.style.left=Math.min(px+12,st.width-240)+'px';p.style.top=Math.min(py+12,st.height-130)+'px';
+  let n=S.wells.length+1;while(S.wells.some(w=>w.name==='W-'+n))n++;$('pName').value='W-'+n;
+  const bi=S.mod?S.mod.beltAt(x,y):0;$('pEnv').innerHTML=S.M.belts.map((b,k)=>`<option value="${k}"${k===bi?' selected':''}>${esc(b.name)}</option>`).join('');
+  S.pending=[Math.round(x),Math.round(y)];$('pEnv').focus()}
+on('pOk','click',()=>{const b=+$('pEnv').value;S.wells.push({name:$('pName').value.trim()||'W',x:S.pending[0],y:S.pending[1],env:S.M.belts[b].name,b,manual:true});
+  $('pop').hidden=true;setTool(null);renderWells();schedule()});
+on('pNo','click',()=>{$('pop').hidden=true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('pop').hidden=true;if(S.tool)setTool(null)}});
+
+// ---------- verdict, wells check, calibration messages ----------
+const ICON={pass:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 20.5l5.5 5.5L29 14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ warn:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4L37 34H3z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M20 15v9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="currentColor"/></svg>',
+ none:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="20" cy="20" r="3" fill="currentColor"/></svg>'};
+function renderVerdict(){const C=S.mod.check,mt=C.filter(c=>c.b>=0),hon=mt.filter(c=>c.honoured),un=C.length-mt.length,wp=hon.filter(c=>c.warped).length;let v,h,sub;
+  if(!C.length){v='none';h='Conceptual map — no well yet';sub='Paste a wells table or click “+ Add on map” (panel 2): the belts are then calibrated on them.'}
+  else if(hon.length===mt.length&&mt.length){v='pass';h=mt.length===1?'The well is honoured':`All ${mt.length} wells honoured`;
+    sub=(wp?`${mt.length-wp} by the calibrated belts, ${wp} by local warping (dashed circle).`:'Every well falls in its belt.')+' Distances to the nearest boundary are in the table below.'}
+  else{v='warn';h=mt.length?`${hon.length} of ${mt.length} wells honoured`:'No well matched to a belt';
+    const bad=mt.find(c=>!c.honoured);sub=bad?(S.mod.cal.msgs[S.mod.cal.conflicts.indexOf(bad.i)]||`${bad.name}: ${bad.env}, but the map puts it in ${S.M.belts[bad.belt].name}.`)+' Try “Auto-fit direction”, turn on local warping (panel 4), or check the environment.':''}
+  if(un)sub+=` ${un} well${un>1?'s have':' has'} an environment not matched to a belt: choose it in panel 2.`;
+  $('verdict').className='verdict '+v;$('verdict').innerHTML=ICON[v]+`<h2>${esc(h)}</h2><div class="sub">${esc(sub)}</div>`}
+function renderCheck(){const B=S.M.belts,d2=diag();
+  $('tb').innerHTML=S.mod.check.map(c=>{const g=c.b>=0?B[c.b]:null,m=B[c.belt];let note='';
+    if(c.b<0)note='Environment not matched to a belt: choose it in panel 2.';
+    else if(c.warped&&c.honoured)note=`Honoured by local warping (radius ${fmtLen(S.mod.warp.R)}).`;
+    else if(!c.honoured)note=S.mod.cal.msgs[S.mod.cal.conflicts.indexOf(c.i)]||'Not in its belt.';
+    else if(c.dist<.02*d2)note='Close to a boundary: the environment could as well be the neighbouring belt.';
+    return`<tr><td class="l">${esc(c.name)}</td><td>${fmtN(c.x)}</td><td>${fmtN(c.y)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td><td>${isFinite(c.dist)?fmtLen(c.dist):'> map size'}</td><td class="l wrap">${esc(note)}</td></tr>`}).join('')||'<tr><td class="l" colspan="8" style="color:var(--mut)">No well.</td></tr>'}
+function renderCal(){const m=S.mod,B=S.M.belts,t=m.t,p=m.prior,cal=m.cal;
+  const st=k=>Math.abs(t[k]-p[k])<1e-6*Math.max(1,Math.abs(p[k]))?'prior':(isFinite(cal.lo[k])&&isFinite(cal.hi[k])?'between wells':'scaled');
+  let h=`<p>Boundaries, distance ${S.M.geom==='radial'?'from the source':'from the reference point along the transport direction'}:</p>`+t.map((v,k)=>`<p><span class="sw" style="background:${B[k].color}"></span>${esc(B[k].name)} | ${esc(B[k+1].name)}: <b>${fmtLen(v)}</b> <span style="color:var(--mut)">(${st(k)}${st(k)==='prior'?'':', prior '+fmtLen(p[k])})</span></p>`).join('');
+  if(cal.msgs.length)h+=cal.msgs.map(s=>`<p class="c">${esc(s)}${S.M.warp.on?'':' Local warping is off.'}</p>`).join('');
+  $('calMsg').innerHTML=h}
+
+// ---------- exports ----------
+function dl(text,name,type){const b=text instanceof Blob?text:new Blob([text],{type}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);toast('Saved '+name)}
+function need(){if(!S.started||!S.mod){banner('Load an example, paste wells or start from a template first.',true);return false}
+  const e=S.M.ext,n=((e.xmax-e.xmin)/S.M.cell)*((e.ymax-e.ymin)/S.M.cell);
+  if(n>6e6){banner(`The export cell size gives ${Math.round(n/1e6)} million cells: increase it in panel 1 (6 million at most).`,true);return false}return true}
+function fullPolys(){if(!S.full)S.full=GDE.polygons(S.mod,S.M.ext,S.M.cell,{minArea:4,tol:.7});return S.full}
+const grid=()=>GDE.nodeGrid(S.mod,S.M.ext,S.M.cell,'GDE');
+on('bIrap','click',()=>{if(need())dl(GDE.irapLines(fullPolys()),'gde_polygons_irap.dat','text/plain')});
+on('bGeo','click',()=>{if(need())dl(GDE.geojson(fullPolys()),'gde_polygons.geojson','application/geo+json')});
+on('bPcsv','click',()=>{if(need())dl(GDE.polyCsv(fullPolys()),'gde_polygons.csv','text/csv')});
+on('bZmap','click',()=>{if(need())dl(GDE.zmap(grid()),'gde_belts.zmap','text/plain')});
+on('bGcsv','click',()=>{if(need())dl(GDE.gridCsv(grid()),'gde_grid.csv','text/csv')});
+on('bWcsv','click',()=>{if(!S.mod)return need();const q=s=>/[",]/.test(String(s))?'"'+String(s).replace(/"/g,'""')+'"':s;
+  dl(['well,x,y,environment,belt_given,belt_map,honoured,distance_to_boundary,warped'].concat(S.mod.check.map(c=>[q(c.name),c.x,c.y,q(c.env),c.b>=0?q(S.M.belts[c.b].name):'',q(S.M.belts[c.belt].name),c.honoured?'yes':'no',isFinite(c.dist)?+c.dist.toFixed(1):'',c.warped?'yes':'no'].join(','))).join('\n'),'gde_wells.csv','text/csv')});
+on('bPng','click',()=>{if(!need())return;const e=S.M.ext,Wc=1000,leg=210,mw=Wc-66-14-leg,Hc=Math.round(mw*(e.ymax-e.ymin)/(e.xmax-e.xmin)+54),sc=2;
+  const P=((e.xmax-e.xmin)*(e.ymax-e.ymin)/S.M.cell**2<=1.5e6)?fullPolys():S.P,o=document.createElement('canvas');o.width=Wc*sc;o.height=Math.max(420,Hc)*sc;
+  const c=o.getContext('2d');c.setTransform(sc,0,0,sc,0,0);render(c,Wc,Math.max(420,Hc),P,{handles:false});o.toBlob(b=>dl(b,'gde_map.png','image/png'),'image/png')});
+
+// ---------- examples, file drop, start ----------
+function loadModel(M,wells){S.M=clone(M);$('ro').textContent=RO0;S.wells=clone(wells).map(w=>({...w,b:GDE.matchBelt(w.env,S.M.belts)}));
+  syncInputs();renderBelts();renderWells();$('wMsg').textContent='';start();size();compute(false)}
+function loadExample(k){const ex=GDE.examples[k];loadModel(ex.M,ex.wells);banner(ex.title+': drag the source, the arrow head or a well to see the map follow.')}
+on('iDelta','click',()=>loadExample('delta'));on('iFan','click',()=>loadExample('fan'));
+on('iBlank','click',()=>{loadModel(blankModel(),[]);banner('Choose a template (panel 3), then add wells.')});
+function readFile(f){const r=new FileReader();r.onload=()=>{$('wTxt').value=String(r.result);applyTable(String(r.result))};r.readAsText(f)}
+on('iOpen','click',()=>$('file').click());
+on('file','change',e=>{if(e.target.files[0])readFile(e.target.files[0])});
+document.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('dragging')});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging')});
+document.addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('dragging');const f=e.dataTransfer.files[0];if(f)readFile(f)});
+S.M=blankModel();syncInputs();renderBelts();renderWells();
+window.GDEUI={S,compute,render,loadExample,loadModel,applyTable,fullPolys,grid,hit,layout:curL};
+const hk=location.hash.slice(1);if(GDE.examples[hk])loadExample(hk);else if(hk==='blank')$('iBlank').click();
 
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
@@ -461,6 +927,6 @@ window.GDE={templates,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perl
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what": "x"});
+({"what": "Runs entirely in your browser: nothing you type or load leaves your machine. Draws a first-pass gross depositional environment (GDE) map for one interval from the environments interpreted at one or a few wells and the depositional system assumed a priori. With 1–5 wells, interpolating between wells cannot make a credible map: the conceptual model does most of the work and the wells calibrate it, the way a GDE map is drawn by hand. Every well is reported as honoured or not, with its distance to the nearest belt boundary.", "date": "24 November 2026", "method": ["Templates: ordered belts from proximal to distal with default relative widths and conventional GDE colours — wave-dominated shelf (coastal plain, shoreface, offshore transition, offshore shelf, slope, basin; linear), river-dominated delta (delta plain, delta front, prodelta, shelf, slope, basin; radial), deep-water fan (slope / canyon, channel–levee complex, proximal lobes, distal lobes / lobe fringe, basin plain; radial), carbonate platform (inner platform / lagoon, platform margin (reef / shoal), fore-reef slope, basin; linear), fluvial (alluvial fan / proximal, braided plain, meandering belt, floodplain–coastal plain; linear) and custom. Names, order, colours and widths are editable; editing turns the template into a custom list.", "Well environments are matched to the belts ignoring case, accents, punctuation and plurals; each belt also accepts the parts of a name written with “/” or brackets (e.g. “lobe fringe”, “reef”) and a few common synonyms. Unmatched names are flagged and fixed with a drop-down.", "Proximal–distal coordinate d(x, y). Linear: d = (x − xs) sin θ + (y − ys) cos θ, the projection on the transport azimuth θ (clockwise from north, towards the distal belts) from the reference point (xs, ys); belts are parallel to the shoreline. Radial: d = distance from the source inside the fan opening angle centred on θ; beyond it d grows smoothly over 15° (by up to three belt spans, smoothstep) and is infinite further out, so outside the fan the most distal belt applies and the belt ends are rounded rather than cut along straight rays.", "Prior boundaries: belt k starts at the sum of the relative widths of the belts before it, scaled so that the most distal belt starts at the belt span from the source; the first belt starts at the source (linear: everything upstream of the reference point is the first belt) and the last belt is open-ended.", "Irregularity: d + a · N(x/λ, y/λ, d/λz), with N three octaves (weights 1, ½, ¼) of seeded 3D gradient noise (improved Perlin noise with a permutation shuffled from the seed), a the amplitude (typical largest shift), λ the wavelength and λz = max(λ, 3a), which keeps d increasing downstream so belts never fold back. Using d as the third coordinate makes successive boundaries similar but not identical. Same seed, same map; amplitude 0 gives straight belts.", "Calibration: each well gets the belt of its environment. The wells whose order along d agrees with the belt order are found as the longest chain sorted by d (dynamic programming; wells in different belts at the same d disagree); the other wells are conflicts. For each boundary the feasible interval is (largest d of the chain wells in more proximal belts, smallest d of those in more distal belts). Consecutive boundaries with the same interval (belts without a well between two wells) are placed together: at their prior positions when they all fall inside the interval with 5 % of its width kept free on each side, otherwise centred in it (a single boundary at the middle of the interval; a group keeps its prior spacing, shrunk to 80 % of the interval when needed). Boundaries with wells on one side only keep the prior widths multiplied by the scale of the calibrated ones (ratio of calibrated to prior span, limited to 0.2–5) and stay at least a quarter of a belt width away from the nearest well. When all wells are in one belt, the prior is kept if it already contains them; otherwise the belt is centred on them and widened to their spread plus a quarter of its width on each side.", "Auto-fit: linear — the azimuth is scanned every 1°, then refined to 0.25° and 0.05°; radial with the source — a 15 × 15 grid of source points over the extent enlarged by 30 % on each side times azimuths every 6°, then three refinements (source step and azimuth step divided by 3 each time, 7 × 7 × 7 candidates). Criteria in order: number of wells in the chain, then the narrowest feasible interval divided by the spread of the wells along d, then (radial) the mean angle of the wells from the fan axis, then the azimuth closest to the current one.", "Local warping (option): for each well left outside its belt, the offset of d that brings it inside its belt, 30 % of the belt width from its edges (open-ended belts: 30 % of the mean belt width), is interpolated by a Gaussian radial basis function, φ(r) = (exp(−r²/R²) − e⁻⁹)/(1 − e⁻⁹) for r < 3R and 0 beyond, so the map is exactly unchanged farther than 3 radii. The wells within 3R of a conflicting well are interpolation points with a zero offset, so they stay where they are. The calibrated boundaries are not changed; the radius R is shown as a dashed circle.", "Belt grid: node grid xmin, xmin + cell, … (≤ xmax), code = belt number (1 = most proximal). Polygons: cell raster covering the extent at the export cell size, patches smaller than 4 cells merged into their neighbour, boundary tracing on the cell edges and shared-arc Douglas–Peucker simplification (0.7 cell), the same code as the Discrete map digitizer: neighbouring polygons share their boundary exactly. The map on screen uses a coarser preview raster (at most 250 000 cells, d computed every 3 cells and interpolated bilinearly, exact where a corner is outside the fan); the exports are computed exactly at the export cell size.", "Wells check: belt given by the map at the exact well position (the continuous model, not the raster), honoured when it equals the belt of the environment, and distance to the nearest boundary measured along 72 directions (steps of 1/400 of the extent diagonal, then bisection).", "Exports: PNG (2000 px wide, legend, wells, scale bar assuming metres, coordinates); IRAP Classic lines (x y z per vertex, z = belt code, rings closed, “999.000000 999.000000 999.000000” after each ring, holes as separate rings); GeoJSON (one Polygon with holes per feature, exterior counter-clockwise, properties code, class, area, perimeter); polygons CSV (one row per vertex); ZMAP+ grid of belt codes (“! code = belt” lines, then “@GDE, GRID, 5” / “15, 1.0E+30, , 7, 1” / rows, columns, xmin, xmax, ymin, ymax / “0.0, 0.0, 0.0” / “@”, values column by column from the upper-left node downwards, 5 per line, width 15, 7 decimals); grid CSV (x, y, code, belt); wells CSV."], "sources": [["Gross depositional environment maps as the base of play-fairway and common-risk-segment mapping", "Exploration practice (play-based exploration); no specific reference consulted", "memory"], ["Facies belts succeed each other laterally in the order they stack vertically (Walther’s law)", "Walther, J. (1894), Einleitung in die Geologie als historische Wissenschaft, Jena", "memory"], ["Belt successions of the templates (shoreface to basin, delta plain to prodelta, canyon–channel–lobe–basin plain, lagoon–margin–fore-reef–basin, alluvial fan to floodplain)", "Reading, H. G. (ed.) (1996), Sedimentary Environments: Processes, Facies and Stratigraphy, 3rd ed., Blackwell; Walker, R. G. & James, N. P. (eds.) (1992), Facies Models: Response to Sea Level Change, Geological Association of Canada", "memory"], ["River-, wave- and tide-dominated deltas", "Galloway, W. E. (1975), Process framework for describing the morphologic and stratigraphic evolution of deltaic depositional systems, in Broussard, M. L. (ed.), Deltas, Models for Exploration, Houston Geological Society", "memory"], ["Carbonate platform belts", "Wilson, J. L. (1975), Carbonate Facies in Geologic History, Springer", "memory"], ["Default relative widths, radial taper, calibration rules, auto-fit criteria", "Own design for this page, shown and editable in the tool", "on the page"], ["Colour palette (continental browns and greens, shoreface yellow, shelf to basin blues, carbonate turquoise, reef pink, deep-water fan oranges and yellows)", "Common map conventions; not a published standard", "on the page"], ["Gradient noise", "Perlin, K. (2002), Improving noise, ACM Transactions on Graphics 21(3), 681–682", "memory"], ["Gaussian radial basis function interpolation", "Standard method, e.g. Buhmann, M. D. (2003), Radial Basis Functions: Theory and Implementations, Cambridge University Press", "memory"], ["Douglas–Peucker line simplification", "Douglas, D. H. & Peucker, T. K. (1973), The Canadian Cartographer 10(2), 112–122", "memory"], ["GeoJSON ring closure and orientation", "IETF RFC 7946, The GeoJSON Format (2016)", "memory"], ["ZMAP+ grid layout", "Format as read by common geoscience software; the output is checked by the site’s ZMAP checker in the self-check script", "memory"], ["IRAP Classic lines ASCII", "Format as read by Petrel; no formal specification consulted", "memory"]], "validation": ["Self-check script scripts/gde_test.mjs: template structure; environment matching; wells table parsing; calibration — wells in belts 2, 3 and 5 compatible with the prior keep it exactly, an infeasible prior gives every boundary inside its feasible interval and every well in its belt, all wells in one belt, an inverted pair detected and reported; linear and radial coordinate (distance from the source inside the fan, most distal belt outside); noise reproducible from the seed; auto-fit recovers the azimuth of a synthetic linear model (30 wells, three azimuths) within 5° and finds a source and azimuth honouring 4 wells of a synthetic fan; warping honours a conflicting well and leaves the map unchanged beyond 3 radii; both examples honour every well; distance to a straight boundary; polygon areas add up to the extent; preview raster agrees with the exact one on more than 99.5 % of the cells; IRAP lines, GeoJSON orientation, ZMAP+ header and column order (and the ZMAP checker reports no error or warning on the file), grid CSV.", "The two examples (delta, 4 wells; deep-water fan, 3 wells) honour every well without warping; they are synthetic, not real fields."], "limits": ["One interval, one depositional system: no lateral change of system along strike, no mixed systems (e.g. a delta feeding a fan), no tide-dominated or lacustrine template (use custom belts).", "Belts are monotonic in the proximal–distal coordinate: features crossing belts (incised valleys, channel belts inside a plain, isolated reefs, sand ridges) are not drawn; add them by hand on the exported polygons.", "The coordinate is a straight projection or a distance from one point: curved shorelines, embayments and multiple sources need custom belts and warping or manual editing.", "The irregularity is cosmetic: it makes boundaries look natural but carries no information; another seed is an equally likely map. Wells near a boundary (see the distance in the table) should be read as uncertain.", "Warping makes local bulges around conflicting wells; a well that needs a large bulge usually means a wrong template, direction or environment, which is reported rather than hidden.", "Auto-fit maximises the number of wells in the right order and then the gaps between them; with one or two wells many directions fit equally well and the result is only as good as the starting values.", "Present-day coordinates: no palinspastic restoration. The scale bar assumes coordinates in metres.", "IRAP lines hold holes as separate rings with the belt code; Petrel reads them as separate polygons. GeoJSON holds map coordinates without a CRS."]});
 </script>
 </body></html>

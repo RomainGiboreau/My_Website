@@ -104,7 +104,7 @@ test('linear: d = projection on the transport azimuth from the source point', ()
   near(G.dBase(M2, 100 + 1000 / Math.SQRT2, 100 + 1000 / Math.SQRT2), 1000, 1e-6);
 });
 test('radial: d = distance from the source inside the fan, distal belt outside', () => {
-  const M = base({ template: 'delta', geom: 'radial', az: 90, fan: 90, src: [0, 0], span: 6000 });
+  const M = base({ template: 'delta', geom: 'radial', az: 90, fan: 90, src: [0, 0], span: 6000, outside: 'distal' });
   const pol = (r, deg) => [r * Math.sin(deg * Math.PI / 180), r * Math.cos(deg * Math.PI / 180)];
   for (const [r, a] of [[1000, 90], [2500, 120], [3000, 60], [4000, 134]]) near(G.dBase(M, ...pol(r, a)), r, 1e-6, `r ${r} az ${a}`);
   const mod = G.build(M, []);
@@ -113,6 +113,17 @@ test('radial: d = distance from the source inside the fan, distal belt outside',
   assert.equal(mod.beltAt(...pol(100, 90)), 0);
 });
 
+test('radial, belts along strike outside the fan: d = min(radial d, projection + protrusion)', () => {
+  const M = base({ template: 'delta', geom: 'radial', az: 90, fan: 60, src: [0, 0], span: 6000, outside: 'strike', protrude: 1500 });
+  const pol = (r, deg) => [r * Math.sin(deg * Math.PI / 180), r * Math.cos(deg * Math.PI / 180)];
+  near(G.dBase(M, ...pol(3000, 90)), 3000, 1e-6, 'on the axis');
+  near(G.dBase(M, ...pol(3000, 0)), 1500, 1e-6, 'along strike: projection 0 + protrusion');
+  near(G.dBase(M, ...pol(2000, 180)), 1500 - 2000 * Math.cos(Math.PI / 2), 1e-6);
+  near(G.dBase(M, -1000, 0), 500, 1e-6, 'behind the source: projection -1000 + 1500');
+  const mod = G.build(M, []);
+  assert.equal(mod.beltAt(-3000, 4000), 0, 'land behind the source, not basin');
+  assert.equal(G.templates.delta.outside, 'strike'); assert.equal(G.templates.fan.outside, 'distal');
+});
 // ---------- noise ----------
 test('noise: same seed -> identical grid, other seed -> different grid, amplitude 0 -> straight belts', () => {
   const M = base({ geom: 'linear', az: 30, src: [-4000, -4000], span: 9000, noise: { amp: 800, wl: 2500, seed: 42 } });
