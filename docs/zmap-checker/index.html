@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>ZMAP checker</title></head><body>
+<script id="zmap-core">
+/* ZMAP checker core: parse / check / write ZMAP+ grids. No DOM access; exposed as window.ZMAP.
+   Format notes and sources: specs/2026-11-24-zmap-research.md */
+(function(W){
+const F=(sev,rule,line,msg,fix)=>({sev,rule,line:line==null?null:line,msg,fix:fix||null});
+const NUM=/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+// values used as "no data" by various packages, besides the one declared in the header
+const NULL_LIKE=[1e30,-1e30,-99999,-9999,-999.25,-999,9999999,-9999999,99999,1e20,-1e20,3.4028235e38,-3.4028235e38];
+const up=s=>String(s||'').toUpperCase();
+const lineList=a=>a.slice(0,5).join(', ')+(a.length>5?` … (${a.length} in all)`:'');
+const fmtN=v=>String(+(+v).toPrecision(10));
+// spacing "round" = multiple of 0.01 (node spacings are usually 12.5, 25, 50, 100…)
+const isRound=v=>{const k=v*100;return isFinite(v)&&v!==0&&Math.abs(k-Math.round(k))<=1e-6*Math.max(1,Math.abs(k))};
+
+function parse(text,name){
+  const z={name:name||'grid.zmap',findings:[],tok:[],tokLine:[],dataLines:[],inner:[],extra:[],at:[]};
+  z.bom=text.charCodeAt(0)===0xFEFF;if(z.bom)text=text.slice(1);
+  z.crOnly=/\r(?!\n)/.test(text)&&!/\n/.test(text);
+  const lines=text.split(/\r\n|\n|\r/);if(lines.length&&lines[lines.length-1]==='')lines.pop();
+  z.lines=lines;
+  lines.forEach((l,i)=>{if(l.trim()[0]==='@')z.at.push(i)});
+  if(!z.at.length)return z;
+  const i0=z.at[0];z.i0=i0;
+  z.comments=lines.slice(0,i0).filter(l=>l.trim()[0]==='!').map(l=>l.trim().slice(1).trim());
+  // line 1: @label, TYPE, nodes_per_line (fallback on whitespace when the commas are missing)
+  const l1=lines[i0].trim().slice(1);let t1=l1.split(',').map(s=>s.trim());
+  z.hdr={l1:{line:i0+1,tok:t1}};
+  if(t1.length!==3){const w=l1.trim().split(/[\s,]+/);if(w.length>=3){t1=[w.slice(0,-2).join(' '),w[w.length-2],w[w.length-1]]}}
+  z.label=t1[0]||'';z.type=t1[1]||'';z.npl=+t1[2];
+  // header body: up to the lone "@"; without it, the following comma lines
+  let iEnd=-1;for(let i=i0+1;i<lines.length;i++)if(lines[i].trim()==='@'){iEnd=i;break}
+  z.iEnd=iEnd;const hb=[];
+  if(iEnd>=0){for(let i=i0+1;i<iEnd;i++){const t=lines[i].trim();if(!t||t[0]==='!'){z.inner.push(i+1);continue}hb.push(i)}}
+  else{for(let i=i0+1;i<lines.length&&hb.length<4;i++){const t=lines[i].trim();if(!t)continue;if(!t.includes(','))break;hb.push(i)}}
+  const sp=i=>({line:i+1,raw:lines[i],tok:lines[i].split(',').map(s=>s.trim())});
+  if(hb[0]!=null)z.hdr.l2=sp(hb[0]);if(hb[1]!=null)z.hdr.l3=sp(hb[1]);if(hb[2]!=null)z.hdr.l4=sp(hb[2]);
+  for(const i of hb.slice(3))z.extra.push(i+1);
+  if(z.hdr.l2){const t=z.hdr.l2.tok;z.width=+t[0];z.nullTok=t[1]||'';z.nullStr=t[2]||'';z.dec=t[3];z.startCol=t[4]}
+  z.nullText=z.nullTok||z.nullStr||'';z.nullVal=NUM.test(z.nullText)?+z.nullText:NaN;
+  if(z.hdr.l3){const t=z.hdr.l3.tok.map(Number);[z.nrows,z.ncols,z.xmin,z.xmax,z.ymin,z.ymax]=t;
+    z.l3ok=z.hdr.l3.tok.length===6&&t.every(isFinite);
+    if(z.l3ok){z.dx=(z.xmax-z.xmin)/(z.ncols-1);z.dy=(z.ymax-z.ymin)/(z.nrows-1)}}
+  // data
+  z.dataStart=iEnd>=0?iEnd+1:(hb.length?hb[hb.length-1]+1:i0+1);
+  for(let i=z.dataStart;i<lines.length;i++){const l=lines[i],t=l.trim();if(!t)continue;
+    if(t[0]==='+'){z.rms=i+1;continue}
+    if(t[0]==='!'){z.inner.push(i+1);continue}
+    const tk=t.split(/\s+/);z.dataLines.push({i,line:i+1,n:tk.length,len:l.length});
+    for(const x of tk){z.tok.push(x);z.tokLine.push(i+1)}}
+  const v=new Float64Array(z.tok.length);for(let k=0;k<v.length;k++){const x=z.tok[k];v[k]=NUM.test(x)?+x:NaN}
+  z.values=v;
+  return z;
+}
+const isNull=(z,v)=>!isFinite(v)||v===z.nullVal;
+const value=(z,r,c)=>z.values[c*z.nrows+r];   // row 0 = top (ymax), column 0 = left (xmin)
+
+function check(z){
+  const out=[...z.findings],P=(...a)=>out.push(F(...a));
+  if(!z.at.length){const csv=z.lines.slice(0,5).some(l=>(l.match(/,/g)||[]).length>=2);
+    P('E','file.notzmap',null,'No “@” header line: this is not a ZMAP+ file'+(csv?' (looks like a CSV or XYZ file)':'')+'.');return out}
+  if(z.bom)P('W','file.bom',1,'UTF-8 byte-order mark at the start of the file; some readers fail on it.','bom');
+  if(z.crOnly)P('W','file.eol',null,'Old Mac line endings (CR only); most readers see a single line.','eol');
+  const tabs=[],nona=[];z.lines.forEach((l,i)=>{if(l.includes('\t'))tabs.push(i+1);if(/[^\x00-\x7F]/.test(l))nona.push(i+1)});
+  if(tabs.length)P('W','file.tabs',tabs[0],`Tab characters on lines ${lineList(tabs)}; ZMAP+ fields are fixed-width, padded with spaces.`,'tabs');
+  if(nona.length)P('W','file.nonascii',nona[0],`Non-ASCII characters on lines ${lineList(nona)}.`);
+  const L1=z.hdr.l1.line;
+  if(up(z.type)!=='GRID'){P('E','file.nongrid',L1,`ZMAP+ ${z.type?`“${z.type}”`:'non-grid'} file (points, lines, faults or contours): only grids are checked here.`);return out}
+  if(z.type!=='GRID')P('W','hdr.gridcase',L1,`Type “${z.type}” should be upper-case GRID (some readers are case-sensitive).`,'header');
+  if(z.at.length!==2)P('E','hdr.at',z.at[Math.min(1,z.at.length-1)]+1,`${z.at.length} line(s) start with “@”; a ZMAP+ grid has exactly two (header start and header end).`);
+  if(z.hdr.l1.tok.length!==3)P('E','hdr.l1',L1,'First header line should be “@name, GRID, nodes per line” (3 fields separated by commas).');
+  if(!(Number.isInteger(z.npl)&&z.npl>0))P('E','hdr.l1',L1,`Nodes per line “${z.hdr.l1.tok[2]||''}” is not a positive integer.`);
+  const l2=z.hdr.l2;
+  if(!l2)P('E','hdr.l2',null,'Second header line (field width, null value, …) missing.');
+  else{
+    if(l2.tok.length!==5)P('E','hdr.l2',l2.line,`Second header line has ${l2.tok.length} fields; expected 5: field width, null value, null text, decimals, start column.`);
+    if(/,,/.test(l2.raw))P('W','hdr.emptyfield',l2.line,'Empty field written “,,”: some readers (GDAL) drop it and misread the line; write “, ,”.','header');
+    if(!z.nullTok&&z.nullStr)P('W','hdr.nullblank',l2.line,`Null value given only as text (“${z.nullStr}”); several readers need it in the second field.`,'header');
+    if(!z.nullText)P('E','hdr.l2',l2.line,'No null value declared.');
+    if(!(Number.isInteger(z.width)&&z.width>0&&z.width<40))P('E','hdr.width',l2.line,`Field width “${l2.tok[0]}” must be an integer between 1 and 39.`);
+    else if(+z.dec>=z.width)P('W','hdr.decimals',l2.line,`Decimals (${z.dec}) not smaller than the field width (${z.width}).`);
+    if(z.startCol!==undefined&&+z.startCol!==1)P('W','hdr.startcol',l2.line,`Start column is ${z.startCol}; almost every file uses 1.`)}
+  const l3=z.hdr.l3;
+  if(!l3||!z.l3ok)P('E','hdr.l3',l3?l3.line:null,'Third header line should be 6 numbers: rows, columns, xmin, xmax, ymin, ymax.');
+  else{
+    if(!(Number.isInteger(z.nrows)&&Number.isInteger(z.ncols)&&z.nrows>=2&&z.ncols>=2))P('E','hdr.size',l3.line,`Grid size ${z.nrows} rows × ${z.ncols} columns: both must be integers ≥ 2.`);
+    if(!(z.xmax>z.xmin)||!(z.ymax>z.ymin))P('E','hdr.extent',l3.line,`Extent inverted or empty: x ${fmtN(z.xmin)} → ${fmtN(z.xmax)}, y ${fmtN(z.ymin)} → ${fmtN(z.ymax)}.`)}
+  const l4=z.hdr.l4;
+  if(!l4&&l3)P('W','hdr.l4',l3.line+1,'Fourth header line (0.0, 0.0, 0.0) missing.','header');
+  else if(l4){const t=l4.tok.map(Number);if(l4.tok.length!==3||!t.every(isFinite))P('W','hdr.l4',l4.line,'Fourth header line should be three numbers (usually 0.0, 0.0, 0.0).','header');
+    else if(t.some(x=>x!==0))P('I','hdr.l4values',l4.line,`Fourth header line is ${l4.tok.join(', ')}; usually zeros (meaning undocumented, ignored by most readers).`)}
+  const inner=z.inner.filter(n=>n-1<(z.iEnd>=0?z.iEnd:z.dataStart));
+  if(inner.length||z.extra.length)P('W','hdr.inner',(inner[0]||z.extra[0]),`Blank, comment or extra line(s) inside the header (lines ${lineList([...inner,...z.extra])}).`,'header');
+  if(z.rms)P('I','hdr.rms',z.rms,'Roxar RMS “+” line after the header: skipped by most readers.');
+  // ---- data
+  const n=z.tok.length,want=l3&&z.l3ok?z.nrows*z.ncols:NaN,countOk=n===want;
+  if(isFinite(want)&&!countOk)P('E','data.count',z.dataLines.length?z.dataLines[z.dataLines.length-1].line:null,`${n} values for ${z.nrows} × ${z.ncols} = ${want} nodes: ${n<want?'values missing (truncated file?)':'extra values after the grid'}.`);
+  const com=[],nn=[];for(let k=0;k<n;k++){const x=z.tok[k];if(NUM.test(x))continue;if(/^[-+]?\d+,\d+$/.test(x))com.push(z.tokLine[k]);else nn.push(k)}
+  if(com.length)P('E','data.comma',com[0],`Comma used as decimal separator on lines ${lineList([...new Set(com)])}.`);
+  if(nn.length)P('E','data.nonnumeric',z.tokLine[nn[0]],`Non-numeric value(s) “${[...new Set(nn.slice(0,50).map(k=>z.tok[k]))].slice(0,4).join('”, “')}” on lines ${lineList([...new Set(nn.map(k=>z.tokLine[k]))])}.`);
+  const npl=z.npl,over=z.dataLines.filter(d=>d.n>npl);
+  if(npl>0&&over.length)P('E','data.perline',over[0].line,`${over.length} line(s) hold more than ${npl} values (nodes per line in the header).`,'layout');
+  if(npl>0&&countOk&&!over.length){let k=0,bad=-1;
+    outer:for(let c=0;c<z.ncols;c++)for(let r=0;r<z.nrows;r+=npl){const e=Math.min(npl,z.nrows-r),d=z.dataLines[k++];if(!d||d.n!==e){bad=d?d.line:-1;break outer}}
+    if(bad!==-1||k!==z.dataLines.length)P('W','data.breaks',bad>0?bad:null,`Line breaks do not follow the columns: each column of ${z.nrows} values should start on a new line, ${npl} values per line.`,'layout')}
+  if(Number.isInteger(z.width)&&z.width>0){
+    const badw=z.dataLines.filter(d=>d.len%z.width);let wide=0;for(let k=0;k<n;k++)if(z.tok[k].length>z.width)wide++;
+    if(badw.length||wide)P('W','data.width',(badw[0]||{}).line,`Fixed-width layout broken (${z.width} characters per value)${badw.length?`: ${badw.length} line(s) whose length is not a multiple of ${z.width}`:''}${wide?`; ${wide} value(s) wider than the field`:''}. Readers that cut fields by width (GDAL) misread them.`,'layout')}
+  let nod=0,nodL=0,ntx=0,ntxL=0;const nl=new Map();
+  for(let k=0;k<n;k++){const x=z.tok[k],v=z.values[k];if(!isFinite(v))continue;
+    if(v===z.nullVal){if(x!==z.nullText){ntx++;ntxL=ntxL||z.tokLine[k]}continue}
+    if(!/[.eE]/.test(x)){nod++;nodL=nodL||z.tokLine[k]}
+    if(NULL_LIKE.includes(v))nl.set(x,(nl.get(x)||0)+1)}
+  if(nod)P('W','data.nodecimal',nodL,`${nod} value(s) written without a decimal point: readers then apply the “implied decimals” of the header (${z.dec}), inconsistently.`);
+  if(ntx)P('I','data.nulltext',ntxL,`${ntx} null node(s) written differently from the header text “${z.nullText}” (same number).`);
+  if(nl.size)P('W','data.nulls',null,`Values that look like another null marker: ${[...nl].map(([k,c])=>`${k} (${c}×)`).join(', ')}; the header null is ${z.nullText}.`,'nulls');
+  // ---- geometry
+  if(z.l3ok&&z.nrows>=2&&z.ncols>=2&&z.xmax>z.xmin&&z.ymax>z.ymin){
+    const ex=z.xmax-z.xmin,ey=z.ymax-z.ymin;
+    if(!(isRound(z.dx)&&isRound(z.dy))){const c=[];
+      const ha=[ex/z.ncols,ey/z.nrows],sw=[ex/(z.nrows-1),ey/(z.ncols-1)];
+      if(isRound(ha[0])&&isRound(ha[1]))c.push(['geo.halfcell',Math.abs(ha[0]-ha[1]),`Node spacing ${fmtN(z.dx)} × ${fmtN(z.dy)} is not round, but the extent divided by the number of cells gives ${fmtN(ha[0])} × ${fmtN(ha[1])}: the extent is probably given at the cell edges (GDAL default). Node-based readers place the grid half a cell off.`]);
+      if(z.nrows!==z.ncols&&isRound(sw[0])&&isRound(sw[1]))c.push(['geo.swapped',Math.abs(sw[0]-sw[1]),`Spacing ${fmtN(z.dx)} × ${fmtN(z.dy)} is not round, but swapping rows and columns gives ${fmtN(sw[0])} × ${fmtN(sw[1])}: rows and columns are probably swapped in the header (rows come first).`]);
+      c.sort((a,b)=>a[1]-b[1]);if(c.length)P('W',c[0][0],l3.line,c[0][2])}
+    if(Math.abs(z.dx-z.dy)>1e-6*Math.max(Math.abs(z.dx),Math.abs(z.dy)))P('I','geo.aniso',l3.line,`Cells are not square: dx = ${fmtN(z.dx)}, dy = ${fmtN(z.dy)}.`)}
+  // ---- plausibility
+  if(countOk){let nv=0,mn=Infinity,mx=-Infinity;for(let k=0;k<n;k++){const v=z.values[k];if(isNull(z,v))continue;nv++;if(v<mn)mn=v;if(v>mx)mx=v}
+    if(!nv)P('E','data.allnull',null,'Every node is null: the grid is empty.');
+    else{if(nv<n/2)P('I','data.nullshare',null,`${Math.round(100*(1-nv/n))} % of the nodes are null.`);
+      if(mn===mx)P('I','data.constant',null,`Constant grid (every value is ${fmtN(mn)}).`);
+      if(mn>0&&/DEPTH|TVD|DPTH/i.test(z.label+' '+(z.comments||[]).join(' ')))P('I','plaus.zsign',L1,`The name says depth and all values are positive (${fmtN(mn)} to ${fmtN(mx)}); Petrel counts Z positive upwards, so check the sign convention.`)}}
+  return out;
+}
+const verdict=f=>f.some(x=>x.sev==='E')?'fail':f.some(x=>x.sev==='W')?'warn':'pass';
+
+function checkBatch(zs){
+  const out=[],P=(sev,rule,file,msg)=>out.push({...F(sev,rule,null,msg),file});
+  const g=zs.filter(z=>z.at.length&&up(z.type)==='GRID');
+  const byName=new Map();for(const z of g){const k=up(z.label.trim());if(!byName.has(k))byName.set(k,[]);byName.get(k).push(z.name)}
+  for(const [k,v] of byName)if(v.length>1)P('I','batch.name',v.join(', '),`Grid name “${k}” used by ${v.length} files: ${v.join(', ')}.`);
+  const geo=new Map();for(const z of g){if(!z.l3ok)continue;const k=`${z.nrows} × ${z.ncols}, x ${fmtN(z.xmin)}–${fmtN(z.xmax)}, y ${fmtN(z.ymin)}–${fmtN(z.ymax)}`;if(!geo.has(k))geo.set(k,[]);geo.get(k).push(z.name)}
+  if(geo.size>1)P('I','batch.geometry',g.map(z=>z.name).join(', '),`The grids do not share the same geometry: ${[...geo].map(([k,v])=>`${v.join(', ')} → ${k}`).join('; ')}.`);
+  return out;
+}
+
+const FIXES=[
+  {id:'bom',label:'Remove the byte-order mark',defaultOn:true},
+  {id:'eol',label:'Normalise line endings (CRLF)',defaultOn:true},
+  {id:'tabs',label:'Replace tabs by spaces',defaultOn:true},
+  {id:'header',label:'Rewrite the header in the standard form',defaultOn:true},
+  {id:'layout',label:'Rewrite the data: one column per block, fixed width, nodes per line',defaultOn:true},
+  {id:'nulls',label:'Replace other null markers by the header null (changes values)',defaultOn:false}];
+
+function write(z,fixIds){
+  const on=new Set(fixIds),log=[],lines=z.lines.slice();
+  const fin=out=>{let text=out.join('\r\n')+'\r\n';if(z.bom&&!on.has('bom'))text='﻿'+text;return {text,log}};
+  if(!z.at.length||up(z.type)!=='GRID')return fin(lines);
+  if(z.bom&&on.has('bom'))log.push('Removed the byte-order mark.');
+  if(z.crOnly&&on.has('eol'))log.push('Converted CR line endings to CRLF.');
+  const f=check(z),has=r=>f.some(x=>x.rule===r);
+  // ---- values (text kept as is)
+  let tok=z.tok,tokChanged=false;
+  if(on.has('nulls')&&z.nullText){let c=0;tok=tok.map(x=>{const v=+x;if(NUM.test(x)&&v!==z.nullVal&&NULL_LIKE.includes(v)){c++;return z.nullText}return x});
+    if(c){tokChanged=true;log.push(`Replaced ${c} other null marker(s) by ${z.nullText}.`)}}
+  const want=z.l3ok?z.nrows*z.ncols:NaN,countOk=tok.length===want&&z.npl>0;
+  const tabsInData=z.dataLines.some(d=>z.lines[d.i].includes('\t'));
+  const relayout=countOk&&((on.has('layout')&&(has('data.perline')||has('data.breaks')||has('data.width')))||tokChanged||(tabsInData&&on.has('tabs')));
+  let width=z.width;
+  if(relayout){let mx=0;for(const x of tok)if(x.length>mx)mx=x.length;
+    if(!(Number.isInteger(width)&&width>0&&width<40)||mx+1>width){const w2=Math.min(39,Math.max(mx+1,Number.isInteger(width)?width:15));if(w2!==width)log.push(`Field width ${z.width} → ${w2} so that every value fits.`);width=w2}
+    if(on.has('layout')&&(has('data.perline')||has('data.breaks')||has('data.width')))log.push(`Rewrote the data: ${z.ncols} columns of ${z.nrows} values, ${z.npl} per line, ${width} characters per value.`)}
+  else if(tokChanged)log.push('Value count does not match the header: data lines kept as they are (null markers replaced in place).');
+  // ---- header
+  const hdrFix=on.has('header')&&['hdr.gridcase','hdr.emptyfield','hdr.nullblank','hdr.l4','hdr.inner'].some(has);
+  const l2t=z.hdr.l2?z.hdr.l2.tok.slice():null;
+  const l2line=()=>{const t=l2t.slice();while(t.length<5)t.push('');t[0]=String(width);if(!t[1]&&t[2]){t[1]=t[2];t[2]=''}return t.map(x=>x===''?' ':x).join(', ').replace(/,  ,/g,', ,')};
+  let out=[];
+  const pre=lines.slice(0,z.i0);out.push(...pre);
+  const hEnd=z.iEnd>=0?z.iEnd:z.dataStart-1;
+  if(hdrFix&&l2t&&z.hdr.l3){
+    out.push(`@${z.label}, GRID, ${z.hdr.l1.tok.length===3?z.hdr.l1.tok[2]:z.npl}`,l2line(),z.hdr.l3.raw.trim(),z.hdr.l4?z.hdr.l4.raw.trim():'0.0, 0.0, 0.0','@');
+    if(has('hdr.gridcase'))log.push('Header: type written GRID.');
+    if(has('hdr.emptyfield')||has('hdr.nullblank'))log.push(`Header: second line written “${l2line()}”.`);
+    if(has('hdr.l4'))log.push('Header: fourth line written 0.0, 0.0, 0.0.');
+    if(has('hdr.inner'))log.push('Header: removed blank, comment or extra lines.');
+    if(z.iEnd<0)log.push('Header: added the closing “@”.');
+  }else{
+    for(let i=z.i0;i<=hEnd;i++)out.push(lines[i]);
+    if(width!==z.width&&z.hdr.l2)out[z.hdr.l2.line-1]=l2line()  // out[] holds the original lines up to here}
+  // ---- data
+  if(relayout){if(z.rms)out.push(lines[z.rms-1]);
+    for(let c=0,k=0;c<z.ncols;c++)for(let r=0;r<z.nrows;r+=z.npl){const e=Math.min(z.npl,z.nrows-r);let s='';for(let j=0;j<e;j++)s+=tok[k++].padStart(width);out.push(s)}}
+  else{let k=0;for(let i=hEnd+1;i<lines.length;i++){let l=lines[i];
+      if(tokChanged&&l.trim()&&!/^[+!]/.test(l.trim()))l=l.replace(/\S+/g,x=>{const y=tok[k++];return y.length<x.length?y.padStart(x.length):y});
+      out.push(l)}}
+  if(on.has('tabs')){let c=0;out=out.map(l=>{if(l.includes('\t')){c++;return l.replace(/\t+/g,' ')}return l});if(c||tabsInData)log.push('Replaced tab characters by spaces.')}
+  return fin(out);
+}
+
+W.ZMAP={parse,check,verdict,checkBatch,FIXES,write,value,isNull,isRound,fmtN,NUM,NULL_LIKE};
+})(window);
+</script>
+</body></html>
