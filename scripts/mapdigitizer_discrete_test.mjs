@@ -173,6 +173,144 @@ test('detect: dominant colours of a 3-colour image, black lines ignored as minor
   assert.ok(c.every(k => k.share > 0.2));
 });
 
+// ---------- polygons ----------
+const sArea = r => { let s = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; s += p[0] * q[1] - q[0] * p[1]; } return s / 2; };
+const raster = (nx, ny, f) => Int16Array.from({ length: nx * ny }, (_, k) => f(k % nx, Math.floor(k / nx)));
+const ID = p => [p[0], p[1]];
+const simple = r => new Set(r.map(p => p[0] + ',' + p[1])).size === r.length;
+const close = (a, b, e = 1e-9) => Math.abs(a - b) <= e * Math.max(1, Math.abs(b));
+
+test('pixLabels: samples the cell centre, -1 for unmatched colour, -2 outside the mask', () => {
+  const d = img(6, 4, (x) => (x < 3 ? [200, 0, 0] : [0, 0, 200]));
+  const m = (r, g, b) => (r > 100 ? 0 : b > 100 ? 1 : -1);
+  const L = MDD.pixLabels(d, 6, 4, { x0: 1, y0: 0, nx: 5, ny: 2, step: 1 }, m, (x, y) => x < 5.5);
+  assert.deepEqual(arr(L), [0, 0, 1, 1, -2, 0, 0, 1, 1, -2]);
+  const L2 = MDD.pixLabels(d, 6, 4, { x0: 0, y0: 0, nx: 3, ny: 2, step: 2 }, m);   // cell (0,0) samples pixel (1,1), cell (1,0) pixel (3,1)
+  assert.deepEqual(arr(L2), [0, 1, 1, 0, 1, 1]);
+});
+test('modeFilter: a 1-pixel unmatched line inside a class disappears, -2 is kept', () => {
+  const L = raster(7, 7, (x, y) => (x === 3 ? -1 : x < 3 ? 0 : 1));
+  L[0] = -2;
+  const o = MDD.modeFilter(L, 7, 7, 1, 3, 2);
+  assert.equal(o[0], -2);
+  for (let y = 0; y < 7; y++) { assert.ok(o[y * 7 + 3] >= 0, 'line pixel filled'); assert.equal(o[y * 7 + 1], 0); assert.equal(o[y * 7 + 5], 1); }
+});
+test('fillHoles: iterates until an unmatched blob is filled from its neighbours; -2 is never filled', () => {
+  const L = raster(9, 9, (x, y) => (x >= 2 && x <= 6 && y >= 2 && y <= 6 ? -1 : 0));
+  L[80] = -2;
+  const r = MDD.fillHoles(L, 9, 9, 10);
+  assert.equal(r.left, 0);
+  assert.ok(r.passes >= 3, String(r.passes));
+  assert.ok(arr(r.L).slice(0, 80).every(v => v === 0));
+  assert.equal(r.L[80], -2);
+  assert.equal(L[40], -1, 'input untouched');
+  const s = MDD.fillHoles(raster(9, 1, x => (x === 0 ? 0 : -1)), 9, 1, 3);   // max passes reached
+  assert.equal(s.left, 5);
+});
+
+// class A (0) everywhere, class B (1) square of 2 x 2 inside
+const AB = raster(6, 5, (x, y) => (x >= 2 && x <= 3 && y >= 1 && y <= 2 ? 1 : 0));
+test('polygonize: A with a B square inside -> one A polygon with one hole + one B polygon', () => {
+  const { polys } = MDD.polygonize(AB, 6, 5, { minArea: 0, tol: 0 });
+  const A = polys.filter(p => p.label === 0), B = polys.filter(p => p.label === 1);
+  assert.equal(A.length, 1); assert.equal(B.length, 1);
+  assert.equal(A[0].holes.length, 1); assert.equal(B[0].holes.length, 0);
+  assert.equal(B[0].outer.length, 4);
+  [A[0].outer, A[0].holes[0], B[0].outer].forEach(r => assert.ok(simple(r)));
+});
+test('toMap: exact areas in pixel units and after an affine transform; exterior CCW, hole CW', () => {
+  const { polys } = MDD.polygonize(AB, 6, 5, { minArea: 0, tol: 0 });
+  const grp = [{ code: 7, name: 'A' }, { code: 9, name: 'B' }];
+  const P = MDD.toMap(polys, ID, grp), A = P.find(p => p.code === 7), B = P.find(p => p.code === 9);
+  assert.equal(A.area, 26); assert.equal(B.area, 4);
+  assert.equal(A.name, 'A'); assert.equal(B.perimeter, 8); assert.equal(A.perimeter, 22 + 8);
+  assert.ok(sArea(A.outer) > 0 && sArea(A.holes[0]) < 0 && sArea(B.outer) > 0);
+  const f = p => [1000 + 2 * p[0] + 0.5 * p[1], 50 + 0.3 * p[0] - 1.5 * p[1]];   // det = -3.15 (flips y like a map)
+  const Q = MDD.toMap(polys, f, grp), A2 = Q.find(p => p.code === 7), B2 = Q.find(p => p.code === 9);
+  assert.ok(close(A2.area, 26 * 3.15)); assert.ok(close(B2.area, 4 * 3.15));
+  assert.ok(sArea(A2.outer) > 0 && sArea(A2.holes[0]) < 0 && sArea(B2.outer) > 0);
+});
+test('polygonize: 4-connectivity, two B squares touching only at a corner are two polygons', () => {
+  const L = raster(6, 6, (x, y) => ((x >= 1 && x <= 2 && y >= 1 && y <= 2) || (x >= 3 && x <= 4 && y >= 3 && y <= 4) ? 1 : 0));
+  const P = MDD.toMap(MDD.polygonize(L, 6, 6, { minArea: 0, tol: 0 }).polys, ID, [{ code: 1 }, { code: 2 }]);
+  const B = P.filter(p => p.code === 2), A = P.filter(p => p.code === 1);
+  assert.equal(B.length, 2);
+  B.forEach(p => { assert.equal(p.area, 4); assert.equal(p.holes.length, 0); assert.equal(p.outer.length, 4); });
+  assert.equal(A.length, 1); assert.equal(A[0].holes.length, 2); assert.equal(A[0].area, 28);
+  [A[0].outer, ...A[0].holes].forEach(r => assert.ok(simple(r), 'simple ring ' + JSON.stringify(r)));
+});
+test('polygonize: min-area merge removes a 1-pixel speck and leaves no hole', () => {
+  const L = raster(5, 5, (x, y) => (x === 2 && y === 2 ? 1 : 0));
+  const { polys } = MDD.polygonize(L, 5, 5, { minArea: 2, tol: 0 });
+  assert.equal(polys.length, 1);
+  assert.equal(polys[0].label, 0); assert.equal(polys[0].holes.length, 0);
+  assert.equal(MDD.toMap(polys, ID, [{ code: 1 }])[0].area, 25);
+  // an unmatched (-1) speck is merged too; a large one stays and makes a hole
+  const U = raster(8, 8, (x, y) => (x === 1 && y === 1 ? -1 : x >= 4 && x <= 6 && y >= 4 && y <= 6 ? -1 : 0));
+  const q = MDD.polygonize(U, 8, 8, { minArea: 4, tol: 0 }).polys;
+  assert.equal(q.length, 1); assert.equal(q[0].holes.length, 1);
+  assert.equal(MDD.toMap(q, ID, [{ code: 1 }])[0].area, 64 - 9);
+});
+test('dp: Douglas-Peucker on a known polyline', () => {
+  const P = [[0, 0], [1, 0.5], [2, -0.6], [3, 0], [4, 3], [5, 0]];
+  assert.deepEqual(MDD.dp(P, 1), [[0, 0], [3, 0], [4, 3], [5, 0]]);
+  assert.deepEqual(MDD.dp(P, 0.4), P);
+  assert.deepEqual(MDD.dp(P, 5), [[0, 0], [5, 0]]);
+});
+test('polygonize: shared-arc simplification leaves no gap nor overlap between neighbours', () => {
+  // staircase boundary between A (left) and B (right), plus a B island in A
+  const L = raster(40, 30, (x, y) => (x > 10 + Math.floor(y * 0.7) ? 1 : (x - 5) ** 2 + (y - 22) ** 2 < 9 ? 1 : 0));
+  const raw = MDD.toMap(MDD.polygonize(L, 40, 30, { minArea: 0, tol: 0 }).polys, ID, [{ code: 1 }, { code: 2 }]);
+  const { polys } = MDD.polygonize(L, 40, 30, { minArea: 0, tol: 1.5 });
+  const P = MDD.toMap(polys, ID, [{ code: 1 }, { code: 2 }]);
+  const nv = Q => Q.reduce((s, p) => s + p.outer.length + p.holes.reduce((t, h) => t + h.length, 0), 0);
+  assert.ok(nv(P) < nv(raw) / 2, `simplified ${nv(P)} vs ${nv(raw)} vertices`);
+  assert.ok(close(P.reduce((s, p) => s + p.area, 0), 1200), 'areas add up to the raster');
+  const vs = new Set(), add = r => r.forEach(p => vs.add(p[0] + ',' + p[1]));
+  P.filter(p => p.code === 1).forEach(p => { add(p.outer); p.holes.forEach(add); });
+  P.filter(p => p.code === 2).forEach(p => p.outer.forEach(q => assert.ok(vs.has(q[0] + ',' + q[1]) || q[0] === 40 || q[1] === 0 || q[1] === 30, 'B vertex ' + q + ' shared with A')));
+  const island = P.find(p => p.code === 2 && p.outer.every(q => q[0] < 12));
+  assert.ok(island && island.outer.length >= 3);
+});
+
+test('polygonize: simplification keeps the raster corners (map rectangle exact)', () => {
+  const L = raster(3, 6, (x, y) => (y >= 1 && (x === 0 || y >= 4) && !(x === 2 && y === 4) ? 0 : 1));
+  const P = MDD.toMap(MDD.polygonize(L, 3, 6, { minArea: 0, tol: 1.5 }).polys, ID, [{ code: 1 }, { code: 2 }]);
+  assert.ok(close(P.reduce((s, p) => s + p.area, 0), 18));
+  const vs = P.flatMap(p => p.outer.map(q => q + ''));
+  ['0,0', '3,0', '0,6', '3,6'].forEach(c => assert.ok(vs.includes(c), 'corner ' + c));
+});
+
+// writers: one polygon with one hole, map coordinates, already oriented
+const PP = [{ code: 2, name: 'Lobe, sandy', outer: [[0, 0], [10, 0], [10, 5]], holes: [[[6, 1], [8, 1.5], [8, 1]]], area: 24.5, perimeter: 30 }];
+test('irapLines: x y z per vertex, z = code, rings closed, 999 separator after each ring', () => {
+  assert.equal(MDD.irapLines(PP), [
+    '0.000000 0.000000 2.000000', '10.000000 0.000000 2.000000', '10.000000 5.000000 2.000000', '0.000000 0.000000 2.000000',
+    '999.000000 999.000000 999.000000',
+    '6.000000 1.000000 2.000000', '8.000000 1.500000 2.000000', '8.000000 1.000000 2.000000', '6.000000 1.000000 2.000000',
+    '999.000000 999.000000 999.000000', ''].join('\n'));
+});
+test('geojson: FeatureCollection, closed rings, exterior CCW and holes CW whatever the input order', () => {
+  const bad = [{ ...PP[0], outer: PP[0].outer.slice().reverse(), holes: [PP[0].holes[0].slice().reverse()] }];
+  const J = JSON.parse(MDD.geojson(bad));
+  assert.equal(J.type, 'FeatureCollection'); assert.equal(J.features.length, 1);
+  const F = J.features[0];
+  assert.equal(F.type, 'Feature'); assert.equal(F.geometry.type, 'Polygon');
+  assert.deepEqual(F.properties, { code: 2, class: 'Lobe, sandy', area: 24.5, perimeter: 30 });
+  const [ext, hole] = F.geometry.coordinates;
+  assert.equal(F.geometry.coordinates.length, 2);
+  [ext, hole].forEach(r => { assert.deepEqual(r[0], r[r.length - 1]); assert.equal(r.length, 4); });
+  assert.ok(sArea(ext.slice(0, -1)) > 0, 'exterior CCW'); assert.ok(sArea(hole.slice(0, -1)) < 0, 'hole CW');
+});
+test('polyCsv: header, one row per vertex (ring not repeated), ring types, quoted names', () => {
+  const L = MDD.polyCsv(PP).split('\n');
+  assert.equal(L[0], 'polygon,ring,ring_type,code,class,vertex,x,y');
+  assert.equal(L.length, 1 + 3 + 3);
+  assert.equal(L[1], '1,1,outer,2,"Lobe, sandy",1,0,0');
+  assert.equal(L[4], '1,2,hole,2,"Lobe, sandy",1,6,1');
+  assert.equal(L[6], '1,2,hole,2,"Lobe, sandy",3,8,1');
+});
+
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
