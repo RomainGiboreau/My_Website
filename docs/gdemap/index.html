@@ -368,12 +368,13 @@ const keysOf=b=>[b.name,...(b.alias||[]),...String(b.name).split(/[\/()]/)].map(
 // lithology and generic words dropped before the second attempt (“mouth-bar sandstones” -> “mouth bar”)
 const GENERIC=new Set('sandstone sand sst mudstone mud shale siltstone silt claystone limestone dolomite dolostone grainstone packstone wackestone marl conglomerate deposit facies environment setting succession interval unit sediment rock bed'.split(' '));
 const strip=e=>e.split(' ').filter(w=>!GENERIC.has(w)).join(' ');
-function matchBelt(env,belts){const e=norm(env);if(!e)return -1;
+function matchBelt(env,belts,strict){const e=norm(env);if(!e)return -1;
   for(let i=0;i<belts.length;i++)if(norm(belts[i].name)===e)return i;
   const K=belts.map(keysOf);
   for(let i=0;i<belts.length;i++)if(K[i].includes(e))return i;
   const s=strip(e);if(!s)return -1;
   for(let i=0;i<belts.length;i++)if(K[i].includes(s))return i;
+  if(strict)return -1;
   // longest name or alias contained in the description as whole words (at least 4 letters); a tie between two belts matches nothing
   let best=-1,bl=0,tie=false;const pad=' '+s+' ';
   for(let i=0;i<belts.length;i++)for(const k of K[i])if(k.length>=4&&pad.includes(' '+k+' ')){
@@ -398,27 +399,54 @@ function channelDefaults(M){const t=templates[M&&M.template]||{},c=t.ch||{},n=M&
 function makeModel(key,o={}){const t=templates[key]||templates.shelf;
   const M={template:templates[key]?key:'shelf',belts:t.belts.map(b=>({name:b.name,color:b.color,w:b.w,alias:b.alias.slice()})),geom:t.geom,
     az:90,src:[0,0],fan:t.fan||90,span:10000,outside:t.outside,protrude:3000,noise:{amp:0,wl:5000,seed:1},warp:{on:true,R:2000},ext:{xmin:0,xmax:20000,ymin:0,ymax:20000},cell:100};
+  const v2=V2[M.template]||V2.custom;
+  Object.assign(M,{lines:[],sources:[],bodies:[],mix:[],faults:[],layers:[],paint:null,variants:(v2.vars||[]).map(([k,name,color,alias])=>({k,name,color,alias:alias.slice()})),
+    ctx:v2.ctx?{name:v2.ctx[0],color:v2.ctx[1],alias:v2.ctx[2].slice()}:null,inf:v2.inf!=null?v2.inf:null});
   for(const k in o)M[k]=o[k];
   M.noise=Object.assign({amp:0,wl:5000,seed:1},o.noise||{});M.warp=Object.assign({on:true,R:2000},o.warp||{});
   M.channels=Object.assign(channelDefaults(M),o.channels||{});
   return M}
 // all belts: the ordered belts, then the channel belt when channels are on (code n + 1, not part of the proximal-distal order)
 const chOn=M=>!!(M.channels&&M.channels.on&&M.channels.n>0&&M.channels.w>0&&M.belts.length);
-const allBelts=M=>chOn(M)?M.belts.concat([{name:M.channels.name||'Channel',color:M.channels.color||'#e8a33d',w:0,alias:[],channel:true}]):M.belts;
 // ---------- model file (JSON): template, belts, geometry, irregularity, warping, extent, channels, wells ----------
 const fin=(v,d)=>{v=+v;return isFinite(v)?v:d};
 function normModel(M){const c=Object.assign(channelDefaults(M),M.channels||{}),nb=M.belts.length;
   const h=[0,1].map(i=>Math.max(0,Math.min(nb-1,Math.round(fin(c.host&&c.host[i],0)))));
   return{template:templates[M.template]?M.template:'custom',
     belts:M.belts.map(b=>({name:String(b.name),color:String(b.color).toLowerCase(),w:+b.w,alias:(b.alias||[]).map(String)})),
-    geom:M.geom==='radial'?'radial':'linear',az:fin(M.az,90),src:[fin(M.src&&M.src[0],0),fin(M.src&&M.src[1],0)],fan:fin(M.fan,90),span:fin(M.span,10000),
+    geom:M.geom==='radial'||M.geom==='lines'?M.geom:'linear',az:fin(M.az,90),src:[fin(M.src&&M.src[0],0),fin(M.src&&M.src[1],0)],fan:fin(M.fan,90),span:fin(M.span,10000),
     outside:M.outside==='strike'?'strike':'distal',protrude:fin(M.protrude,0),
     noise:{amp:fin(M.noise&&M.noise.amp,0),wl:fin(M.noise&&M.noise.wl,5000),seed:Math.round(fin(M.noise&&M.noise.seed,1))},
     warp:{on:!!(M.warp&&M.warp.on),R:fin(M.warp&&M.warp.R,2000)},
     ext:{xmin:fin(M.ext.xmin,0),xmax:fin(M.ext.xmax,1),ymin:fin(M.ext.ymin,0),ymax:fin(M.ext.ymax,1)},cell:fin(M.cell,100),
-    channels:{on:!!c.on,n:Math.max(0,Math.round(fin(c.n,3))),w:fin(c.w,100),sin:Math.max(1,fin(c.sin,1.4)),host:[Math.min(h[0],h[1]),Math.max(h[0],h[1])],name:String(c.name||'Channel'),color:String(c.color||'#e8a33d').toLowerCase()}}}
+    channels:{on:!!c.on,n:Math.max(0,Math.round(fin(c.n,3))),w:fin(c.w,100),sin:Math.max(1,fin(c.sin,1.4)),host:[Math.min(h[0],h[1]),Math.max(h[0],h[1])],name:String(c.name||'Channel'),color:String(c.color||'#e8a33d').toLowerCase()},
+    ...normV2(M,nb)}}
+const r6=v=>+(+v).toPrecision(10),PT=q=>[r6(q[0]),r6(q[1])],okPts=(a,m)=>Array.isArray(a)&&a.length>=m&&a.every(q=>Array.isArray(q)&&isFinite(+q[0])&&isFinite(+q[1]));
+const normGrid=g=>g&&g.nx>1&&g.ny>1&&Array.isArray(g.z||g.v)?{nx:g.nx|0,ny:g.ny|0,x0:r6(g.x0),y0:r6(g.y0),dx:r6(g.dx),dy:r6(g.dy)}:null;
+function normV2(M,nb){const col=c=>/^#[0-9a-f]{6}$/i.test(String(c))?String(c).toLowerCase():'#c08040';
+  const o={lines:(M.lines||[]).filter(l=>l&&okPts(l.pts,2)).map(l=>({name:String(l.name||'Line'),k:clamp(Math.round(fin(l.k,0)),-1,nb-2),pts:l.pts.map(PT)})),
+    sources:(M.sources||[]).filter(q=>q&&isFinite(+q.x)&&isFinite(+q.y)).map(q=>{const r={kind:['fan','fault'].includes(q.kind)?q.kind:'coast',x:r6(q.x),y:r6(q.y),az:r6(fin(q.az,180)),L:r6(Math.max(1,fin(q.L,1000))),open:r6(clamp(fin(q.open,60),5,300)),asym:r6(clamp(fin(q.asym,0),-1,1))};
+      if(r.kind==='fault')r.fault=Math.max(0,Math.round(fin(q.fault,0)));else r.line=Math.max(0,Math.round(fin(q.line,0)));if(q.canyon===false)r.canyon=false;return r}),
+    bodies:(M.bodies||[]).filter(b=>b&&isFinite(+b.x)&&isFinite(+b.y)).map(b=>{const T=BODY[b.type]?b.type:'custom',sh=['ellipse','poly','ribbon'].includes(b.shape)?b.shape:(BODY[T].belts?'ellipse':'poly');
+      const r={type:T,shape:sh,x:r6(b.x),y:r6(b.y)};if(sh==='ellipse')Object.assign(r,{a:r6(Math.max(1,fin(b.a,BODY[T].a))),e:r6(clamp(fin(b.e,BODY[T].e),.05,1)),rot:r6(fin(b.rot,0))});
+      if(sh==='poly')r.pts=okPts(b.pts,3)?b.pts.map(PT):[];if(sh==='ribbon'){r.line=okPts(b.line,2)?b.line.map(PT):[];r.width=r6(Math.max(1,fin(b.width,200)))}
+      r.w=(Array.isArray(b.w)?b.w:[]).map(v=>r6(Math.max(0,fin(v,0))));if(b.irr!=null)r.irr=r6(Math.max(0,fin(b.irr,0)));
+      if(T==='custom'){r.env=String(b.env||'Body');r.color=col(b.color)}if(b.layer)r.layer=String(b.layer);if(b.name)r.name=String(b.name);return r}),
+    mix:(M.mix||[]).filter(m=>m&&m.k>=0&&m.k<nb-1&&+m.w>0).map(m=>({k:Math.round(m.k),w:r6(m.w)})),
+    faults:(M.faults||[]).filter(q=>q&&okPts(q.pts,2)).map(q=>{const r={pts:q.pts.map(PT),side:+q.side<0?-1:1,off:r6(Math.max(0,fin(q.off,0))),taper:r6(Math.max(0,fin(q.taper,0))),fw:r6(clamp(fin(q.fw,0),0,1))};if(q.layer)r.layer=String(q.layer);return r}),
+    layers:(M.layers||[]).filter(l=>l&&l.id).map(l=>{const r={id:String(l.id),name:String(l.name||l.id),role:['lith','fault','obj'].includes(l.role)?l.role:'lith',on:l.on!==false,
+      trend:{on:!!(l.trend&&l.trend.on),dir:l.trend&&l.trend.dir==='proximal'?'proximal':'distal',w:r6(clamp(fin(l.trend&&l.trend.w,.5),0,1)),smooth:r6(Math.max(0,fin(l.trend&&l.trend.smooth,0)))}};
+      const g=normGrid(l.grid);if(g)r.grid=Object.assign(g,{z:l.grid.z.map(v=>v==null||!isFinite(+v)?null:r6(v))});
+      if(l.src)r.src=String(l.src);if(l.synth)r.synth=JSON.parse(JSON.stringify(l.synth));
+      if(Array.isArray(l.cal))r.cal=l.cal.filter(q=>Array.isArray(q)&&q.length>=4).map(q=>q.slice(0,4).map(r6));
+      if(l.bar&&l.bar.a&&l.bar.b)r.bar={a:l.bar.a.map(r6),b:l.bar.b.map(r6),v0:r6(fin(l.bar.v0,0)),v1:r6(fin(l.bar.v1,1))};
+      if(l.channel)r.channel=String(l.channel);if(l.tol!=null)r.tol=r6(l.tol);if(l.op!=null)r.op=r6(clamp(+l.op,0,1));return r}),
+    paint:null,variants:(M.variants||[]).filter(v=>v&&v.k>=0&&v.k<nb&&v.name).map(v=>({k:Math.round(v.k),name:String(v.name),color:col(v.color),alias:(v.alias||[]).map(String)})),
+    ctx:M.ctx&&M.ctx.name?{name:String(M.ctx.name),color:col(M.ctx.color),alias:(M.ctx.alias||[]).map(String)}:null,inf:M.inf!=null&&isFinite(+M.inf)?Math.round(+M.inf):null};
+  const pg=normGrid(M.paint);if(pg&&M.paint.v.length===pg.nx*pg.ny&&M.paint.v.some(v=>+v))o.paint=Object.assign(pg,{v:M.paint.v.map(v=>r6(fin(v,0)))});
+  return o}
 const normWell=w=>{const o={name:String(w.name),x:+w.x,y:+w.y,env:String(w.env??'')};if(typeof w.b==='number'&&w.b>=0)o.b=w.b;return o};
-function saveModel(M,wells){return JSON.stringify({format:'gde-model',version:1,generator:'GDE map generator',model:normModel(M),wells:(wells||[]).map(normWell)},null,1)+'\n'}
+function saveModel(M,wells){return JSON.stringify({format:'gde-model',version:2,generator:'GDE map generator',model:normModel(M),wells:(wells||[]).map(normWell)},null,1)+'\n'}
 function openModel(text){const errors=[];let J;
   try{J=JSON.parse(text)}catch(e){return{errors:['Not a JSON file: '+e.message]}}
   if(!J||J.format!=='gde-model'||!J.model)return{errors:['Not a GDE model file (format “gde-model” expected).']};
@@ -492,10 +520,7 @@ function perlin(seed){seed=seed|0;if(PCACHE.has(seed))return PCACHE.get(seed);
       lerp(lerp(g(p[AA+1],x,y,z-1),g(p[BA+1],x-1,y,z-1),u),lerp(g(p[AB+1],x,y-1,z-1),g(p[BB+1],x-1,y-1,z-1),u),v),w)};
   const o=[0,1,2].map(()=>[r()*256,r()*256,r()*256]),res={f,o};PCACHE.set(seed,res);if(PCACHE.size>64)PCACHE.delete(PCACHE.keys().next().value);return res}
 // d plus seeded smooth noise: 3 octaves of 3D noise in (x/wl, y/wl, d/wz); wz >= 3 amp keeps d increasing downstream (no folded belts)
-function field(M){const amp=+(M.noise&&M.noise.amp)||0;if(!(amp>0))return(x,y)=>dBase(M,x,y);
-  const wl=Math.max(1e-9,+M.noise.wl||1),wz=Math.max(wl,3*amp),P=perlin(M.noise.seed),f=P.f,o=P.o,k=amp*1.6/1.75;
-  return(x,y)=>{const d=dBase(M,x,y);if(!isFinite(d))return d;const X=x/wl,Y=y/wl,Zz=d/wz;
-    return d+k*(f(X+o[0][0],Y+o[0][1],Zz+o[0][2])+.5*f(2*X+o[1][0],2*Y+o[1][1],2*Zz+o[1][2])+.25*f(4*X+o[2][0],4*Y+o[2][1],4*Zz+o[2][2]))}}
+function field(M){const g=geoField(M),nz=noiseFn(M);if(!nz)return g;return(x,y)=>{const d=g(x,y);return isFinite(d)?nz(x,y,d):d}}
 const classify=(d,t)=>{if(d!==d)return 0;let k=0;while(k<t.length&&d>=t[k])k++;return k};
 // ---------- calibration ----------
 // longest chain of wells whose order along d agrees with the belt order (wells with an infinite d outside the distal belt excluded)
@@ -507,7 +532,7 @@ function chain(d,b,n1){const idx=[];for(let i=0;i<d.length;i++)if(b[i]>=0&&b[i]<
   const S=[];for(let a=best;a>=0;a=pr[a])S.push(idx[a]);S.reverse();
   return S}
 function intervals(S,d,b,n1){const lo=new Array(n1).fill(-Infinity),hi=new Array(n1).fill(Infinity);
-  for(const i of S)for(let k=0;k<n1;k++){if(b[i]<=k)lo[k]=Math.max(lo[k],d[i]);else hi[k]=Math.min(hi[k],d[i])}
+  for(const i of S)for(let k=0;k<n1;k++){if(b[i]%1&&Math.floor(b[i])===k)continue;if(b[i]<=k)lo[k]=Math.max(lo[k],d[i]);else hi[k]=Math.min(hi[k],d[i])}
   return{lo,hi}}
 // margin: smallest feasible interval (gap between wells of successive belts) relative to the spread of the wells along d
 function marginOf(S,d,lo,hi){let m=Infinity;for(let k=0;k<lo.length;k++)if(isFinite(lo[k])&&isFinite(hi[k]))m=Math.min(m,hi[k]-lo[k]);
@@ -541,7 +566,11 @@ function calibrate(d,b,p,opt={}){const n1=p.length,S=chain(d,b,n1),inS=new Set(S
         else if(bb===n1){const s=dmin-m-p[n1-1];for(let k=0;k<n1;k++)t[k]=p[k]+s}
         else{const c=(dmin+dmax)/2,h=Math.max(wb/2,(dmax-dmin)/2+m);t[bb-1]=c-h;t[bb]=c+h;
           for(let k=bb-2;k>=0;k--)t[k]=t[k+1]-(p[k+1]-p[k]);for(let k=bb+1;k<n1;k++)t[k]=t[k-1]+(p[k]-p[k-1])}}}}
-  const nm=i=>opt.names&&opt.names[i]!=null?opt.names[i]:'Well '+(i+1),bn=k=>opt.belts&&opt.belts[k]!=null?opt.belts[k]:'belt '+(k+1);
+  // boundaries with a mixed zone: put on the wells described "A / B" (inside the interval, between the neighbouring boundaries)
+  for(const k of opt.mixK||[]){if(!(k>=0&&k<n1))continue;const D=S.filter(i=>b[i]===k+.5&&isFinite(d[i])).map(i=>d[i]);if(!D.length)continue;
+    const dm=D.reduce((a,v)=>a+v,0)/D.length,A=Math.max(lo[k],k?t[k-1]:-Infinity),B=Math.min(hi[k],k<n1-1?t[k+1]:Infinity),g=1e-6*Math.max(1,Math.abs(dm));
+    if(dm>A+g&&dm<B-g)t[k]=dm}
+  const nm=i=>opt.names&&opt.names[i]!=null?opt.names[i]:'Well '+(i+1),bn=k=>k%1?bn(Math.floor(k))+' / '+bn(Math.ceil(k)):opt.belts&&opt.belts[k]!=null?opt.belts[k]:'belt '+(k+1);
   const msgs=conflicts.map(i=>{
     if(!isFinite(d[i]))return`${nm(i)} (${bn(b[i])}) is outside the fan opening, where the map has the most distal belt: widen the fan angle or move the source.`;
     for(const j of S){if(b[j]<b[i]&&d[j]>=d[i])return`${nm(i)} (${bn(b[i])}) sits more proximal than ${nm(j)} (${bn(b[j])}) along the transport direction, although its environment is more distal.`;
@@ -555,31 +584,49 @@ function solve(A,y){const n=y.length,M=A.map((r,i)=>[...r,y[i]]);
     if(Math.abs(M[p][c])<1e-14)return null;[M[c],M[p]]=[M[p],M[c]];
     for(let r=0;r<n;r++)if(r!==c){const f=M[r][c]/M[c][c];if(f)for(let k=c;k<=n;k++)M[r][k]-=f*M[c][k]}}
   return M.map((r,i)=>r[n]/r[i])}
-function target(d,b,t){const n1=t.length,A=b>0?t[b-1]:-Infinity,B=b<n1?t[b]:Infinity;
+function target(d,b,t){const n1=t.length,A=Math.floor(b)>0?t[Math.floor(b)-1]:-Infinity,B=Math.ceil(b)<n1?t[Math.ceil(b)]:Infinity;
   const wf=n1>1?(t[n1-1]-t[0])/(n1-1):Math.max(1,Math.abs(t[0]||1));
   if(isFinite(A)&&isFinite(B)){const m=.3*(B-A);return clamp(d,A+m,B-m)}
   return isFinite(A)?Math.max(d,A+.3*wf):Math.min(d,B-.3*wf)}
 // ---------- model build ----------
-function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),F=field(M),AB=allBelts(M);
-  const W=(wells||[]).map(w=>({name:w.name,x:+w.x,y:+w.y,env:w.env,b:(typeof w.b==='number'&&w.b>=0&&w.b<AB.length)?w.b:matchBelt(w.env,AB)}));
-  const dw=W.map(w=>F(w.x,w.y)),bw=W.map(w=>w.b);
-  const cal=calibrate(dw,bw,p,{names:W.map(w=>w.name),belts:M.belts.map(b=>b.name)}),t=cal.t;
+const inBand=(d,b,t)=>{const k=classify(d,t);return k>=Math.floor(b)&&k<=Math.ceil(b)};
+function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),AB=allBelts(M),FD=fieldD(M,opt),F=FD.D;
+  const W=(wells||[]).map(w=>{let b,pair=null;if(typeof w.b==='number'&&w.b>=0&&w.b<AB.length)b=w.b;else{const r=matchEnv(w.env,AB,n);b=r.b;pair=r.pair}
+    if(b>=0&&AB[b].kind==='mix')pair=[AB[b].a,AB[b].b];return{name:w.name,x:+w.x,y:+w.y,env:w.env,b,pair}});
+  const BD=prepBodies(M,AB,W),cb=W.map(w=>w.body!=null?-1:calIdx(w,AB,n));
+  const mixAt=new Array(n).fill(-1),mixW=new Array(n).fill(0),varAt=new Array(n).fill(-1);let ctx=-1;
+  AB.forEach((c,i)=>{if(c.kind==='mix'){mixAt[c.a]=i;mixW[c.a]=+((M.mix||[]).find(m=>m.k===c.a)||{}).w||0}else if(c.kind==='variant')varAt[c.k]=i;else if(c.kind==='ctx')ctx=i});
+  const dw=W.map(w=>F(w.x,w.y));
+  const cal=calibrate(dw,cb,p,{names:W.map(w=>w.name),belts:M.belts.map(b=>b.name),mixK:mixAt.map((v,k)=>v>=0?k:-1).filter(k=>k>=0)}),t=cal.t;
   const R=+(M.warp&&M.warp.R)||0,warp={on:!!(M.warp&&M.warp.on),R,wells:[],centres:[],lam:[]};let Wf=null;
   if(warp.on&&R>0){const R2=R*R,bad=[];
-    W.forEach((w,i)=>{if(w.b>=0&&w.b<n&&isFinite(dw[i])&&classify(dw[i],t)!==w.b)bad.push(i)});
-    if(bad.length){const sel=W.map((w,i)=>i).filter(i=>W[i].b>=0&&W[i].b<n&&isFinite(dw[i])&&bad.some(j=>Math.hypot(W[i].x-W[j].x,W[i].y-W[j].y)<3*R));
-      const del=sel.map(i=>bad.includes(i)?target(dw[i],W[i].b,t)-dw[i]:0);
+    W.forEach((w,i)=>{if(cb[i]>=0&&isFinite(dw[i])&&!inBand(dw[i],cb[i],t))bad.push(i)});
+    if(bad.length){const sel=W.map((w,i)=>i).filter(i=>cb[i]>=0&&isFinite(dw[i])&&bad.some(j=>Math.hypot(W[i].x-W[j].x,W[i].y-W[j].y)<3*R));
+      const del=sel.map(i=>bad.includes(i)?target(dw[i],cb[i],t)-dw[i]:0);
       const A=sel.map(i=>sel.map(j=>kern((W[i].x-W[j].x)**2+(W[i].y-W[j].y)**2,R2)+(i===j?1e-9:0)));
       const lam=solve(A,del);
       if(lam){const cx=sel.map(i=>W[i].x),cy=sel.map(i=>W[i].y);warp.wells=bad;warp.centres=sel;warp.lam=lam;
         Wf=(x,y)=>{let s=0;for(let k=0;k<cx.length;k++){const dx=x-cx[k],dy=y-cy[k],r2=dx*dx+dy*dy;if(r2<9*R2)s+=lam[k]*kern(r2,R2)}return s}}}}
   const D=Wf?(x,y)=>F(x,y)+Wf(x,y):F;
-  const base=(x,y)=>classify(D(x,y),t),ch=chOn(M)?makeChannels(M,W,n,base):null;
-  const beltAt=ch?(x,y)=>{const k=base(x,y);return k>=ch.host[0]&&k<=ch.host[1]&&ch.at(x,y)?n:k}:base;
-  const mod={M,t,prior:p,cal,warp,D,beltAt,wells:W,ch,belts:AB};
+  const base=(x,y)=>classify(D(x,y),t);
+  // channels follow the transport direction (v1) or, with key lines, fan out from the first source
+  let chM=M;if(linesOn(M)&&(M.sources||[]).length){const s0=M.sources[0];chM=Object.assign({},M,{geom:'radial',src:[+s0.x,+s0.y],az:+s0.az,fan:+s0.open,span:+s0.L*2})}
+  const ch=chOn(M)?makeChannels(chM,W,n,base):null;
+  const mixN=perlin(((M.noise&&M.noise.seed)|0)+29);
+  const cls=(x,y,d)=>{if(BD.any){const c=BD.at(x,y);if(c>=0)return c}
+    if(ctx>=0&&d<0)return ctx;const k=classify(d,t);
+    for(const j of [k-1,k])if(j>=0&&mixAt[j]>=0){const wl=Math.max(1,3*mixW[j]),hw=mixW[j]/2*(1+.45*mixN.f(x/wl+.31,y/wl+.77,.5)/.75);if(Math.abs(d-t[j])<hw)return mixAt[j]}
+    if(varAt[k]>=0&&FD.mem&&FD.mem(x,y)<0)return varAt[k];
+    if(ch&&k>=ch.host[0]&&k<=ch.host[1]&&ch.at(x,y))return n;
+    return k};
+  const beltAt=(x,y)=>cls(x,y,D(x,y));
+  const mod={M,t,prior:p,cal,warp,D,beltAt,cls,wells:W,ch,belts:AB,bodies:BD,faults:FD.FA,grid:FD.grid};
+  const ok=(w,bm)=>{if(w.pair)return bm===w.pair[0]||bm===w.pair[1]||bm===mixAt[w.pair[0]];if(!(w.b>=0))return false;if(bm===w.b)return true;
+    const c=AB[bm];return!!c&&c.kind==='mix'&&(c.a===w.b||c.b===w.b)};
   mod.check=W.map((w,i)=>{const bm=beltAt(w.x,w.y);
     const chOut=!!ch&&w.b===n&&bm!==n&&(()=>{const k=base(w.x,w.y);return k<ch.host[0]||k>ch.host[1]})();
-    return{name:w.name,x:w.x,y:w.y,env:w.env,b:w.b,i,d:dw[i],belt:bm,honoured:w.b>=0&&bm===w.b,warped:warp.wells.includes(i),chOut,
+    const c=AB[w.b],varOut=!!c&&c.kind==='belt'&&varAt[w.b]>=0&&bm===varAt[w.b];
+    return{name:w.name,x:w.x,y:w.y,env:w.env,b:w.b,pair:w.pair,i,d:dw[i],belt:bm,honoured:ok(w,bm),warped:warp.wells.includes(i),chOut,varOut,body:w.body,
       conflict:cal.conflicts.includes(i),dist:opt.dist===false?NaN:distToBoundary(mod,w.x,w.y,M.ext)}});
   return mod}
 // distance from (x, y) to the nearest belt boundary: 72 rays marched in steps of 1/400 of the extent diagonal, then bisection
@@ -625,10 +672,10 @@ function polygons(mod,ext,cell,opt={}){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.
     const mx=Math.ceil((nx-1)/s)+1,my=Math.ceil((ny-1)/s)+1,Dg=new Float64Array(mx*my),t=mod.t,ch=mod.ch,nb=mod.M.belts.length,X=i=>ext.xmin+(Math.min(i,nx-1)+.5)*cx,Y=j=>ext.ymax-(Math.min(j,ny-1)+.5)*cy;
     for(let b=0;b<my;b++)for(let a=0;a<mx;a++)Dg[b*mx+a]=mod.D(X(a*s),Y(b*s));
     for(let b=0;b<my-1;b++)for(let a=0;a<mx-1;a++){const i0=a*s,j0=b*s,i1=Math.min((a+1)*s,nx-1),j1=Math.min((b+1)*s,ny-1);
-      const d00=Dg[b*mx+a],d10=Dg[b*mx+a+1],d01=Dg[(b+1)*mx+a],d11=Dg[(b+1)*mx+a+1],ok=isFinite(d00+d10+d01+d11);
+      const d00=Dg[b*mx+a],d10=Dg[b*mx+a+1],d01=Dg[(b+1)*mx+a],d11=Dg[(b+1)*mx+a+1],ok=isFinite(d00+d10+d01+d11),bx0=X(i0),bx1=X(i1),by0=Y(j1),by1=Y(j0);
+      const nf=(mod.faults||[]).some(f=>{for(let q=0;q+3<f.P.length;q+=2){const x0=Math.min(f.P[q],f.P[q+2])-2*cx,x1=Math.max(f.P[q],f.P[q+2])+2*cx,y0=Math.min(f.P[q+1],f.P[q+3])-2*cy,y1=Math.max(f.P[q+1],f.P[q+3])+2*cy;if(bx1>=x0&&bx0<=x1&&by1>=y0&&by0<=y1)return true}return false});
       for(let j=j0;j<=j1;j++){const v=j1>j0?(j-j0)/(j1-j0):0;for(let i=i0;i<=i1;i++){const u=i1>i0?(i-i0)/(i1-i0):0;
-        let k=ok?classify((d00*(1-u)+d10*u)*(1-v)+(d01*(1-u)+d11*u)*v,t):mod.beltAt(ext.xmin+(i+.5)*cx,ext.ymax-(j+.5)*cy);
-        if(ok&&ch&&k>=ch.host[0]&&k<=ch.host[1]&&ch.at(ext.xmin+(i+.5)*cx,ext.ymax-(j+.5)*cy))k=nb;L[j*nx+i]=k}}}}
+        const x=ext.xmin+(i+.5)*cx,y=ext.ymax-(j+.5)*cy;L[j*nx+i]=ok&&!nf?mod.cls(x,y,(d00*(1-u)+d10*u)*(1-v)+(d01*(1-u)+d11*u)*v):mod.beltAt(x,y)}}}}
   const r=polygonize(L,nx,ny,{minArea:opt.minArea??4,tol:opt.tol??.7});
   const groups=allBelts(mod.M).map((b,i)=>({code:i+1,name:b.name}));
   const P=toMap(r.polys,q=>[ext.xmin+q[0]*cx,ext.ymax-q[1]*cy],groups);P.raster={L:r.L,nx,ny,cx,cy};return P}
@@ -767,6 +814,409 @@ function gridCsv(G,sep=','){const nm=new Map(G.legend||[]),q=s=>{s=oneLine(s);re
   const L=[['x','y','code','belt'].join(sep)];
   for(let j=0;j<G.ny;j++)for(let i=0;i<G.nx;i++){const v=G.codes[j*G.nx+i];L.push([crd(G.x0+i*G.dx),crd(G.y0+j*G.dy),v,q(nm.get(v))].join(sep))}
   return L.join('\n')}
+// =====================================================================================================================================
+// ---------- v2: key lines, polarised sources, isolated bodies, mixed zones, faults, attribute layers (lithology trend, objects, faults)
+// =====================================================================================================================================
+// per system: key lines [name, k] proximal -> distal (the line sits on prior boundary k, between belt k and k + 1; k = -1: at d = 0, the start of
+// the first belt, with a context class landward of it), deep-water rule inf (beyond the last line, d jumps to the most distal belt after boundary
+// `inf`: outside the lobes the basin plain), source kind (coast: lobes on the shoreline, fan: lobes at the shelf edge) and along-strike
+// variants [k, name, colour, aliases]: away from the sources belt k is drawn as the variant (e.g. delta front -> interdeltaic shoreface)
+const HINT=['Hinterland (erosion, bypass)','#d8d2c4',['hinterland','basement','erosion','bypass','non deposition','eroded']];
+const SHELFX=['Shelf','#bcd9ea',['shelf','outer shelf','shelf mudstone','continental shelf','shelf break']];
+const V2={
+ fluvial:{ln:[['Mountain front (depositional limit)',-1]],ctx:HINT},
+ aeolian:{ln:[['Mountain front (depositional limit)',-1]],ctx:HINT},
+ estuary:{ln:[['Shoreline',1],['Shelf edge',4]]},
+ wavedelta:{ln:[['Shoreline',1],['Shelf edge',4],['Toe of slope',5]],vars:[[0,'Coastal plain','#b8c978',['alluvial plain','interdeltaic plain','coastal']],
+  [2,'Interdeltaic shoreface','#efe39a',['interdeltaic','strandplain shoreface','barrier island','interdeltaic beach']],[3,'Interdeltaic offshore transition','#d8e8d2',['offshore transition zone']]]},
+ delta:{ln:[['Shoreline',0],['Shelf edge',3],['Toe of slope',4]],vars:[[0,'Interdeltaic coastal plain','#b9c97c',['coastal plain','interdeltaic plain','chenier plain','strandplain','strand plain']],
+  [1,'Interdeltaic shoreface','#efe39a',['shoreface','upper shoreface','lower shoreface','beach','foreshore','barrier','interdeltaic','barrier island']],[2,'Offshore transition','#d8e8d2',['transition zone','offshore transition zone','hcs sandstone']]]},
+ shelf:{ln:[['Shoreline',0],['Shelf edge',3],['Toe of slope',4]]},
+ carbonate:{ln:[['Shoreline',0],['Platform margin',3],['Toe of slope',4]]},
+ ramp:{ln:[['Shoreline',-1]],ctx:['Land (exposed)','#d8d2c4',['land','exposed','karst','subaerial']]},
+ mixed:{ln:[['Shoreline',0],['Shelf edge',4],['Toe of slope',5]]},
+ glacial:{ln:[['Grounding line',0],['Calving line (ice-shelf front)',3]]},
+ fan:{ln:[['Shelf edge',-1],['Toe of slope',0]],ctx:SHELFX,inf:0,src:'fan'},
+ fansand:{ln:[['Shelf edge',-1],['Toe of slope',0]],ctx:SHELFX,inf:0,src:'fan'},
+ fanmud:{ln:[['Shelf edge',-1],['Toe of slope',0]],ctx:SHELFX,inf:0,src:'fan'},
+ apron:{ln:[['Shelf edge',0],['Toe of slope',2]]},
+ lake:{ln:[['Lake margin',0],['Slope break',2]],src:'coast'},
+ playa:{ln:[['Basin margin (mountain front)',-1]],ctx:HINT},
+ custom:{ln:[['Key line',0]]}};
+for(const k in templates){const v=V2[k]||V2.custom;templates[k].ln=v.ln;templates[k].src=v.src||'coast'}
+// isolated bodies: core then concentric halos [name, colour, default width (m, 0 for the core), aliases]; default size a (semi-major axis, m) and
+// elongation e (minor / major); 'custom' = one environment chosen per body (extracted from an attribute or traced by hand)
+const BODY={
+ pinnacle:{name:'Pinnacle / patch reef',a:600,e:.8,belts:[['Reef core','#d9548a',0,['pinnacle reef','pinnacle','reef core','build up','buildup','reef mound','reef']],
+  ['Reef flank / talus','#f2a7c3',250,['reef flank','flank','reef apron','flank talus']],['Off-reef halo','#cfe7e4',700,['off reef','halo','peri reef','inter reef']]]},
+ platform:{name:'Isolated carbonate platform',a:5000,e:.6,belts:[['Isolated platform interior','#a8e2d6',0,['isolated platform','platform top','atoll lagoon']],
+  ['Isolated platform margin','#e98fb1',500,['isolated platform rim','atoll rim']],['Isolated platform slope','#7cc0d1',1500,['periplatform apron','platform apron']]]},
+ bar:{name:'Offshore sand bar / tidal ridge',a:5000,e:.22,belts:[['Sand ridge / bar crest','#f1d35a',0,['offshore bar','offshore sand bar','sand ridge crest','bar crest','sand bar','shelf ridge']],
+  ['Ridge flank','#efe7b4',400,['bar flank','ridge flank','bar margin','ridge trough']]]},
+ island:{name:'Island',a:2500,e:.7,belts:[['Island (emergent)','#b8c978',0,['island','emergent']],['Island beach / shoreface','#f3d955',300,['island beach','island shoreface']],
+  ['Island nearshore','#d7e9cc',700,['island shelf','nearshore']]]},
+ salt:{name:'Salt-related high (crestal shoal)',a:2500,e:.8,belts:[['Crestal shoal','#f2d577',0,['salt high','diapir crest','crest shoal']],['Shoal flank','#ebe5bf',500,['shoal flank']]]},
+ custom:{name:'Body of one environment (from an attribute or traced)',a:1000,e:1,belts:null}};
+const linesOn=M=>M.geom==='lines'&&(M.lines||[]).some(l=>l&&Array.isArray(l.pts)&&l.pts.length>=2);
+const offLayers=M=>new Set((M.layers||[]).filter(l=>l&&!l.on).map(l=>l.id));
+const activeBodies=M=>{const off=offLayers(M);return(M.bodies||[]).filter(b=>b&&(!b.layer||!off.has(b.layer)))};
+const activeFaults=M=>{const off=offLayers(M);return(M.faults||[]).filter(f=>f&&Array.isArray(f.pts)&&f.pts.length>=2&&(!f.layer||!off.has(f.layer)))};
+function bodyBelts(b){const T=BODY[b.type];if(T&&T.belts)return T.belts.map((x,j)=>[x[0],x[1],j?Math.max(0,fin(b.w&&b.w[j-1],x[2])):0,x[3]]);
+  return[[String(b.env||'Body'),String(b.color||'#c08040'),0,[]]].concat((b.w||[]).map((w,j)=>[String(b.env||'Body')+' halo '+(j+1),'#e6dcc8',+w||0,[]]))}
+const hex=c=>{c=String(c).replace('#','');return[0,2,4].map(i=>parseInt(c.substr(i,2),16)||0)};
+const mixColor=(a,b)=>'#'+hex(a).map((v,i)=>Math.round((v+hex(b)[i])/2).toString(16).padStart(2,'0')).join('');
+// every class of the map, in code order: belts, channel, along-strike variants, context, mixed zones, body belts
+function allBelts(M){const n=M.belts.length,out=M.belts.map((b,i)=>Object.assign({},b,{kind:'belt',k:i}));
+  if(chOn(M))out.push({name:M.channels.name||'Channel',color:M.channels.color||'#e8a33d',w:0,alias:[],channel:true,kind:'channel'});
+  const has=nm=>out.some(c=>norm(c.name)===norm(nm));
+  if(linesOn(M)){
+    if((M.sources||[]).some(s=>s&&s.kind!=='fan'))for(const v of M.variants||[])if(v.k>=0&&v.k<n&&!has(v.name))out.push({name:v.name,color:v.color,w:0,alias:v.alias||[],kind:'variant',k:v.k});
+    if(M.ctx&&M.lines.some(l=>l&&Math.round(+l.k)===-1&&l.pts&&l.pts.length>=2)&&!has(M.ctx.name))out.push({name:M.ctx.name,color:M.ctx.color,w:0,alias:M.ctx.alias||[],kind:'ctx'})}
+  for(const m of M.mix||[])if(m&&m.k>=0&&m.k<n-1&&+m.w>0){const A=M.belts[m.k],B=M.belts[m.k+1],nm=A.name+' + '+B.name;
+    if(!has(nm))out.push({name:nm,color:mixColor(A.color,B.color),w:0,alias:[A.name+' / '+B.name],kind:'mix',a:m.k,b:m.k+1,hatch:[A.color,B.color]})}
+  for(const b of activeBodies(M))for(const [nm,col,,al] of bodyBelts(b))if(!has(nm))out.push({name:nm,color:col,w:0,alias:al||[],kind:'body'});
+  return out}
+// ---------- geometry ----------
+const flat=pts=>{const o=[];for(const p of pts)o.push(+p[0],+p[1]);return o};
+// uniform Catmull-Rom through the control points, `sub` points per span (the key lines are drawn and used as smooth curves)
+function curve(pts,sub=8){const n=pts.length,o=[];if(n<3)return flat(pts);
+  for(let i=0;i<n-1;i++){const a=pts[Math.max(0,i-1)],b=pts[i],c=pts[i+1],d=pts[Math.min(n-1,i+2)];
+    for(let s=0;s<sub;s++){const t=s/sub,t2=t*t,t3=t2*t;
+      for(let q=0;q<2;q++)o.push(.5*(2*b[q]+(-a[q]+c[q])*t+(2*a[q]-5*b[q]+4*c[q]-d[q])*t2+(-a[q]+3*b[q]-3*c[q]+d[q])*t3))}}
+  o.push(+pts[n-1][0],+pts[n-1][1]);return o}
+// signed distance to a polyline (flat array), > 0 on the right of the direction of travel. The first and last segments are extended as rays,
+// so the line splits the plane in two; when the nearest point is a vertex the sign follows the sum of the normals of its two segments.
+function sdistF(P,x,y){const n=P.length/2;if(n<2)return NaN;let best=Infinity,sg=1;
+  for(let i=0;i<n-1;i++){const ax=P[2*i],ay=P[2*i+1],ex=P[2*i+2]-ax,ey=P[2*i+3]-ay,L2=ex*ex+ey*ey;if(!(L2>0))continue;
+    const wx=x-ax,wy=y-ay;let t=(wx*ex+wy*ey)/L2,v=-1;
+    if(t<0&&i>0){t=0;v=i}else if(t>1&&i<n-2){t=1;v=i+1}
+    const px=wx-t*ex,py=wy-t*ey,d2=px*px+py*py;
+    if(d2<best){best=d2;sg=v<0?(wx*ey-wy*ex>=0?1:-1):vsign(P,v,x,y)}}
+  return sg*Math.sqrt(best)}
+function vsign(P,v,x,y){const n=P.length/2;let nx=0,ny=0;
+  for(const [a,b] of [[v-1,v],[v,v+1]]){if(a<0||b>=n)continue;const ex=P[2*b]-P[2*a],ey=P[2*b+1]-P[2*a+1],l=Math.hypot(ex,ey);if(l>0){nx+=ey/l;ny-=ex/l}}
+  return(x-P[2*v])*nx+(y-P[2*v+1])*ny>=0?1:-1}
+const sdist=(pts,x,y)=>sdistF(flat(pts),x,y);
+// unsigned distance to a polyline (segments only) with the arc length of the nearest point and the side (+1 right, -1 left)
+function nearF(P,x,y){const n=P.length/2;let best=Infinity,s=0,side=1,acc=0;
+  for(let i=0;i<n-1;i++){const ax=P[2*i],ay=P[2*i+1],ex=P[2*i+2]-ax,ey=P[2*i+3]-ay,L2=ex*ex+ey*ey,L=Math.sqrt(L2);if(!(L2>0))continue;
+    const wx=x-ax,wy=y-ay,t=clamp((wx*ex+wy*ey)/L2,0,1),px=wx-t*ex,py=wy-t*ey,d2=px*px+py*py;
+    if(d2<best){best=d2;s=acc+t*L;side=wx*ey-wy*ex>=0?1:-1}acc+=L}
+  return{d:Math.sqrt(best),s,side,len:acc}}
+const udistF=(P,x,y)=>nearF(P,x,y).d;
+// normalised coordinate between two lines: 0 on (and landward of) A, 1 on (and beyond) B
+function shelfCoord(A,B,x,y){const a=Math.max(0,sdist(A,x,y)),b=Math.max(0,-sdist(B,x,y));return a+b>0?a/(a+b):0}
+// signed distance to a closed polygon (negative inside)
+function polySd(Q,x,y){const n=Q.length;let best=Infinity,ins=false;
+  for(let i=0,j=n-1;i<n;j=i++){const a=Q[j],b=Q[i],ex=b[0]-a[0],ey=b[1]-a[1],L2=ex*ex+ey*ey,t=L2>0?clamp(((x-a[0])*ex+(y-a[1])*ey)/L2,0,1):0,px=a[0]+t*ex-x,py=a[1]+t*ey-y;
+    best=Math.min(best,px*px+py*py);if((a[1]>y)!==(b[1]>y)&&x<a[0]+(y-a[1])*(b[0]-a[0])/(b[1]-a[1]))ins=!ins}
+  return(ins?-1:1)*Math.sqrt(best)}
+// polynomial smooth minimum (rounds the junction between a lobe and the regional belts)
+const smin=(a,b,k)=>{if(!(k>0)||!isFinite(a)||!isFinite(b))return Math.min(a,b);const h=Math.max(k-Math.abs(a-b),0)/k;return Math.min(a,b)-h*h*k/4};
+const smooth01=t=>t<=0?0:t>=1?1:t*t*(3-2*t);
+// ---------- regional field from the key lines, with the source lobes ----------
+// zones: landward of the first line d = v0 + signed distance; between lines i and i+1 d = vi + u (vi+1 - vi), u = a / (a + b) with a, b the distances
+// to the two lines, so belts widen where the shelf widens; beyond the last line d = vlast + distance (or +Infinity beyond boundary `inf`).
+// Source lobe metric rho: distance from the source inside its opening (bent towards one side and elongated downdrift by the asymmetry), r / (1 - u^2)
+// in the TAPER degrees beyond, infinite further. Lobe field: coast d = v + g (rho - L) (the lobe stands out by L, g = belt-scale of the zone);
+// fan d = v + rho (vend - v) / L (most distal belt from rho = L); fault-bounded or k = -1 lines: d = rho v' / L. The field is smin(regional, lobes).
+const BEND=35;let MEMV=0;
+function lobeR(s,x,y){const dx=x-s.x,dy=y-s.y,r=Math.hypot(dx,dy);if(r===0)return 0;
+  const p=dx*s.ux+dy*s.uy,q=dx*s.uy-dy*s.ux;let a=Math.atan2(q,p)/RAD;
+  a-=s.asym*BEND*Math.min(1,r/s.L);
+  const h=Math.max(3,s.open/2*(a>0?1+.5*s.asym:1-.5*s.asym)),e=Math.abs(a)-h,rr=a*s.asym>0?r/(1+.35*Math.abs(s.asym)):r;
+  if(e<=0)return rr;if(e>=TAPER)return Infinity;const u=e/TAPER;return rr/(1-u*u)}
+function lineModel(M){const p=prior(M),n=M.belts.length,L=[];
+  (M.lines||[]).forEach((l,oi)=>{if(!l||!Array.isArray(l.pts)||l.pts.length<2)return;const k=clamp(Math.round(fin(l.k,0)),-1,p.length-1);L.push({P:curve(l.pts),k,v:k<0?0:p[k],oi})});
+  L.sort((a,b)=>a.v-b.v);
+  const inf=M.inf!=null&&isFinite(+M.inf)?p[clamp(Math.round(+M.inf),0,p.length-1)]:null,pend=p[Math.max(0,n-2)];
+  const reg=(x,y)=>{let s=sdistF(L[0].P,x,y);if(s<0)return L[0].v+s;
+    for(let i=0;i+1<L.length;i++){const s1=sdistF(L[i+1].P,x,y);if(s1<0){const a=s,b=-s1;return L[i].v+(a+b>0?a/(a+b):0)*(L[i+1].v-L[i].v)}s=s1}
+    const d=L[L.length-1].v+s;return inf!=null&&d>=inf?Infinity:d};
+  const FL=(M.faults||[]).map(f=>f&&Array.isArray(f.pts)&&f.pts.length>=2?flat(f.pts):null);
+  const S=(M.sources||[]).map(s=>{const a=fin(s.az,180)*RAD,o={x:fin(s.x,0),y:fin(s.y,0),ux:Math.sin(a),uy:Math.cos(a),L:Math.max(1,fin(s.L,1000)),open:clamp(fin(s.open,60),5,300),
+      asym:clamp(fin(s.asym,0),-1,1),kind:s.kind==='fan'?'fan':s.kind==='fault'?'fault':'coast',canyon:s.canyon!==false};
+    if(o.kind==='fault'){o.v=0;o.g=pend/o.L;o.k=.1*pend;o.off=0;return o}
+    const li=L.find(l=>l.oi===Math.round(fin(s.line,0)))||L[0];o.v=li.v;
+    if(o.kind==='fan'){o.g=Math.max(1e-6,pend-li.v)/o.L;o.k=.12*(pend-li.v);o.off=0}
+    else if(li.k<0){o.g=(p[0]||1)/o.L;o.k=.15*(p[0]||1);o.off=0}
+    else{const j=L.indexOf(li),nx=L[j+1];let g=1;if(nx){const W=Math.abs(sdistF(nx.P,o.x,o.y));if(W>0)g=clamp((nx.v-li.v)/W,.05,20)}o.g=g;o.k=.3*o.L*g;o.off=o.L}
+    o.W=.5*o.L+o.L*Math.tan(Math.min(80,o.open/2)*RAD);return o});
+  const p0=p[0]||1;
+  const f=(x,y)=>{const dr=reg(x,y);let d=dr,m=-1e9;
+    for(const s of S){const rho=lobeR(s,x,y),ds=s.v+s.g*(rho-s.off);d=smin(d,ds,s.k);
+      if(s.kind==='fan'&&s.canyon){const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;if(pp<0){const q=Math.abs(dx*s.uy-dy*s.ux),c=.5*p0*(1-Math.max(q/(.03*s.L),-pp/(.12*s.L)));if(c>d)d=c}}
+      if(s.kind==='coast'){let mm=isFinite(ds)?dr-ds+.1*s.L*s.g:-1e9;const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;
+        if(pp<0){const q=dx*s.uy-dy*s.ux,lt=(1-Math.hypot(pp/(1.5*s.L),q/s.W))*s.L*s.g;if(lt>mm)mm=lt}if(mm>m)m=mm}}
+    MEMV=m;return d};
+  return{f,L,S,p}}
+function geoField(M){if(!linesOn(M))return(x,y)=>dBase(M,x,y);return lineModel(M).f}
+function noiseFn(M,seedAdd=0){const amp=+(M.noise&&M.noise.amp)||0;if(!(amp>0))return null;
+  const wl=Math.max(1e-9,+M.noise.wl||1),wz=Math.max(wl,3*amp),P=perlin((M.noise.seed|0)+seedAdd),f=P.f,o=P.o,k=amp*1.6/1.75;
+  return(x,y,d)=>{const X=x/wl,Y=y/wl,Zz=d/wz;return d+k*(f(X+o[0][0],Y+o[0][1],Zz+o[0][2])+.5*f(2*X+o[1][0],2*Y+o[1][1],2*Zz+o[1][2])+.25*f(4*X+o[2][0],4*Y+o[2][1],4*Zz+o[2][2]))}}
+// ---------- faults: the downthrown side is shifted distal by `off` (in d units), full in the middle, tapering to zero over `taper` at both tips
+// and over half the fault length away from it; the footwall can be raised by fw * off (fw 0..1). Step functions: added exactly, not gridded.
+function prepFaults(M){return activeFaults(M).filter(f=>+f.off>0).map(f=>{const P=flat(f.pts),nf=nearF(P,P[0],P[1]);let len=0;for(let i=0;i+1<P.length/2;i++)len+=Math.hypot(P[2*i+2]-P[2*i],P[2*i+3]-P[2*i+1]);
+  const xs=P.filter((v,i)=>!(i%2)),ys=P.filter((v,i)=>i%2),R=Math.max(1,len/2);
+  return{P,len,off:+f.off,side:+f.side<0?-1:1,taper:Math.max(1e-9,fin(f.taper,len/4)),fw:clamp(fin(f.fw,0),0,1),R,box:[Math.min(...xs)-2*R,Math.max(...xs)+2*R,Math.min(...ys)-2*R,Math.max(...ys)+2*R]}})}
+function faultShift(FA,x,y){let s=0;for(const f of FA){if(x<f.box[0]||x>f.box[1]||y<f.box[2]||y>f.box[3])continue;const q=nearF(f.P,x,y);
+    const pr=smooth01(Math.min(q.s,f.len-q.s)/f.taper),dec=Math.exp(-((q.d/f.R)**2));s+=(q.side===f.side?1:-f.fw)*f.off*pr*dec}
+  return s}
+// ---------- grids: sampling with nulls, smoothing, percentiles ----------
+function sampleGrid(G,x,y){const fx=(x-G.x0)/G.dx,fy=(y-G.y0)/G.dy;if(!(fx>=-1e-9&&fy>=-1e-9&&fx<=G.nx-1+1e-9&&fy<=G.ny-1+1e-9))return NaN;
+  const i=Math.min(G.nx-2,Math.max(0,Math.floor(fx))),j=Math.min(G.ny-2,Math.max(0,Math.floor(fy))),u=clamp(fx-i,0,1),v=clamp(fy-j,0,1),z=G.z;
+  const c=[[z[j*G.nx+i],(1-u)*(1-v)],[z[j*G.nx+i+1],u*(1-v)],[z[(j+1)*G.nx+i],(1-u)*v],[z[(j+1)*G.nx+i+1],u*v]];let s=0,w=0;
+  for(const [a,b] of c)if(a!=null&&isFinite(a)){s+=a*b;w+=b}return w>1e-12?s/w:(c.some(q=>q[0]!=null&&isFinite(q[0]))?c.find(q=>q[0]!=null&&isFinite(q[0]))[0]:NaN)}
+function blur(A,nx,ny,r){if(!(r>=1))return A;r=Math.round(r);let B=Float64Array.from(A);
+  for(let pass=0;pass<2;pass++){const C=new Float64Array(B.length);
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){let s=0,w=0;for(let jj=Math.max(0,j-r);jj<=Math.min(ny-1,j+r);jj++)for(let ii=Math.max(0,i-r);ii<=Math.min(nx-1,i+r);ii++){const v=B[jj*nx+ii];if(v===v){s+=v;w++}}
+      C[j*nx+i]=A[j*nx+i]===A[j*nx+i]&&w?s/w:NaN}B=C}
+  return B}
+function pctl(v,q){const a=v.filter(x=>x===x&&isFinite(x));if(!a.length)return NaN;a.sort((x,y)=>x-y);const k=clamp(q/100*(a.length-1),0,a.length-1),i=Math.floor(k);return i+1<a.length?a[i]+(k-i)*(a[i+1]-a[i]):a[i]}
+// ---------- the proximal-distal field of the map: regional (lines, sources, noise) on a grid, blended with the lithology trends; paint and
+// faults added exactly. v1 geometry without trend is exact (no grid).
+function layerOn(l){return l&&l.on!==false}
+function fieldD(M,opt={}){const geo=geoField(M),nz=noiseFn(M),lines=linesOn(M),memOn=lines&&allBelts(M).some(c=>c.kind==='variant');
+  const TL=(M.layers||[]).filter(l=>layerOn(l)&&l.role==='lith'&&l.trend&&l.trend.on&&+l.trend.w>0).map(l=>({l,g:layerGrid(l,M.ext)})).filter(x=>x.g);
+  const PG=M.paint&&Array.isArray(M.paint.v)&&M.paint.v.some(v=>v)?Object.assign({},M.paint,{z:M.paint.v}):null,FA=prepFaults(M);
+  const nzm=memOn?noiseFn(M,17):null;
+  const exactGeo=(x,y)=>{let d=geo(x,y);if(nz&&isFinite(d))d=nz(x,y,d);return d};
+  const post=(x,y,d)=>{if(PG&&isFinite(d)){const v=sampleGrid(PG,x,y);if(v===v)d+=v}if(FA.length&&isFinite(d))d+=faultShift(FA,x,y);return d};
+  if(!lines&&!TL.length){const D=(PG||FA.length)?(x,y)=>post(x,y,exactGeo(x,y)):exactGeo;return{D,mem:null,FA}}
+  const e=M.ext,mx=.03*(e.xmax-e.xmin),my=.03*(e.ymax-e.ymin),gx0=e.xmin-mx,gy0=e.ymin-my,GW=e.xmax-e.xmin+2*mx,GH=e.ymax-e.ymin+2*my;
+  const c=Math.sqrt(GW*GH/(opt.fast?12000:40000)),nx=Math.max(3,Math.ceil(GW/c)+1),ny=Math.max(3,Math.ceil(GH/c)+1),dx=GW/(nx-1),dy=GH/(ny-1);
+  const D0=new Float64Array(nx*ny),MM=memOn?new Float64Array(nx*ny):null;
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const x=gx0+i*dx,y=gy0+j*dy,k=j*nx+i;let d=geo(x,y);
+    if(MM)MM[k]=Math.max(-1e9,MEMV+(nzm?nzm(x,y,0):0));if(nz&&isFinite(d))d=nz(x,y,d);D0[k]=d}
+  let TW=null,TS=null;
+  if(TL.length){TW=new Float64Array(nx*ny);TS=new Float64Array(nx*ny);
+    const inExt=[];for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const x=gx0+i*dx,y=gy0+j*dy;if(x>=e.xmin&&x<=e.xmax&&y>=e.ymin&&y<=e.ymax)inExt.push(j*nx+i)}
+    for(const {l,g} of TL){let T=new Float64Array(nx*ny);for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)T[j*nx+i]=sampleGrid(g,gx0+i*dx,gy0+j*dy);
+      const sr=+l.trend.smooth||0;if(sr>0)T=blur(T,nx,ny,sr/Math.max(dx,dy));
+      const sg=l.trend.dir==='proximal'?-1:1,dv=[],tv=[];for(const k of inExt)if(isFinite(D0[k])&&T[k]===T[k]){dv.push(D0[k]);tv.push(sg*T[k])}
+      const d2=pctl(dv,2),d98=pctl(dv,98),t2=pctl(tv,2),t98=pctl(tv,98);if(!(t98>t2)||!(d98>d2))continue;
+      const w=clamp(+l.trend.w,0,1),b=(d98-d2)/(t98-t2);
+      for(let k=0;k<T.length;k++)if(T[k]===T[k]){TW[k]+=w;TS[k]+=w*(d2+(sg*T[k]-t2)*b)}}
+    for(let k=0;k<TW.length;k++)if(TW[k]>1){TS[k]/=TW[k];TW[k]=1}}
+  const DG=new Float64Array(nx*ny);for(let k=0;k<DG.length;k++){const d=D0[k];DG[k]=TW&&isFinite(d)?(1-TW[k])*d+TS[k]:d}
+  const bil=(A,x,y)=>{const fx=(x-gx0)/dx,fy=(y-gy0)/dy;if(!(fx>=0&&fy>=0&&fx<=nx-1&&fy<=ny-1))return NaN;const i=Math.min(nx-2,Math.floor(fx)),j=Math.min(ny-2,Math.floor(fy)),u=fx-i,v=fy-j,k=j*nx+i;
+    const a=A[k],b=A[k+1],cc=A[k+nx],dd=A[k+nx+1];if(!isFinite(a+b+cc+dd))return NaN;return(a*(1-u)+b*u)*(1-v)+(cc*(1-u)+dd*u)*v};
+  const base=(x,y)=>{const v=bil(DG,x,y);if(v===v)return v;let d=exactGeo(x,y);if(TW&&isFinite(d)){const tw=bil(TW,x,y),ts=bil(TS,x,y);if(tw===tw&&ts===ts)d=(1-tw)*d+ts}return d};
+  const D=(PG||FA.length)?(x,y)=>post(x,y,base(x,y)):base;
+  const mem=MM?(x,y)=>{const v=bil(MM,x,y);if(v===v)return v;geo(x,y);return MEMV+(nzm?nzm(x,y,0):0)}:null;
+  return{D,mem,FA,grid:{nx,ny,x0:gx0,y0:gy0,dx,dy}}}
+// paint (brush) grid in d units, positive = distal; stored in the model file
+function paintGrid(ext,n=96){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.ymin,c=Math.max(W,H)/(n-1),nx=Math.max(2,Math.round(W/c)+1),ny=Math.max(2,Math.round(H/c)+1);
+  return{nx,ny,x0:ext.xmin,y0:ext.ymin,dx:W/(nx-1),dy:H/(ny-1),v:new Array(nx*ny).fill(0)}}
+function paintStroke(P,x,y,R,amt){for(let j=0;j<P.ny;j++)for(let i=0;i<P.nx;i++){const r=Math.hypot(P.x0+i*P.dx-x,P.y0+j*P.dy-y)/R;if(r<1)P.v[j*P.nx+i]=+(P.v[j*P.nx+i]+amt*(1-r*r)**2).toPrecision(6)}return P}
+// ---------- bodies ----------
+function bodyShape(b,seed){const T=BODY[b.type],sh=b.shape||(T&&T.belts?'ellipse':'poly'),cx=fin(b.x,0),cy=fin(b.y,0),belts=bodyBelts(b),E=[0];
+  for(let j=1;j<belts.length;j++)E.push(E[j-1]+belts[j][2]);const out=E[E.length-1];let sdc,R0,size;
+  if(sh==='ellipse'){const r=fin(b.rot,0)*RAD,sr=Math.sin(r),cr=Math.cos(r),a=Math.max(1,fin(b.a,T?T.a:500)),e=clamp(fin(b.e,T?T.e:1),.05,1);size=a;R0=a;
+    sdc=(x,y,s)=>{const dx=x-cx,dy=y-cy,u=dx*sr+dy*cr,v=dx*cr-dy*sr,A=a*s,B=a*e*s,rho=Math.hypot(u/A,v/B);if(rho<1e-12)return -B;return(rho-1)*rho/Math.hypot(u/(A*A),v/(B*B))}}
+  else if(sh==='ribbon'){const Q=(b.line||[]).map(q=>[cx+q[0],cy+q[1]]),P=flat(Q),hw=Math.max(1,fin(b.width,200))/2;size=hw;R0=Math.max(0,...Q.map(q=>Math.hypot(q[0]-cx,q[1]-cy)))+hw;
+    sdc=(x,y,s)=>udistF(P,x,y)-hw*s}
+  else{const Q=(b.pts||[]).map(q=>[+q[0],+q[1]]);R0=Math.max(1,...Q.map(q=>Math.hypot(q[0],q[1])));size=Math.sqrt(Math.abs(sArea(Q))/Math.PI)||R0;
+    sdc=(x,y,s)=>Q.length>=3?polySd(Q,(x-cx)/s,(y-cy)/s)*s:Infinity}
+  const irr=b.irr!=null?Math.max(0,+b.irr):(T&&T.belts?.12*size:0),P=irr>0?perlin(seed):null,wl=Math.max(20,.9*size);
+  const sd=(x,y,s)=>{let v=sdc(x,y,s);if(P){const f=P.f,o=P.o;v+=irr*(f(x/wl+o[0][0],y/wl+o[0][1],.37)+.5*f(2*x/wl+o[1][0],2*y/wl+o[1][1],.61))}return v};
+  return{sd,E,out,R0,irr,size,cx,cy,sh,s:1,belts}}
+function prepBodies(M,AB,W){const list=activeBodies(M).map((b,i)=>{const B=bodyShape(b,((M.noise&&M.noise.seed)|0)*131+i*7919+3);B.cls=B.belts.map(x=>AB.findIndex(c=>norm(c.name)===norm(x[0])));B.src=b;B.i=i;return B});
+  const adj=[],band=(B,j)=>[j?B.E[j-1]:-Infinity,B.E[j]];
+  const root=(f,lo=.03,hi=40)=>{if(f(lo)*f(hi)>0)return null;for(let it=0;it<60;it++){const m=Math.sqrt(lo*hi);if(f(m)>0)lo=m;else hi=m}return Math.sqrt(lo*hi)};
+  const isBody=new Set(list.flatMap(B=>B.cls));
+  W.forEach(w=>{if(!(w.b>=0)||!isBody.has(w.b)||!isFinite(w.x))return;
+    const cand=list.filter(B=>B.cls.includes(w.b));let B=cand[0],bd=Infinity;for(const c of cand){const v=c.sd(w.x,w.y,c.s);if(v<bd){bd=v;B=c}}
+    const j=B.cls.indexOf(w.b),[lo,hi]=band(B,j),v=B.sd(w.x,w.y,B.s);w.body=B.i;if(v>=lo&&v<hi)return;
+    const f=j===0?s=>B.sd(w.x,w.y,s)+.4*B.size*s:s=>B.sd(w.x,w.y,s)-(lo+hi)/2,s=root(f);
+    if(s){adj.push({body:B.i,well:w.name,scale:s/B.s,from:B.s});B.s=s}});
+  W.forEach(w=>{if(!(w.b>=0)||isBody.has(w.b)||!isFinite(w.x))return;
+    for(const B of list){const v=B.sd(w.x,w.y,B.s);if(v>=B.out)continue;const tg=B.out+.08*Math.max(B.out,B.size),s=root(s=>B.sd(w.x,w.y,s)-tg);
+      if(s&&s<B.s){adj.push({body:B.i,well:w.name,scale:s/B.s,from:B.s});B.s=s}}});
+  for(const B of list){B.R=B.R0*Math.max(1,B.s)+B.out+3*B.irr+1}
+  const at=(x,y)=>{for(let q=list.length-1;q>=0;q--){const B=list[q];if(Math.abs(x-B.cx)>B.R*B.s+B.R||Math.abs(y-B.cy)>B.R*B.s+B.R)continue;const v=B.sd(x,y,B.s);if(v>=B.out)continue;
+      for(let j=0;j<B.E.length;j++)if(v<B.E[j])return B.cls[j];return B.cls[B.cls.length-1]}return -1};
+  return{list,adj,at,any:list.length>0}}
+// ---------- environment matching with pairs: "A / B", "A + B" (adjacent belts) ----------
+function matchEnv(env,AB,n){const whole=matchBelt(env,AB,true);if(whole>=0)return{b:whole,pair:null};
+  const parts=String(env||'').split(/\s*(?:\/|\+|&|\band\b)\s*/i).filter(s=>s.trim());
+  if(parts.length===2){const a=matchBelt(parts[0],AB.slice(0,n)),b=matchBelt(parts[1],AB.slice(0,n));
+    if(a>=0&&b>=0&&Math.abs(a-b)===1){const k=Math.min(a,b),mi=AB.findIndex(c=>c.kind==='mix'&&c.a===k);return{b:mi,pair:[k,k+1]}}}
+  return{b:matchBelt(env,AB),pair:null}}
+// calibration index of a well: belt k, its variant -> k, mixed zone or pair k | k+1 -> k + .5; channel, context and body classes -> -1 (not in the order)
+function calIdx(w,AB,n){if(w.pair)return w.pair[0]+.5;if(!(w.b>=0))return -1;const c=AB[w.b];if(!c)return -1;
+  if(c.kind==='belt')return w.b;if(c.kind==='variant')return c.k;if(c.kind==='mix')return c.a+.5;return -1}
+// ---------- attribute layers: grids and georeferenced images ----------
+// ZMAP+, Surfer ASCII (DSAA) or x,y,z text -> {nx, ny, x0, y0, dx, dy, z} (row j = 0 at y0, null = no value)
+function parseGrid(text){const t=String(text||'');const L=t.split(/\r?\n/);
+  if(/^\s*DSAA/.test(t)){const v=t.replace(/^\s*DSAA/,'').trim().split(/\s+/).map(Number),nx=v[0],ny=v[1];if(!(nx>1&&ny>1))return{err:'Surfer grid: bad header.'};
+    const z=v.slice(8,8+nx*ny).map(a=>a>=1.7e38||!isFinite(a)?null:a);if(z.length<nx*ny)return{err:'Surfer grid: too few values.'};
+    return{nx,ny,x0:v[2],y0:v[4],dx:(v[3]-v[2])/(nx-1),dy:(v[5]-v[4])/(ny-1),z}}
+  const hi=L.findIndex(s=>/^\s*@/.test(s)&&/grid/i.test(s));
+  if(hi>=0){const H=[];let i=hi+1;for(;i<L.length&&!/^\s*@/.test(L[i]);i++){if(/^\s*!/.test(L[i]))continue;H.push(...L[i].split(',').map(s=>s.trim()))}
+    const nul=+H[1]||(H[2]!==''?+H[2]:1e30),ny=+H[5],nx=+H[6],x0=+H[7],x1=+H[8],y0=+H[9],y1=+H[10];if(!(nx>1&&ny>1))return{err:'ZMAP+ grid: bad header.'};
+    const vals=L.slice(i+1).filter(s=>!/^\s*!/.test(s)).join(' ').trim().split(/\s+/).map(Number),z=new Array(nx*ny).fill(null);
+    for(let m=0;m<Math.min(vals.length,nx*ny);m++){const col=Math.floor(m/ny),row=m%ny,v=vals[m];z[(ny-1-row)*nx+col]=Math.abs(v-nul)<=1e-6*Math.abs(nul)||!isFinite(v)?null:v}
+    return{nx,ny,x0,y0,dx:(x1-x0)/(nx-1),dy:(y1-y0)/(ny-1),z}}
+  const P=[];for(const s of L){const f=s.trim().split(/[\s,;\t]+/).map(num);if(f.length>=3&&f.slice(0,3).every(isFinite))P.push(f.slice(0,3))}
+  if(P.length<4)return{err:'Not a grid: ZMAP+, Surfer ASCII (DSAA) or x, y, z lines expected.'};
+  const ux=[...new Set(P.map(p=>+p[0].toPrecision(9)))].sort((a,b)=>a-b),uy=[...new Set(P.map(p=>+p[1].toPrecision(9)))].sort((a,b)=>a-b);
+  if(ux.length>1&&uy.length>1&&ux.length*uy.length<=1.05*P.length){const nx=ux.length,ny=uy.length,dx=(ux[nx-1]-ux[0])/(nx-1),dy=(uy[ny-1]-uy[0])/(ny-1),z=new Array(nx*ny).fill(null);
+    for(const p of P){const i=Math.round((p[0]-ux[0])/dx),j=Math.round((p[1]-uy[0])/dy);if(i>=0&&j>=0&&i<nx&&j<ny)z[j*nx+i]=p[2]}return{nx,ny,x0:ux[0],y0:uy[0],dx,dy,z}}
+  // scattered points: cell averages on a 120-node grid, gaps up to 3 cells filled by diffusion
+  const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]),xa=Math.min(...xs),xb=Math.max(...xs),ya=Math.min(...ys),yb=Math.max(...ys),c=Math.max(xb-xa,yb-ya)/119||1,nx=Math.round((xb-xa)/c)+1,ny=Math.round((yb-ya)/c)+1;
+  const s=new Float64Array(nx*ny),w=new Float64Array(nx*ny);for(const p of P){const k=Math.round((p[1]-ya)/c)*nx+Math.round((p[0]-xa)/c);s[k]+=p[2];w[k]++}
+  let z=Array.from(s,(v,k)=>w[k]?v/w[k]:null);
+  for(let it=0;it<3;it++){const z2=z.slice();for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const k=j*nx+i;if(z[k]!=null)continue;let a=0,b=0;
+    for(const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){const ii=i+di,jj=j+dj;if(ii>=0&&jj>=0&&ii<nx&&jj<ny&&z[jj*nx+ii]!=null){a+=z[jj*nx+ii];b++}}if(b)z2[k]=a/b}z=z2}
+  return{nx,ny,x0:xa,y0:ya,dx:c,dy:c,z}}
+// colour: sRGB -> CIE Lab (D65), as in the Continuous map digitizer
+function rgb2lab(r,g,b){const f=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)};const R=f(r),G=f(g),B=f(b);
+  let X=(R*.4124564+G*.3575761+B*.1804375)/.95047,Y=(R*.2126729+G*.7151522+B*.072175),Z=(R*.0193339+G*.119192+B*.9503041)/1.08883;
+  const h=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;X=h(X);Y=h(Y);Z=h(Z);return[116*Y-16,500*(X-Y),200*(Y-Z)]}
+// image georeferencing: control points [px, py, X, Y]; 2 points: scale only (no rotation), >= 3: least-squares affine (as in the Continuous map digitizer)
+function affine(P){P=(P||[]).filter(q=>q&&q.length>=4&&q.every(isFinite));const n=P.length;if(n<2)return{err:'At least 2 control points.'};let f,inv;
+  if(n===2){const [a,b]=P;if(a[0]===b[0]||a[1]===b[1]||a[2]===b[2]||a[3]===b[3])return{err:'The 2 points must differ in both directions (or add a third).'};
+    const sx=(b[2]-a[2])/(b[0]-a[0]),ox=a[2]-sx*a[0],sy=(b[3]-a[3])/(b[1]-a[1]),oy=a[3]-sy*a[1];f=p=>[sx*p[0]+ox,sy*p[1]+oy];inv=(X,Y)=>[(X-ox)/sx,(Y-oy)/sy]}
+  else{const A=[[0,0,0],[0,0,0],[0,0,0]],bx=[0,0,0],by=[0,0,0];for(const q of P){const r=[q[0],q[1],1];for(let u=0;u<3;u++){for(let v=0;v<3;v++)A[u][v]+=r[u]*r[v];bx[u]+=r[u]*q[2];by[u]+=r[u]*q[3]}}
+    const X=solve(A,bx),Y=solve(A,by);if(!X||!Y)return{err:'The control points are aligned.'};const det=X[0]*Y[1]-X[1]*Y[0];if(Math.abs(det)<1e-14)return{err:'Degenerate control points.'};
+    f=p=>[X[0]*p[0]+X[1]*p[1]+X[2],Y[0]*p[0]+Y[1]*p[1]+Y[2]];inv=(x,y)=>{const u=x-X[2],v=y-Y[2];return[(Y[1]*u-X[1]*v)/det,(-Y[0]*u+X[0]*v)/det]}}
+  let rms=0;for(const q of P){const r=inv(q[2],q[3]);rms+=(r[0]-q[0])**2+(r[1]-q[1])**2}return{f,inv,rms:Math.sqrt(rms/n),n}}
+const pix=(img,x,y)=>{const i=clamp(Math.round(x),0,img.w-1),j=clamp(Math.round(y),0,img.h-1),k=4*(j*img.w+i),d=img.data;return[d[k],d[k+1],d[k+2],d[k+3]]};
+// colour bar: N colours sampled along the bar from end a (value v0) to end b (value v1)
+function barLut(img,a,b,v0,v1,N=96){const lab=new Float64Array(3*N),val=new Float64Array(N);
+  for(let k=0;k<N;k++){const t=k/(N-1),c=pix(img,a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])),l=rgb2lab(c[0],c[1],c[2]);lab.set(l,3*k);val[k]=v0+t*(v1-v0)}return{lab,val,N}}
+// value of a pixel: nearest colour of the bar (CIE Lab, rejected beyond tol), else luminance (0..1) or one channel; transparent = no value
+function imgValue(img,px,py,o={}){if(px<-.5||py<-.5||px>img.w-.5||py>img.h-.5)return NaN;const c=pix(img,px,py);if(c[3]<8)return NaN;
+  if(o.lut){const l=rgb2lab(c[0],c[1],c[2]),L=o.lut;let best=Infinity,bi=-1;for(let k=0;k<L.N;k++){const a=l[0]-L.lab[3*k],b=l[1]-L.lab[3*k+1],d=l[2]-L.lab[3*k+2],q=a*a+b*b+d*d;if(q<best){best=q;bi=k}}
+    return best<=(o.tol||12)**2?L.val[bi]:NaN}
+  if(o.channel==='r'||o.channel==='g'||o.channel==='b')return c['rgb'.indexOf(o.channel)]/255;
+  return(.2126*c[0]+.7152*c[1]+.0722*c[2])/255}
+function imageGrid(img,cal,o,g){const z=new Array(g.nx*g.ny);
+  for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){const q=cal.inv(g.x0+i*g.dx,g.y0+j*g.dy),v=imgValue(img,q[0],q[1],o);z[j*g.nx+i]=v===v?v:null}
+  return Object.assign({},g,{z})}
+// layer -> value grid over the map (from its grid, or its image georeferenced by control points, with or without a colour bar); cached
+const LCACHE=new Map();
+function layerGrid(l,ext){if(l.grid&&Array.isArray(l.grid.z))return l.grid;
+  const img=l.img||(l.synth?synthImage(l.synth).img:null);if(!img||!l.cal)return null;
+  const key=JSON.stringify([l.id,l.cal,l.bar,l.channel,l.tol,l.synth||null,ext,img.w,img.h,img.uid||0]);if(LCACHE.has(key))return LCACHE.get(key);
+  const cal=affine(l.cal);if(cal.err)return null;
+  const W=ext.xmax-ext.xmin,H=ext.ymax-ext.ymin,c=Math.sqrt(W*H/40000),nx=Math.round(W/c)+1,ny=Math.round(H/c)+1;
+  const lut=l.bar&&l.bar.a&&l.bar.b?barLut(img,l.bar.a,l.bar.b,+l.bar.v0,+l.bar.v1):null;
+  const g=imageGrid(img,cal,{lut,tol:+l.tol||12,channel:l.channel},{nx,ny,x0:ext.xmin,y0:ext.ymin,dx:W/(nx-1),dy:H/(ny-1)});
+  LCACHE.set(key,g);if(LCACHE.size>12)LCACHE.delete(LCACHE.keys().next().value);return g}
+// binary mask of a grid by threshold (value) or percentile, after optional smoothing (radius in nodes)
+function maskOf(G,o){let z=Float64Array.from(G.z,v=>v==null?NaN:+v);if(+o.smooth>0)z=blur(z,G.nx,G.ny,+o.smooth);
+  const thr=o.pct!=null&&o.thr==null?pctl(Array.from(z),o.mode==='below'?100-o.pct:+o.pct):+o.thr;
+  return{m:Uint8Array.from(z,v=>v===v&&(o.mode==='below'?v<thr:v>thr)?1:0),thr}}
+// connected regions of the mask -> polygons (traced on the cell edges, simplified), kept when area >= minArea and elongation P^2 / (4 pi A) >= minElong
+function extractBodies(G,o={}){const {nx,ny}=G,{m,thr}=maskOf(G,o),L=new Int16Array(nx*ny);
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)L[(ny-1-j)*nx+i]=m[j*nx+i]?0:-1;
+  const {C,n,size,lab}=comps(L,nx,ny),cell=Math.abs(G.dx*G.dy),per=new Float64Array(n);
+  for(let k=0;k<L.length;k++){if(L[k]<0)continue;const i=k%nx,c=C[k];if(i===0||L[k-1]<0)per[c]+=Math.abs(G.dy);if(i===nx-1||L[k+1]<0)per[c]+=Math.abs(G.dy);
+    if(k<nx||L[k-nx]<0)per[c]+=Math.abs(G.dx);if(k+nx>=L.length||L[k+nx]<0)per[c]+=Math.abs(G.dx)}
+  const keep=new Int32Array(n).fill(-1),stats=[];let kept=0,dropped=0;
+  for(let c=0;c<n;c++){if(lab[c]<0)continue;const A=size[c]*cell,E=per[c]*per[c]/(4*Math.PI*A),ok=A>=(+o.minArea||0)&&E>=(+o.minElong||0);stats.push({area:A,elong:+E.toFixed(2),kept:ok});if(ok)keep[c]=kept++;else dropped++}
+  const L2=new Int16Array(nx*ny);for(let k=0;k<L.length;k++)L2[k]=L[k]>=0&&keep[C[k]]>=0?0:-1;
+  const polys=simplify(trace(L2,nx,ny),o.tol??.8),X=q=>G.x0-G.dx/2+q[0]*G.dx,Y=q=>G.y0+(ny-.5)*G.dy-q[1]*G.dy,bodies=[];
+  for(const p of polys){const R=p.outer.map(q=>[X(q),Y(q)]);if(R.length<3)continue;let cx=0,cy=0;for(const q of R){cx+=q[0];cy+=q[1]}cx/=R.length;cy/=R.length;
+    bodies.push({type:'custom',shape:'poly',x:+cx.toFixed(1),y:+cy.toFixed(1),pts:R.map(q=>[+(q[0]-cx).toFixed(1),+(q[1]-cy).toFixed(1)]),env:o.env||'Body',color:o.color||'#c08040',w:[],irr:0,...(o.layer?{layer:o.layer}:{})})}
+  return{bodies,kept,dropped,thr,stats}}
+// fault traces: mask, thinning (Zhang-Suen), spurs pruned, skeleton paths traced, short ones dropped, Douglas-Peucker in map units
+function extractFaults(G,o={}){const {nx,ny}=G,{m,thr}=maskOf(G,o),A=Uint8Array.from(m),at=(i,j)=>i>=0&&j>=0&&i<nx&&j<ny?A[j*nx+i]:0;
+  const nb=(i,j)=>[at(i,j+1),at(i+1,j+1),at(i+1,j),at(i+1,j-1),at(i,j-1),at(i-1,j-1),at(i-1,j),at(i-1,j+1)];
+  for(let ch=1,it=0;ch&&it<60;it++){ch=0;for(const step of [0,1]){const del=[];
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){if(!A[j*nx+i])continue;const P=nb(i,j),B=P.reduce((s,v)=>s+v,0);if(B<2||B>6)continue;let T=0;for(let q=0;q<8;q++)if(!P[q]&&P[(q+1)%8])T++;if(T!==1)continue;
+      if(step===0?(P[0]*P[2]*P[4]===0&&P[2]*P[4]*P[6]===0):(P[0]*P[2]*P[6]===0&&P[0]*P[4]*P[6]===0))del.push(j*nx+i)}
+    for(const k of del)A[k]=0;ch+=del.length}}
+  const deg=(i,j)=>nb(i,j).reduce((s,v)=>s+v,0);
+  for(let it=0;it<(o.prune??4);it++){const del=[];for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)if(A[j*nx+i]&&deg(i,j)<=1)del.push(j*nx+i);for(const k of del)A[k]=0}
+  const seen=new Uint8Array(nx*ny),paths=[],D8=[[0,1],[1,1],[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1]];
+  const walk=(i,j)=>{const P=[[i,j]];seen[j*nx+i]=1;let pd=null;for(;;){let nxt=null,bs=-9;for(const [di,dj] of D8){const a=i+di,b=j+dj;if(at(a,b)&&!seen[b*nx+a]){const sc=pd?(di*pd[0]+dj*pd[1])/Math.hypot(di,dj):0;if(sc>bs){bs=sc;nxt=[a,b,di,dj]}}}
+    if(!nxt)break;for(const [di,dj] of D8){const a=i+di,b=j+dj;if(at(a,b)&&Math.abs(a-nxt[0])+Math.abs(b-nxt[1])<=1)seen[b*nx+a]=1}pd=[nxt[2],nxt[3]];i=nxt[0];j=nxt[1];seen[j*nx+i]=1;P.push([i,j])}return P};
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)if(A[j*nx+i]&&!seen[j*nx+i]&&deg(i,j)===1)paths.push(walk(i,j));
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)if(A[j*nx+i]&&!seen[j*nx+i])paths.push(walk(i,j));
+  const faults=[];for(const P of paths){const R=P.map(([i,j])=>[G.x0+i*G.dx,G.y0+j*G.dy]);let len=0;for(let q=1;q<R.length;q++)len+=Math.hypot(R[q][0]-R[q-1][0],R[q][1]-R[q-1][1]);
+    if(len<(+o.minLen||0))continue;faults.push({pts:dp(R,+o.tol||Math.abs(G.dx)).map(q=>[+q[0].toFixed(1),+q[1].toFixed(1)]),side:1,off:0,taper:+(len/4).toFixed(0),fw:0,...(o.layer?{layer:o.layer}:{})})}
+  return{faults,thr}}
+// synthetic attribute images for the examples (amplitude with channels and lobes and a colour bar; coherence with fault lineaments),
+// georeferenced by the four corners of the map area; deterministic from the parameters
+const AMPC=[[0,[20,33,61]],[.3,[58,110,165]],[.52,[222,222,218]],[.74,[242,193,78]],[1,[192,57,43]]];
+const ampColor=v=>{v=clamp(v,0,1);for(let i=1;i<AMPC.length;i++)if(v<=AMPC[i][0]){const [a,ca]=AMPC[i-1],[b,cb]=AMPC[i],t=(v-a)/(b-a);return ca.map((c,q)=>Math.round(c+t*(cb[q]-c)))}return AMPC[AMPC.length-1][1]};
+const SCACHE=new Map();
+function synthImage(o){const key=JSON.stringify(o);if(SCACHE.has(key))return SCACHE.get(key);
+  const e=o.ext,mw=o.px||480,mh=Math.round(mw*(e.ymax-e.ymin)/(e.xmax-e.xmin)),bar=o.kind==='amp',w=mw+(bar?74:0),h=mh,data=new Uint8ClampedArray(w*h*4).fill(255);
+  const P=perlin(o.seed|0),f=P.f,R=mulberry32((o.seed|0)^0x9e3779b9),X=i=>e.xmin+(i+.5)/mw*(e.xmax-e.xmin),Y=j=>e.ymax-(j+.5)/mh*(e.ymax-e.ymin);
+  const CH=(o.ch||[]).map(c=>({P:flat(c.pts),hw:c.w/2})),LO=o.lobes||[],FL=(o.faults||[]).map(q=>flat(q));
+  for(let j=0;j<mh;j++)for(let i=0;i<mw;i++){const x=X(i),y=Y(j),k=4*(j*w+i);let v;
+    if(bar){v=.2+.13*f(x/4000,y/4000,.5)+.06*f(x/900,y/900,.2)+.05*(R()-.5);
+      for(const L of LO){const r=Math.hypot((x-L.x)/L.rx,(y-L.y)/L.ry),q=r+.18*f(x/1500,y/1500,1.3);if(q<1.4)v=Math.max(v,.42+.3*Math.exp(-q*q*1.6)+.04*(R()-.5))}
+      for(const c of CH){const d=udistF(c.P,x,y);if(d<c.hw)v=Math.max(v,.9-.12*(d/c.hw)**2+.04*(R()-.5))}
+      data.set(ampColor(v),k)}
+    else{v=.12+.1*Math.abs(f(x/2500,y/2500,.7))+.1*R();for(const F of FL){const d=udistF(F,x,y);if(d<(o.fw||120))v=Math.max(v,.85+.1*R())}
+      const g=Math.round(255*(1-clamp(v,0,1)));data.set([g,g,g],k)}
+    data[k+3]=255}
+  let barDef=null;
+  if(bar){const x0=mw+22,x1=mw+40,y0=16,y1=mh-16;for(let j=y0;j<=y1;j++){const c=ampColor((y1-j)/(y1-y0));for(let i=x0;i<=x1;i++)data.set(c,4*(j*w+i))}barDef={a:[(x0+x1)/2,y1],b:[(x0+x1)/2,y0],v0:o.v0??0,v1:o.v1??100}}
+  const res={img:{w,h,data,uid:'s'+key.length+'_'+(o.seed|0)},cal:[[0,0,e.xmin,e.ymax],[mw,0,e.xmax,e.ymax],[0,mh,e.xmin,e.ymin],[mw,mh,e.xmax,e.ymin]],bar:barDef};
+  SCACHE.set(key,res);if(SCACHE.size>8)SCACHE.delete(SCACHE.keys().next().value);return res}
+// ---------- key lines and faults as polylines for the exports ----------
+function lineFeatures(M){const o=[];(M.lines||[]).forEach((l,i)=>{if(l&&l.pts&&l.pts.length>=2){const c=curve(l.pts);const pts=[];for(let q=0;q<c.length;q+=2)pts.push([c[q],c[q+1]]);o.push({name:String(l.name||'Line '+(i+1)),kind:'key line',code:i+1,pts})}});
+  activeFaults(M).forEach((f,i)=>o.push({name:'Fault '+(i+1),kind:'fault',code:101+i,pts:f.pts.map(q=>[+q[0],+q[1]]),throw:+f.off||0}));return o}
+function irapPolylines(L){const o=[];for(const l of L){for(const q of l.pts)o.push(`${f6(q[0])} ${f6(q[1])} ${f6(l.code)}`);o.push('999.000000 999.000000 999.000000')}return o.join('\n')+'\n'}
+function geojsonLines(L){return'{"type":"FeatureCollection","features":[\n'+L.map(l=>JSON.stringify({type:'Feature',properties:{name:oneLine(l.name),kind:l.kind,code:l.code},geometry:{type:'LineString',coordinates:l.pts.map(q=>[rp(q[0]),rp(q[1])])}})).join(',\n')+'\n]}\n'}
+// ---------- "Propose a sketch": key lines and sources from the wells and the template ----------
+// Transport azimuth fitted on the wells (linear model) when they span two belts, else the current one. Each line is placed between the wells on its
+// two sides (prior widths when only one side has wells), given a seeded natural shape (a large bay or cape, smaller bends), then pushed locally
+// (Gaussian bumps along strike) until every well is on its side; lines kept in order. Sources: a delta on the shoreline at the deltaic wells
+// (coast templates with variants or radial geometry), a fan at the shelf edge for deep-water templates.
+function proposeSketch(M,wells,opt={}){const t=templates[M.template]||templates.custom,ln=(V2[M.template]||V2.custom).ln,n=M.belts.length,e=M.ext;
+  const AB=allBelts(Object.assign({},M,{geom:'linear',bodies:[],mix:[]})),cx=(e.xmin+e.xmax)/2,cy=(e.ymin+e.ymax)/2,ctxName=M.ctx&&M.ctx.name;
+  const W=(wells||[]).map(w=>{const r=matchEnv(w.env,AB,n);let b=typeof w.b==='number'&&w.b>=0&&w.b<n?w.b:r.pair?r.pair[0]+.5:r.b>=0&&r.b<n?r.b:-9;
+    if(b===-9&&ctxName&&norm(w.env)===norm(ctxName))b=-1;return{x:+w.x,y:+w.y,b}}).filter(w=>w.b>-9&&isFinite(w.x)&&isFinite(w.y));
+  let az=M.az;const Wb=W.filter(w=>w.b>=0&&w.b%1===0);
+  if(new Set(Wb.map(w=>w.b)).size>=2){const f=fitAzimuth(Object.assign({},M,{geom:'linear',src:[cx,cy],noise:{amp:0,wl:1,seed:1}}),Wb.map(w=>({x:w.x,y:w.y,b:w.b})),{source:false});az=f.az}
+  const ux=Math.sin(az*RAD),uy=Math.cos(az*RAD),tx=-uy,ty=ux,PP=w=>(w.x-cx)*ux+(w.y-cy)*uy,QQ=w=>(w.x-cx)*tx+(w.y-cy)*ty;
+  const C=[[e.xmin,e.ymin],[e.xmax,e.ymin],[e.xmin,e.ymax],[e.xmax,e.ymax]],Hu=Math.max(...C.map(([x,y])=>Math.abs((x-cx)*ux+(y-cy)*uy))),Ht=Math.max(...C.map(([x,y])=>Math.abs((x-cx)*tx+(y-cy)*ty)));
+  // prior positions scaled so the lines fill about 60 % of the map along the transport direction unless the wells say otherwise
+  const p0=prior(M),ks=ln.map(l=>l[1]),vv=ks.map(k=>k<0?0:p0[k]),span=vv[vv.length-1]-vv[0];let sc=span>0?1.2*Hu/span:1;
+  // wells -> constraints per line: proximal wells (b <= k) must be landward, distal (b >= k + 1) basinward
+  const side=(w,k)=>w.b<=k?-1:w.b>=k+1?1:0,cs=[];
+  for(let li=0;li<ln.length;li++){const k=ks[li];let lo=-Infinity,hi=Infinity;for(const w of W){const s=side(w,k);if(s<0)lo=Math.max(lo,PP(w));else if(s>0)hi=Math.min(hi,PP(w))}cs.push({lo,hi})}
+  const both=cs.map((c,i)=>isFinite(c.lo)&&isFinite(c.hi)&&c.lo<c.hi?i:-1).filter(i=>i>=0);
+  if(both.length>=2){const a=both[0],b=both[both.length-1],da=(cs[a].lo+cs[a].hi)/2,db=(cs[b].lo+cs[b].hi)/2;if(vv[b]>vv[a]&&db>da)sc=(db-da)/(vv[b]-vv[a])}
+  const pos=new Array(ln.length).fill(NaN);
+  for(const i of both)pos[i]=(cs[i].lo+cs[i].hi)/2;
+  if(!both.length){// one-sided: from the wells' belt centres
+    const ctr=b=>{const lo=b<=0?(b<0?-(p0[0]||1):0):p0[Math.floor(b)-1],hi=b>=n-1?p0[n-2]+(p0[n-2]-(p0[n-3]||0)):p0[Math.ceil(b)];return(b<0?lo:(lo+hi)/2)};
+    const est=[];for(const w of W)est.push(PP(w)-ctr(w.b)*sc);pos[0]=est.length?est.sort((a,b)=>a-b)[est.length>>1]+vv[0]*sc:-.5*Hu}
+  for(let i=0;i<ln.length;i++)if(pos[i]!==pos[i]){let j=-1;for(let q=0;q<ln.length;q++)if(pos[q]===pos[q]&&(j<0||Math.abs(q-i)<Math.abs(j-i)))j=q;pos[i]=pos[j]+(vv[i]-vv[j])*sc}
+  for(let i=0;i<ln.length;i++){if(isFinite(cs[i].lo))pos[i]=Math.max(pos[i],cs[i].lo+.05*Hu);if(isFinite(cs[i].hi))pos[i]=Math.min(pos[i],cs[i].hi-.05*Hu)}
+  // natural shapes along strike, then local bumps for the wells, then order
+  const rnd=mulberry32(((M.noise&&M.noise.seed)|0)*7+11),irr=opt.irr??1,NQ=15,qs=[];for(let q=0;q<NQ;q++)qs.push(-1.2*Ht+2.4*Ht*q/(NQ-1));
+  const big=[rnd()*6.28,rnd()*6.28],shapes=ln.map((l,i)=>{const ph=[rnd()*6.28,rnd()*6.28,rnd()*6.28],a1=.09*Ht*irr*(1+.4*i),a2=.035*Ht*irr,a3=.015*Ht*irr;
+    return q=>a1*Math.sin(Math.PI*q/(1.6*Ht)+big[0])+.5*a1*Math.sin(Math.PI*q/(0.9*Ht)+big[1]+.6*i)+a2*Math.sin(2*Math.PI*q/(.55*Ht)+ph[0])+a3*Math.sin(2*Math.PI*q/(.23*Ht)+ph[1])});
+  const cv=ln.map((l,i)=>qs.map(q=>pos[i]+shapes[i](q)));
+  const evalC=(c,q)=>{const f=(q-qs[0])/(qs[NQ-1]-qs[0])*(NQ-1),i=clamp(Math.floor(f),0,NQ-2),u=f-i;return c[i]*(1-u)+c[i+1]*u};
+  const sig=.22*Ht,gap=.04*Hu;
+  for(let it=0;it<40;it++){let moved=false;
+    for(let li=0;li<ln.length;li++)for(const w of W){const s=side(w,ks[li]);if(!s)continue;const c=evalC(cv[li],QQ(w)),p=PP(w),need=s<0?p+gap-c:c-(p-gap);
+      if(need>0){for(let q=0;q<NQ;q++)cv[li][q]+=(s<0?1:-1)*1.05*need*Math.exp(-(((qs[q]-QQ(w))/sig)**2));moved=true}}
+    for(let li=1;li<ln.length;li++)for(let q=0;q<NQ;q++){const mg=.25*(vv[li]-vv[li-1])*sc;if(cv[li][q]<cv[li-1][q]+mg){cv[li][q]=cv[li-1][q]+mg;moved=true}}
+    if(!moved)break}
+  const pt=(c,q)=>[+(cx+c*ux+q*tx).toFixed(1),+(cy+c*uy+q*ty).toFixed(1)];
+  const lines=ln.map((l,i)=>({name:l[0],k:l[1],pts:qs.map((q,j)=>pt(cv[i][j],q))}));
+  const span2=Math.max(1,(+M.span||1)*sc);
+  // sources
+  const sources=[],kind=t.src||'coast',deep=kind==='fan';
+  const addSrc=(li,qw)=>{const c=evalC(cv[li],qw),dq=Ht*.02,dc=(evalC(cv[li],qw+dq)-evalC(cv[li],qw-dq))/(2*dq),nxv=ux-dc*tx,nyv=uy-dc*ty,a=(Math.atan2(nxv,nyv)/RAD+360)%360,[x,y]=pt(c,qw);return{x,y,az:+a.toFixed(1),line:li}};
+  if(deep){const fw=W.filter(w=>w.b>=0&&w.b<=n-2),qw=fw.length?fw.reduce((s,w)=>s+QQ(w),0)/fw.length:0,s=addSrc(0,qw);
+    let L=0;for(const w of fw)L=Math.max(L,Math.hypot(w.x-s.x,w.y-s.y));L=L?1.3*L:1.2*Hu;sources.push(Object.assign(s,{kind:'fan',L:+L.toFixed(0),open:t.fan||50,asym:0}))}
+  else if((M.variants&&M.variants.length)||t.geom==='radial'){const ksh=ln[0][1],dw=W.filter(w=>w.b>ksh&&w.b<=ksh+2),qw=dw.length?dw.reduce((s,w)=>s+QQ(w),0)/dw.length:0,s=addSrc(0,qw);
+    const L=.14*Ht*2,dw2=W.filter(w=>w.b>ksh&&w.b<=ksh+1);let Lm=L;for(const w of dw2){const pr=(w.x-s.x)*Math.sin(s.az*RAD)+(w.y-s.y)*Math.cos(s.az*RAD);if(pr>0)Lm=Math.max(Lm,.8*pr)}
+    sources.push(Object.assign(s,{kind:'coast',L:+Math.min(Lm,.4*Hu).toFixed(0),open:Math.min(110,t.fan||70),asym:0}))}
+  return{lines,sources,az:+az.toFixed(1),span:+span2.toPrecision(6)}}
+
 // ---------- examples ----------
 const examples={
  delta:{title:'River-dominated delta, 4 wells',M:makeModel('delta',{az:165,src:[12000,30000],fan:50,span:32000,outside:'strike',protrude:9000,noise:{amp:1500,wl:8000,seed:7},warp:{on:true,R:4000},
@@ -785,7 +1235,9 @@ const examples={
  lake:{title:'Rift lake, 4 wells',M:makeModel('lake',{az:268,src:[30000,20000],span:20000,noise:{amp:700,wl:5000,seed:9},warp:{on:true,R:2500},
    ext:{xmin:0,xmax:30000,ymin:0,ymax:36000},cell:50}),
    wells:[{name:'Lake-1',x:26500,y:24000,env:'Fan delta'},{name:'Lake-2',x:20200,y:15000,env:'Lake shoreline'},{name:'Lake-3',x:15000,y:22000,env:'Littoral'},{name:'Lake-4',x:6000,y:17000,env:'Profundal'}]}};
-window.GDE={templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
+window.GDE={V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
+  layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
+  templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
 })();
 

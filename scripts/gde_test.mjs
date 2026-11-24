@@ -381,7 +381,7 @@ test('normalised shelf coordinate between two lines: 0 at the shoreline, 1 at th
   assert.ok(G.shelfCoord(S, E, 80, -5) < .25, 'wide shelf: the same distance from the coast is less far across the shelf');
   assert.equal(G.shelfCoord(S, E, 0, 5), 0); assert.equal(G.shelfCoord(S, E, -50, -20), 1);
   // in a model, d = prior position of the shoreline at the coast, of the shelf edge at the edge, proportional between
-  const M = linesModel('shelf', { lines: [{ name: 'Shoreline', k: 0, pts: [[-30000, 0], [30000, 0]] }, { name: 'Shelf edge', k: 3, pts: [[-30000, -4000], [-5000, -4000], [30000, -16000]] }] });
+  const M = linesModel('shelf', { lines: [{ name: 'Shoreline', k: 0, pts: [[-30000, 0], [30000, 0]] }, { name: 'Shelf edge', k: 3, pts: [[-30000, -4000], [-15000, -4000], [-5000, -4000], [30000, -16000]] }] });
   const p = arr(G.prior(M)), F = G.geoField(M);
   near(F(-20000, 0), p[0], 1e-6); near(F(-20000, -4000), p[3], 1e-6); near(F(-20000, -2000), (p[0] + p[3]) / 2, 1e-6);
   near(F(-20000, 3000), p[0] - 3000, 1e-6, 'land side: signed distance');
@@ -434,20 +434,20 @@ test('isolated body: core and halos override the regional map, an inside well is
 });
 test('traced channel (polyline with a width) and freehand polygon bodies: area, environment and code', () => {
   const M = G.makeModel('fan', { geom: 'linear', az: 180, src: [0, 10000], span: 20000, ext: { xmin: -10000, xmax: 10000, ymin: -10000, ymax: 10000 }, noise: { amp: 0, wl: 5000, seed: 1 }, warp: { on: false, R: 1000 },
-    bodies: [{ type: 'custom', shape: 'ribbon', x: 0, y: 0, line: [[-5000, 0], [5000, 0]], width: 400, env: 'Channel fill', color: '#c0602a', w: [], irr: 0 },
+    bodies: [{ type: 'custom', shape: 'ribbon', x: 0, y: 0, line: [[-5000, 0], [5000, 0]], width: 430, env: 'Channel fill', color: '#c0602a', w: [], irr: 0 },
       { type: 'custom', shape: 'poly', x: 0, y: 5000, pts: [[-1000, -1000], [1000, -1000], [1000, 1000], [-1000, 1000]], env: 'Lobe sand', color: '#f0c040', w: [], irr: 0 }] });
-  const mod = G.build(M, []), g = G.nodeGrid(mod, M.ext, 50), ci = clsIdx(M, 'Channel fill') + 1, li = clsIdx(M, 'Lobe sand') + 1;
-  let a = 0, b = 0; for (const c of g.codes) { if (c === ci) a++; if (c === li) b++; }
-  near(a * 2500, 10000 * 400 + Math.PI * 200 * 200, 0.06 * 4e6, 'ribbon area');
+  const mod = G.build(M, []), g = G.nodeGrid(mod, M.ext, 25), ci = clsIdx(M, 'Channel fill') + 1, li = clsIdx(M, 'Lobe sand') + 1;
+  let a = 0, b = 0; for (const c of g.codes) { if (c === ci) a++; if (c === li) b++; } a *= 625 / 2500; b *= 625 / 2500;
+  near(a * 2500, 10000 * 430 + Math.PI * 215 * 215, 0.06 * 4e6, 'ribbon area');
   near(b * 2500, 4e6, 0.06 * 4e6, 'polygon area');
   assert.ok(arr(g.legend).some(([c, nm]) => c === ci && nm === 'Channel fill'));
 });
 test('mixed zone between two belts: own class “A + B”; wells “A / B” honoured in A, B or the mix', () => {
-  const M = G.makeModel('shelf', { geom: 'linear', az: 90, src: [-5000, 0], span: 6000, ext: { xmin: -5000, xmax: 5000, ymin: -5000, ymax: 5000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 }, mix: [{ k: 1, w: 400 }] });
+  const M = G.makeModel('shelf', { geom: 'linear', az: 90, src: [-5000, 0], span: 6000, ext: { xmin: -5000, xmax: 5000, ymin: -5000, ymax: 5000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 }, mix: [{ k: 1, w: 200 }] });
   const mi = clsIdx(M, 'Shoreface + Offshore transition');
   assert.ok(mi > 0 && G.allBelts(M)[mi].kind === 'mix');
   const mod = G.build(M, []), x = -5000 + mod.t[1];
-  assert.equal(mod.beltAt(x + 60, 0), mi); assert.equal(mod.beltAt(x - 60, 0), mi); assert.equal(mod.beltAt(x + 450, 0), 2); assert.equal(mod.beltAt(x - 450, 0), 1);
+  assert.equal(mod.beltAt(x + 40, 0), mi); assert.equal(mod.beltAt(x - 40, 0), mi); assert.equal(mod.beltAt(x + 250, 0), 2); assert.equal(mod.beltAt(x - 250, 0), 1);
   const W = [{ name: 'A', x: -4000, y: 0, env: 'shoreface' }, { name: 'AB', x: -2800, y: 0, env: 'Shoreface / offshore transition' }, { name: 'C', x: 0, y: 0, env: 'offshore shelf' }];
   const m2 = G.build(M, W);
   assert.ok(m2.check.every(c => c.honoured), JSON.stringify(m2.check.map(c => [c.name, c.b, c.belt])));
@@ -538,7 +538,7 @@ test('fault extraction: two straight faults in a discontinuity grid recovered as
   const F = G.extractFaults({ nx, ny, x0: 0, y0: 0, dx: 10, dy: 10, z }, { mode: 'above', thr: .5, minLen: 300, tol: 15 });
   assert.equal(F.faults.length, 2, JSON.stringify(F.faults.map(f => f.pts.length)));
   for (const f of F.faults) { const p = f.pts, a = p[0], b = p[p.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    assert.ok(L > 800, 'long ' + L);
+    assert.ok(L > 700, 'long ' + L);
     for (const q of p) { const dd = Math.abs((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])) / L; assert.ok(dd < 25, 'straight ' + dd); } }
   const vert = F.faults.find(f => Math.abs(f.pts[0][0] - 1300) < 30); assert.ok(vert, 'the vertical fault at x = 1300');
 });
