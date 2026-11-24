@@ -90,9 +90,12 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
 .cls.hd{color:var(--mut);font-size:.72rem;margin:6px 0 0}
 .cls input[type=color]{width:30px;height:24px;padding:1px;border:1px solid var(--line);border-radius:4px;background:var(--bg);cursor:pointer}
 #clsRes table{margin-top:6px;border:1px solid var(--line)}
-#clsRes td:nth-child(3),#clsRes th:nth-child(3){text-align:left}
-#clsRes tbody tr{cursor:default}
-#clsRes .sw{width:14px;height:14px}
+#clsRes td:nth-child(3),#clsRes th:nth-child(3),#polyRes td:nth-child(3),#polyRes th:nth-child(3){text-align:left}
+#clsRes tbody tr,#polyRes tbody tr{cursor:default}
+#clsRes .sw,#polyRes .sw{width:14px;height:14px}
+#polyRes{overflow-x:auto}#polyRes table{margin-top:6px;border:1px solid var(--line);font-size:.76rem}#polyRes th,#polyRes td{padding:3px 5px}#polyRes td:first-child{white-space:nowrap}
+#polyRes td:nth-child(2),#polyRes th:nth-child(2){text-align:left}#polyRes td:nth-child(3),#polyRes th:nth-child(3){text-align:right}
+button.busy{cursor:progress}
 </style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head><body>
 <div class="top"><h1>Map digitizer</h1>
@@ -103,14 +106,18 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <button id="bMat" title="Matrix CSV: one row per y (top = ymax), one column per x">Matrix CSV</button>
   <button id="bGrd" title="Surfer ASCII grid (DSAA), empty nodes = 1.70141e38">Surfer .grd</button>
   <button id="bZmap" title="ZMAP+ grid of class codes, legend in ! comment lines, empty nodes = 1E+30" hidden>ZMAP+</button>
+  <span id="polyExp" hidden><span style="opacity:.85;font-size:.8rem;margin:0 2px 0 6px">Polygons</span>
+  <button id="bIrap" title="IRAP Classic lines (ASCII) for Petrel: x y z per vertex, z = class code, each ring closed and followed by 999.000000 999.000000 999.000000; holes are separate rings">IRAP lines</button>
+  <button id="bGeo" title="GeoJSON FeatureCollection, one Polygon (with holes) per feature, properties code, class, area, perimeter; exterior rings counter-clockwise, holes clockwise">GeoJSON</button>
+  <button id="bPcsv" title="One row per vertex: polygon, ring, ring_type (outer / hole), code, class, vertex, x, y; rings are not repeated at the end">Polygons CSV</button></span>
   <span class="msg" id="exportMsg"></span>
-  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the images are never uploaded. The value of each grid node is read from its colour by matching it to the colour legend (CIE Lab distance), then the median over a small pixel window is kept (colour bar) or the majority class of the window (colour boxes). Colours that do not match the legend (text, white background, contour lines) give empty nodes. With colour boxes the exports hold the class code; the CSV is x, y, code, class and always omits the empty nodes; the ZMAP+ grid lists the classes as ! code = name comment lines.">?</span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the images are never uploaded. The value of each grid node is read from its colour by matching it to the colour legend (CIE Lab distance), then the median over a small pixel window is kept (colour bar) or the majority class of the window (colour boxes). Colours that do not match the legend (text, white background, contour lines) give empty nodes. With colour boxes the exports hold the class code; the CSV is x, y, code, class and always omits the empty nodes; the ZMAP+ grid lists the classes as ! code = name comment lines. Polygons (after “Extract polygons”): IRAP Classic lines for Petrel (x y z, z = class code, rings closed and separated by 999 lines, holes as separate rings), GeoJSON (one polygon with its holes per feature) and CSV (one row per vertex).">?</span>
  </div>
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
 <aside class="side">
  <section class="panel"><h2><span class="n">1</span>Map image<span class="tt" tabindex="0" data-tip="Open a file, drop it on the canvas, or paste a screenshot with Ctrl+V. The map should be a flat colour-filled map (no perspective). The image never leaves your browser.">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="row"><button class="pri" id="bOpen">Open map…</button><button id="bExample">Try an example</button><button id="bExFac" title="Synthetic facies map with a legend of colour boxes (discrete classes)">Facies example</button></div>
+  <div class="body"><div class="row"><button class="pri" id="bOpen">Open map…</button><button id="bExample">Try an example</button><button id="bExFac" title="Synthetic facies map with a legend of colour boxes (discrete classes)">Facies example</button><button id="bExTur" title="Synthetic turbidite facies map (basin plain, channel-levee complex, lobes) with wells, grid lines and a legend of colour boxes, to test the polygon output">Turbidite example</button></div>
   <input type="file" id="file" accept="image/*" hidden><input type="file" id="fileLeg" accept="image/*" hidden>
   </div>
  </section>
@@ -152,10 +159,13 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <div class="row"><label class="inl">Window ± <input type="number" id="win" min="0" max="15" value="2" style="width:52px">px</label>
    <label class="inl">Min. matching <input type="number" id="minf" min="1" max="100" value="30" style="width:56px">%</label></div>
   <div class="row" id="rowFill" hidden><label class="inl"><input type="checkbox" id="fillGaps" checked>Fill small gaps</label><span class="tt" tabindex="0" data-tip="One pass after the extraction: an empty node takes the class shared by at least 5 of its 8 neighbours (read from the grid before filling). It closes the holes left by labels, well symbols and lines without growing the classes into the empty areas.">?</span></div>
-  <div class="row"><button class="pri" id="bExtract">Extract grid</button></div>
-  <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label><label class="inl"><input type="checkbox" id="showU">Unmatched pixels</label></div>
+  <div class="row" id="rowPoly" hidden><label class="inl">Simplify <input type="number" id="pTol" min="0" step="any" placeholder="auto" style="width:84px" aria-label="Simplification tolerance in map units"></label><label class="inl">Min. area <input type="number" id="pMin" min="0" step="any" placeholder="auto" style="width:96px" aria-label="Minimum polygon area in map units squared"></label><span class="tt" tabindex="0" data-tip="Extract polygons uses the same grid bounds, colour tolerance, window and min. matching as the grid, but classifies every image pixel (not only the nodes): majority filter over the window, unmatched pixels (text, lines, wells) filled from the neighbouring classes, then the outline of each zone is traced along the pixel edges. Simplify: Douglas–Peucker tolerance in map units (empty = 1.5 pixel, 0 = keep the pixel stair-steps); shared boundaries are simplified once, so neighbouring polygons still fit without gap. Min. area in map units² (empty = 25 pixels): smaller patches are merged into the class around them, so they leave no hole.">?</span></div>
+  <div class="row"><button class="pri" id="bExtract">Extract grid</button><button id="bPoly" hidden>Extract polygons</button></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label><label class="inl" hidden><input type="checkbox" id="showP" checked>Polygons</label><label class="inl"><input type="checkbox" id="showU">Unmatched pixels</label></div>
   <div class="msg" id="exMsg"></div>
-  <div id="clsRes"></div></div>
+  <div id="clsRes"></div>
+  <div class="msg" id="pMsg"></div>
+  <div id="polyRes"></div></div>
  </section>
 </aside>
 <main>
@@ -244,9 +254,15 @@ function modeFilter(L,nx,ny,r,minN,nG){if(r<1)return L.slice();const o=new Int16
     o[k]=bi}
   return o}
 // unmatched pixels (-1) take the majority class of their 8 neighbours (tie -> lowest index), read from the previous pass;
-// repeated until none is left, nothing changes or maxPass passes. -2 is never filled.
-function fillHoles(L,nx,ny,maxPass=64){L=L.slice();let todo=[],nG=0;
-  for(let k=0;k<L.length;k++){if(L[k]===-1)todo.push(k);else if(L[k]>=nG)nG=L[k]+1}
+// repeated until none is left, nothing changes or maxPass passes. -2 is never filled; nor are unmatched patches (8-connected)
+// of more than maxSize cells (white margins, inset legends, title blocks): they stay -1, i.e. no polygon there.
+function fillHoles(L,nx,ny,maxPass=64,maxSize=Infinity){L=L.slice();let todo=[],nG=0;const N=L.length,seen=new Uint8Array(N),st=new Int32Array(N);
+  for(let k=0;k<N;k++){if(L[k]>=nG)nG=L[k]+1;if(L[k]!==-1||seen[k])continue;
+    let top=0,a=0;const grp=[];st[top++]=k;seen[k]=1;
+    while(top){const q=st[--top],i=q%nx,j=(q-i)/nx;grp.push(q);a++;
+      for(let v=-1;v<=1;v++){const y=j+v;if(y<0||y>=ny)continue;for(let u=-1;u<=1;u++){const x=i+u;if(x<0||x>=nx)continue;const z=y*nx+x;if(!seen[z]&&L[z]===-1){seen[z]=1;st[top++]=z}}}}
+    if(a<=maxSize)for(const q of grp)todo.push(q)}
+  const kept=N-todo.length-L.reduce((s,v)=>s+(v!==-1),0);
   const cnt=new Int32Array(Math.max(1,nG));let passes=0;
   while(todo.length&&passes<maxPass){const set=[],rest=[];
     for(const k of todo){const i=k%nx,j=(k-i)/nx;let best=0,bc=-1;cnt.fill(0);
@@ -256,7 +272,7 @@ function fillHoles(L,nx,ny,maxPass=64){L=L.slice();let todo=[],nG=0;
     if(!set.length)break;passes++;
     for(let q=0;q<set.length;q+=2)L[set[q]]=set[q+1];
     todo=rest}
-  return{L,passes,left:todo.length}}
+  return{L,passes,left:todo.length+kept}}
 // 4-connected components of equal labels
 function comps(L,nx,ny){const N=L.length,C=new Int32Array(N).fill(-1),st=new Int32Array(N),size=[],lab=[];let n=0;
   for(let s=0;s<N;s++){if(C[s]>=0)continue;const c=L[s];let top=0,sz=0;st[top++]=s;C[s]=n;
@@ -448,7 +464,7 @@ function setImage(doc,img){
   doc.img=img;doc.imgC=c;doc.w=c.width;doc.h=c.height;doc.imgData=g.getImageData(0,0,doc.w,doc.h);
 }
 function afterLoad(doc){
-  if(doc===S.map){S.R=null;S.region=null;$('drop').style.display='none'}
+  if(doc===S.map){S.R=null;S.P=null;S.region=null;$('drop').style.display='none';$('pMsg').textContent='';renderPolyRes()}
   if(doc===LD()){resetTicks();resetCls()}
   fit();recal();buildLUT();renderTable();$('exMsg').textContent=''}
 function loadFile(f,target){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();
@@ -517,6 +533,49 @@ function makeFacies(){
   return{canvas:c,geo:{px0,py0,pw,ph,boxes:boxes.reverse()}}}
 $('bExFac').onclick=()=>{const e=makeFacies();const i=new Image();i.onload=()=>{setMode('disc');S.sep=false;$('legSrc').value='same';$('bOpenLeg').hidden=true;['vsep','vMap','vLeg'].forEach(k=>$(k).hidden=true);setView('map');
   setImage(S.map,i);window.EXGEO=e.geo;afterLoad(S.map);banner('Facies example: press “+ Add class” and click each colour box of the legend (or “Detect colours”), name the classes, then calibrate with two corners (0, 0) and (100, 60) and extract.')};i.src=e.canvas.toDataURL('image/png')};
+
+// turbidite example: synthetic deep-water facies map (basin plain, channel-levee complex, lobes), map coordinates in metres
+const TUR=[['Basin plain mud',[124,134,158]],['Lobe fringe',[236,226,166]],['Lobe',[244,196,64]],['Levee',[122,172,96]],['Channel axis',[206,104,48]]];
+const TURX={X0:400000,X1:440000,Y0:6700000,Y1:6727500};   // map frame in metres (40 km × 27.5 km); the drawing works in km from the lower-left corner
+const turC1=x=>22-.55*x+1.6*Math.sin(x/2.2),turC2=x=>turC1(11)+.3*(x-11)+.9*Math.sin((x-11)/1.8);   // channel axes y(x), km; the second one branches off at x = 11
+function turGeo(){const cur=(f,a,b)=>{const P=[];for(let k=0;a+k*.1<=b+1e-9;k++)P.push([a+k*.1,f(a+k*.1)]);return P};
+  const C1=cur(turC1,-1,22),C2=cur(turC2,11,27);
+  const lobe=(P,R,wd)=>{const n=P.length,m=P[n-1],q=P[n-4],h=Math.hypot(m[0]-q[0],m[1]-q[1]),ux=(m[0]-q[0])/h,uy=(m[1]-q[1])/h;return{ux,uy,cx:m[0]+ux*R*.55,cy:m[1]+uy*R*.55,a:R,b:R*wd,fan:true}};
+  const L1=lobe(C1,6.4,.72),L2=lobe(C2,4.6,.75);
+  return{C1,C2,L:[L1,L2,{ux:1,uy:0,cx:35.6,cy:6.8,a:2.9,b:2.1,fan:false}],mud:[L1.cx+L1.ux*1.1-L1.uy*1.3,L1.cy+L1.uy*1.1+L1.ux*1.3,.8]}}
+function turD(P,x,y){const x0=P[0][0],i0=Math.max(0,Math.floor((x-1.3-x0)/.1)),i1=Math.min(P.length-1,Math.ceil((x+1.3-x0)/.1));let best=Infinity;   // distance to the polyline, only near x
+  for(let i=i0;i<i1;i++){const a=P[i],b=P[i+1],ex=b[0]-a[0],ey=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*ex+(y-a[1])*ey)/(ex*ex+ey*ey))),dx=x-a[0]-t*ex,dy=y-a[1]-t*ey,d=dx*dx+dy*dy;if(d<best)best=d}
+  return Math.sqrt(best)}
+function turQ(l,x,y){const u=(x-l.cx)*l.ux+(y-l.cy)*l.uy,v=-(x-l.cx)*l.uy+(y-l.cy)*l.ux,b=l.fan?l.b*(.45+.55*Math.max(0,Math.min(1,(u+l.a)/(2*l.a)))):l.b;return Math.hypot(u/l.a,v/b)}
+function turAt(x,y,T){const d=Math.min(turD(T.C1,x,y),turD(T.C2,x,y));
+  if(d<.32)return 4;if(d<1.05)return 3;
+  if(Math.hypot(x-T.mud[0],y-T.mud[1])<T.mud[2])return 0;
+  let q=Infinity;for(const l of T.L)q=Math.min(q,turQ(l,x,y));
+  return q<1?2:q<1.22?1:0}
+function makeTurbidite(){
+  const W=920,H=540,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);
+  const px0=86,py0=36,pw=640,ph=440,KX=40,KY=27.5,T=turGeo(),im=g.createImageData(pw,ph),area=new Array(TUR.length).fill(0),SS=[[.25,.25],[.75,.25],[.25,.75],[.75,.75]];
+  for(let j=0;j<ph;j++)for(let i=0;i<pw;i++){let r=0,gg=0,b=0;   // 2 × 2 supersampling: anti-aliased boundaries, as in a real map export
+    for(const [su,sv] of SS){const k=turAt((i+su)/pw*KX,KY-(j+sv)/ph*KY,T),q=TUR[k][1];r+=q[0];gg+=q[1];b+=q[2];area[k]++}
+    const o=(j*pw+i)*4;im.data[o]=Math.round(r/4);im.data[o+1]=Math.round(gg/4);im.data[o+2]=Math.round(b/4);im.data[o+3]=255}
+  g.putImageData(im,px0,py0);
+  const sx=x=>px0+x/KX*pw,sy=y=>py0+ph-y/KY*ph;
+  g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1;     // grid lines, wells and labels to test robustness
+  for(let x=0;x<=KX;x+=10){g.beginPath();g.moveTo(Math.round(sx(x))+.5,py0);g.lineTo(Math.round(sx(x))+.5,py0+ph);g.stroke()}
+  for(let y=0;y<=KY;y+=5){g.beginPath();g.moveTo(px0,Math.round(sy(y))+.5);g.lineTo(px0+pw,Math.round(sy(y))+.5);g.stroke()}
+  g.fillStyle='#000';g.font='12px sans-serif';
+  [[5.5,20.6,'TB-1'],[14.2,13.4,'TB-2'],[25.3,5.2,'TB-3'],[30.2,19.4,'TB-4'],[35.4,7.6,'TB-5'],[9,5,'TB-6'],[19,23,'TB-7']].forEach(([x,y,n])=>{g.beginPath();g.arc(sx(x),sy(y),3.5,0,7);g.fill();g.fillText(n,sx(x)+6,sy(y)-4)});
+  g.strokeStyle='#000';g.strokeRect(px0+.5,py0+.5,pw,ph);g.font='11px sans-serif';
+  for(let x=0;x<=KX;x+=10){g.beginPath();g.moveTo(sx(x)+.5,py0+ph);g.lineTo(sx(x)+.5,py0+ph+5);g.stroke();g.fillText(String(TURX.X0+x*1000),sx(x)-20,py0+ph+18)}
+  g.textAlign='right';for(let y=0;y<=KY;y+=5){g.beginPath();g.moveTo(px0-5,sy(y)+.5);g.lineTo(px0,sy(y)+.5);g.stroke();g.fillText(String(TURX.Y0+y*1000),px0-8,sy(y)+4)}
+  g.textAlign='left';g.fillText('X (m)',px0+pw/2-14,py0+ph+34);g.fillText('Y (m)',8,py0-12);
+  const bx=px0+pw+20,boxes=[];g.font='600 12px sans-serif';g.fillText('Turbidite facies',bx,py0+8);g.font='12px sans-serif';
+  TUR.slice().reverse().forEach(([n,q],k)=>{const y=py0+24+k*28;g.fillStyle=`rgb(${q.join(',')})`;g.fillRect(bx,y,28,18);g.strokeStyle='#000';g.strokeRect(bx+.5,y+.5,27,17);g.fillStyle='#000';g.fillText(n,bx+36,y+13);boxes.push({name:n,rgb:q,cx:bx+14,cy:y+9})});
+  const m2=(KX*1000/pw)*(KY*1000/ph)/4;   // m² per sub-sample
+  return{canvas:c,geo:{px0,py0,pw,ph,...TURX,boxes:boxes.reverse(),area:Object.fromEntries(TUR.map(([n],k)=>[n,area[k]*m2]))}}}
+$('bExTur').onclick=()=>{const e=makeTurbidite();const i=new Image();i.onload=()=>{setMode('disc');S.sep=false;$('legSrc').value='same';$('bOpenLeg').hidden=true;['vsep','vMap','vLeg'].forEach(k=>$(k).hidden=true);setView('map');
+  setImage(S.map,i);window.EXGEO=e.geo;afterLoad(S.map);banner('Turbidite example: press “+ Add class” and click each colour box of the legend (or “Detect colours”), name the classes, calibrate with the lower-left corner (400000, 6700000) and the upper-right corner (440000, 6727500), then press “Extract polygons”.')};i.src=e.canvas.toDataURL('image/png')};
 
 // ---------- view ----------
 function size(){const r=$('stage').getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);return{w:r.width,h:r.height,dpr}}
@@ -628,10 +687,11 @@ $('bDetect').onclick=()=>{const D=S.map;if(!D.img){banner('Open a map first.',tr
   else banner(P.length?'No new colour: every dominant colour is already a class.':'No dominant colour found.',!P.length)};
 function setMode(m){S.mode=m;$('legType').value=m;const d=m==='disc';
   $('legCont').hidden=d;$('legDisc').hidden=!d;$('rowFill').hidden=!d;$('bZmap').hidden=!d;$('skipNaN').parentElement.hidden=d;
+  ['rowPoly','bPoly','polyExp'].forEach(i=>$(i).hidden=!d);$('showP').parentElement.hidden=!d;
   $('bCopy').textContent=d?'Copy table':'Copy XYZ';$('bCopy').title=d?'Copy x, y, code, class as tab-separated text (empty nodes omitted), ready to paste into Excel':'Copy x, y, value as tab-separated text, ready to paste into Excel';
   $('bCsv').textContent=d?'CSV (code, class)':'XYZ CSV';$('bCsv').title=d?'x, y, code, class; empty nodes are omitted':'';
   if(S.tool==='tick'||S.tool==='cls')setTool(null);
-  S.R=null;$('exMsg').textContent='';renderClsRes();renderTable();computeU()}
+  S.R=null;S.P=null;$('exMsg').textContent='';$('pMsg').textContent='';renderClsRes();renderPolyRes();renderTable();computeU()}
 $('legType').onchange=e=>setMode(e.target.value);
 
 // ---------- unmatched-pixel overlay ----------
@@ -650,7 +710,7 @@ function gridSpec(){const v=['gx0','gx1','gy0','gy1','gdx','gdy'].map(i=>num($(i
   if(v.some(x=>!isFinite(x)))return{err:'Fill in xmin, xmax, ymin, ymax, dx, dy.'};
   const [x0,x1,y0,y1,dx,dy]=v;if(dx<=0||dy<=0)return{err:'dx and dy must be positive.'};if(x1<x0||y1<y0)return{err:'max must be ≥ min.'};
   const nx=Math.floor((x1-x0)/dx+1e-9)+1,ny=Math.floor((y1-y0)/dy+1e-9)+1;
-  if(nx*ny>300000)return{err:`Too many nodes (${nx}×${ny}); increase dx, dy.`};return{x0,y0,dx,dy,nx,ny}}
+  if(nx*ny>300000)return{err:`Too many nodes (${nx}×${ny}); increase dx, dy.`};return{x0,y0,dx,dy,nx,ny,x1,y1}}
 function draw(){
   const dpr=window.devicePixelRatio||1,W=cv.width/dpr,H=cv.height/dpr,D=CUR();
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
@@ -664,6 +724,7 @@ function draw(){
     const xe=R.x0+(R.nx-1)*R.dx,ye=R.y0+(R.ny-1)*R.dy,cs=[G.inv(R.x0,R.y0),G.inv(xe,R.y0),G.inv(xe,ye),G.inv(R.x0,ye)];
     ctx.save();ctx.beginPath();cs.forEach((c,i)=>i?ctx.lineTo(c[0],c[1]):ctx.moveTo(c[0],c[1]));ctx.closePath();ctx.clip();   // no half-cell bleed outside the grid bounds
     ctx.transform(ax[0],ax[1],ay[0],ay[1],o[0]-.5*ax[0]-.5*ay[0],o[1]-.5*ax[1]-.5*ay[1]);ctx.drawImage(R.canvas,0,0);ctx.restore();ctx.globalAlpha=1}
+  if(isMap&&S.P&&$('showP').checked){ctx.lineJoin='round';ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=3.2/D.s;ctx.stroke(S.P.path);ctx.strokeStyle='#232220';ctx.lineWidth=1.4/D.s;ctx.stroke(S.P.path)}
   ctx.setTransform(dpr,0,0,dpr,0,0);
   if(isMap&&S.region){const r=S.region,[a,b]=toScr(r.x0,r.y0),[c,d]=toScr(r.x1,r.y1);ctx.strokeStyle='#a8623a';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.strokeRect(a,b,c-a,d-b);ctx.setLineDash([])}
   if(isMap&&S.R&&$('showN').checked){const R=S.R,G=GEO();ctx.lineWidth=1;
@@ -751,15 +812,19 @@ function gUpd(){const g=gridSpec(),m=$('gMsg');m.className='msg'+(g.err?' err':'
 $('tol').oninput=e=>{$('tolV').textContent=e.target.value;updU()};
 
 // ---------- extraction ----------
-$('bExtract').onclick=()=>{
-  const m=$('exMsg');m.className='msg';
-  if(!S.map.img){m.textContent='Open a map first.';m.className='msg err';banner('Open a map first.',true);return}
-  if(DISC()&&!DL){const e=S.cls.length?'Every colour of the legend needs an integer code (section 2).':'Define the classes first (section 2): click each colour box of the legend with “+ Add class”, or press “Detect colours”.';m.textContent=e;m.className='msg err';banner(e,true);return}
-  if(!DISC()&&!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';banner('Define the colour legend first (section 2): click the min and max ends of the colour bar and type their values.',true);return}
-  if(S.cal.pts.length&&(!CAL||CAL.err)){const e='Calibration incomplete: '+(CAL&&CAL.err?CAL.err:'fix the control points')+' Fix it, or press Reset to work in image pixels.';m.textContent=e;m.className='msg err';banner(e,true);return}
+function prep(m){   // checks shared by the grid and polygon extractions; null after reporting the problem
+  m.className='msg';
+  if(!S.map.img){m.textContent='Open a map first.';m.className='msg err';banner('Open a map first.',true);return null}
+  if(DISC()&&!DL){const e=S.cls.length?'Every colour of the legend needs an integer code (section 2).':'Define the classes first (section 2): click each colour box of the legend with “+ Add class”, or press “Detect colours”.';m.textContent=e;m.className='msg err';banner(e,true);return null}
+  if(!DISC()&&!LUT){m.textContent='Read the colour legend first (section 2).';m.className='msg err';banner('Define the colour legend first (section 2): click the min and max ends of the colour bar and type their values.',true);return null}
+  if(S.cal.pts.length&&(!CAL||CAL.err)){const e='Calibration incomplete: '+(CAL&&CAL.err?CAL.err:'fix the control points')+' Fix it, or press Reset to work in image pixels.';m.textContent=e;m.className='msg err';banner(e,true);return null}
   if(['gx0','gx1','gy0','gy1','gdx','gdy'].some(i=>$(i).value.trim()===''))autoGrid();
-  const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';$('gMsg').textContent=g.err;banner(g.err,true);return}
-  const D=S.map,d=D.imgData.data,G=GEO(),tol2=(+$('tol').value)**2,w=Math.max(0,Math.min(15,Math.round(+$('win').value||0))),minN=Math.max(1,Math.ceil((+$('minf').value||30)/100*(2*w+1)**2));
+  const g=gridSpec();if(g.err){m.textContent=g.err;m.className='msg err';$('gMsg').textContent=g.err;banner(g.err,true);return null}
+  const w=Math.max(0,Math.min(15,Math.round(+$('win').value||0))),minf=+$('minf').value||30;
+  return{g,D:S.map,G:GEO(),tol2:(+$('tol').value)**2,w,minf,minN:Math.max(1,Math.ceil(minf/100*(2*w+1)**2))}}
+$('bExtract').onclick=()=>{
+  const m=$('exMsg'),q=prep(m);if(!q)return;
+  const {g,D,G,tol2,w,minN}=q,d=D.imgData.data;
   if(DISC()){extractDisc(g,D,G,tol2,w,minN);return}
   const idx=new Int16Array(g.nx*g.ny).fill(-1),buf=new Int16Array((2*w+1)**2);let ok=0,vmin=Infinity,vmax=-Infinity,sum=0;
   for(let j=0;j<g.ny;j++)for(let i=0;i<g.nx;i++){
@@ -810,6 +875,52 @@ function renderTable(){const R=S.R;$('thX').textContent=R&&R.px?'X (px)':'X';$('
   const nm=R.disc?new Map(legendOf(R)):null;let h='',n=0;for(let j=0;j<R.ny&&n<400;j++)for(let i=0;i<R.nx&&n<400;i++,n++){const k=j*R.nx+i;const z=zOf(k);h+=`<tr><td>${k+1}</td><td>${fmt(R.x0+i*R.dx)}</td><td>${fmt(R.y0+j*R.dy)}</td><td>${R.disc?(isFinite(z)?z+' · '+esc(nm.get(z)):'—'):fmt(z)}</td></tr>`}
   if(R.nx*R.ny>n)h+=`<tr><td colspan="4">… ${R.nx*R.ny-n} more nodes (all are exported)</td></tr>`;$('tb').innerHTML=h}
 
+// ---------- polygons (discrete legend) ----------
+const MAXCELLS=3.2e6;   // label raster size cap: larger regions are read every step-th pixel
+function extractPolys(){
+  const m=$('pMsg'),q=prep(m);if(!q)return;
+  const {g,D,G,tol2,w,minf}=q,t0=performance.now(),fail=e=>{m.textContent=e;m.className='msg err';banner(e,true)};
+  const X0=g.x0,X1=g.x1,Y0=g.y0,Y1=g.y1,cs=[[X0,Y0],[X1,Y0],[X1,Y1],[X0,Y1]].map(p=>G.inv(p[0],p[1])),cx=cs.map(p=>p[0]),cy=cs.map(p=>p[1]);
+  const bx0=Math.max(0,Math.floor(Math.min(...cx))),bx1=Math.min(D.w,Math.ceil(Math.max(...cx))),by0=Math.max(0,Math.floor(Math.min(...cy))),by1=Math.min(D.h,Math.ceil(Math.max(...cy)));
+  if(bx1-bx0<4||by1-by0<4)return fail('The grid bounds fall outside the map image, or cover less than 4 pixels.');
+  const tIn=$('pTol').value.trim(),mIn=$('pMin').value.trim();
+  if((tIn!==''&&!(num(tIn)>=0))||(mIn!==''&&!(num(mIn)>=0)))return fail('Simplify and Min. area must be empty (auto) or numbers ≥ 0.');
+  const step=Math.max(1,Math.ceil(Math.sqrt((bx1-bx0)*(by1-by0)/MAXCELLS))),nx=Math.ceil((bx1-bx0)/step),ny=Math.ceil((by1-by0)/step);
+  const e=1e-9*Math.max(Math.abs(X1-X0),Math.abs(Y1-Y0),1),inside=(x,y)=>{const p=G.f([x,y]);return p[0]>=X0-e&&p[0]<=X1+e&&p[1]>=Y0-e&&p[1]<=Y1+e};
+  let L=MDD.pixLabels(D.imgData.data,D.w,D.h,{x0:bx0,y0:by0,nx,ny,step},(r,gg,b)=>dMatch(r,gg,b,tol2),inside);
+  const r=w>0?Math.max(1,Math.round(w/step)):0;
+  L=MDD.modeFilter(L,nx,ny,r,Math.max(1,Math.ceil(minf/100*(2*r+1)**2)),DL.G.length);
+  const F=MDD.fillHoles(L,nx,ny,64,Math.max(400,.01*nx*ny));   // unmatched patches over 1 % of the region stay unclassified
+  const o=G.f([0,0]),a=G.f([step,0]),b=G.f([0,step]),cellA=Math.abs((a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0])),cell=Math.sqrt(cellA);
+  const tol=tIn===''?1.5*cell:num(tIn),minA=mIn===''?25*cellA:num(mIn);
+  const R=MDD.polygonize(F.L,nx,ny,{minArea:minA/cellA,tol:tol/cell});
+  const im=p=>[bx0+p[0]*step,by0+p[1]*step],P=MDD.toMap(R.polys,p=>G.f(im(p)),DL.G);
+  const path=new Path2D();for(const p of R.polys)for(const rg of [p.outer,...p.holes]){rg.forEach((v,i)=>{const [x,y]=im(v);i?path.lineTo(x,y):path.moveTo(x,y)});path.closePath()}
+  let nIn=0,nUn=0;for(const v of R.L){if(v!==-2)nIn++;if(v===-1)nUn++}
+  S.P={P,path,groups:DL.G.map(x=>({...x})),regionA:nIn*cellA,unA:nUn*cellA,nx,ny,step,cell,tol,minA,merged:R.merged,ms:performance.now()-t0,px:!!G.px};
+  const nh=P.reduce((s,p)=>s+p.holes.length,0),u=G.px?' px':'',ms=Math.round(S.P.ms);
+  m.className='msg';
+  m.textContent=P.length?`${P.length} polygon${P.length>1?'s':''} (${nh} hole${nh!==1?'s':''}) · label raster ${nx} × ${ny} cells of ${fmt(cell)}${u}`+(step>1?` (every ${step}th image pixel: the region exceeds ${MAXCELLS/1e6} M pixels)`:' (1 cell = 1 image pixel)')+` · simplify ${fmt(tol)}${u} · min. area ${fmt(minA)}${u?' px²':''} · ${ms} ms`:'No polygon: no pixel of the region matched a class.';
+  if(!P.length){m.className='msg err';banner('No pixel of the grid region matched a legend class. Raise the colour tolerance, or check the class colours against the map.',true)}
+  else if(S.P.unA>.05*S.P.regionA){m.className='msg err';banner(`${Math.round(100*S.P.unA/S.P.regionA)} % of the region stays unclassified (no polygon there). Raise the colour tolerance, add the missing classes, or keep the grid inside the coloured area.`,true)}
+  else banner(`${P.length} polygons traced. Check the Polygons overlay, then export from the top bar (IRAP lines for Petrel, GeoJSON or CSV).`);
+  renderPolyRes();draw()}
+const liveName=(code,gr)=>{const c=DL&&DL.G.find(x=>x.code===code);return c?c.name:gr?gr.name:''};
+function renderPolyRes(){const P=S.P,el=$('polyRes');if(!P){el.innerHTML='';return}
+  const tot=P.regionA,rows=P.groups.map(gr=>{const Q=P.P.filter(p=>p.code===gr.code);return{gr,n:Q.length,h:Q.reduce((s,p)=>s+p.holes.length,0),a:Q.reduce((s,p)=>s+p.area,0)}});
+  const e3=tot>0?Math.max(0,3*Math.floor(Math.log10(tot)/3)-3):0,sc=10**e3,A=a=>(a/sc).toFixed(a/sc<100?2:0);   // areas shown in units of 10^(3k)
+  el.innerHTML=`<table><thead><tr><th>Code</th><th>Class</th><th>Polygons</th><th>Holes</th><th>Area${e3?` ×10<sup>${e3}</sup>`:''}</th><th>%</th></tr></thead><tbody>`+rows.map(r=>`<tr><td><span class="sw" style="background:rgb(${r.gr.rgb.join(',')})"></span> ${r.gr.code}</td><td>${esc(liveName(r.gr.code,r.gr))}</td><td>${r.n}</td><td>${r.h}</td><td>${A(r.a)}</td><td>${tot?(100*r.a/tot).toFixed(1):'—'}</td></tr>`).join('')
+    +(P.unA>0?`<tr><td>—</td><td>unclassified</td><td></td><td></td><td>${A(P.unA)}</td><td>${(100*P.unA/tot).toFixed(1)}</td></tr>`:'')+'</tbody></table>'
+    +`<div class="note">Area in map units² (${P.px?'image pixels':'from the calibration'}) of the exported, simplified polygons; % = share of the grid region. Holes are the islands of other classes (or unclassified patches) inside a polygon.</div>`}
+$('bPoly').onclick=()=>{const b=$('bPoly');if(b.disabled)return;b.disabled=true;b.classList.add('busy');b.textContent='Extracting…';document.body.style.cursor='progress';
+  requestAnimationFrame(()=>setTimeout(()=>{try{extractPolys()}catch(err){$('pMsg').textContent='Polygon extraction failed: '+err.message;$('pMsg').className='msg err'}
+    finally{b.disabled=false;b.classList.remove('busy');b.textContent='Extract polygons';document.body.style.cursor=''}},0))};
+const polyOut=()=>S.P.P.map(p=>({...p,name:liveName(p.code,S.P.groups.find(g=>g.code===p.code))}));
+const needP=()=>{if(!S.P||!S.P.P.length){toast('Nothing to export: extract the polygons first.');return false}return true};
+$('bIrap').onclick=()=>{if(needP())dl(MDD.irapLines(polyOut()),'map_polygons_irap.dat','text/plain')};
+$('bGeo').onclick=()=>{if(needP())dl(MDD.geojson(polyOut()),'map_polygons.geojson','application/geo+json')};
+$('bPcsv').onclick=()=>{if(needP())dl(MDD.polyCsv(polyOut()),'map_polygons.csv','text/csv')};
+
 // ---------- export ----------
 function xyz(sep){if(S.R.disc)return MDD.csv(gridOut(S.R),sep);const R=S.R,skip=$('skipNaN').checked,L=[['x','y','value'].join(sep)];
   for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);if(skip&&!isFinite(z))continue;L.push([+(R.x0+i*R.dx).toPrecision(10),+(R.y0+j*R.dy).toPrecision(10),isFinite(z)?+z.toPrecision(8):''].join(sep))}
@@ -825,8 +936,8 @@ $('bCsv').onclick=()=>{if(need())dl(xyz(','),S.R.disc?'map_classes.csv':'map_xyz
 $('bZmap').onclick=()=>{if(need()&&S.R.disc)dl(MDD.zmap(gridOut(S.R)),'map_classes.zmap','text/plain')};
 $('bMat').onclick=()=>{if(need())dl(matrix(),'map_matrix.csv','text/csv')};
 $('bGrd').onclick=()=>{if(need())dl(grd(),'map_grid.grd','text/plain')};
-$('showR').onchange=$('showN').onchange=draw;$('showU').onchange=computeU;
-window.DG={S,buildCal,get LUT(){return LUT},get CAL(){return CAL},get DL(){return DL},addClass:(x,y)=>addClassAt(CUR(),x,y),setMode,imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
+$('showR').onchange=$('showN').onchange=$('showP').onchange=draw;$('showU').onchange=computeU;
+window.DG={S,buildCal,recal,renderCal,makeTurbidite,extractPolys,load:i=>{setImage(S.map,i);afterLoad(S.map)},get LUT(){return LUT},get CAL(){return CAL},get DL(){return DL},addClass:(x,y)=>addClassAt(CUR(),x,y),setMode,imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
 renderCls();recal();size();draw();
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
@@ -906,6 +1017,6 @@ renderCls();recal();size();draw();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what": "Runs entirely in your browser: nothing you load leaves your machine. Read a continuous property (colour bar legend) or a discrete property such as facies, lithology or depositional environment (legend of colour boxes) from a colour-filled map image, on a regular grid in map coordinates.", "date": "24 November 2026", "method": ["Legend: click the minimum and maximum ends of the colour bar and type their values; the colours in between are read from the bar pixels along the line joining the two ends, with linear or log interpolation. Intermediate ticks only if the bar is not linear.", "Each grid node is matched to the legend by CIE Lab colour distance, then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes. Settings: colour tolerance (maximum CIE Lab distance; about 2 is barely visible, 10 clearly different), window half-size in pixels, and minimum share of matching pixels in the window.", "Georeferencing: 2 control points are enough if the map is not rotated; 3 or more fit a full affine transform by least squares and handle rotation. Without control points the grid is defined in image pixels (y downward).", "Grid: regular, nodes xmin, xmin + dx, … up to xmax (same for y).", "Discrete legend (colour boxes): each class is a colour sampled as the mean of a 5 × 5 pixel window inside a legend box (editable), a name and an integer code. Colours sharing a code are merged into one class. “Detect colours” proposes the dominant colours of the region: 15-bit colour histogram, bins merged greedily from the most frequent within the colour tolerance (minimum 6) in CIE Lab, kept when they cover at least 1 % of the region (16 at most).", "Discrete node assignment: every pixel of the window is matched to the nearest class colour (CIE Lab distance) within the colour tolerance; the node takes the majority class (mode), not the median, which has no meaning for classes. A tie goes to the tied class whose colour is nearest to the centre pixel. Below the minimum share of matching pixels the node is empty.", "Fill small gaps (option, on by default): one pass after the extraction, an empty node takes the class shared by at least 5 of its 8 neighbours, counted on the grid before filling, so holes left by labels and symbols close without the classes growing into empty areas.", "Discrete exports: CSV x, y, code, class with the empty nodes omitted; ZMAP+ grid of codes, legend in “! code = name” comment lines, header “@name, GRID, 5” / “15, 1E+30, , 0, 1” / rows, columns, xmin, xmax, ymin, ymax / “0.0, 0.0, 0.0” / “@”, then the values column by column from the upper-left node (ymax) downwards, each column starting on a new line, 5 values of width 15 per line, empty nodes 1E+30. The Matrix CSV and Surfer grid hold the codes too."], "sources": [["CIE Lab colour distance, affine least-squares transform", "Standard methods; no specific reference", "classical"], ["Majority (mode) filter, 8-neighbour gap filling, histogram colour quantisation", "Standard image-processing methods; no specific reference", "classical"], ["ZMAP+ grid layout", "Format as used by common geoscience software; no formal specification consulted", "memory"]], "validation": ["No validation against an independent implementation is recorded for this page.", "Discrete mode: self-check script scripts/mapdigitizer_discrete_test.mjs (majority vote, Lab matching with tolerance, gap filling, ZMAP+ and CSV writers, colour detection). On the built-in facies example (6 classes, 1 km grid, 101 × 61 nodes), 99.9 % of the nodes are classified and 99.3 % of them match the class used to draw the map; the differences are nodes on class boundaries."], "limits": ["The map must be a flat colour-filled map without perspective.", "Discrete mode outputs a grid of class codes only: no polygon (shapefile, outline) output.", "Anti-aliased class boundaries mix two colours: these pixels match neither class or the wrong one, so nodes on boundaries can be empty or misclassified; a window of ± 2 px or more and the majority vote reduce it.", "Hatched, dotted or patterned fills are not supported: each class must be one flat colour (several colours can be merged under one code, but a pattern is not recognised as such).", "Classes with very close colours (CIE Lab distance below the tolerance) compete for the same pixels: lower the tolerance or merge them."]});
+({"what": "Runs entirely in your browser: nothing you load leaves your machine. Read a continuous property (colour bar legend) or a discrete property such as facies, lithology or depositional environment (legend of colour boxes) from a colour-filled map image, on a regular grid in map coordinates, and for a discrete property the polygons outlining each zone (IRAP lines for Petrel, GeoJSON, CSV).", "date": "24 November 2026", "method": ["Legend: click the minimum and maximum ends of the colour bar and type their values; the colours in between are read from the bar pixels along the line joining the two ends, with linear or log interpolation. Intermediate ticks only if the bar is not linear.", "Each grid node is matched to the legend by CIE Lab colour distance, then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes. Settings: colour tolerance (maximum CIE Lab distance; about 2 is barely visible, 10 clearly different), window half-size in pixels, and minimum share of matching pixels in the window.", "Georeferencing: 2 control points are enough if the map is not rotated; 3 or more fit a full affine transform by least squares and handle rotation. Without control points the grid is defined in image pixels (y downward).", "Grid: regular, nodes xmin, xmin + dx, … up to xmax (same for y).", "Discrete legend (colour boxes): each class is a colour sampled as the mean of a 5 × 5 pixel window inside a legend box (editable), a name and an integer code. Colours sharing a code are merged into one class. “Detect colours” proposes the dominant colours of the region: 15-bit colour histogram, bins merged greedily from the most frequent within the colour tolerance (minimum 6) in CIE Lab, kept when they cover at least 1 % of the region (16 at most).", "Discrete node assignment: every pixel of the window is matched to the nearest class colour (CIE Lab distance) within the colour tolerance; the node takes the majority class (mode), not the median, which has no meaning for classes. A tie goes to the tied class whose colour is nearest to the centre pixel. Below the minimum share of matching pixels the node is empty.", "Fill small gaps (option, on by default): one pass after the extraction, an empty node takes the class shared by at least 5 of its 8 neighbours, counted on the grid before filling, so holes left by labels and symbols close without the classes growing into empty areas.", "Discrete exports: CSV x, y, code, class with the empty nodes omitted; ZMAP+ grid of codes, legend in “! code = name” comment lines, header “@name, GRID, 5” / “15, 1E+30, , 0, 1” / rows, columns, xmin, xmax, ymin, ymax / “0.0, 0.0, 0.0” / “@”, then the values column by column from the upper-left node (ymax) downwards, each column starting on a new line, 5 values of width 15 per line, empty nodes 1E+30. The Matrix CSV and Surfer grid hold the codes too.", "Polygons (discrete legend, “Extract polygons”): same grid bounds, colour tolerance, window and minimum matching share as the grid. Every image pixel of the region is classified (label raster at image resolution, not at node resolution) to the nearest class colour in CIE Lab within the tolerance. Regions larger than 3.2 million pixels are read every n-th pixel (n = ⌈√(pixels / 3.2 M)⌉) so the raster stays under that size; the message gives the effective cell size. With a rotated calibration (affine, 3 points or more) the cells whose centre falls outside the xmin–xmax / ymin–ymax rectangle are left out.", "Cleaning of the label raster: (1) majority (mode) filter over the same window as the nodes (± window px, converted to raster cells), unmatched pixels ignored, the centre class kept on ties; below the minimum matching share the pixel becomes unmatched. (2) Gap filling: each unmatched pixel takes the majority class of its 8 neighbours, read from the previous pass, repeated until none is left or 64 passes; unmatched patches (8-connected) larger than 1 % of the region (white margins, inset legends, title blocks) are not filled and stay without polygon. (3) Minimum area: 4-connected patches smaller than the minimum area (default 25 cells) take the class with which they share the longest boundary, so they leave no hole; repeated until stable.", "Boundary tracing: the pixel edges between a 4-connected component and anything else are chained into closed rings (edge following on the pixel grid, no marching squares). Where a component touches itself diagonally, the ring turns so that it joins the two pixels, which keeps every ring simple (a hole may touch the exterior at one vertex, as allowed by the OGC simple-features rules). The ring with a positive area is the exterior, the others are holes. Vertices are transformed to map coordinates with the calibration.", "Simplification: Douglas–Peucker with a tolerance in map units (default 1.5 raster cells, 0 = keep the pixel stair-steps). It is applied to shared arcs, not to each polygon: rings are cut at junctions (vertices where three labels or more meet, the raster corners, diagonal contacts), each arc is simplified once in a fixed direction and reused, reversed, by the neighbouring polygon. Neighbouring polygons therefore keep an identical boundary: no gap and no overlap, and the areas of all polygons add up to the region. The tolerance is converted to raster cells with the geometric mean cell size (exact for a non-distorted calibration). A ring left with fewer than 3 vertices gets back its farthest dropped vertices.", "Per polygon: class code and name, area (exterior minus holes, shoelace formula in map units²), perimeter (exterior plus holes) and number of holes. Orientation as in RFC 7946: exterior counter-clockwise, holes clockwise (in map coordinates, x east, y north).", "Polygon exports: IRAP Classic lines (ASCII), map_polygons_irap.dat: one “x y z” line per vertex with 6 decimals, z = class code, each ring closed (first vertex repeated) and followed by the line “999.000000 999.000000 999.000000”; holes are written as separate rings. GeoJSON, map_polygons.geojson: FeatureCollection, one Feature per polygon (Polygon geometry with its holes, rings closed), properties code, class, area, perimeter; the coordinates are the map coordinates of the calibration, no CRS member. CSV, map_polygons.csv: polygon, ring, ring_type (outer / hole), code, class, vertex, x, y, one row per vertex, the first vertex not repeated."], "sources": [["CIE Lab colour distance, affine least-squares transform", "Standard methods; no specific reference", "classical"], ["Majority (mode) filter, 8-neighbour gap filling, histogram colour quantisation", "Standard image-processing methods; no specific reference", "classical"], ["ZMAP+ grid layout", "Format as used by common geoscience software; no formal specification consulted", "memory"], ["Douglas–Peucker line simplification", "Douglas, D. H. & Peucker, T. K. (1973), Algorithms for the reduction of the number of points required to represent a digitized line or its caricature, The Canadian Cartographer 10(2), 112–122", "memory"], ["GeoJSON structure, ring closure and orientation (exterior counter-clockwise, holes clockwise)", "IETF RFC 7946, The GeoJSON Format (Butler et al., 2016)", "memory"], ["IRAP Classic lines ASCII (x y z per vertex, 999 separator lines)", "Format as read by Petrel and other geoscience software; no formal specification consulted", "memory"], ["Pixel-edge boundary tracing, 4-connected components, mode filter, shared-arc simplification", "Standard raster-to-vector methods; no specific reference", "classical"]], "validation": ["No validation against an independent implementation is recorded for this page.", "Discrete mode: self-check script scripts/mapdigitizer_discrete_test.mjs (majority vote, Lab matching with tolerance, gap filling, ZMAP+ and CSV writers, colour detection). On the built-in facies example (6 classes, 1 km grid, 101 × 61 nodes), 99.9 % of the nodes are classified and 99.3 % of them match the class used to draw the map; the differences are nodes on class boundaries.", "Polygons: self-check script (same file) on small label rasters: a class with a square of another class inside gives one polygon with one hole and one without, exact areas in pixel units and after an affine transform, exterior counter-clockwise and hole clockwise; two squares touching at a corner stay two polygons; a 1-pixel speck is merged without leaving a hole; Douglas–Peucker on a known polyline; after simplification the polygons of a staircase boundary share their vertices and their areas add up to the raster; exact IRAP lines text, GeoJSON structure and orientation, CSV rows. A fuzz test on 300 random label rasters found no self-intersecting ring and exact areas before simplification, and no area loss after it when every cell is classified.", "Turbidite example (640 × 440 px map, 62.5 m cells, 5 classes, anti-aliased boundaries, grid lines, wells and labels): 11 polygons (3 holes); the class areas are within 1 % of the areas used to draw the map (basin plain +0.06 %, lobe fringe +0.4 %, lobe −0.3 %, levee −0.9 %, channel axis +0.5 %). A 2000 × 1500 px map (3 million pixels) is processed in about 0.6 s in a desktop browser."], "limits": ["The map must be a flat colour-filled map without perspective.", "Anti-aliased class boundaries mix two colours: these pixels match neither class or the wrong one, so nodes on boundaries can be empty or misclassified; a window of ± 2 px or more and the majority vote reduce it.", "Hatched, dotted or patterned fills are not supported: each class must be one flat colour (several colours can be merged under one code, but a pattern is not recognised as such).", "Classes with very close colours (CIE Lab distance below the tolerance) compete for the same pixels: lower the tolerance or merge them.", "Polygon boundaries follow the pixel edges: before simplification they are stair-steps at the pixel (or downsampled cell) scale; Douglas–Peucker smooths them but does not guarantee that two arcs never cross when the tolerance is large compared with narrow features (rings are simple before simplification).", "Anti-aliased or blurred boundaries are assigned by the majority filter: a boundary can move by about half a pixel.", "Hatched, dotted or patterned fills are not supported for polygons either: a pattern gives several classes or unmatched pixels.", "IRAP lines: holes are written as separate closed rings with the class code as z; Petrel reads them as separate polygons, not as holes of the surrounding one. Use the GeoJSON output when holes matter.", "GeoJSON: RFC 7946 expects longitude/latitude (WGS 84); the file holds the map coordinates of the calibration (e.g. projected metres) and no CRS, which most GIS read but need the coordinate system to be set by hand.", "Unmatched patches larger than 1 % of the region and cells outside the map rectangle get no polygon; they appear as holes or gaps."]});
 </script>
 </body></html>

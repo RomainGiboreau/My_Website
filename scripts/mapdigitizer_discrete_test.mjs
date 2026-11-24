@@ -207,6 +207,15 @@ test('fillHoles: iterates until an unmatched blob is filled from its neighbours;
   const s = MDD.fillHoles(raster(9, 1, x => (x === 0 ? 0 : -1)), 9, 1, 3);   // max passes reached
   assert.equal(s.left, 5);
 });
+test('fillHoles: unmatched patches larger than maxSize (8-connected) stay unclassified', () => {
+  // a 2-pixel label at (2,2)-(3,2) and a 4-column white margin on the right, joined diagonally to a 1-pixel speck at (5,6)
+  const L = raster(10, 8, (x, y) => (x >= 6 || (y === 2 && (x === 2 || x === 3)) || (x === 5 && y === 6) ? -1 : 0));
+  const r = MDD.fillHoles(L, 10, 8, 64, 6);
+  assert.equal(r.L[2 * 10 + 2], 0); assert.equal(r.L[2 * 10 + 3], 0);
+  assert.ok([...Array(8).keys()].every(y => [6, 7, 8, 9].every(x => r.L[y * 10 + x] === -1)), 'margin left empty');
+  assert.equal(r.L[6 * 10 + 5], -1, 'speck touching the margin belongs to it');
+  assert.equal(r.left, 33);
+});
 
 // class A (0) everywhere, class B (1) square of 2 x 2 inside
 const AB = raster(6, 5, (x, y) => (x >= 2 && x <= 3 && y >= 1 && y <= 2 ? 1 : 0));
