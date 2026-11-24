@@ -1,0 +1,251 @@
+// Self-check for the GDE map generator core (docs/gdemap/index.html, <script id="gde-core">).
+// Run: node scripts/gde_test.mjs
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+
+const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const html = read('docs/gdemap/index.html');
+const m = html.match(/<script id="gde-core">([\s\S]*?)<\/script>/);
+assert.ok(m, 'gde-core script block not found');
+const ctx = { window: {} };
+vm.runInNewContext(m[1], ctx);
+const G = ctx.window.GDE;
+// the site's ZMAP checker, to validate the ZMAP+ writer independently
+const zm = read('docs/zmap-checker/index.html').match(/<script id="zmap-core">([\s\S]*?)<\/script>/);
+const zctx = { window: {} };
+vm.runInNewContext(zm[1], zctx);
+const Z = zctx.window.ZMAP;
+
+const tests = [];
+const test = (name, fn) => tests.push([name, fn]);
+const arr = a => Array.from(a);
+const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg || ''} ${a} vs ${b} (tol ${tol})`);
+const rng = s => () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+
+// ---------- templates and matching ----------
+test('templates: every template has ordered belts with name, colour and positive width', () => {
+  for (const k of ['shelf', 'delta', 'fan', 'carbonate', 'fluvial', 'custom']) {
+    const t = G.templates[k];
+    assert.ok(t && t.belts.length >= 3, k);
+    for (const b of t.belts) { assert.ok(b.name && /^#[0-9a-f]{6}$/i.test(b.color) && b.w > 0, k + ' ' + b.name); }
+  }
+  assert.equal(G.templates.delta.geom, 'radial');
+  assert.equal(G.templates.fan.geom, 'radial');
+  assert.equal(G.templates.shelf.geom, 'linear');
+});
+test('matchBelt: case-insensitive, punctuation and plural tolerant, slash parts accepted, unknown = -1', () => {
+  const B = G.templates.fan.belts;
+  assert.equal(G.matchBelt('CHANNEL-LEVEE COMPLEX', B), 1);
+  assert.equal(G.matchBelt('  proximal lobe ', B), 2);
+  assert.equal(G.matchBelt('lobe fringe', B), 3);
+  assert.equal(G.matchBelt('Basin plain', B), 4);
+  assert.equal(G.matchBelt('reef', B), -1);
+  assert.equal(G.matchBelt('Delta Front', G.templates.delta.belts), 1);
+});
+test('parseWells: tab, semicolon (decimal comma) and comma tables, header skipped, environment with spaces', () => {
+  const a = G.parseWells('name\tx\ty\tenvironment\nW-1\t1000\t2000\tDelta front\nW-2\t1500.5\t2500\tprodelta');
+  assert.equal(a.wells.length, 2);
+  assert.deepEqual([a.wells[1].name, a.wells[1].x, a.wells[1].y, a.wells[1].env], ['W-2', 1500.5, 2500, 'prodelta']);
+  const b = G.parseWells('A;10,5;20;shelf\nB;11;21;offshore shelf');
+  assert.equal(b.wells[0].x, 10.5); assert.equal(b.wells[1].env, 'offshore shelf');
+  const c = G.parseWells('A, 10, 20, shoreface\nbad line');
+  assert.equal(c.wells.length, 1); assert.equal(c.errors.length, 1);
+  const d = G.parseWells('A 10 20 delta front');
+  assert.equal(d.wells[0].env, 'delta front');
+});
+
+// ---------- threshold calibration ----------
+const P5 = [1000, 2000, 3000, 4000, 5000];        // 6 belts, prior boundaries
+test('calibrate: wells in belts 1, 2, 4 compatible with the prior keep the prior', () => {
+  const r = G.calibrate([1500, 2500, 4500], [1, 2, 4], P5);
+  assert.ok(r.ok); assert.deepEqual(arr(r.conflicts), []);
+  assert.deepEqual(arr(r.t), P5);
+});
+test('calibrate: prior infeasible -> every threshold inside its feasible interval, increasing', () => {
+  const d = [2200, 2600, 3300], b = [1, 2, 4], r = G.calibrate(d, b, P5);
+  assert.ok(r.ok);
+  const t = arr(r.t);
+  for (let k = 0; k < t.length; k++) {
+    const lo = Math.max(-Infinity, ...d.filter((v, i) => b[i] <= k)), hi = Math.min(Infinity, ...d.filter((v, i) => b[i] >= k + 1));
+    assert.ok(t[k] > lo && t[k] < hi, `t${k}=${t[k]} not in (${lo}, ${hi})`);
+    if (k) assert.ok(t[k] > t[k - 1], 'increasing');
+  }
+  near(t[1], 2400, 1e-9, 'single boundary at the middle of its interval');
+  // every well falls in its belt
+  d.forEach((v, i) => assert.equal(G.classify(v, t), b[i]));
+});
+test('calibrate: all wells in one belt -> belt widened around them, prior kept elsewhere when feasible', () => {
+  const r = G.calibrate([2100, 2900], [2, 2], P5);
+  const t = arr(r.t);
+  assert.ok(t[1] < 2100 && t[2] > 2900);
+  assert.equal(G.classify(2500, t), 2);
+  assert.deepEqual(arr(G.calibrate([2200, 2800], [2, 2], P5).t), P5);
+});
+test('calibrate: inconsistent order detected and reported', () => {
+  const r = G.calibrate([1500, 2500, 3500], [2, 1, 3], P5);
+  assert.equal(r.ok, false);
+  assert.equal(r.conflicts.length, 1);
+  assert.ok(r.msgs.length >= 1 && /proximal|distal/.test(r.msgs[0]), String(r.msgs[0]));
+  // the consistent wells are honoured
+  const keep = [0, 1, 2].filter(i => !arr(r.conflicts).includes(i));
+  for (const i of keep) assert.equal(G.classify([1500, 2500, 3500][i], arr(r.t)), [2, 1, 3][i]);
+});
+test('calibrate: no wells -> prior', () => {
+  assert.deepEqual(arr(G.calibrate([], [], P5).t), P5);
+});
+
+// ---------- geometry ----------
+const base = o => G.makeModel(o.template || 'shelf', Object.assign({ ext: { xmin: -5000, xmax: 5000, ymin: -5000, ymax: 5000 }, cell: 100, noise: { amp: 0, wl: 3000, seed: 1 } }, o));
+test('linear: d = projection on the transport azimuth from the source point', () => {
+  const M = base({ geom: 'linear', az: 90, src: [0, 0] });
+  near(G.dBase(M, 1000, 500), 1000, 1e-9); near(G.dBase(M, -300, 7), -300, 1e-9);
+  const M2 = base({ geom: 'linear', az: 45, src: [100, 100] });
+  near(G.dBase(M2, 100 + 1000 / Math.SQRT2, 100 + 1000 / Math.SQRT2), 1000, 1e-6);
+});
+test('radial: d = distance from the source inside the fan, distal belt outside', () => {
+  const M = base({ template: 'delta', geom: 'radial', az: 90, fan: 90, src: [0, 0], span: 6000 });
+  const pol = (r, deg) => [r * Math.sin(deg * Math.PI / 180), r * Math.cos(deg * Math.PI / 180)];
+  for (const [r, a] of [[1000, 90], [2500, 120], [3000, 60], [4000, 134]]) near(G.dBase(M, ...pol(r, a)), r, 1e-6, `r ${r} az ${a}`);
+  const mod = G.build(M, []);
+  const nb = M.belts.length;
+  for (const [r, a] of [[1500, 180], [3000, 10], [2000, 270], [1000, 0]]) assert.equal(mod.beltAt(...pol(r, a)), nb - 1, `outside r ${r} az ${a}`);
+  assert.equal(mod.beltAt(...pol(100, 90)), 0);
+});
+
+// ---------- noise ----------
+test('noise: same seed -> identical grid, other seed -> different grid, amplitude 0 -> straight belts', () => {
+  const M = base({ geom: 'linear', az: 30, src: [-4000, -4000], span: 9000, noise: { amp: 800, wl: 2500, seed: 42 } });
+  const g1 = G.nodeGrid(G.build(M, []), M.ext, 200), g2 = G.nodeGrid(G.build(M, []), M.ext, 200);
+  assert.deepEqual(arr(g1.codes), arr(g2.codes));
+  const M3 = base({ geom: 'linear', az: 30, src: [-4000, -4000], span: 9000, noise: { amp: 800, wl: 2500, seed: 43 } });
+  assert.notDeepEqual(arr(G.nodeGrid(G.build(M3, []), M.ext, 200).codes), arr(g1.codes));
+  const F = G.field(M), F0 = G.field(base({ geom: 'linear', az: 30, src: [-4000, -4000], span: 9000 }));
+  let mx = 0; for (let i = 0; i < 200; i++) { const x = -5000 + 50 * i, y = 3000 - 20 * i; mx = Math.max(mx, Math.abs(F(x, y) - F0(x, y))); }
+  assert.ok(mx > 100 && mx <= 1600, 'noise shift ' + mx);
+});
+
+// ---------- auto-fit ----------
+test('auto-fit: azimuth of a known linear model recovered within 5 degrees', () => {
+  for (const az0 of [60, 200, 315]) {
+    const truth = base({ geom: 'linear', az: az0, src: [0, 0], span: 6000 });
+    truth.src = [-3000 * Math.sin(az0 * Math.PI / 180), -3000 * Math.cos(az0 * Math.PI / 180)];
+    const mt = G.build(truth, []), r = rng(az0), W = [];
+    for (let i = 0; i < 30; i++) { const x = -5000 + 10000 * r(), y = -5000 + 10000 * r(); W.push({ name: 'w' + i, x, y, b: mt.beltAt(x, y) }); }
+    const M = Object.assign({}, truth, { az: (az0 + 110) % 360 });
+    const f = G.fitAzimuth(M, W, { source: false });
+    let e = Math.abs(((f.az - az0) % 360 + 540) % 360 - 180);
+    assert.ok(e <= 5, `az0 ${az0} fitted ${f.az}`);
+    assert.equal(f.count, 30);
+  }
+});
+test('auto-fit radial: source and azimuth found so that every well is consistent', () => {
+  const truth = base({ template: 'fan', geom: 'radial', az: 180, fan: 80, src: [0, 5500], span: 9000 });
+  const mt = G.build(truth, []);
+  const W = [[0, 3000], [-800, 0], [600, -2500], [1500, -4500]].map(([x, y], i) => ({ name: 'F' + i, x, y, b: mt.beltAt(x, y) }));
+  const M = Object.assign({}, truth, { az: 120, src: [3000, 4000] });
+  const f = G.fitAzimuth(M, W, { source: true });
+  assert.equal(f.count, W.length);
+  const mod = G.build(Object.assign({}, M, { az: f.az, src: f.src }), W);
+  assert.ok(mod.check.every(c => c.honoured), JSON.stringify(mod.check.map(c => [c.belt, c.b])));
+});
+
+// ---------- warping ----------
+test('warping: a conflicting well ends in its belt, the map beyond 3 radii is unchanged', () => {
+  const M = base({ geom: 'linear', az: 90, src: [-5000, 0], span: 8000 });
+  // four wells in order along y = 4000 + one conflicting well C (slope, more proximal than the offshore-transition and shelf wells)
+  const W = [{ name: 'A', x: -3500, y: 4000, env: 'shoreface' }, { name: 'D', x: -1800, y: 4000, env: 'offshore transition' },
+    { name: 'E', x: 0, y: 4000, env: 'offshore shelf' }, { name: 'B', x: 2500, y: 4000, env: 'slope' }, { name: 'C', x: -2600, y: -3500, env: 'slope' }];
+  const R = 900, ic = 4;
+  const off = G.build(Object.assign({}, M, { warp: { on: false, R } }), W), on = G.build(Object.assign({}, M, { warp: { on: true, R } }), W);
+  assert.deepEqual(arr(off.cal.conflicts), [ic]);
+  assert.equal(off.check[ic].honoured, false, 'conflict without warping');
+  assert.ok(on.check.every(c => c.honoured), 'all honoured with warping');
+  assert.ok(on.warp.wells.includes(ic));
+  assert.deepEqual(arr(on.t), arr(off.t), 'same thresholds');
+  const ext = M.ext, g0 = G.nodeGrid(off, ext, 100), g1 = G.nodeGrid(on, ext, 100);
+  let changedNear = 0, changedFar = 0;
+  for (let j = 0; j < g0.ny; j++) for (let i = 0; i < g0.nx; i++) {
+    const k = j * g0.nx + i; if (g0.codes[k] === g1.codes[k]) continue;
+    const x = g0.x0 + i * g0.dx, y = g0.y0 + j * g0.dy;
+    if (Math.hypot(x - W[ic].x, y - W[ic].y) > 3 * R) changedFar++; else changedNear++;
+  }
+  assert.ok(changedNear > 0, 'warping changes the map near the well');
+  assert.equal(changedFar, 0, 'unchanged beyond 3 radii');
+});
+
+// ---------- examples ----------
+for (const k of ['delta', 'fan']) test(`example ${k}: every well honoured, belts in order away from the source`, () => {
+  const ex = G.examples[k];
+  assert.ok(ex.wells.length === (k === 'delta' ? 4 : 3));
+  const mod = G.build(ex.M, ex.wells);
+  for (const c of mod.check) { assert.ok(c.b >= 0, c.name + ' matched'); assert.ok(c.honoured, `${c.name}: ${c.belt} vs ${c.b}`); assert.ok(c.dist > 0); }
+  const t = arr(mod.t); for (let i = 1; i < t.length; i++) assert.ok(t[i] > t[i - 1]);
+  const g = G.nodeGrid(mod, ex.M.ext, 500);
+  const used = new Set(arr(g.codes)); assert.ok(used.size >= 4, 'belts on the map ' + [...used]);
+});
+
+// ---------- distance to the nearest boundary ----------
+test('distance to the nearest boundary: straight belts, exact value', () => {
+  const M = base({ geom: 'linear', az: 90, src: [-5000, 0], span: 6000 });
+  const mod = G.build(M, []), t = arr(mod.t), x = -5000 + t[1] + 300;
+  near(G.distToBoundary(mod, x, 0, M.ext), 300, 15);
+});
+
+// ---------- polygons and writers ----------
+test('polygons: straight belts give one polygon per belt, areas add up to the extent', () => {
+  const M = base({ geom: 'linear', az: 90, src: [-5000, 0], span: 6000 });
+  const P = G.polygons(G.build(M, []), M.ext, 100);
+  const tot = P.reduce((s, p) => s + p.area, 0);
+  near(tot, 1e8, 1e-3);
+  assert.equal(new Set(P.map(p => p.code)).size, P.length);
+  for (const p of P) assert.ok(G.sArea(p.outer) > 0, 'exterior counter-clockwise (y up)');
+});
+test('preview polygons (d interpolated every 3 cells) agree with the exact raster on > 99.5 % of the cells', () => {
+  for (const k of ['delta', 'fan']) {
+    const ex = G.examples[k], mod = G.build(ex.M, ex.wells), e = ex.M.ext, cell = Math.sqrt((e.xmax - e.xmin) * (e.ymax - e.ymin) / 250000);
+    const a = G.polygons(mod, ex.M.ext, cell, { minArea: 0, tol: 0 }).raster.L, b = G.polygons(mod, ex.M.ext, cell, { minArea: 0, tol: 0, stride: 3 }).raster.L;
+    let diff = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) diff++;
+    assert.ok(diff / a.length < 0.005, `${k}: ${diff} of ${a.length}`);
+  }
+});
+test('IRAP lines: closed rings, z = belt code, 999 separator lines', () => {
+  const P = [{ code: 3, name: 'Shoreface', outer: [[0, 0], [10, 0], [10, 10]], holes: [], area: 50, perimeter: 34 }];
+  const L = G.irapLines(P).trim().split('\n');
+  assert.deepEqual(L, ['0.000000 0.000000 3.000000', '10.000000 0.000000 3.000000', '10.000000 10.000000 3.000000', '0.000000 0.000000 3.000000', '999.000000 999.000000 999.000000']);
+});
+test('GeoJSON: exterior counter-clockwise, hole clockwise, rings closed, belt in properties', () => {
+  const P = [{ code: 2, name: 'Delta front', outer: [[0, 0], [0, 10], [10, 10], [10, 0]], holes: [[[2, 2], [4, 2], [4, 4], [2, 4]]], area: 96, perimeter: 48 }];
+  const g = JSON.parse(G.geojson(P)), c = g.features[0].geometry.coordinates;
+  assert.equal(g.features[0].properties.class, 'Delta front'); assert.equal(g.features[0].properties.code, 2);
+  const sa = r => { let s = 0; for (let i = 0; i < r.length - 1; i++) s += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return s / 2; };
+  assert.ok(sa(c[0]) > 0 && sa(c[1]) < 0);
+  assert.deepEqual(c[0][0], c[0][c[0].length - 1]);
+});
+test('ZMAP+: header and column-major order from the upper-left node; accepted by the ZMAP checker', () => {
+  const Gd = { name: 'gde belts', nx: 3, ny: 2, x0: 0, y0: 0, dx: 100, dy: 50, codes: [1, 2, 3, 4, 5, 6], legend: [[1, 'A'], [2, 'B']] };
+  const txt = G.zmap(Gd), L = txt.split('\n');
+  const h = L.indexOf('@gde_belts, GRID, 5');
+  assert.ok(h >= 0, txt);
+  assert.deepEqual(L.slice(h, h + 5), ['@gde_belts, GRID, 5', '15, 1.0E+30, , 7, 1', '2, 3, 0, 200, 0, 50', '0.0, 0.0, 0.0', '@']);
+  assert.ok(L[0].startsWith('!'));
+  // nodes: row j=0 is ymin. Upper-left = (i=0, j=1) = 4, then down the column: 1; next column 5, 2; then 6, 3
+  const vals = L.slice(h + 5).join(' ').trim().split(/\s+/).map(Number);
+  assert.deepEqual(vals, [4, 1, 5, 2, 6, 3]);
+  assert.equal(L[h + 5], '      4.0000000      1.0000000');
+  const z = Z.parse(txt, 'g.zmap'), f = Z.check(z);
+  assert.deepEqual([...f].filter(x => x.sev !== 'I').map(x => x.rule), []);
+  assert.equal(Z.value(z, 0, 0), 4); assert.equal(Z.value(z, 1, 2), 3);
+});
+test('grid CSV: x, y, code, belt', () => {
+  const Gd = { nx: 2, ny: 1, x0: 10, y0: 20, dx: 5, dy: 5, codes: [1, 2], legend: [[1, 'Coastal plain'], [2, 'Shoreface, upper']] };
+  assert.equal(G.gridCsv(Gd), 'x,y,code,belt\n10,20,1,Coastal plain\n15,20,2,"Shoreface, upper"');
+});
+
+let fail = 0;
+for (const [name, fn] of tests) {
+  try { fn(); console.log('ok   ', name); }
+  catch (e) { fail++; console.log('FAIL ', name, '\n     ', String(e.message).split('\n').slice(0, 6).join('\n      ')); }
+}
+console.log(`${tests.length - fail}/${tests.length} passed`);
+process.exit(fail ? 1 : 0);

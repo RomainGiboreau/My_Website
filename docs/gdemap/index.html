@@ -1,0 +1,466 @@
+<!doctype html><html><head><title>GDE map generator</title></head><body><div class="top"><h1>GDE map generator</h1></div>
+<script id="gde-core">
+/* GDE map generator core: conceptual belts on a proximal-distal coordinate, calibrated on wells. Pure logic, no DOM; window.GDE.
+   Tested by scripts/gde_test.mjs. Polygon tracing, shared-arc simplification and the IRAP / GeoJSON / CSV writers are copied from
+   the Discrete map digitizer (docs/discretemap/index.html, md-discrete-core). */
+(function(){
+const RAD=Math.PI/180,TAPER=15;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+// ---------- templates: belts proximal -> distal, relative widths, conventional GDE colours ----------
+const T=(name,geom,belts)=>({name,geom,belts:belts.map(([n,c,w,al])=>({name:n,color:c,w,alias:al||[]}))});
+const templates={
+ shelf:T('Wave-dominated shelf','linear',[
+  ['Coastal plain','#b8c978',1.6,['coastal','alluvial plain','strandplain','continental']],
+  ['Shoreface','#f3d955',0.7,['upper shoreface','lower shoreface','beach','foreshore','shoreline','shallow marine sand']],
+  ['Offshore transition','#cfe5c6',1,['transition zone','offshore transition zone']],
+  ['Offshore shelf','#a9d3ec',2.4,['offshore','shelf','inner shelf','outer shelf','open shelf']],
+  ['Slope','#6c9fcd',1.4,['continental slope']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]]),
+ delta:T('River-dominated delta','radial',[
+  ['Delta plain','#9fc46e',3,['upper delta plain','lower delta plain','deltaic plain','distributary channel']],
+  ['Delta front','#f3d34f',1,['mouth bar','delta front sand']],
+  ['Prodelta','#c8dcc0',1.5,['pro delta']],
+  ['Shelf','#a9d3ec',2.5,['offshore shelf','offshore','open shelf']],
+  ['Slope','#6c9fcd',1.5,['continental slope']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]]),
+ fan:T('Deep-water fan','radial',[
+  ['Slope / canyon','#97a9bd',2,['upper slope','feeder canyon','slope channel']],
+  ['Channel–levee complex','#e7a043',2.5,['channel levee','channel levee system','channel','leveed channel','inner fan']],
+  ['Proximal lobes','#f4d35e',2,['lobe','mid fan','middle fan','lobe complex']],
+  ['Distal lobes / lobe fringe','#f6ebb0',2,['outer fan','distal fan','fringe']],
+  ['Basin plain','#5a80b3',2,['basin floor','basin','abyssal plain']]]),
+ carbonate:T('Carbonate platform','linear',[
+  ['Inner platform / lagoon','#9edfd3',3,['platform interior','tidal flat','restricted platform']],
+  ['Platform margin (reef / shoal)','#e98fb1',0.8,['shelf margin','barrier','oolite shoal','margin']],
+  ['Fore-reef slope','#64b3c7',1.5,['foreslope','fore reef','slope']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin']]]),
+ fluvial:T('Fluvial','linear',[
+  ['Alluvial fan / proximal','#a8703d',1.5,['alluvial fan','fanglomerate']],
+  ['Braided plain','#d29f5a',2,['braided river','braided']],
+  ['Meandering belt','#e5c784',2.5,['meandering river','meander belt','meandering']],
+  ['Floodplain–coastal plain','#a5c47a',2,['floodplain','coastal plain','flood plain']]]),
+ custom:T('Custom','linear',[['Proximal','#c9a66b',1],['Intermediate','#f0d65e',1],['Distal','#7fb0d8',1]])};
+// ---------- environment names -> belt index (case-insensitive, punctuation and plural tolerant) ----------
+const norm=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
+  .split(' ').map(w=>w.length>3&&w.endsWith('s')&&!w.endsWith('ss')?w.slice(0,-1):w).join(' ');
+const keys=b=>[b.name,...(b.alias||[]),...String(b.name).split(/[\/()]/)].map(norm).filter(Boolean);
+function matchBelt(env,belts){const e=norm(env);if(!e)return -1;
+  for(let i=0;i<belts.length;i++)if(norm(belts[i].name)===e)return i;
+  for(let i=0;i<belts.length;i++)if(keys(belts[i]).includes(e))return i;
+  return -1}
+// ---------- wells table: name, x, y, environment (tab, ';', ',' or spaces) ----------
+const NUMRE=/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+const num=v=>{v=String(v??'').replace(/\s/g,'');if(/^[-+]?\d*,\d+$/.test(v))v=v.replace(',','.');return NUMRE.test(v)?+v:NaN};
+function parseWells(text){const wells=[],errors=[];
+  String(text||'').split(/\r?\n/).forEach((ln,i)=>{const s=ln.trim();if(!s||s[0]==='#'||s[0]==='!')return;let f;
+    if(s.includes('\t'))f=s.split('\t');else if(s.includes(';'))f=s.split(';');else if(s.includes(','))f=s.split(',');
+    else{const m=s.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(.+)$/);f=m?m.slice(1):[s]}
+    f=f.map(x=>x.trim());const x=num(f[1]),y=num(f[2]),env=f.slice(3).filter(Boolean).join(f.length>4&&s.includes(',')&&!s.includes(';')&&!s.includes('\t')?', ':' ');
+    if(f.length>=3&&isFinite(x)&&isFinite(y)){wells.push({name:f[0]||('W-'+(wells.length+1)),x,y,env});return}
+    if(!wells.length&&!errors.length&&f.length>=3&&!isFinite(num(f[1])))return;      // header line
+    errors.push(`Line ${i+1}: expected name, x, y, environment — got “${s.slice(0,60)}”.`)});
+  return{wells,errors}}
+// ---------- model ----------
+function makeModel(key,o={}){const t=templates[key]||templates.shelf;
+  const M={template:templates[key]?key:'shelf',belts:t.belts.map(b=>({name:b.name,color:b.color,w:b.w,alias:b.alias.slice()})),geom:t.geom,
+    az:90,src:[0,0],fan:90,span:10000,noise:{amp:0,wl:5000,seed:1},warp:{on:true,R:2000},ext:{xmin:0,xmax:20000,ymin:0,ymax:20000},cell:100};
+  for(const k in o)M[k]=o[k];
+  M.noise=Object.assign({amp:0,wl:5000,seed:1},o.noise||{});M.warp=Object.assign({on:true,R:2000},o.warp||{});
+  return M}
+// prior boundaries: belt k starts at the sum of the widths before it, scaled so that the most distal belt starts at `span` from the source
+function prior(M){const w=M.belts.map(b=>Math.max(1e-9,+b.w||1)),n1=w.length-1,c=[];let s=0;
+  for(let k=0;k<n1;k++){s+=w[k];c.push(s)}
+  const f=n1?(+M.span||1)/c[n1-1]:1;return c.map(v=>v*f)}
+// proximal-distal coordinate: linear = projection on the transport azimuth (clockwise from north) from the source point;
+// radial = distance from the source inside the fan opening, tapered over TAPER degrees beyond it, +Infinity (most distal belt) outside
+const smooth=u=>u*u*(3-2*u);
+function dBase(M,x,y){const a=M.az*RAD,ux=Math.sin(a),uy=Math.cos(a),dx=x-M.src[0],dy=y-M.src[1];
+  if(M.geom!=='radial')return dx*ux+dy*uy;
+  const r=Math.hypot(dx,dy);if(r===0)return 0;
+  const e=Math.acos(clamp((dx*ux+dy*uy)/r,-1,1))/RAD-M.fan/2;
+  if(e<=0)return r;if(e>=TAPER)return Infinity;
+  return r+smooth(e/TAPER)*3*Math.max(1,+M.span||1)}
+// seeded 3D gradient noise (improved Perlin noise with a seeded permutation)
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const PCACHE=new Map();
+function perlin(seed){seed=seed|0;if(PCACHE.has(seed))return PCACHE.get(seed);
+  const p=new Uint8Array(512),r=mulberry32(seed^0x5bd1e995),q=[];for(let i=0;i<256;i++)q.push(i);
+  for(let i=255;i>0;i--){const j=Math.floor(r()*(i+1)),tt=q[i];q[i]=q[j];q[j]=tt}
+  for(let i=0;i<512;i++)p[i]=q[i&255];
+  const fade=t=>t*t*t*(t*(t*6-15)+10),lerp=(a,b,t)=>a+t*(b-a);
+  const g=(h,x,y,z)=>{h&=15;const u=h<8?x:y,v=h<4?y:(h===12||h===14?x:z);return((h&1)?-u:u)+((h&2)?-v:v)};
+  const f=(x,y,z)=>{let X=Math.floor(x),Y=Math.floor(y),Z=Math.floor(z);x-=X;y-=Y;z-=Z;X&=255;Y&=255;Z&=255;
+    const u=fade(x),v=fade(y),w=fade(z),A=p[X]+Y,AA=p[A]+Z,AB=p[A+1]+Z,B=p[X+1]+Y,BA=p[B]+Z,BB=p[B+1]+Z;
+    return lerp(lerp(lerp(g(p[AA],x,y,z),g(p[BA],x-1,y,z),u),lerp(g(p[AB],x,y-1,z),g(p[BB],x-1,y-1,z),u),v),
+      lerp(lerp(g(p[AA+1],x,y,z-1),g(p[BA+1],x-1,y,z-1),u),lerp(g(p[AB+1],x,y-1,z-1),g(p[BB+1],x-1,y-1,z-1),u),v),w)};
+  const o=[0,1,2].map(()=>[r()*256,r()*256,r()*256]),res={f,o};PCACHE.set(seed,res);if(PCACHE.size>64)PCACHE.delete(PCACHE.keys().next().value);return res}
+// d plus seeded smooth noise: 3 octaves of 3D noise in (x/wl, y/wl, d/wz); wz >= 3 amp keeps d increasing downstream (no folded belts)
+function field(M){const amp=+(M.noise&&M.noise.amp)||0;if(!(amp>0))return(x,y)=>dBase(M,x,y);
+  const wl=Math.max(1e-9,+M.noise.wl||1),wz=Math.max(wl,3*amp),P=perlin(M.noise.seed),f=P.f,o=P.o,k=amp*1.6/1.75;
+  return(x,y)=>{const d=dBase(M,x,y);if(!isFinite(d))return d;const X=x/wl,Y=y/wl,Zz=d/wz;
+    return d+k*(f(X+o[0][0],Y+o[0][1],Zz+o[0][2])+.5*f(2*X+o[1][0],2*Y+o[1][1],2*Zz+o[1][2])+.25*f(4*X+o[2][0],4*Y+o[2][1],4*Zz+o[2][2]))}}
+const classify=(d,t)=>{if(d!==d)return 0;let k=0;while(k<t.length&&d>=t[k])k++;return k};
+// ---------- calibration ----------
+// longest chain of wells whose order along d agrees with the belt order (wells with an infinite d outside the distal belt excluded)
+function chain(d,b,n1){const idx=[];for(let i=0;i<d.length;i++)if(b[i]>=0&&b[i]<=n1&&d[i]===d[i]&&(isFinite(d[i])||b[i]===n1))idx.push(i);
+  idx.sort((i,j)=>(d[i]===d[j]?0:d[i]-d[j])||b[i]-b[j]||i-j);
+  const L=idx.map(()=>1),pr=idx.map(()=>-1),ok=(i,j)=>b[i]<b[j]?d[i]<d[j]:b[i]===b[j];
+  for(let a=0;a<idx.length;a++)for(let c=0;c<a;c++)if(ok(idx[c],idx[a])&&L[c]+1>L[a]){L[a]=L[c]+1;pr[a]=c}
+  let best=-1;for(let a=0;a<idx.length;a++)if(best<0||L[a]>L[best])best=a;
+  const S=[];for(let a=best;a>=0;a=pr[a])S.push(idx[a]);S.reverse();
+  return S}
+function intervals(S,d,b,n1){const lo=new Array(n1).fill(-Infinity),hi=new Array(n1).fill(Infinity);
+  for(const i of S)for(let k=0;k<n1;k++){if(b[i]<=k)lo[k]=Math.max(lo[k],d[i]);else hi[k]=Math.min(hi[k],d[i])}
+  return{lo,hi}}
+// margin: smallest feasible interval (gap between wells of successive belts) relative to the spread of the wells along d
+function marginOf(S,d,lo,hi){let m=Infinity;for(let k=0;k<lo.length;k++)if(isFinite(lo[k])&&isFinite(hi[k]))m=Math.min(m,hi[k]-lo[k]);
+  const f=S.map(i=>d[i]).filter(isFinite),rg=f.length?Math.max(...f)-Math.min(...f):0;
+  return isFinite(m)&&rg>0?m/rg:0}
+// thresholds t[k] between belt k and k+1. d, b: wells' coordinate and belt index (-1 = ignored); p: prior thresholds
+function calibrate(d,b,p,opt={}){const n1=p.length,S=chain(d,b,n1),inS=new Set(S);
+  const conflicts=[];for(let i=0;i<d.length;i++)if(b[i]>=0&&b[i]<=n1&&!inS.has(i))conflicts.push(i);
+  const {lo,hi}=intervals(S,d,b,n1),t=new Array(n1).fill(NaN),fx=new Array(n1).fill(false);
+  const fin=k=>isFinite(lo[k])&&isFinite(hi[k]);
+  for(let k=0;k<n1;){if(!fin(k)){k++;continue}
+    let m=k;while(m+1<n1&&fin(m+1)&&lo[m+1]===lo[k]&&hi[m+1]===hi[k])m++;
+    const Lo=lo[k],Hi=hi[k],g=.05*(Hi-Lo);let inside=true;
+    for(let j=k;j<=m;j++)if(!(p[j]>Lo+g&&p[j]<Hi-g))inside=false;
+    if(inside)for(let j=k;j<=m;j++)t[j]=p[j];
+    else if(k===m)t[k]=(Lo+Hi)/2;
+    else{const c=(Lo+Hi)/2,pc=(p[k]+p[m])/2,sp=p[m]-p[k],sc=sp>0?Math.min(1,.8*(Hi-Lo)/sp):0;for(let j=k;j<=m;j++)t[j]=c+(p[j]-pc)*sc}
+    for(let j=k;j<=m;j++)fx[j]=true;k=m+1}
+  const F=[];for(let k=0;k<n1;k++)if(fx[k])F.push(k);
+  let sc=1;
+  if(F.length){const a=F[0],z=F[F.length-1];if(z>a&&p[z]>p[a])sc=clamp((t[z]-t[a])/(p[z]-p[a]),.2,5);
+    for(let k=a-1;k>=0;k--){const w=sc*(p[k+1]-p[k]);t[k]=Math.min(t[k+1]-w,hi[k]-.25*w)}
+    for(let k=z+1;k<n1;k++){const w=sc*(p[k]-p[k-1]);t[k]=Math.max(t[k-1]+w,lo[k]+.25*w)}}
+  else{for(let k=0;k<n1;k++)t[k]=p[k];
+    const D=S.map(i=>d[i]).filter(isFinite);
+    if(D.length&&n1){const bb=b[S[0]],dmin=Math.min(...D),dmax=Math.max(...D);
+      const wb=bb===0?p[0]:bb<n1?p[bb]-p[bb-1]:(n1>1?p[n1-1]-p[n1-2]:p[0]),g=.05*wb,m=.25*wb;
+      const okLo=bb===0||p[bb-1]<=dmin-g,okHi=bb===n1||p[bb]>=dmax+g;
+      if(!(okLo&&okHi)){
+        if(bb===0){const s=dmax+m-p[0];for(let k=0;k<n1;k++)t[k]=p[k]+s}
+        else if(bb===n1){const s=dmin-m-p[n1-1];for(let k=0;k<n1;k++)t[k]=p[k]+s}
+        else{const c=(dmin+dmax)/2,h=Math.max(wb/2,(dmax-dmin)/2+m);t[bb-1]=c-h;t[bb]=c+h;
+          for(let k=bb-2;k>=0;k--)t[k]=t[k+1]-(p[k+1]-p[k]);for(let k=bb+1;k<n1;k++)t[k]=t[k-1]+(p[k]-p[k-1])}}}}
+  const nm=i=>opt.names&&opt.names[i]!=null?opt.names[i]:'Well '+(i+1),bn=k=>opt.belts&&opt.belts[k]!=null?opt.belts[k]:'belt '+(k+1);
+  const msgs=conflicts.map(i=>{
+    if(!isFinite(d[i]))return`${nm(i)} (${bn(b[i])}) is outside the fan opening, where the map has the most distal belt: widen the fan angle or move the source.`;
+    for(const j of S){if(b[j]<b[i]&&d[j]>=d[i])return`${nm(i)} (${bn(b[i])}) sits more proximal than ${nm(j)} (${bn(b[j])}) along the transport direction, although its environment is more distal.`;
+      if(b[j]>b[i]&&d[j]<=d[i])return`${nm(i)} (${bn(b[i])}) sits more distal than ${nm(j)} (${bn(b[j])}) along the transport direction, although its environment is more proximal.`}
+    return`${nm(i)} (${bn(b[i])}) does not fit the belt order.`});
+  return{t,ok:!conflicts.length,conflicts,kept:S,lo,hi,msgs,scale:sc,margin:marginOf(S,d,lo,hi)}}
+// ---------- warping: truncated Gaussian RBF of the d offsets needed at the conflicting wells ----------
+const kern=(r2,R2)=>r2>=9*R2?0:(Math.exp(-r2/R2)-1.2340980408667956e-4)/(1-1.2340980408667956e-4);   // 0 beyond 3 R
+function solve(A,y){const n=y.length,M=A.map((r,i)=>[...r,y[i]]);
+  for(let c=0;c<n;c++){let p=c;for(let r=c+1;r<n;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;
+    if(Math.abs(M[p][c])<1e-14)return null;[M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<n;r++)if(r!==c){const f=M[r][c]/M[c][c];if(f)for(let k=c;k<=n;k++)M[r][k]-=f*M[c][k]}}
+  return M.map((r,i)=>r[n]/r[i])}
+function target(d,b,t){const n1=t.length,A=b>0?t[b-1]:-Infinity,B=b<n1?t[b]:Infinity;
+  const wf=n1>1?(t[n1-1]-t[0])/(n1-1):Math.max(1,Math.abs(t[0]||1));
+  if(isFinite(A)&&isFinite(B)){const m=.3*(B-A);return clamp(d,A+m,B-m)}
+  return isFinite(A)?Math.max(d,A+.3*wf):Math.min(d,B-.3*wf)}
+// ---------- model build ----------
+function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),F=field(M);
+  const W=(wells||[]).map(w=>({name:w.name,x:+w.x,y:+w.y,env:w.env,b:(typeof w.b==='number'&&w.b>=0&&w.b<n)?w.b:matchBelt(w.env,M.belts)}));
+  const dw=W.map(w=>F(w.x,w.y)),bw=W.map(w=>w.b);
+  const cal=calibrate(dw,bw,p,{names:W.map(w=>w.name),belts:M.belts.map(b=>b.name)}),t=cal.t;
+  const R=+(M.warp&&M.warp.R)||0,warp={on:!!(M.warp&&M.warp.on),R,wells:[],centres:[],lam:[]};let Wf=null;
+  if(warp.on&&R>0){const R2=R*R,bad=[];
+    W.forEach((w,i)=>{if(w.b>=0&&isFinite(dw[i])&&classify(dw[i],t)!==w.b)bad.push(i)});
+    if(bad.length){const sel=W.map((w,i)=>i).filter(i=>W[i].b>=0&&isFinite(dw[i])&&bad.some(j=>Math.hypot(W[i].x-W[j].x,W[i].y-W[j].y)<3*R));
+      const del=sel.map(i=>bad.includes(i)?target(dw[i],W[i].b,t)-dw[i]:0);
+      const A=sel.map(i=>sel.map(j=>kern((W[i].x-W[j].x)**2+(W[i].y-W[j].y)**2,R2)+(i===j?1e-9:0)));
+      const lam=solve(A,del);
+      if(lam){const cx=sel.map(i=>W[i].x),cy=sel.map(i=>W[i].y);warp.wells=bad;warp.centres=sel;warp.lam=lam;
+        Wf=(x,y)=>{let s=0;for(let k=0;k<cx.length;k++){const dx=x-cx[k],dy=y-cy[k],r2=dx*dx+dy*dy;if(r2<9*R2)s+=lam[k]*kern(r2,R2)}return s}}}}
+  const D=Wf?(x,y)=>F(x,y)+Wf(x,y):F;
+  const beltAt=(x,y)=>classify(D(x,y),t);
+  const mod={M,t,prior:p,cal,warp,D,beltAt,wells:W};
+  mod.check=W.map((w,i)=>{const bm=beltAt(w.x,w.y);
+    return{name:w.name,x:w.x,y:w.y,env:w.env,b:w.b,i,d:dw[i],belt:bm,honoured:w.b>=0&&bm===w.b,warped:warp.wells.includes(i),
+      conflict:cal.conflicts.includes(i),dist:opt.dist===false?NaN:distToBoundary(mod,w.x,w.y,M.ext)}});
+  return mod}
+// distance from (x, y) to the nearest belt boundary: 72 rays marched in steps of 1/400 of the extent diagonal, then bisection
+function distToBoundary(mod,x,y,ext){const diag=Math.hypot(ext.xmax-ext.xmin,ext.ymax-ext.ymin),st=diag/400,b0=mod.beltAt(x,y);let best=Infinity;
+  for(let a=0;a<72;a++){const ux=Math.cos(a*5*RAD),uy=Math.sin(a*5*RAD);let prev=0;
+    for(let s=st;s<=Math.min(best,diag);s+=st){if(mod.beltAt(x+ux*s,y+uy*s)!==b0){let l=prev,h=s;
+        for(let q=0;q<14;q++){const mi=(l+h)/2;if(mod.beltAt(x+ux*mi,y+uy*mi)!==b0)h=mi;else l=mi}
+        best=Math.min(best,h);break}prev=s}}
+  return best}
+// ---------- auto-fit of the transport azimuth (and source point, radial) ----------
+function score(M,W){const F=field(M),n1=M.belts.length-1,d=W.map(w=>F(w.x,w.y)),b=W.map(w=>w.b),S=chain(d,b,n1),{lo,hi}=intervals(S,d,b,n1);
+  let off=0;if(M.geom==='radial'){const a=M.az*RAD,ux=Math.sin(a),uy=Math.cos(a);
+    for(const w of W){const dx=w.x-M.src[0],dy=w.y-M.src[1],r=Math.hypot(dx,dy);off+=r?Math.acos(clamp((dx*ux+dy*uy)/r,-1,1)):0}off/=Math.max(1,W.length)}
+  return{count:S.length,margin:marginOf(S,d,lo,hi),off}}
+const better=(a,b)=>!b||a.count>b.count||(a.count===b.count&&(a.margin>b.margin+1e-9||(Math.abs(a.margin-b.margin)<=1e-9&&a.off<b.off-1e-9)));
+const angd=(a,b)=>Math.abs(((a-b)%360+540)%360-180);
+function fitAzimuth(M,wells,opt={}){const n=M.belts.length;
+  const W=(wells||[]).map(w=>({x:+w.x,y:+w.y,b:(typeof w.b==='number'&&w.b>=0&&w.b<n)?w.b:matchBelt(w.env,M.belts)})).filter(w=>w.b>=0&&isFinite(w.x)&&isFinite(w.y));
+  const res={az:M.az,src:M.src.slice(),count:0,margin:0,n:W.length};
+  if(new Set(W.map(w=>w.b)).size<2){const s=W.length?score(M,W):{count:0,margin:0};return Object.assign(res,{count:s.count,margin:s.margin,msg:'Auto-fit needs wells in at least two different belts.'})}
+  let best=null;
+  const tryM=(az,src)=>{az=(az%360+360)%360;const s=score(Object.assign({},M,{az,src}),W);s.az=az;s.src=src;
+    if(better(s,best)||(best&&s.count===best.count&&Math.abs(s.margin-best.margin)<=1e-9&&Math.abs(s.off-best.off)<=1e-9&&angd(az,M.az)<angd(best.az,M.az)))best=s};
+  if(M.geom==='radial'&&opt.source){const e=M.ext,w=e.xmax-e.xmin,h=e.ymax-e.ymin,N=14;
+    for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const src=[e.xmin-.3*w+1.6*w*i/N,e.ymin-.3*h+1.6*h*j/N];for(let az=0;az<360;az+=6)tryM(az,src)}
+    let sx=1.6*w/N,sy=1.6*h/N,sa=6;
+    for(let it=0;it<3;it++){const b0=best;sx/=3;sy/=3;sa/=3;
+      for(let i=-3;i<=3;i++)for(let j=-3;j<=3;j++)for(let k=-3;k<=3;k++)tryM(b0.az+k*sa,[b0.src[0]+i*sx,b0.src[1]+j*sy])}}
+  else{const src=M.src.slice();for(let az=0;az<360;az+=1)tryM(az,src);
+    for(const st of [.25,.05]){const b0=best;for(let k=-8;k<=8;k++)tryM(b0.az+k*st,src)}}
+  return Object.assign(res,{az:+best.az.toFixed(2),src:best.src.map(v=>+v.toPrecision(10)),count:best.count,margin:best.margin})}
+// ---------- grids ----------
+// node grid (ZMAP+, CSV): nodes xmin, xmin + cell, ... <= xmax; codes = belt index + 1, k = j*nx + i, j = 0 at ymin
+function nodeGrid(mod,ext,cell,name){const nx=Math.max(2,Math.floor((ext.xmax-ext.xmin)/cell+1e-9)+1),ny=Math.max(2,Math.floor((ext.ymax-ext.ymin)/cell+1e-9)+1);
+  const codes=new Int16Array(nx*ny);
+  for(let j=0;j<ny;j++){const y=ext.ymin+j*cell;for(let i=0;i<nx;i++)codes[j*nx+i]=mod.beltAt(ext.xmin+i*cell,y)+1}
+  return{name:name||'GDE',nx,ny,x0:ext.xmin,y0:ext.ymin,dx:cell,dy:cell,codes,legend:mod.M.belts.map((b,i)=>[i+1,b.name])}}
+// polygons: cell raster exactly covering the extent (row 0 at ymax), traced and simplified with shared arcs, in map coordinates
+function polygons(mod,ext,cell,opt={}){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.ymin,nx=Math.max(1,Math.round(W/cell)),ny=Math.max(1,Math.round(H/cell)),cx=W/nx,cy=H/ny;
+  const L=new Int16Array(nx*ny),s=Math.max(1,opt.stride|0);
+  if(s===1)for(let j=0;j<ny;j++){const y=ext.ymax-(j+.5)*cy;for(let i=0;i<nx;i++)L[j*nx+i]=mod.beltAt(ext.xmin+(i+.5)*cx,y)}
+  else{// preview: d evaluated every s cells and interpolated bilinearly (d is smooth); exact where a corner is infinite (outside the fan)
+    const mx=Math.ceil((nx-1)/s)+1,my=Math.ceil((ny-1)/s)+1,Dg=new Float64Array(mx*my),t=mod.t,X=i=>ext.xmin+(Math.min(i,nx-1)+.5)*cx,Y=j=>ext.ymax-(Math.min(j,ny-1)+.5)*cy;
+    for(let b=0;b<my;b++)for(let a=0;a<mx;a++)Dg[b*mx+a]=mod.D(X(a*s),Y(b*s));
+    for(let b=0;b<my-1;b++)for(let a=0;a<mx-1;a++){const i0=a*s,j0=b*s,i1=Math.min((a+1)*s,nx-1),j1=Math.min((b+1)*s,ny-1);
+      const d00=Dg[b*mx+a],d10=Dg[b*mx+a+1],d01=Dg[(b+1)*mx+a],d11=Dg[(b+1)*mx+a+1],ok=isFinite(d00+d10+d01+d11);
+      for(let j=j0;j<=j1;j++){const v=j1>j0?(j-j0)/(j1-j0):0;for(let i=i0;i<=i1;i++){const u=i1>i0?(i-i0)/(i1-i0):0;
+        L[j*nx+i]=ok?classify((d00*(1-u)+d10*u)*(1-v)+(d01*(1-u)+d11*u)*v,t):mod.beltAt(ext.xmin+(i+.5)*cx,ext.ymax-(j+.5)*cy)}}}}
+  const r=polygonize(L,nx,ny,{minArea:opt.minArea??4,tol:opt.tol??.7});
+  const groups=mod.M.belts.map((b,i)=>({code:i+1,name:b.name}));
+  const P=toMap(r.polys,q=>[ext.xmin+q[0]*cx,ext.ymax-q[1]*cy],groups);P.raster={L:r.L,nx,ny,cx,cy};return P}
+
+// ---- copied from the Discrete map digitizer (md-discrete-core): number formatting, components, tracing, shared-arc simplification, writers
+const crd=v=>String(+(+v).toPrecision(10));
+const oneLine=s=>String(s??'').replace(/[\r\n\t]+/g,' ');
+// 4-connected components of equal labels
+function comps(L,nx,ny){const N=L.length,C=new Int32Array(N).fill(-1),st=new Int32Array(N),size=[],lab=[];let n=0;
+  for(let s=0;s<N;s++){if(C[s]>=0)continue;const c=L[s];let top=0,sz=0;st[top++]=s;C[s]=n;
+    while(top){const k=st[--top],i=k%nx;sz++;
+      if(i>0&&C[k-1]<0&&L[k-1]===c){C[k-1]=n;st[top++]=k-1}
+      if(i<nx-1&&C[k+1]<0&&L[k+1]===c){C[k+1]=n;st[top++]=k+1}
+      if(k>=nx&&C[k-nx]<0&&L[k-nx]===c){C[k-nx]=n;st[top++]=k-nx}
+      if(k+nx<N&&C[k+nx]<0&&L[k+nx]===c){C[k+nx]=n;st[top++]=k+nx}}
+    size.push(sz);lab.push(c);n++}
+  return{C,n,size,lab}}
+// components smaller than minA cells (classes and unmatched specks, not -2) take the class they share the longest boundary with
+// (counted on the large neighbours first); a speck touching no class becomes -1. Repeated until stable (8 rounds at most).
+function mergeSmall(L,nx,ny,minA){L=L.slice();let merged=0;
+  for(let it=0;it<8;it++){const {C,n,size,lab}=comps(L,nx,ny),small=new Uint8Array(n);let ns=0;
+    for(let c=0;c<n;c++)if(size[c]<minA&&lab[c]!==-2){small[c]=1;ns++}
+    if(!ns)break;
+    const big=new Map(),any=new Map(),add=(M,c,l)=>{let m=M.get(c);if(!m)M.set(c,m=new Map());m.set(l,(m.get(l)||0)+1)};
+    const pair=(a,b)=>{const ca=C[a],cb=C[b];if(ca===cb)return;
+      if(small[ca]){add(any,ca,L[b]);if(!small[cb])add(big,ca,L[b])}
+      if(small[cb]){add(any,cb,L[a]);if(!small[ca])add(big,cb,L[a])}};
+    for(let k=0;k<L.length;k++){const i=k%nx;if(i<nx-1)pair(k,k+1);if(k+nx<L.length)pair(k,k+nx)}
+    const to=new Int16Array(n).fill(-3);let ch=0;
+    for(let c=0;c<n;c++){if(!small[c])continue;const m=big.get(c)||any.get(c);if(!m)continue;let bl=-3,bn=0;
+      for(const [l,q] of m)if(l>=0&&(q>bn||(q===bn&&l<bl))){bl=l;bn=q}
+      if(bl<0&&lab[c]>=0&&m.has(-1))bl=-1;
+      if(bl!==-3&&bl!==lab[c]){to[c]=bl;ch++}}
+    if(!ch)break;merged+=ch;
+    for(let k=0;k<L.length;k++){const t=to[C[k]];if(t!==-3)L[k]=t}}
+  return{L,merged}}
+const sArea=r=>{let s=0;for(let i=0,n=r.length;i<n;i++){const p=r[i],q=r[(i+1)%n];s+=p[0]*q[1]-q[0]*p[1]}return s/2};
+// boundary tracing on the pixel edges, one ring set per 4-connected component. Edges are directed with the region on their right
+// (y downward); at a vertex where the component touches itself diagonally the left turn is taken, so every ring is simple
+// (holes and the exterior may touch at a vertex). Vertices: corners, plus junctions ([x, y, 1]: vertex where >= 3 labels meet, raster corner,
+// or a checkerboard), which delimit the arcs shared by two polygons. Outer rings have a positive area in (x, y-down) coordinates.
+function trace(L,nx,ny){const {C}=comps(L,nx,ny),N=L.length,seen=new Uint8Array(N*4),out=new Map();
+  const DX=[1,0,-1,0],DY=[0,1,0,-1],SX=[0,1,1,0],SY=[0,0,1,1],NX=[0,1,0,-1],NY=[-1,0,1,0];   // side 0 top (east), 1 right (south), 2 bottom (west), 3 left (north)
+  const inC=(i,j,c)=>i>=0&&j>=0&&i<nx&&j<ny&&C[j*nx+i]===c;
+  const lv=(i,j)=>i>=0&&j>=0&&i<nx&&j<ny?L[j*nx+i]:-2;
+  const isJ=(x,y)=>{if((x===0||x===nx)&&(y===0||y===ny))return true;const a=lv(x-1,y-1),b=lv(x,y-1),c=lv(x-1,y),d=lv(x,y);const n=1+(b!==a)+(c!==a&&c!==b)+(d!==a&&d!==b&&d!==c);return n>=3||(n===2&&a===d&&b===c&&a!==b)};
+  for(let k=0;k<N;k++){if(L[k]<0)continue;const i0=k%nx,j0=(k-i0)/nx,c=C[k];
+    for(let s0=0;s0<4;s0++){if(seen[4*k+s0]||inC(i0+NX[s0],j0+NY[s0],c))continue;
+      const ring=[];let i=i0,j=j0,s=s0,prev=-1;
+      do{seen[4*(j*nx+i)+s]=1;const vx=i+SX[s],vy=j+SY[s],J=isJ(vx,vy);
+        if(s!==prev||J)ring.push(J?[vx,vy,1]:[vx,vy]);prev=s;
+        const bi=i+DX[s],bj=j+DY[s],ai=bi+NX[s],aj=bj+NY[s];
+        if(inC(ai,aj,c)){i=ai;j=aj;s=(s+3)%4}else if(inC(bi,bj,c)){i=bi;j=bj}else s=(s+1)%4;
+      }while(i!==i0||j!==j0||s!==s0);
+      if(prev===s0&&!ring[0][2])ring.shift();          // the start edge was in the middle of a straight run
+      let p=out.get(c);if(!p)out.set(c,p={label:L[k],outer:null,holes:[]});
+      if(sArea(ring)>0)p.outer=ring;else p.holes.push(ring)}}
+  return[...out.values()].sort((a,b)=>a.label-b.label)}
+// Douglas-Peucker: keep flags K over P[lo..hi]; ties -> the vertex with the smallest (y, x)
+const vkey=p=>p[1]*1048576+p[0];
+function dpKeep(P,lo,hi,tol2,K){const st=[lo,hi];
+  while(st.length){const b=st.pop(),a=st.pop();if(b-a<2)continue;
+    const A=P[a],B=P[b],ex=B[0]-A[0],ey=B[1]-A[1],L2=ex*ex+ey*ey;let md=-1,mi=-1;
+    for(let i=a+1;i<b;i++){const p=P[i],u=p[0]-A[0],v=p[1]-A[1];let dd;if(L2>0){const c=ex*v-ey*u;dd=c*c/L2}else dd=u*u+v*v;
+      if(dd>md||(dd===md&&vkey(p)<vkey(P[mi]))){md=dd;mi=i}}
+    if(md>tol2){K[mi]=1;st.push(a,mi,mi,b)}}}
+function dp(P,tol){if(P.length<3)return P.slice();const K=new Uint8Array(P.length);K[0]=K[P.length-1]=1;dpKeep(P,0,P.length-1,tol*tol,K);return P.filter((p,i)=>K[i])}
+// Shared-arc simplification: rings are cut at junctions into arcs; each arc is simplified once, in a canonical direction, and reused
+// (reversed) by the neighbouring polygon, so shared boundaries stay identical (no gap, no overlap). A ring left with < 3 vertices gets
+// back the farthest dropped vertices of its arcs.
+function simplify(polys,tol){if(!(tol>0))return polys.map(p=>({label:p.label,outer:p.outer.map(q=>[q[0],q[1]]),holes:p.holes.map(h=>h.map(q=>[q[0],q[1]]))}));
+  const tol2=tol*tol,arcs=new Map();
+  const less=(p,q,r,s)=>vkey(p)!==vkey(r)?vkey(p)<vkey(r):vkey(q)<vkey(s);
+  function getArc(pts,closed){let rev=false;
+    if(closed){let m=0;for(let i=1;i<pts.length;i++)if(vkey(pts[i])<vkey(pts[m]))m=i;
+      const n=pts.length,r=[];for(let i=0;i<n;i++)r.push(pts[(m+i)%n]);
+      if(vkey(r[n-1])<vkey(r[1])){r.reverse();r.unshift(r.pop());rev=true}
+      r.push(r[0]);pts=r}
+    else{const n=pts.length;if(less(pts[n-1],pts[n-2],pts[0],pts[1])){pts=pts.slice().reverse();rev=true}}
+    const key=(closed?'c':'o')+vkey(pts[0])+','+vkey(pts[1]);let a=arcs.get(key);
+    if(!a){const K=new Uint8Array(pts.length);K[0]=K[pts.length-1]=1;
+      if(closed){let f=1,fd=-1;for(let i=1;i<pts.length-1;i++){const u=pts[i][0]-pts[0][0],v=pts[i][1]-pts[0][1],dd=u*u+v*v;if(dd>fd||(dd===fd&&vkey(pts[i])<vkey(pts[f]))){fd=dd;f=i}}
+        K[f]=1;dpKeep(pts,0,f,tol2,K);dpKeep(pts,f,pts.length-1,tol2,K)}
+      else dpKeep(pts,0,pts.length-1,tol2,K);
+      arcs.set(key,a={pts,K})}
+    return{a,rev,closed}}
+  function addOne(a){const P=a.pts,K=a.K;let md=-1,mi=-1,s=0;
+    for(let e=1;e<P.length;e++){if(!K[e])continue;const A=P[s],B=P[e],ex=B[0]-A[0],ey=B[1]-A[1],L2=ex*ex+ey*ey;
+      for(let i=s+1;i<e;i++){const u=P[i][0]-A[0],v=P[i][1]-A[1];let dd;if(L2>0){const c=ex*v-ey*u;dd=c*c/L2}else dd=u*u+v*v;if(dd>md||(dd===md&&vkey(P[i])<vkey(P[mi]))){md=dd;mi=i}}
+      s=e}
+    if(mi<0)return false;K[mi]=1;return true}
+  function split(ring){const J=[];ring.forEach((p,i)=>{if(p[2])J.push(i)});
+    if(!J.length)return[getArc(ring,true)];
+    const n=ring.length,res=[];
+    for(let t=0;t<J.length;t++){const a=J[t],b=t+1<J.length?J[t+1]:J[0]+n,pts=[];for(let i=a;i<=b;i++)pts.push(ring[i%n]);res.push(getArc(pts,false))}
+    return res}
+  function build(parts){const r=[];
+    for(const {a,rev,closed} of parts){let q=a.pts.filter((p,i)=>a.K[i]);if(rev)q.reverse();q.pop();for(const p of q)r.push([p[0],p[1]])}
+    return r}
+  const P=polys.map(p=>({label:p.label,outer:split(p.outer),holes:p.holes.map(split)}));
+  for(const p of P)for(const parts of [p.outer,...p.holes]){let guard=0;
+    while(new Set(build(parts).map(q=>vkey(q))).size<3&&guard++<4){let any=false;for(const x of parts)any=addOne(x.a)||any;if(!any)break}}
+  return P.map(p=>({label:p.label,outer:build(p.outer),holes:p.holes.map(build)}))}
+// label raster -> polygons in raster corner coordinates (x right, y down): small components merged, rings traced, simplified
+function polygonize(L,nx,ny,opt={}){const minA=opt.minArea||0,M=minA>1?mergeSmall(L,nx,ny,minA):{L,merged:0};
+  return{polys:simplify(trace(M.L,nx,ny),opt.tol||0),L:M.L,merged:M.merged}}
+// to map coordinates: f([x, y]) -> [X, Y]; exterior counter-clockwise, holes clockwise (RFC 7946); area, perimeter, holes
+const orient=(r,ccw)=>(sArea(r)>0)===ccw?r:r.slice().reverse();
+const perim=r=>{let s=0;for(let i=0,n=r.length;i<n;i++){const p=r[i],q=r[(i+1)%n];s+=Math.hypot(q[0]-p[0],q[1]-p[1])}return s};
+function toMap(polys,f,groups){return polys.map(p=>{const g=groups[p.label]||{},T=r=>r.map(q=>f([q[0],q[1]]));
+  const outer=orient(T(p.outer),true),holes=p.holes.map(h=>orient(T(h),false));
+  return{label:p.label,code:g.code,name:g.name,outer,holes,area:sArea(outer)+holes.reduce((s,h)=>s+sArea(h),0),perimeter:perim(outer)+holes.reduce((s,h)=>s+perim(h),0)}})}
+// writers. P = [{code, name, outer:[[x,y]...], holes:[[[x,y]...]], area, perimeter}], rings not closed
+const f6=v=>(+v).toFixed(6),rp=v=>+(+v).toPrecision(12),closeR=r=>r.concat([r[0]]);
+function irapLines(P){const L=[];
+  for(const p of P)for(const r of [p.outer,...p.holes]){for(const q of closeR(r))L.push(`${f6(q[0])} ${f6(q[1])} ${f6(p.code)}`);L.push('999.000000 999.000000 999.000000')}
+  return L.join('\n')+'\n'}
+function geojson(P){const F=P.map(p=>JSON.stringify({type:'Feature',properties:{code:p.code,class:oneLine(p.name),area:rp(p.area),perimeter:rp(p.perimeter)},
+  geometry:{type:'Polygon',coordinates:[orient(p.outer,true),...p.holes.map(h=>orient(h,false))].map(r=>closeR(r).map(q=>[rp(q[0]),rp(q[1])]))}}));
+  return'{"type":"FeatureCollection","features":[\n'+F.join(',\n')+'\n]}\n'}
+function polyCsv(P,sep=','){const q=s=>{s=oneLine(s);return sep===','&&/[",]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=[['polygon','ring','ring_type','code','class','vertex','x','y'].join(sep)];
+  P.forEach((p,n)=>[p.outer,...p.holes].forEach((r,k)=>r.forEach((v,i)=>L.push([n+1,k+1,k?'hole':'outer',p.code,q(p.name),i+1,crd(v[0]),crd(v[1])].join(sep)))));
+  return L.join('\n')}
+// ---- end of copy
+
+// ZMAP+ grid of belt codes, legend in ! lines; values column by column from the upper-left node (ymax) downwards
+function zmap(G){const nm=String(G.name||'GDE').replace(/[^A-Za-z0-9_.-]+/g,'_').replace(/^_+|_+$/g,'')||'GDE';
+  const L=['! GDE map generator: belt codes'].concat((G.legend||[]).map(([c,n])=>`! ${c} = ${oneLine(n)}`));
+  L.push(`@${nm}, GRID, 5`,'15, 1.0E+30, , 7, 1',`${G.ny}, ${G.nx}, ${crd(G.x0)}, ${crd(G.x0+(G.nx-1)*G.dx)}, ${crd(G.y0)}, ${crd(G.y0+(G.ny-1)*G.dy)}`,'0.0, 0.0, 0.0','@');
+  for(let i=0;i<G.nx;i++){let line='',n=0;
+    for(let j=G.ny-1;j>=0;j--){const v=G.codes[j*G.nx+i];line+=(v==null||!isFinite(v)?'1.0E+30':(+v).toFixed(7)).padStart(15);if(++n===5){L.push(line);line='';n=0}}
+    if(n)L.push(line)}
+  return L.join('\n')+'\n'}
+function gridCsv(G,sep=','){const nm=new Map(G.legend||[]),q=s=>{s=oneLine(s);return sep===','&&/[",]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=[['x','y','code','belt'].join(sep)];
+  for(let j=0;j<G.ny;j++)for(let i=0;i<G.nx;i++){const v=G.codes[j*G.nx+i];L.push([crd(G.x0+i*G.dx),crd(G.y0+j*G.dy),v,q(nm.get(v))].join(sep))}
+  return L.join('\n')}
+// ---------- examples ----------
+const examples={
+ delta:{title:'River-dominated delta, 4 wells',M:makeModel('delta',{az:128,src:[3000,28500],fan:120,span:36000,noise:{amp:1600,wl:9000,seed:7},warp:{on:true,R:4000},
+   ext:{xmin:0,xmax:40000,ymin:0,ymax:30000},cell:100}),
+   wells:[{name:'Delta-1',x:9200,y:23800,env:'Delta plain'},{name:'Delta-2',x:15400,y:21300,env:'Delta front'},{name:'Delta-3',x:13600,y:13900,env:'Prodelta'},{name:'Delta-4',x:27500,y:17200,env:'Shelf'}]},
+ fan:{title:'Deep-water fan, 3 wells',M:makeModel('fan',{az:182,src:[24000,44000],fan:76,span:44000,noise:{amp:1800,wl:10000,seed:11},warp:{on:true,R:5000},
+   ext:{xmin:0,xmax:50000,ymin:0,ymax:40000},cell:100}),
+   wells:[{name:'Fan-1',x:24600,y:28500,env:'Channel-levee complex'},{name:'Fan-2',x:16800,y:17500,env:'Proximal lobes'},{name:'Fan-3',x:30500,y:7000,env:'Distal lobes'}]}};
+window.GDE={templates,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
+  zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
+})();
+
+</script>
+<script>
+
+
+</script><script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what": "x"});
+</script>
+</body></html>
