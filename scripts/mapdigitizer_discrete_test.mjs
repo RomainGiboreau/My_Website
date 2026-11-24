@@ -1,10 +1,10 @@
-// Self-check for the discrete-legend core of the map digitizer (docs/mapdigitizer/index.html, <script id="md-discrete-core">).
+// Self-check for the discrete-legend core of the discrete map digitizer (docs/discretemap/index.html, <script id="md-discrete-core">).
 // Run: node scripts/mapdigitizer_discrete_test.mjs
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
-const html = readFileSync(new URL('../docs/mapdigitizer/index.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../docs/discretemap/index.html', import.meta.url), 'utf8');
 const m = html.match(/<script id="md-discrete-core">([\s\S]*?)<\/script>/);
 assert.ok(m, 'md-discrete-core script block not found');
 const ctx = { window: {} };

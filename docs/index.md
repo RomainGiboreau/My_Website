@@ -110,11 +110,17 @@ Pull numbers back out of published plots and maps.
 
     Calibrate the axes of a chart image, click or auto-extract points, export CSV.
 
--   [![Map digitizer](assets/tools/mapdigitizer.webp){ loading=lazy }](mapdigitizer/index.html)
+-   [![Continuous map digitizer](assets/tools/mapdigitizer.webp){ loading=lazy }](mapdigitizer/index.html)
 
-    [**Map digitizer**](mapdigitizer/index.html)
+    [**Continuous map digitizer**](mapdigitizer/index.html)
 
-    Turn a colour-coded map into a regular XY grid using its legend: values from a colour bar (e.g. a depth map) or class codes from colour boxes (e.g. a facies map).
+    Turn a depth or other property map with a colour bar into a regular XY grid of values; export CSV, XYZ or Surfer grid.
+
+-   [![Discrete map digitizer](assets/tools/discretemap.webp){ loading=lazy }](discretemap/index.html)
+
+    [**Discrete map digitizer**](discretemap/index.html)
+
+    Turn a facies or other class map with colour boxes into a grid of class codes and polygons (IRAP lines, GeoJSON, CSV).
 
 </div>
 

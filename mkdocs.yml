@@ -73,7 +73,8 @@ nav:
           - ZMAP checker: zmap-checker/index.html
       - Digitization:
           - Plot digitizer: digitizer/index.html
-          - Map digitizer: mapdigitizer/index.html
+          - Continuous map digitizer: mapdigitizer/index.html
+          - Discrete map digitizer: discretemap/index.html
       - Mapping and spatial statistics:
           - Map interpolation: gridding/index.html
           - Variogram: variogram/index.html
