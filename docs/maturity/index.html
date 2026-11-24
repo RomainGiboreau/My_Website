@@ -99,11 +99,13 @@ textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:
 canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
 table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
 table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
-@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
 
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .tabs button{padding:.35rem .9rem}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:12px}
+main{min-width:0}
+#resT,#parT{max-height:none}
 .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
 .card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
 .card h3 .sp{margin-left:auto}
@@ -143,10 +145,10 @@ td.l,th.l{text-align:left}
   <span>Time is</span><select id="tmode"><option value="auto">auto-detect</option><option value="age">age (Ma, decreasing to 0)</option><option value="fwd">elapsed time (Ma, increasing)</option></select>
   <span>Temperature unit</span><select id="tu"><option value="C">°C</option><option value="K">K</option></select></div>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
- <section class="panel"><h2><span class="n">2</span>Models<span class="tt" tabindex="0" data-tip="EASY%Ro: parameters of Table 1 of Sweeney & Burnham (1990), %Ro = exp(−1.6 + 3.7 F), F = fraction reacted (maximum 0.85, i.e. %Ro ≤ 4.7), stated valid for 0.3–4.5 %Ro. Easy%RoDL: A = 2×10¹⁴ s⁻¹, %Ro = exp(−1.5 + 3.7 F), fractions summing to 0.95, with the energy distribution read from the bar chart of Schenk et al. (2017) (no table is published there), so treat it as approximate. Basin%Ro: parameters supplied by the user (A = e^60.9856 Ma⁻¹, Σ factors = 0.9215, %Ro = 0.2104·exp(3.7 F)), not checked against the paper. Each segment between two rows is treated as a constant heating (or cooling) rate; the Arrhenius integral uses the approximation of the paper's Appendix 1. TTI (Lopatin): Σ 2^n·Δt over temperature classes of 10 °C, n = 0 for 100–110 °C; formula as commonly attributed to Lopatin / Waples (1980), not checked here against the original paper.">?</span><i class="chev"></i></h2>
+ <section class="panel"><h2><span class="n">2</span>Models<span class="tt" tabindex="0" data-tip="EASY%Ro: parameters of Table 1 of Sweeney & Burnham (1990), %Ro = exp(−1.6 + 3.7 F), F = fraction reacted (maximum 0.85, i.e. %Ro ≤ 4.7), stated valid for 0.3–4.5 %Ro. Easy%RoDL: A = 2×10¹⁴ s⁻¹, %Ro = exp(−1.5 + 3.7 F), fractions summing to 0.95, with the energy distribution read from the bar chart of Schenk et al. (2017) (no table is published there), so treat it as approximate. Basin%Ro (Nielsen et al. 2017): parameters supplied by the site author (A = e^60.9856 Ma⁻¹, Σ factors = 0.9215, %Ro = 0.2104·exp(3.7 F)), not checked against the paper. Each segment between two rows is treated as a constant heating (or cooling) rate; the Arrhenius integral uses the approximation of the paper's Appendix 1. TTI (Lopatin): Σ 2^n·Δt (Δt in Ma) over temperature classes of 10 °C, n = 0 for 100–110 °C, time in each class computed exactly; formula as commonly attributed to Lopatin / Waples (1980), not checked here against the original paper.">?</span><i class="chev"></i></h2>
   <div class="body"><label class="inl"><input type="checkbox" id="m_easy" checked>EASY%Ro (Sweeney & Burnham 1990)</label>
   <label class="inl"><input type="checkbox" id="m_dl">Easy%RoDL (Burnham; Schenk et al. 2017)</label>
-  <label class="inl"><input type="checkbox" id="m_basin">Basin%Ro (Nielsen et al. 2015)</label>
+  <label class="inl"><input type="checkbox" id="m_basin">Basin%Ro (Nielsen et al. 2017)</label>
   <label class="inl"><input type="checkbox" id="mTti" checked>TTI (Lopatin)</label>
   <div class="msg" id="runMsg"></div></div></section>
  <section class="panel"><h2><span class="n">3</span>Display<i class="chev"></i></h2>
@@ -160,7 +162,7 @@ td.l,th.l{text-align:left}
  <div class="cards"><div class="card wide"><h3>Vitrinite reflectance vs time<span class="sp"></span><button data-png="cv">PNG</button></h3><canvas id="cv" style="position:static;height:420px"></canvas></div>
   <div class="card"><h3>Temperature history<span class="sp"></span><button data-png="c2">PNG</button></h3><canvas id="c2"></canvas></div>
   <div class="card" id="cB"><h3>Burial history (depth)<span class="sp"></span><button data-png="c3">PNG</button></h3><canvas id="c3"></canvas></div>
-  <div class="card" id="cT"><h3>TTI vs time<span class="sp"></span><button data-png="c4">PNG</button></h3><canvas id="c4"></canvas></div>
+  <div class="card" id="cTti"><h3>TTI vs time<span class="sp"></span><button data-png="c4">PNG</button></h3><canvas id="c4"></canvas></div>
   <div class="card"><h3>%Ro vs temperature along the path<span class="sp"></span><button data-png="c5">PNG</button></h3><canvas id="c5"></canvas></div>
   <div class="card wide"><h3>Constant heating rates<span id="hLeg"></span><span class="sp"></span><button data-png="c6">PNG</button></h3><canvas id="c6"></canvas></div></div>
  <div class="card" style="margin-top:12px"><h3>Results<span class="tt" tabindex="0" data-tip="Values at the last row of each group (present day for ages). F = fraction reacted. TTI is dimensionless (Ma × temperature factor).">?</span></h3><div class="tw" id="resT"></div></div>
@@ -258,7 +260,7 @@ const EASY={id:'easy',name:'EASY%Ro',A:1e13,c:-1.6,dash:[],
 // bars at 2 kcal/mol spacing from 38; their sum is 0.95 as stated in the captions and %Ro = 0.223 exp(3.7 F) = exp(-1.5 + 3.7 F). Not a published table.
 const DL={id:'dl',name:'Easy%RoDL',A:2e14,c:-1.5,dash:[7,3],EA:Array.from({length:20},(_,i)=>38+2*i),
   FR:[.02,.03,.04,.05,.04,.04,.03,.04,.07,.10,.09,.07,.06,.05,.05,.04,.04,.03,.03,.03]};
-// Basin%Ro (Nielsen, Clausen & McGregor 2015, Basin Research): parameters supplied by the user from his own implementation (A = exp(60.9856) Ma^-1,
+// Basin%Ro (Nielsen, Clausen & McGregor 2017, Basin Research 29 suppl. 1; online 2015): parameters supplied by the user from his own implementation (A = exp(60.9856) Ma^-1,
 // 20 Ea at 34-72 kcal/mol, factors summing to 0.9215, %Ro = 0.2104 exp(3.7 F)); NOT checked against the paper (paywalled). F = sum f_i (1 - w_i), NOT renormalised by the sum
 // of factors, same convention as EASY%Ro: with it, Easy - Basin peaks at 0.35 %Ro in the 0.5-1.7 %Ro range at 3 C/Ma, matching the abstract ("up to 0.35").
 const BASIN={id:'basin',name:'Basin%Ro',A:Math.exp(60.9856)/3.15576e13,c:Math.log(0.2104),dash:[2,3],EA:EASY.EA.slice(),dig:4,
@@ -273,44 +275,62 @@ function step(w,M,T1,T2,dt){const iso=Math.abs(T2-T1)<1e-3;
   for(let i=0;i<M.EA.length;i++){let dI;if(iso)dI=M.A*Math.exp(-M.EA[i]/(RG*0.5*(T1+T2)))*dt;else{const H=(T2-T1)/dt;dI=(Iint(M.EA[i],T2,M.A)-Iint(M.EA[i],T1,M.A))/H}w[i]*=Math.exp(-dI)}}
 const Fof=(w,M)=>{let s=0;for(let i=0;i<w.length;i++)s+=M.FR[i]*(1-w[i]);return s};
 const RoOf=(F,M)=>Math.exp(M.c+3.7*F);   // eq. 1 (EASY%Ro) / Easy%RoDL: mean random reflectance in %
-// TTI (Lopatin): factor 2^n for the 10 °C class containing T, n = 0 for 100-110 °C (T in °C, dt in Ma)
+// TTI (Lopatin; Waples 1980): factor 2^n for the 10 °C class containing T, n = 0 for 100-110 °C (T in °C, dt in Ma)
 const ttiRate=Tc=>Math.pow(2,Math.floor((Tc-100)/10));
-// integrate one history with the models ms: rows [{t (Ma), T (°C), z}] -> fine samples {t,T,tti,node,F:{id},Ro:{id}}
+// exact TTI of a segment with a linear temperature change T1 -> T2 (°C) lasting dt (Ma): time in each 10 °C class x its factor
+function ttiSeg(T1,T2,dt){if(!(dt>0))return 0;if(Math.abs(T2-T1)<1e-9)return ttiRate(T1)*dt;const lo=Math.min(T1,T2),hi=Math.max(T1,T2);let s=0;
+  for(let c=Math.floor((lo-100)/10);c*10+100<hi;c++){const a=Math.max(lo,c*10+100),b=Math.min(hi,c*10+110);if(b>a)s+=Math.pow(2,c)*(b-a)}return s*dt/(hi-lo)}
+// integrate one history with the models ms: rows [{t (Ma), T (°C), z}] sorted in time (rows at the same time = instantaneous temperature change)
+// -> fine samples {t,T,tti,node,F:{id},Ro:{id}}; node = index of the table row for the sample at that row, -1 for intermediate samples
 function integrate(rows,age,doTti,ms){ms=ms||[EASY];const W={};for(const M of ms)W[M.id]=new Float64Array(M.EA.length).fill(1);let tti=0;const out=[];
   const snap=(t,T,node)=>{const F={},Ro={};for(const M of ms){F[M.id]=Fof(W[M.id],M);Ro[M.id]=RoOf(F[M.id],M)}return{t,T,tti,node,F,Ro}};
   out.push(snap(rows[0].t,rows[0].T,0));
-  for(let j=1;j<rows.length;j++){const a=rows[j-1],b=rows[j],dtMa=age?a.t-b.t:b.t-a.t;if(!(dtMa>0))continue;
-    const n=Math.max(1,Math.min(1500,Math.ceil(Math.abs(b.T-a.T)/1)));   // sub-steps of at most 1 °C (also resolves the 10 °C TTI classes)
+  for(let j=1;j<rows.length;j++){const a=rows[j-1],b=rows[j],dtMa=age?a.t-b.t:b.t-a.t;if(!(dtMa>0)){out.push(snap(b.t,b.T,j));continue}
+    const n=Math.max(1,Math.min(1500,Math.ceil(Math.abs(b.T-a.T)/1)));   // sub-steps of at most 1 °C (for the curves; each sub-step is integrated exactly)
     for(let s=1;s<=n;s++){const T1=a.T+(b.T-a.T)*(s-1)/n,T2=a.T+(b.T-a.T)*s/n,dt=dtMa/n;
-      for(const M of ms)step(W[M.id],M,T1+273.15,T2+273.15,dt*SEC_MA);if(doTti)tti+=ttiRate(0.5*(T1+T2))*dt;
-      out.push(snap(age?a.t-dt*s:a.t+dt*s,T2,s===n?j:0))}}
+      for(const M of ms)step(W[M.id],M,T1+273.15,T2+273.15,dt*SEC_MA);if(doTti)tti+=ttiSeg(T1,T2,dt);
+      out.push(snap(s===n?b.t:(age?a.t-dt*s:a.t+dt*s),T2,s===n?j:-1))}}
   return out}
-window.DG={integrate,step,Fof,RoOf,Iint,EASY,DL,BASIN,MODELS};
+// ---- table preparation
+// column guess from the header: [time, temperature, depth, group, unit 'C'|'K']
+function guessCols(head){const nn=head.map(h=>String(h).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'')),f=re=>nn.findIndex(h=>re.test(h));
+  let t=f(/^(age|time|ma|myr)/),z=f(/^(depth|prof|md|tvd|z(m|ft)?$|burial)/),T=f(/^(temp|t$|tc$|tk$|t(deg)?[ck]$|degc|celsius|kelvin)/),g=f(/^(layer|group|unit|well|name|horizon|sample|formation|fm)/);
+  if(t<0)t=0;if(T<0||T===t)T=head.findIndex((_,i)=>i!==t&&i!==z&&i!==g);
+  const unit=T>=0&&/\bK\b|kelvin|°K/i.test(String(head[T]))?'K':'C';return[t,T,z,g,unit]}
+// group the records [{g,t,T,z}] (file order) into histories sorted in time. mode 'age' | 'fwd' | 'auto'; timeHead = header of the time column.
+// auto: an age column (Age, Ma BP, before present) is an age; an elapsed time column (elapsed, since) is elapsed time; otherwise the table is an
+// age table when the oldest time is listed first in most histories. The same convention is used for every history.
+// Rows sharing the same time are kept in file order (instantaneous temperature change); histories with fewer than 2 distinct times are skipped.
+function prepare(recs,mode,timeHead){const m=new Map();for(const r of recs){if(!m.has(r.g))m.set(r.g,[]);m.get(r.g).push(r)}
+  let age=mode==='age';if(mode==='auto'){const h=String(timeHead||'').toLowerCase();
+    if(/\bage\b|^age|\bbp\b|before|ago/.test(h))age=true;else if(/elapsed|since|forward/.test(h))age=false;
+    else{let v=0;for(const rows of m.values())if(rows.length>1)v+=Math.sign(rows[0].t-rows[rows.length-1].t);age=v>=0}}
+  const groups=[];let skipped=0;
+  for(const [g,rs] of m){const rows=rs.map((r,i)=>({...r,_i:i})).sort((a,b)=>(age?b.t-a.t:a.t-b.t)||a._i-b._i).map(({_i,...r})=>r);
+    let dupT=0;for(let i=1;i<rows.length;i++)if(rows[i].t===rows[i-1].t)dupT++;
+    if(rows.length-dupT<2){skipped++;continue}groups.push({g,rows,age,dupT})}
+  return{groups,skipped,age}}
+window.DG={integrate,step,Fof,RoOf,Iint,ttiRate,ttiSeg,guessCols,prepare,EASY,DL,BASIN,MODELS,SEC_MA,RG};
 </script>
 <script>
 const D={table:null,gr:[],hr:[],rates:[]};
 const activeModels=()=>MODELS.filter(m=>$('m_'+m.id).checked);
 // ---- data
-function guess(head){const f=re=>head.findIndex(h=>re.test(normName(h)));let t=f(/^(age|time|ma|myr)/),T=f(/^(temp|t$|tc|degc|tk)/),z=f(/^(depth|prof|md|tvd|z$)/),g=f(/^(layer|group|unit|well|name|horizon|sample)/);
-  if(t<0)t=0;if(T<0||T===t)T=head.findIndex((_,i)=>i!==t&&i!==z);return[t,T,z,g]}
-function fillCols(){const h=D.table.head,[t,T,z,g]=guess(h),o=h.map((x,i)=>`<option value="${i}">${esc(x)}</option>`).join('');
+function fillCols(){const h=D.table.head,[t,T,z,g,u]=guessCols(h),o=h.map((x,i)=>`<option value="${i}">${esc(x)}</option>`).join('');
   $('ct').innerHTML=o;$('cT').innerHTML=o;$('cd').innerHTML='<option value="-1">— (none)</option>'+o;$('cg').innerHTML='<option value="-1">— (single history)</option>'+o;$('ct').value=t;$('cT').value=T;$('cd').value=z;$('cg').value=g;
-  if(/\bK\b|kelvin/i.test(h[T]))$('tu').value='K'}
+  $('tu').value=u;$('tmode').value='auto'}
 function loadText(text){const t=parseTable(text,2);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillCols();build();return true}
 function build(){const t=D.table;if(!t)return;const ct=+$('ct').value,cT=+$('cT').value,cd=+$('cd').value,cg=+$('cg').value,K=$('tu').value==='K',m=new Map();let bad=0;
   for(const r of t.rows){const tm=toN(r[ct]);let T=toN(r[cT]);if(!isFinite(tm)||!isFinite(T)){bad++;continue}if(K)T-=273.15;if(T<-50||T>700){bad++;continue}const g=cg>=0?(r[cg]||'').trim()||'(blank)':'history';if(!m.has(g))m.set(g,[]);m.get(g).push({t:tm,T,z:cd>=0?toN(r[cd]):NaN})}
-  let mode=$('tmode').value;D.gr=[];let skipped=0;
-  for(const [g,rows] of m){if(rows.length<2){skipped++;continue}let age=mode==='age';if(mode==='auto')age=rows[0].t>rows[rows.length-1].t;
-    rows.sort((a,b)=>age?b.t-a.t:a.t-b.t);D.gr.push({g,rows,age})}
-  D.gr.forEach(o=>{o.dupT=0;o.rows=o.rows.filter((r,i,a)=>{if(i&&r.t===a[i-1].t){o.dupT++;return false}return true})});
-  $('dataMsg').className='msg';$('dataMsg').textContent=`${D.gr.length} history(ies) · ${D.gr.reduce((a,o)=>a+o.rows.length,0)} rows`+(bad?` · ${bad} row(s) skipped`:'')+(skipped?` · ${skipped} group(s) with < 2 rows ignored`:'')+(D.gr.some(o=>o.dupT)?' · duplicate times dropped':'');
-  if(!D.gr.length){$('dataMsg').className='msg err';$('dataMsg').textContent='Need at least 2 rows per history.';return}
+  const recs=[];for(const [g,rows] of m)for(const r of rows)recs.push({g,...r});const P=prepare(recs,$('tmode').value,t.head[ct]);D.gr=P.groups;const skipped=P.skipped;
+  $('dataMsg').className='msg';$('dataMsg').textContent=`${D.gr.length} history(ies) · ${D.gr.reduce((a,o)=>a+o.rows.length,0)} rows · read as ${P.age?'ages (Ma before present)':'elapsed time (Ma)'}`+(bad?` · ${bad} row(s) skipped`:'')+(skipped?` · ${skipped} group(s) with < 2 rows ignored`:'')+(D.gr.some(o=>o.dupT)?' · rows at the same time read as an instantaneous temperature change':'');
+  if(!D.gr.length){$('dataMsg').className='msg err';$('dataMsg').textContent='Need at least 2 rows at different times per history'+(bad?` (${bad} row(s) skipped: not numeric or temperature outside −50…700 °C — check the columns and the temperature unit)`:'')+'.';D.hr=[];draw();table();return}
   run()}
-function run(){if(!D.gr.length)return;const doT=$('mTti').checked,ms=activeModels();
+function run(){if(!D.gr.length){D.hr=[];heating();draw();table();return}const doT=$('mTti').checked,ms=activeModels();
   D.hr=D.gr.map(o=>({...o,s:integrate(o.rows,o.age,doT,ms)}));
   const warn=[];if(ms.length)for(const o of D.hr)for(const M of ms){const mx=Math.max(...o.s.map(q=>q.Ro[M.id]));
     if(M.id==='easy'&&mx>4.5)warn.push(`${o.g}: ${M.name} > 4.5 %Ro, outside the stated validity range`)}
-  const mixed=D.hr.some(o=>o.age!==D.hr[0].age);$('runMsg').className='msg'+(warn.length?' err':'');$('runMsg').textContent=warn.join(' · ')+(mixed?' · groups mix age and elapsed-time conventions':'');
+  $('runMsg').className='msg'+(warn.length?' err':'');$('runMsg').textContent=warn.join(' · ');
   heating();draw();table()}
 function heating(){const rs=$('rates').value.split(/[,;\s]+/).map(Number).filter(v=>v>0&&isFinite(v)).slice(0,6),tm=Math.min(600,Math.max(50,+$('tmaxh').value||300));D.rates=[];
   for(const M of activeModels())for(const r of rs){const w=new Float64Array(M.EA.length).fill(1),T=[20],Ro=[RoOf(0,M)];for(let c=21;c<=tm;c++){step(w,M,c-1+273.15,c+273.15,SEC_MA/r);T.push(c);Ro.push(RoOf(Fof(w,M),M))}D.rates.push({r,M,T,Ro})}}
@@ -318,23 +338,26 @@ function heating(){const rs=$('rates').value.split(/[,;\s]+/).map(Number).filter
 // drawChart takes the x range from points only, so panels drawn with lines alone need an explicit range
 const xr=lines=>{let a=Infinity,b=-Infinity;for(const l of lines)for(const v of l.x)if(isFinite(v)){a=Math.min(a,v);b=Math.max(b,v)}const p=(b-a)*0.04||1;return[a-p,b+p]};
 function blank(cv,msg){const x=cv.getContext('2d');cv.width=cv.clientWidth;cv.height=cv.clientHeight;x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);x.fillStyle='#5c5a52';x.font='13px Inter,sans-serif';x.fillText(msg,20,30)}
-function draw(){if(!D.hr.length)return;const log=$('logRo').checked,ms=activeModels(),nd=$('nodes').checked,age=D.hr[0].age,xl=age?'Age (Ma)':'Time (Ma)',
+function draw(){drawHeating();parTable();if(!D.hr.length){$('legend').innerHTML='';for(const c of ['cv','c2','c3','c4','c5'])blank($(c),'Paste a thermal history or click Example (panel 1).');return}const log=$('logRo').checked,ms=activeModels(),nd=$('nodes').checked,age=D.hr[0].age,xl=age?'Age (Ma)':'Time (Ma)',
     thin=s=>{const k=Math.ceil(s.length/500);return s.filter((_,i)=>i%k===0||i===s.length-1)},pc=i=>PAL[i%PAL.length];
-  $('legend').innerHTML=D.hr.map((o,i)=>`<span><i style="background:${pc(i)}"></i>${esc(o.g)}</span>`).join('')+(ms.length>1?ms.map(M=>`<span>${M.dash.length?'- - -':'———'} ${M.name}</span>`).join(''):'');
+  $('legend').innerHTML=D.hr.map((o,i)=>`<span><i style="background:${pc(i)}"></i>${esc(o.g)}</span>`).join('')+(ms.length>1?ms.map(M=>`<span>${dashSw(M)}${M.name}</span>`).join(''):'');
   const mkL=(o,i,f,M)=>{const s=thin(o.s);return{x:s.map(q=>q.t),y:s.map(q=>f(q)),c:pc(i),w:1.8,dash:M?M.dash:[]}};
-  const nodePts=(o,i,f,M)=>nd?o.s.filter(q=>q.node).concat(o.s[0]).map(q=>({x:q.t,y:f(q),c:pc(i),r:3.5,info:`<b>${esc(o.g)}</b><br>${age?'age':'time'} ${fmt(q.t)} Ma<br>T ${fmt(q.T)} °C`+ms.map(m=>`<br>${m.name} ${q.Ro[m.id].toFixed(3)} %Ro`).join('')+`<br>TTI ${fmt(q.tti)}`})):[];
+  const nodePts=(o,i,f,M)=>nd?o.s.filter(q=>q.node>=0).map(q=>({x:q.t,y:f(q),c:pc(i),r:3.5,info:`<b>${esc(o.g)}</b><br>${age?'age':'time'} ${fmt(q.t)} Ma<br>T ${fmt(q.T)} °C`+ms.map(m=>`<br>${m.name} ${q.Ro[m.id].toFixed(3)} %Ro`).join('')+`<br>TTI ${fmt(q.tti)}`})):[];
   if(ms.length){const pts=[],lines=[];D.hr.forEach((o,i)=>ms.forEach((M,k)=>{const f=q=>q.Ro[M.id];if(k===0||true)lines.push(mkL(o,i,f,M));if(M===ms[0])pts.push(...nodePts(o,i,f,M))}));
     drawChart($('cv'),{ylab:'%Ro (mean random)',ylog:log,panels:[{xlab:xl,xrev:age,pts,lines}]})}else blank($('cv'),'Select at least one reflectance model.');
-  drawChart($('c2'),{ylab:'Temperature (°C)',panels:[{xlab:xl,xrev:age,pts:D.hr.flatMap((o,i)=>nd?o.s.filter(q=>q.node).concat(o.s[0]).map(q=>({x:q.t,y:q.T,c:pc(i),r:3.5,info:`<b>${esc(o.g)}</b><br>${fmt(q.t)} Ma · ${fmt(q.T)} °C`})):[]),lines:D.hr.map((o,i)=>mkL(o,i,q=>q.T))}]});
+  drawChart($('c2'),{ylab:'Temperature (°C)',panels:[{xlab:xl,xrev:age,pts:D.hr.flatMap((o,i)=>nd?o.s.filter(q=>q.node>=0).map(q=>({x:q.t,y:q.T,c:pc(i),r:3.5,info:`<b>${esc(o.g)}</b><br>${fmt(q.t)} Ma · ${fmt(q.T)} °C`})):[]),lines:D.hr.map((o,i)=>mkL(o,i,q=>q.T))}]});
   const hasZ=D.hr.some(o=>o.rows.some(r=>isFinite(r.z)));$('cB').style.display=hasZ?'':'none';
   if(hasZ){const ln=D.hr.map((o,i)=>({x:o.rows.map(r=>r.t),y:o.rows.map(r=>r.z),c:pc(i),w:1.8}));drawChart($('c3'),{ylab:'Depth',yrev:true,panels:[{xlab:xl,xrev:age,xlim:xr(ln),pts:[],lines:ln}]})}
-  const doT=$('mTti').checked;$('cT').style.display=doT?'':'none';
+  const doT=$('mTti').checked;$('cTti').style.display=doT?'':'none';
   if(doT){const ln=D.hr.map((o,i)=>{const s=thin(o.s.filter(q=>q.tti>=0.01));return{x:s.map(q=>q.t),y:s.map(q=>q.tti),c:pc(i),w:1.8}}).filter(l=>l.x.length);if(ln.length)drawChart($('c4'),{ylab:'TTI (log scale)',ylog:true,panels:[{xlab:xl,xrev:age,xlim:xr(ln),pts:[],lines:ln}]})}
   if(ms.length){const ln=[];D.hr.forEach((o,i)=>ms.forEach(M=>{const s=thin(o.s);ln.push({x:s.map(q=>q.T),y:s.map(q=>q.Ro[M.id]),c:pc(i),w:1.8,dash:M.dash})}));drawChart($('c5'),{ylab:'%Ro',ylog:log,panels:[{xlab:'Temperature (°C)',xlim:xr(ln),pts:[],lines:ln}]})}else blank($('c5'),'');
-  if(D.rates.length){const ln=D.rates.map(q=>({x:q.T,y:q.Ro,c:pc(rateIdx(q.r)),w:1.8,dash:q.M.dash})),pts=D.rates.flatMap(q=>q.T.filter((_,k)=>k%10===0).map(T=>({x:T,y:q.Ro[T-20],c:pc(rateIdx(q.r)),r:0.1,info:`<b>${q.M.name} · ${q.r} °C/Ma</b><br>T ${T} °C<br>%Ro ${q.Ro[T-20].toFixed(3)}`})));
-    const rs=[...new Set(D.rates.map(q=>q.r))];$('hLeg').innerHTML=rs.map(r=>`<span style="margin-left:10px;font:500 .78rem Inter"><i style="display:inline-block;width:18px;height:3px;background:${pc(rateIdx(r))};vertical-align:middle;margin-right:4px"></i>${r} °C/Ma</span>`).join('')+(ms.length>1?ms.map(M=>`<span style="margin-left:10px;font:500 .78rem Inter">${M.dash.length?'- - -':'———'} ${M.name}</span>`).join(''):'');
+}
+function drawHeating(){
+  if(D.rates.length){const log=$('logRo').checked,ms=activeModels(),pc=i=>PAL[i%PAL.length],ln=D.rates.map(q=>({x:q.T,y:q.Ro,c:pc(rateIdx(q.r)),w:1.8,dash:q.M.dash})),pts=D.rates.flatMap(q=>q.T.filter((_,k)=>k%10===0).map(T=>({x:T,y:q.Ro[T-20],c:pc(rateIdx(q.r)),r:0.1,info:`<b>${q.M.name} · ${q.r} °C/Ma</b><br>T ${T} °C<br>%Ro ${q.Ro[T-20].toFixed(3)}`})));
+    const rs=[...new Set(D.rates.map(q=>q.r))];$('hLeg').innerHTML=rs.map(r=>`<span style="margin-left:10px;font:500 .78rem Inter"><i style="display:inline-block;width:18px;height:3px;background:${pc(rateIdx(r))};vertical-align:middle;margin-right:4px"></i>${r} °C/Ma</span>`).join('')+(ms.length>1?ms.map(M=>`<span style="margin-left:10px;font:500 .78rem Inter">${dashSw(M)}${M.name}</span>`).join(''):'');
     drawChart($('c6'),{ylab:'%Ro',ylog:log,panels:[{xlab:'Temperature (°C)',xlim:xr(ln),pts,lines:ln}]})}else{$('hLeg').innerHTML='';blank($('c6'),'')}
-  parTable()}
+}
+const dashSw=M=>`<svg width="28" height="8" style="vertical-align:middle;margin-right:4px"><line x1="1" y1="4" x2="27" y2="4" stroke="#232220" stroke-width="1.8"${M.dash.length?` stroke-dasharray="${M.dash.join(',')}"`:''}/></svg>`;
 const rateIdx=r=>[...new Set(D.rates.map(q=>q.r))].indexOf(r);
 function table(){const ms=activeModels(),rows=[];D.hr.forEach((o,i)=>{const e=o.s[o.s.length-1],mx=Math.max(...o.s.map(q=>q.T));
     const base=`<td class="l"><span class="dot" style="background:${PAL[i%PAL.length]}"></span> ${esc(o.g)}</td><td>${o.rows.length}</td><td>${fmt(o.rows[0].t)}</td><td>${fmt(mx)}</td><td>${fmt(e.T)}</td>`,tt=$('mTti').checked?fmt(e.tti):'–';
@@ -348,7 +371,7 @@ $('bOpen').onclick=()=>$('file').click();
 $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>3e6?r.result.slice(0,3e6):r.result;loadText(r.result)};r.readAsText(f);e.target.value=''};
 document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
 ['ct','cT','cd','cg','tmode','tu'].forEach(i=>$(i).addEventListener('change',build));['m_easy','m_dl','m_basin','mTti'].forEach(i=>$(i).addEventListener('change',run));['logRo','nodes'].forEach(i=>$(i).addEventListener('change',draw));
-['rates','tmaxh'].forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(D.ht);D.ht=setTimeout(()=>{heating();if(D.hr.length)draw()},300)}));
+['rates','tmaxh'].forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(D.ht);D.ht=setTimeout(()=>{heating();draw()},300)}));
 window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(draw,150)});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b)pngOf($(b.dataset.png),'maturity_'+b.dataset.png+'.png')});$('bPng').onclick=()=>pngOf($('cv'),'maturity.png');
 $('bNodes').onclick=()=>{if(!D.hr.length)return banner('Nothing to export.',true);const ms=activeModels(),L=['group,time_Ma,temperature_C,depth,TTI'+ms.map(M=>`,F_${M.id},Ro_${M.id}_percent`).join('')];
@@ -362,6 +385,7 @@ function example(){const L=['Layer\tAge (Ma)\tDepth (m)\tTemperature (°C)'],H={
       'Uplifted':[[150,0,20],[100,2500,85],[70,3500,120],[40,3800,135],[20,2500,95],[0,1800,70]]};
   for(const g in H)for(const r of H[g])L.push(`${g}\t${r[0]}\t${r[1]}\t${r[2]}`);$('paste').value=L.join('\n');loadText($('paste').value)}
 $('bExample').onclick=example;
+heating();draw();table();
 
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
@@ -441,6 +465,6 @@ $('bExample').onclick=example;
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what": "Runs entirely in your browser: nothing you load leaves your machine. EASY%Ro, Easy%RoDL and Basin%Ro vitrinite reflectance and Lopatin TTI from a burial and temperature history.", "method": ["Twenty parallel first-order reactions with Arrhenius kinetics, integrated along the temperature history with the temperature-integral approximation of Braun &amp; Burnham as used by Sweeney &amp; Burnham (1990). The transformed fraction F is converted to %Ro by an exponential law.", "EASY%Ro: A = 10<sup>13<\/sup> s<sup>−1<\/sup>, Ea 34–72 kcal/mol, reaction factors summing to 0.85, %Ro = exp(−1.6 + 3.7 F).", "Easy%RoDL: A = 2×10<sup>14<\/sup> s<sup>−1<\/sup>, Ea 38–76 kcal/mol, factors summing to 0.95, %Ro = exp(−1.5 + 3.7 F).", "Basin%Ro: A = exp(60.9856) Ma<sup>−1<\/sup>, Ea 34–72 kcal/mol, factors summing to 0.9215, %Ro = 0.2104 exp(3.7 F). F is not renormalised by the sum of the factors, as in EASY%Ro.", "TTI (Lopatin): time–temperature index summed over the history."], "sources": [["EASY%Ro: 20 parallel reactions, factors and Ea", "Sweeney &amp; Burnham (1990), AAPG Bulletin 74(10), 1559–1570, Table 1", "published"], ["Temperature integral", "Same paper, Appendix 1, eq. 10 (approximation of Braun &amp; Burnham 1987)", "published"], ["Easy%RoDL parameters", "Schenk, Peters &amp; Burnham (EAGE 2017); Burnham, <i>Global Chemical Kinetics of Fossil Fuels<\/i> (2017). Frequency factor 2×10<sup>14<\/sup> s<sup>−1<\/sup> confirmed in a Burnham presentation (Sodir seminar, 2021) and in Burnham (2019, vitrinite, kerogen and bitumen reflectance models), which do not tabulate the activation energies, the factors or the Ro equation of Easy%RoDL", "figure (bar chart; no table found); A confirmed"], ["Basin%Ro parameters", "Nielsen, Clausen &amp; McGregor (2015), Basin Research, doi 10.1111/bre.12160. Abstract read (calibration on borehole and laboratory data; Easy%Ro overestimates by up to 0.35 %Ro between 0.5 and 1.7 %Ro); the parameters themselves are in the paywalled text", "supplied (abstract read; parameters not checked)"], ["F not renormalised", "With this convention the largest Easy − Basin difference between 0.5 and 1.7 %Ro at 3 °C/Ma is 0.35 %Ro, the value stated in the abstract of Nielsen et al.", "derived check"], ["TTI (Lopatin)", "Waples (1980), AAPG Bulletin (exact reference to complete)", "memory (formula not checked)"]], "validation": ["JavaScript against brute-force numerical integration of the same kinetics: largest difference 0.0006 %Ro (EASY%Ro) and 0.001 %Ro (Easy%RoDL, Basin%Ro) for constant heating rates of 1 to 50 °C/Ma."], "limits": ["EasyRoB and EasyRoV are not included. The Easy%RoDL fractions were read off a bar chart and confirmed against the site author's code.", "The Easy%RoDL conversion exp(−1.5 + 3.7 F) = 0.223 exp(3.7 F) is the same as the Easy%RoV equation listed in Burnham (2019, Table 4); no source found for the Easy%RoDL one."]});
+({"what": "Runs entirely in your browser: nothing you load leaves your machine. EASY%Ro, Easy%RoDL and Basin%Ro vitrinite reflectance and Lopatin TTI from a burial and temperature history.", "method": ["Twenty parallel first-order reactions with Arrhenius kinetics, integrated along the temperature history with the temperature-integral approximation of Braun &amp; Burnham as used by Sweeney &amp; Burnham (1990). Each segment between two rows is a constant heating (or cooling) rate, cut into sub-steps of at most 1 °C for the curves. The transformed fraction F is converted to %Ro by an exponential law.", "EASY%Ro: A = 10<sup>13</sup> s<sup>−1</sup>, Ea 34–72 kcal/mol, reaction factors summing to 0.85, %Ro = exp(−1.6 + 3.7 F).", "Easy%RoDL: A = 2×10<sup>14</sup> s<sup>−1</sup>, Ea 38–76 kcal/mol, factors summing to 0.95, %Ro = exp(−1.5 + 3.7 F).", "Basin%Ro: A = exp(60.9856) Ma<sup>−1</sup>, Ea 34–72 kcal/mol, factors summing to 0.9215, %Ro = 0.2104 exp(3.7 F). F is not renormalised by the sum of the factors, as in EASY%Ro.", "TTI (Lopatin): Σ Δt · 2<sup>n</sup>, Δt in Ma, n = 0 for 100–110 °C, n = 1 for 110–120 °C, n = −1 for 90–100 °C, etc. The time spent in each 10 °C class is computed exactly for a linear temperature change along each segment.", "Time: ages (Ma before present) or elapsed time. In auto-detect mode a time column named Age, Ma BP or before present is read as ages, one named elapsed or since as elapsed time; otherwise the table is read as ages when the oldest time comes first in most histories. The convention is the same for every history and is shown under the table. Rows are sorted in time; two rows at the same time are an instantaneous temperature change (kept in file order).", "Temperatures are taken from the table (°C or K); depth is only plotted, it is not converted to temperature."], "sources": [["EASY%Ro: 20 parallel reactions, factors and Ea", "Sweeney &amp; Burnham (1990), AAPG Bulletin 74(10), 1559–1570, Table 1", "published"], ["Temperature integral", "Same paper, Appendix 1, eq. 10 (approximation of Braun &amp; Burnham 1987)", "published"], ["Easy%RoDL parameters", "Schenk, Peters &amp; Burnham (EAGE 2017); Burnham, <i>Global Chemical Kinetics of Fossil Fuels</i> (2017). Frequency factor 2×10<sup>14</sup> s<sup>−1</sup> confirmed in a Burnham presentation (Sodir seminar, 2021) and in Burnham (2019, vitrinite, kerogen and bitumen reflectance models), which do not tabulate the activation energies, the factors or the Ro equation of Easy%RoDL", "figure (bar chart; no table found); A confirmed"], ["Basin%Ro parameters", "Nielsen, Clausen &amp; McGregor (2017), Basin%Ro: a vitrinite reflectance model derived from basin and laboratory data, Basin Research 29 (suppl. 1), 515–536 (online 2015), doi 10.1111/bre.12160. Abstract read (calibration on borehole and laboratory data; Easy%Ro overestimates by up to 0.35 %Ro between 0.5 and 1.7 %Ro); the parameters themselves are in the paywalled text", "supplied (abstract read; parameters not checked)"], ["F not renormalised", "With this convention the largest Easy − Basin difference between 0.5 and 1.7 %Ro at 3 °C/Ma is 0.35 %Ro, the value stated in the abstract of Nielsen et al.", "derived check"], ["TTI (Lopatin)", "Waples (1980), AAPG Bulletin 64 (Lopatin’s method; class index n = 0 for 100–110 °C). Reference details and the TTI ↔ %Ro correlation not checked; the page does not convert TTI to %Ro", "memory (formula not checked)"], ["Comparison of Easy%Ro, Easy%RoDL and Basin%Ro at 2 °C/Myr", "Figure from Burnham (2019, Org. Geochem. 131, 50–59) reproduced in A.K. Burnham, <i>Evolution of vitrinite reflectance models</i>, FORCE seminar, Norwegian Petroleum Directorate, 2 December 2021 (slide 18; also states A = 2×10<sup>14</sup> s<sup>−1</sup> for Easy%RoDL)", "published (figure, read)"]], "validation": ["Automated checks (<code>node scripts/maturity_test.mjs</code>, 19 checks), November 2026:", "EASY%Ro against an independent brute-force integration written from the Sweeney &amp; Burnham parameters (exact first-order decay over 0.01 °C sub-steps, no temperature-integral approximation): largest difference 0.003 %Ro at 0.1, 1, 2, 10 and 1000 °C/Myr up to 250 °C.", "EASY%Ro at 1 °C/Myr reaches 0.5 %Ro at 86 °C, 1.0 %Ro at 144 °C and 2.0 %Ro at 192 °C, in line with Sweeney &amp; Burnham (1990, Fig. 2).", "Isothermal step (100 Myr at 100 °C) equal to the exact first-order solution within 0.001 %Ro; subdividing the rows of a history changes %Ro by less than 0.002; %Ro never decreases during cooling; age and elapsed-time tables give identical results.", "At 2 °C/Myr EASY%Ro is above Easy%RoDL and Basin%Ro at 125 °C (0.75 vs 0.60 and 0.63 %Ro) and below them at 225 °C (2.80 vs 3.39 and 3.46 %Ro), as in the Burnham (2019) comparison figure; an exp(−1.5 + 5 F) law for Easy%RoDL would give about 9 %Ro at 225 °C, far off that figure.", "Basin%Ro: largest EASY − Basin difference between 0.5 and 1.7 %Ro at 3 °C/Myr is 0.35 ± 0.05 %Ro, the value of the Nielsen et al. abstract.", "TTI: linear 20 → 220 °C in 100 Myr gives 5 × (2<sup>12</sup> − 2<sup>−8</sup>) = 20 479.98; 100 Myr at 100 °C gives 100; 99.5 → 100.5 °C in 10 Myr gives 7.5.", "Interface checked in headless Edge at 1400 px and 500 px width (exports, model and TTI switches, Kelvin then °C tables, same-age rows, age tables listed youngest first)."], "limits": ["EasyRoB and EasyRoV are not included. The Easy%RoDL fractions were read off a bar chart and confirmed against the site author's code.", "The Easy%RoDL conversion exp(−1.5 + 3.7 F) = 0.223 exp(3.7 F) is the same as the Easy%RoV equation listed in Burnham (2019, Table 4); no source found for the Easy%RoDL one.", "The Easy%RoDL factors and the Basin%Ro parameters could not be checked against a published table; they are checked only against published figures and the Nielsen et al. abstract (see Validation)."], "date": "24 November 2026"});
 </script>
 </body></html>
