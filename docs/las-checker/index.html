@@ -133,12 +133,14 @@ const F=(sev,rule,line,msg,fix)=>({sev,rule,line:line==null?null:line,msg,fix:fi
 const NUM=/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
 const TEXT_NULL=/^(na|n\/a|#n\/a|nan|null|\(null\)|inf|-inf|\+inf|-1\.#ind|-1\.#inf|-1\.#io|1\.#inf|-+)$/i;
 const NUM_NULL=[-999.25,-999,-9999,-99999,9999.25,999.25,-999.99,9999,32767,-32767,2147483647,-2147483648];
-const INDEX=/^(DEPT|DEPTH|MD|TDEP|TIME|ETIM|INDEX)$/i;
+const INDEX=/^(DEPT|DEPTH|DEP|MD|TDEP|TVD|TVDSS|TVDKB|TVDSD|TIME|ETIM|INDEX)$/i;
 const up=s=>String(s||'').toUpperCase();
 
 // Split "MNEM.UNIT  VALUE : DESCRIPTION". Mnemonic ends at the first dot, unit at the first
 // whitespace after it; the description starts at the first colon preceded by whitespace (so colons
 // inside units/values such as hh:mm or 23:15 survive), else at the last colon.
+// LAS 1.2 ~W labels written in the value slot ("WELL.  WELL : ACME-1")
+const LABEL=/^(COMPANY|WELL( NAME)?|FIELD( NAME)?|LOCATION|PROVINCE|COUNTY|STATE|COUNTRY|(SERVICE|LOGGING) COMPANY|LOG DATE|DATE( LOGGED)?|UNIQUE WELL ID|UWI|API( NUMBER| NO\.?)?|LICEN[CS]E( NUMBER)?)$/i;
 function splitHeader(s){
   const t=s.replace(/^\s+/,'');
   const d=t.indexOf('.'),c0=t.indexOf(':');
@@ -149,7 +151,8 @@ function splitHeader(s){
   const mnem=t.slice(0,d).trim();let rest=t.slice(d+1),unit='';
   const sp=rest.search(/\s/);
   if(sp<0){unit=rest;rest=''}else{unit=rest.slice(0,sp);rest=rest.slice(sp)}
-  let ci=rest.search(/\s:/);ci=ci>=0?ci+1:rest.lastIndexOf(':');
+  // no ' :' → a 1.2 label glued to its colon ("LOG DATE:  13-DEC-86 10:30") splits at the first colon, else the last
+  let ci=rest.search(/\s:/);if(ci>=0)ci++;else{const k=rest.indexOf(':');ci=k>=0&&LABEL.test(rest.slice(0,k).trim())?k:rest.lastIndexOf(':')}
   // unit with a colon swallowed the delimiter ("UNIT:desc"): only when nothing follows
   if(ci<0&&unit.includes(':')&&!rest.trim()){const k=unit.indexOf(':');rest=' '+unit.slice(k);unit=unit.slice(0,k);ci=1}
   if(unit==='1000'&&/^\s+LBF\b/i.test(rest)){unit='1000 LBF';rest=rest.replace(/^\s+LBF/i,'');ci=rest.search(/\s:/);ci=ci>=0?ci+1:rest.lastIndexOf(':')}
@@ -182,8 +185,8 @@ function parse(text,name){
   // LAS 1.2 ~W layout: value in the description for the text items
   const txt=['COMP','WELL','FLD','LOC','SRVC','DATE','PROV','CNTY','STAT','CTRY','UWI','API'];
   // an item is in 1.2 layout when its value slot is empty or holds a label ("WELL.  WELL : ACME-1")
-  const LABEL=/^(COMPANY|WELL( NAME)?|FIELD( NAME)?|LOCATION|PROVINCE|COUNTY|STATE|COUNTRY|(SERVICE|LOGGING) COMPANY|LOG DATE|DATE( LOGGED)?|UNIQUE WELL ID|UWI|API( NUMBER| NO\.?)?|LICEN[CS]E( NUMBER)?)$/i;
-  const is12=h=>txt.includes(up(h.mnem))&&h.desc&&(!h.value||LABEL.test(h.value));
+  // an empty value counts only when the description is data, not a label (2.0 files often leave LOC/PROV… empty)
+  const is12=h=>txt.includes(up(h.mnem))&&h.desc&&(LABEL.test(h.value)||(!h.value&&!LABEL.test(h.desc)));
   const w12=las.well.filter(is12).length;
   las.layout12=w12>=3||(ver===1.2&&w12>=1);
   if(las.layout12)for(const h of las.well)if(is12(h)){const lab=h.value;h.value=h.desc;h.desc=lab;h.from12=true}
@@ -200,14 +203,19 @@ function parse(text,name){
   if(!las.wrapped){
     for(let i=A.start+1;i<A.end;i++){const t=lines[i].trim();if(!t)continue;if(t[0]==='#'){las.aComments.push(i+1);continue}mkRow(i+1,tok(t))}
   }else{
-    let buf=null,start=0,cnt=0;las.wrapIssues=[];
+    let buf=null,start=0,cnt=0,prev=NaN,dz=NaN;las.wrapIssues=[];
+    const stp=parseFloat((las.well.find(h=>up(h.mnem)==='STEP')||{}).value);
+    const flush=()=>{mkRow(start,buf,cnt);const z=+buf[0];if(isFinite(prev)&&isFinite(z))dz=z-prev;prev=z;buf=null};
     for(let i=A.start+1;i<A.end;i++){const t=lines[i].trim();if(!t)continue;if(t[0]==='#'){las.aComments.push(i+1);continue}
       if(lines[i].length>80)las.wrapIssues.push([i+1,'line longer than 80 characters']);
       const tk=tok(t);
+      // a short record followed by a lone value at the expected next depth: the record lost a line, start a new one
+      if(buf&&buf.length<nc&&tk.length===1&&NUM.test(tk[0])&&isFinite(prev)){const st=stp&&isFinite(stp)?stp:dz;
+        if(isFinite(st)&&st&&Math.abs(+tk[0]-(+buf[0]+st))<=Math.abs(st)*0.5){las.wrapIssues.push([start,'record without all its values']);flush()}}
       if(!buf){buf=tk.slice();start=i+1;cnt=1;if(tk.length!==1)las.wrapIssues.push([i+1,'index value is not alone on its line'])}
       else{buf.push(...tk);cnt++}
-      if(nc&&buf.length>=nc){mkRow(start,buf,cnt);buf=null}}
-    if(buf)mkRow(start,buf,cnt);
+      if(nc&&buf.length>=nc)flush()}
+    if(buf)flush();
   }
   las.data=las.rows.filter(r=>r.ok).map(r=>r.vals);
   return las;
@@ -222,12 +230,18 @@ const fmtN=v=>String(+(+v).toPrecision(10));
 // index statistics shared by check() and write()
 function indexInfo(las){
   // every row whose index token is a number, even if the rest of the row is bad: a truncated row must not leave a gap
-  const idx=(las.rows?las.rows.filter(r=>NUM.test(r.tokens[0])).map(r=>+r.tokens[0]):las.data.map(r=>r[0])).filter(v=>!isNull(las,v));
+  const src=las.rows?las.rows.filter(r=>NUM.test(r.tokens[0])).map(r=>r.tokens[0]):las.data.map(r=>String(r[0]));
+  const idx=src.map(Number).filter(v=>!isNull(las,v));
+  // printed precision: depths rounded to 2 decimals make a 0.1524 step look irregular
+  let dec=0;for(const t of src){const m=/\.(\d+)/.exec(t);if(m&&m[1].length>dec)dec=m[1].length}
+  const rtol=Math.pow(10,-dec)*1.0001;
   const d=[];for(let i=1;i<idx.length;i++)d.push(idx[i]-idx[i-1]);
-  const md=median(d),tol=Math.abs(md)*1e-3||1e-6;
+  const md=median(d),tol=Math.max(Math.abs(md)*1e-3,rtol)||1e-6;
   const regular=d.length>0&&d.every(x=>Math.abs(x-md)<=tol);
   const jitter=d.length?amax(d.map(x=>Math.abs(x-md))):0;
-  return {idx,d,step:md,regular,jitter,first:idx[0],last:idx[idx.length-1]};
+  const n=idx.length,est=regular&&n>1?(idx[n-1]-idx[0])/(n-1):md;
+  let mono=true;for(let i=1;i<d.length;i++)if(Math.sign(d[i])!==Math.sign(d[0])||!d[i]){mono=false;break}
+  return {idx,d,step:est,regular,jitter,dec,rtol,mono,stepTol:Math.max(Math.abs(est)*1e-3,2*rtol/Math.max(1,n-1)),endTol:Math.max(Math.abs(est)*0.01,rtol),first:idx[0],last:idx[n-1]};
 }
 
 const lineList=a=>a.slice(0,5).join(', ')+(a.length>5?` … (${a.length} in all)`:'');
@@ -268,7 +282,7 @@ function check(las){
   // ---- ~V
   const V=las.ver;
   if(!('VERS' in V))P('E','ver.vers',null,'VERS missing in ~V.');
-  else if(!['1.2','2.0','3.0','1.20','2','3'].includes(String(V.VERS).trim()))P('E','ver.vers',null,`VERS = “${V.VERS}”: expected 1.2, 2.0 or 3.0.`,'vers');
+  else if(![1.2,2,3].includes(parseFloat(V.VERS)))P('E','ver.vers',null,`VERS = “${V.VERS}”: expected 1.2, 2.0 or 3.0.`,'vers');
   if(las3)P('I','ver.las3',null,'LAS 3.0 file: typed sections and Definition/Data pairs are not validated; only the basic checks ran.');
   if(!('WRAP' in V)||!['YES','NO'].includes(up(V.WRAP).trim()))P('E','ver.wrap',null,`WRAP ${'WRAP' in V?`= “${V.WRAP}”`:'missing'}: expected YES or NO.`);
   else if(las.wrapped)P('W','ver.wrapyes',null,'Wrapped file (WRAP YES): several importers only read unwrapped LAS.','wrap');
@@ -295,7 +309,7 @@ function check(las){
   const ix=indexInfo(las);las.ix=ix;
   const num=k=>w[k]&&NUM.test(w[k].value)?+w[k].value:NaN;
   const strt=num('STRT'),stop=num('STOP'),step=num('STEP');
-  if(ix.idx.length>1){const tol=Math.abs(ix.step)*0.01||1e-6;
+  if(ix.idx.length>1){const tol=ix.endTol;
     const bad=[];if(isFinite(strt)&&Math.abs(strt-ix.first)>tol)bad.push(`STRT ${w.STRT.value} ≠ first index ${fmtN(ix.first)}`);
     if(isFinite(stop)&&Math.abs(stop-ix.last)>tol)bad.push(`STOP ${w.STOP.value} ≠ last index ${fmtN(ix.last)}`);
     if(bad.length)P('W','well.strtstop',(w.STRT||w.STOP).line,bad.join('; ')+'.','strtstop');
@@ -303,8 +317,8 @@ function check(las){
       if(step===0&&ix.regular)P('W','well.step',w.STEP.line,`STEP = 0 (irregular) but the data step is constant (${fmtN(ix.step)}).`,'step');
       else if(step!==0&&!ix.regular)P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is irregular: it should be 0.`,'step');
       else if(step!==0&&Math.sign(step)!==Math.sign(ix.step))P('W','well.step',w.STEP.line,`STEP sign (${w.STEP.value}) does not match the index direction (${fmtN(ix.first)} → ${fmtN(ix.last)}).`,'step');
-      else if(step!==0&&Math.abs(step-ix.step)>Math.abs(ix.step)*1e-3)P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is ${fmtN(ix.step)}.`,'step');
-      if(ix.regular&&ix.jitter>1e-9&&ix.jitter>Math.abs(ix.step)*1e-6)P('I','data.jitter',null,`Index step varies by up to ${ix.jitter.toExponential(1)} around ${fmtN(ix.step)} (rounding).`)}}
+      else if(step!==0&&Math.abs(step-ix.step)>ix.stepTol)P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is ${fmtN(ix.step)}.`,'step');
+      if(ix.regular&&ix.jitter>ix.rtol&&ix.jitter>Math.abs(ix.step)*1e-6)P('I','data.jitter',null,`Index step varies by up to ${ix.jitter.toExponential(1)} around ${fmtN(ix.step)} (rounding).`)}}
   const c0=las.curves[0],iu=c0?c0.unit:'';
   const wu=['STRT','STOP','STEP'].filter(k=>w[k]).map(k=>w[k].unit);
   if(c0&&INDEX.test(c0.mnem)&&!/^(TIME|ETIM)$/i.test(c0.mnem)){
@@ -325,23 +339,26 @@ function check(las){
   if(tags.includes('C')&&!nc)P('E','curve.none',null,'~C declares no curve.');
   if(c0&&!INDEX.test(c0.mnem))P('E','curve.index',c0.line,`First curve “${c0.mnem}” is not an index (DEPT, DEPTH, TIME…).`);
   const nou=las.curves.filter(h=>!h.unit&&!(h.value&&/^[A-Za-z%]/.test(h.value)));
-  if(nou.length)P('W','curve.nounit',nou[0].line,`Curve(s) without unit: ${nou.map(h=>h.mnem).join(', ')}.`);
+  if(nou.length)P('I','curve.nounit',nou[0].line,`Curve(s) without unit: ${nou.map(h=>h.mnem).join(', ')}.`);
   // ---- ~A
   const A=S.find(s=>s.tag==='A');
   if(A&&!las.rows.length){P('E','file.nodata',A.start+1,'~A contains no data.');return out}
   if(!A||!nc)return out;
   const lens=[...new Set(las.rows.map(r=>r.tokens.length))];
   const runon=las.rows.filter(r=>r.tokens.some(t=>!NUM.test(t)&&!TEXT_NULL.test(t)&&/^[-+]?\d*\.\d+[-+]?\d*\.\d+/.test(t)));
+  const ronSet=new Set(runon);
+  const com=[];for(let i=A.start+1;i<A.end;i++)if(las.lines[i].includes(',')&&las.lines[i].trim()[0]!=='#')com.push(i+1);
+  if(com.length)P('W','data.commas',com[0],`Commas in the data (lines ${lineList(com)}): LAS columns are separated by spaces; most readers fail.`);
   if(runon.length)P('E','data.runon',runon[0].line,`Values glued together (no space), e.g. “${runon[0].tokens.find(t=>/^[-+]?\d*\.\d+[-+]?\d*\.\d+/.test(t))}” on lines ${lineList(runon.map(r=>r.line))}.`);
   if(lens.length===1&&lens[0]!==nc)P('E','curve.count',las.rows[0].line,`~C lists ${nc} curves but every data row has ${lens[0]} values.`);
-  else{const bad=las.rows.filter(r=>r.tokens.length!==nc&&!runon.includes(r));
+  else{const bad=las.rows.filter(r=>r.tokens.length!==nc&&!ronSet.has(r));
     if(bad.length)P('E','data.rowlen',bad[0].line,`${bad.length} row(s) without ${nc} values (lines ${lineList(bad.map(r=>r.line))}); truncated line or missing column.`)}
   const nn=[],tn=new Map();
-  for(const r of las.rows)r.tokens.forEach(t=>{if(NUM.test(t))return;if(TEXT_NULL.test(t))tn.set(t,(tn.get(t)||0)+1);else if(!runon.includes(r))nn.push([r.line,t])});
+  for(const r of las.rows)r.tokens.forEach(t=>{if(NUM.test(t))return;if(TEXT_NULL.test(t))tn.set(t,(tn.get(t)||0)+1);else if(!ronSet.has(r))nn.push([r.line,t])});
   if(nn.length)P('E','data.nonnumeric',nn[0][0],`Non-numeric value(s) “${[...new Set(nn.map(x=>x[1]))].slice(0,5).join('”, “')}” on lines ${lineList([...new Set(nn.map(x=>x[0]))])}.`);
   if(las.aComments.length)P('W','data.comment',las.aComments[0],`Comment line(s) inside ~A (lines ${lineList(las.aComments)}).`);
   const ex=las.rows.filter(r=>r.tokens.some(t=>/e/i.test(t)&&NUM.test(t)));
-  if(ex.length)P('W','data.exponent',ex[0].line,`Exponent notation (e.g. 1.2E+03) on lines ${lineList(ex.map(r=>r.line))}; a few readers reject it.`);
+  if(ex.length)P('I','data.exponent',ex[0].line,`Exponent notation (e.g. 1.2E+03) on lines ${lineList(ex.map(r=>r.line))}; a few readers reject it.`);
   if(las.wrapped&&las.wrapIssues&&las.wrapIssues.length)P('W','data.wrap',las.wrapIssues[0][0],`Wrapped data malformed: ${las.wrapIssues[0][1]} (lines ${lineList(las.wrapIssues.map(x=>x[0]))}).`);
   // index
   const idx=las.data.map(r=>r[0]);
@@ -439,18 +456,22 @@ function write(las,fixIds){
     const f=okRows[0].tokens[0],l=okRows[okRows.length-1].tokens[0];
     const S=item(H.well,'STRT'),T=item(H.well,'STOP'),P=item(H.well,'STEP');
     const ix=indexInfo({data:okRows.map(r=>[+r.tokens[0]]),nullVal:las.nullVal});
-    const tol=Math.abs(ix.step)*0.01||1e-6,trimmed=log.some(x=>x.startsWith('Dropped'));
+    const ix0=indexInfo(las),tol=ix0.endTol,trimmed=log.some(x=>x.startsWith('Dropped'));
+    if(!ix.mono&&(on.has('strtstop')||on.has('step')))log.push('STRT/STOP/STEP not changed: the index is not monotonic, fix the data rows first.');
+    else{
     if((on.has('strtstop')||trimmed)){
       if(S&&(!NUM.test(S.value)||Math.abs(+S.value-+f)>tol))setItem(S,{value:f},'first index');
       if(T&&(!NUM.test(T.value)||Math.abs(+T.value-+l)>tol))setItem(T,{value:l},'last index')}
-    if(on.has('step')&&P){const want=ix.regular?+ix.step.toFixed(6):0;
-      if(!NUM.test(P.value)||Math.abs(+P.value-want)>Math.abs(ix.step)*1e-3)setItem(P,{value:fmtN(want)},ix.regular?'data step':'irregular data')}}
+    if(on.has('step')&&P){const want=ix0.regular?+ix0.step.toFixed(6):0;
+      if(!NUM.test(P.value)||Math.abs(+P.value-want)>ix0.stepTol)setItem(P,{value:fmtN(want)},ix.regular?'data step':'irregular data')}}}
   // ---- syntax and tabs in the other header lines
   const touched=new Set();
   for(const list of [H.vItems||[],H.well,H.curves,H.params])for(const h of list){
     if(on.has('syntax')&&(h.nodot||h.nocolon||(list===H.curves&&!h.unit&&/^[A-Za-z%][\w\/%*.\-]*$/.test(h.value)))){
       if(list===H.curves&&!h.unit&&/^[A-Za-z%][\w\/%*.\-]*$/.test(h.value)){h.unit=h.value;h.value=''}
-      h.nodot=h.nocolon=false;lines[h.line-1]=fmtItem(h);touched.add(h.line);log.push(`Line ${h.line}: rewrote ${h.mnem} as MNEM.UNIT VALUE : DESC.`)}}
+      h.nodot=h.nocolon=false;
+      // a 1.2-layout item stays in 1.2 layout when the file is not rewritten as 2.0
+      lines[h.line-1]=fmtItem(h.from12&&!(on.has('vers')&&!isLas3)?{...h,value:h.desc,desc:h.value}:h);touched.add(h.line);log.push(`Line ${h.line}: rewrote ${h.mnem} as MNEM.UNIT VALUE : DESC.`)}}
   if(on.has('tabs')){let n=0;for(let i=0;i<lines.length;i++){if(A&&i>A.start&&i<A.end)continue;if(lines[i].includes('\t')){lines[i]=lines[i].replace(/\t+/g,' ');n++}}
     if(n||tabsInA)log.push('Replaced tab characters by spaces.')}
   // ---- assemble

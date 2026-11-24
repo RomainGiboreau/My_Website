@@ -175,6 +175,50 @@ test('write does not modify the parsed file (fixes can be unticked)', () => {
   assert.equal(o.well.find(h => h.mnem === 'WELL').desc, 'WELL');
 });
 
+// ---- review findings (regressions)
+test('R1: empty LOC/PROV/CNTY/STAT in a 2.0 file is not a 1.2 layout, and the fix leaves them alone', () => {
+  const t = CLEAN.replace(' LOC .         12-34-56                : LOCATION', ' LOC .                                 : LOCATION\n PROV.                                 : PROVINCE\n CNTY.                                 : COUNTY\n STAT.                                 : STATE');
+  const las = LAS.parse(t, 'r1.las');
+  assert.equal(las.layout12, false);
+  assert.ok(!rules(LAS.check(las)).includes('ver.layout'));
+  assert.equal(las.well.find(h => h.mnem === 'LOC').value, '');
+  assert.ok(!LAS.write(las, defaults()).text.includes('LOCATION : LOC'));
+});
+test('R2: wrapped record missing a line does not make the default fixes write a data value into STOP', () => {
+  const t = CLEAN.replace('WRAP.                  NO', 'WRAP.                 YES').replace(/~A[\s\S]*$/, '~A\n1000.00\n 45.2 2.45\n 0.21 12.5\n1000.25\n 47.8 2.44\n1000.50\n 80.1 2.52\n 0.30 3.2\n');
+  const las = LAS.parse(t, 'r2.las');
+  assert.equal(las.rows.length, 3);
+  assert.ok(rules(LAS.check(las)).includes('data.rowlen'));
+  const out = LAS.parse(LAS.write(las, defaults()).text, 'r2o.las');
+  const stop = +out.well.find(h => h.mnem === 'STOP').value;
+  assert.ok(stop === 1001 || stop === 1000.5, 'STOP=' + stop);
+});
+test('R3: depths printed with fewer decimals than the step are regular', () => {
+  const rows = []; for (let i = 0; i < 40; i++) rows.push(`${(1000 + i * 0.1524).toFixed(2)} 45 2.4 0.2 1`);
+  const t = withData(rows.join('\n') + '\n').replace('1001.0000 ', (1000 + 39 * 0.1524).toFixed(4) + ' ').replace('0.2500', '0.1524');
+  const las = LAS.parse(t, 'r3.las'), r = rules(LAS.check(las));
+  assert.ok(!r.includes('well.step') && !r.includes('well.strtstop'), r.join(', '));
+  assert.ok(LAS.write(las, defaults()).log.every(x => !/STEP|STOP/.test(x)));
+});
+test('R4: LAS 1.2 label glued to the colon, with a time in the value', () => {
+  const h = LAS.splitHeader(' DATE.            LOG DATE:   13-DEC-86 10:30');
+  assert.equal(h.value, 'LOG DATE'); assert.equal(h.desc, '13-DEC-86 10:30');
+});
+test('R8: comma-separated data is flagged', () => has(withData('1000.00,45,2.4,0.2,1\n1000.25,46,2.4,0.2,1\n'), 'data.commas'));
+test('R9: VERS 2.00 is valid', () => { assert.ok(!rules(run(CLEAN.replace(' 2.0 : CWLS', '2.00 : CWLS')).f).includes('ver.vers')); });
+test('R10: TVDSS index accepted; dimensionless curve and exponent are info only', () => {
+  const { f } = run(CLEAN.replace(' DEPT.M', ' TVDSS.M').replace(' RT  .OHMM', ' RT  .').replace('12.5', '1.25E+01'));
+  assert.ok(!rules(f).includes('curve.index'));
+  for (const r of ['curve.nounit', 'data.exponent']) assert.equal(f.find(x => x.rule === r).sev, 'I', r);
+});
+
+test('R12: syntax fix keeps a 1.2-layout line in 1.2 layout when vers is off', () => {
+  const t = W12.replace(' COMP.             COMPANY:   ANY OIL COMPANY INC.', ' COMP  : ANY OIL COMPANY INC.');
+  const text = LAS.write(LAS.parse(t, 'r12.las'), ['syntax']).text;
+  const line = text.split('\r\n').find(l => l.trim().startsWith('COMP'));
+  assert.match(line, /^ COMP\.\s+: ANY OIL COMPANY INC\.$/);
+});
+
 // ---- batch
 test('batch: same WELL different UWI, overlapping runs, mixed depth units', () => {
   const a = LAS.parse(CLEAN, 'a.las'), b = LAS.parse(CLEAN.replace('NO-1234', 'NO-9999'), 'b.las');
