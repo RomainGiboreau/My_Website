@@ -493,155 +493,274 @@ W.LAS={parse,check,verdict,checkBatch,FIXES,write,fmtItem,amin,amax,splitHeader,
 })(window);
 </script>
 <style>
-.side .drop{position:static;display:block;border:2px dashed var(--line);border-radius:8px;padding:14px 10px;text-align:center;color:var(--mut);font-size:.82rem;pointer-events:auto}
-body.dragging .side .drop{border-color:var(--acc);background:rgba(74,90,78,.08)}
-.fx{display:flex;gap:6px;align-items:flex-start;font-size:.8rem;margin:4px 0}.fx input{margin-top:3px}.fx small{color:var(--mut);margin-left:auto;white-space:nowrap}
-.chip.fail{background:#a8623a;color:#f5f3ed}.chip.pass{background:#4a5a4e;color:#f5f3ed}
-.sev{display:inline-block;width:18px;text-align:center;border-radius:3px;font-weight:700;font-size:.72rem;color:#f5f3ed}
-.sev.E{background:#a8623a}.sev.W{background:#c2924a}.sev.I{background:#8c8a80}
-#tF td,#tF th,#tH td,#tH th{text-align:left;vertical-align:top}
-#tF td.n,#tS td.n,#tS th.n{text-align:right}
-#tS td,#tS th{text-align:left}
-#tS tr.sel{background:rgba(74,90,78,.16)}
-.flt{display:flex;gap:4px;margin-left:auto}.flt button{padding:.05rem .45rem;font-size:.72rem}
-.log{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;max-height:220px;overflow:auto;margin:0}
-.batch{margin:0 0 10px;padding:0;list-style:none}.batch li{background:var(--card);border:1px solid var(--line);border-left:4px solid #c2924a;border-radius:6px;padding:5px 10px;margin:4px 0;font-size:.8rem}
-.cv2{height:460px!important}
-main{min-width:0}#tF td:last-child{white-space:nowrap}
-.hdrtabs{display:flex;gap:4px;margin-left:auto}.hdrtabs button{padding:.05rem .45rem;font-size:.72rem}
-@media (max-width:700px){.cards{grid-template-columns:1fr}.card canvas.cv2{height:380px!important}}
+/* LAS checker page: verdict first, problems in plain words, details in tabs */
+.layout{grid-template-columns:300px minmax(0,1fr)}
+main{min-width:0}
+.side .drop{position:static;pointer-events:auto;display:block;margin-top:2px;border:2px dashed var(--line);border-radius:8px;padding:12px 10px;text-align:center;color:var(--mut);font-size:.8rem}
+body.dragging .side .drop,body.dragging .intro .dz{border-color:var(--acc);background:rgba(74,90,78,.08)}
+.flist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.flist li{display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);cursor:pointer;font-size:.82rem;min-width:0}
+.flist li:hover{border-color:var(--acc)}
+.flist li.sel{border-color:var(--acc);box-shadow:inset 3px 0 0 var(--acc);background:#fff}
+.flist li .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.flist li small{color:var(--mut);white-space:nowrap}
+.flist li button{padding:0 .35rem;font-size:.72rem;border-color:transparent;background:transparent;color:var(--mut)}
+.flist li button:hover{color:var(--acc2);border-color:var(--line)}
+.st{width:10px;height:10px;border-radius:50%;flex:none;background:#8c8a80}
+.st.pass{background:#4a5a4e}.st.warn{background:#c2924a}.st.fail{background:#a8623a}
+.fx{display:flex;gap:6px;align-items:flex-start;font-size:.8rem;margin:5px 0;cursor:pointer}.fx input{margin-top:3px}.fx small{color:var(--mut);margin-left:auto;white-space:nowrap}
+
+/* empty state */
+.intro{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px 30px;max-width:900px}
+.intro h2{font:700 1.7rem/1.2 "Space Grotesk",Inter,sans-serif;margin:0 0 8px}
+.intro p{color:var(--mut);max-width:62ch;margin:0 0 18px}
+.intro .dz{border:2px dashed var(--line);border-radius:10px;padding:26px 18px;text-align:center;margin-bottom:22px}
+.intro .dz .row{justify-content:center;margin-top:10px}
+.intro .dz button{padding:.45rem 1rem;font-size:.9rem}
+.intro dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px 26px;margin:0}
+.intro dt{font:600 .9rem "Space Grotesk",Inter,sans-serif;margin-bottom:2px}
+.intro dd{margin:0;color:var(--mut);font-size:.82rem}
+
+/* verdict */
+.verdict{display:grid;grid-template-columns:auto 1fr auto;gap:6px 18px;align-items:center;background:#fff;border:1px solid var(--line);border-left:8px solid var(--vc);border-radius:10px;padding:16px 20px;--vc:#4a5a4e}
+.verdict.warn{--vc:#c2924a}.verdict.fail{--vc:#a8623a}
+.verdict svg{width:40px;height:40px;color:var(--vc);grid-row:1/3}
+.verdict h2{font:700 1.45rem/1.2 "Space Grotesk",Inter,sans-serif;margin:0}
+.verdict .sub{color:var(--mut);font-size:.88rem;grid-column:2}
+.verdict .act{grid-row:1/3;grid-column:3;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.verdict .act button{padding:.5rem 1rem;font-size:.9rem}
+.verdict .act a{font-size:.78rem;color:var(--acc);cursor:pointer}
+.facts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 22px;margin:10px 0 0;padding-top:10px;border-top:1px solid var(--alt);font-size:.82rem}
+.facts div{display:flex;gap:6px}.facts dt{color:var(--mut)}.facts dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
+.across{margin:12px 0 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.across h3{font:600 .9rem "Space Grotesk",Inter,sans-serif;margin:0 0 4px}
+.across p{margin:3px 0;font-size:.82rem}
+
+/* problems */
+.grp{margin-top:18px}
+.grp>h3{font:600 1rem "Space Grotesk",Inter,sans-serif;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.grp>h3 .c{font:600 .75rem Inter,sans-serif;background:var(--alt);border-radius:9px;padding:0 7px;color:var(--mut)}
+
+.sev{display:inline-block;width:18px;text-align:center;border-radius:3px;font-weight:700;font-size:.72rem;color:#f5f3ed;background:#8c8a80}.sev.E{background:#a8623a}.sev.W{background:#c2924a}
+.pb{background:#fff;border:1px solid var(--line);border-left:4px solid var(--pc,#8c8a80);border-radius:8px;padding:9px 12px;margin:6px 0;display:grid;grid-template-columns:1fr auto;gap:2px 14px}
+.pb.E{--pc:#a8623a}.pb.W{--pc:#c2924a}
+.pb b{font-weight:600;font-size:.88rem}
+.pb p{margin:0;font-size:.82rem;color:var(--fg);grid-column:1;overflow-wrap:anywhere}
+.pb .meta{grid-column:1;font-size:.74rem;color:var(--mut);display:flex;gap:12px;flex-wrap:wrap}
+.pb .meta a{color:var(--acc);cursor:pointer;text-decoration:underline}
+.pb .fixit{grid-column:2;grid-row:1/4;align-self:center;font-size:.78rem;display:flex;gap:5px;align-items:center;white-space:nowrap;color:var(--acc);cursor:pointer}
+.pb .fixit.off{color:var(--mut)}
+.allgood{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px;color:var(--mut);font-size:.86rem;margin-top:14px}
+
+/* details tabs */
+.det{margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px 10px}
+.tabs{display:flex;gap:4px;margin:0 0 8px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.tabs button{padding:.3rem .8rem;border-color:transparent;background:transparent}
+.tabs button.on{background:#fff;border-color:var(--line);box-shadow:none;font-weight:600}
+.pane{display:none}.pane.on{display:block}
+.trk{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px;position:relative}
+.trk canvas{display:block;height:520px}
+#trkRo{font-size:.78rem;color:var(--mut);min-height:1.3em;margin:4px 2px 0;font-variant-numeric:tabular-nums}
+#tH td,#tH th{text-align:left;vertical-align:top}
+.htabs{display:flex;gap:4px;margin-bottom:6px}.htabs button{padding:.05rem .5rem;font-size:.76rem}
+.src{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;background:#fff;border:1px solid var(--line);border-radius:6px;max-height:460px;overflow:auto;white-space:pre;margin:0}
+.src .ln{display:block;padding:0 8px 0 0}
+.src .ln i{display:inline-block;width:5.5em;padding-right:10px;margin-right:8px;text-align:right;color:#9a968a;font-style:normal;border-right:1px solid var(--alt);user-select:none}
+.src .ln.E{background:rgba(168,98,58,.16)}.src .ln.W{background:rgba(194,146,74,.16)}.src .ln.I{background:rgba(140,138,128,.12)}
+.src .ln.tgt{outline:2px solid var(--acc);outline-offset:-2px}
+.srcbar{display:flex;gap:8px;align-items:center;font-size:.8rem;margin-bottom:6px;flex-wrap:wrap}
+.srcbar input{width:90px}
+.log{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px 10px;max-height:360px;overflow:auto;margin:0}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,li:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.verdict{grid-template-columns:auto 1fr}.verdict .act{grid-row:auto;grid-column:1/-1;align-items:flex-start}.pb{grid-template-columns:1fr}.pb .fixit{grid-column:1;grid-row:auto}}
 </style>
 <div class="top"><h1>LAS checker</h1>
  <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
-  <button class="pri" id="bLas" disabled title="Selected file with the ticked fixes applied (LAS 2.0, CRLF)">Corrected LAS</button>
-  <button id="bAll" disabled title="One corrected file per loaded file">All corrected</button>
-  <button id="bCsv" disabled title="Every finding of every file, one line each">Report CSV</button><span class="msg" id="exportMsg"></span>
-  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the files are read in memory and never uploaded. Each file is checked against the LAS 1.2 / 2.0 conventions (sections, ~V, header line syntax, mandatory ~W items, curves, data rows) and a few plausibility rules. E = error (import fails or data is wrong), W = warning (non-conforming, imports with risk), I = information. Mechanical problems can be fixed in the downloaded copy; values are never changed unless you tick the null-marker fix.">?</span></div>
+  <button id="bAll" disabled title="One corrected file per loaded file, with the corrections ticked">All corrected files</button>
+  <button id="bCsv" disabled title="Every problem of every file, one line each">Report (CSV)</button><span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs in your browser: the files are read in memory and never uploaded. Each file is checked against the LAS 1.2 / 2.0 conventions and a few plausibility rules. Mechanical problems can be fixed in a downloaded copy; measured values are never changed unless you tick the null-marker correction.">?</span></div>
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
 <aside class="side">
- <section class="panel"><h2><span class="n">1</span>Files<i class="chev"></i></h2>
-  <div class="body"><div class="drop">Drop one or several <b style="font-size:.9rem">.las</b> files here<br>or anywhere on the page</div>
+ <section class="panel"><h2>Files<i class="chev"></i></h2>
+  <div class="body"><div class="drop">Drop .las files here or anywhere on the page</div>
   <input type="file" id="file" accept=".las,.LAS,.txt,text/*" multiple hidden>
-  <div class="row"><button class="pri" id="bOpen">Open files…</button><button id="bExample">Example</button><button id="bClear">Clear</button></div>
-  <div class="msg" id="dataMsg">No file yet.</div></div></section>
- <section class="panel"><h2><span class="n">2</span>Fixes for the download<span class="tt" tabindex="0" data-tip="Applied only to the downloaded copy; the loaded file is untouched. The number on the right is how many findings of the selected file each fix resolves. The change log below lists every modification.">?</span><i class="chev"></i></h2>
+  <div class="row"><button class="pri" id="bOpen">Add files…</button><button id="bExample">Example</button><button id="bClear" title="Remove every file">Clear</button></div>
+  <ul class="flist" id="flist"></ul></div></section>
+ <section class="panel collapsed" id="pFix"><h2>Corrections<span class="tt" tabindex="0" data-tip="What the corrected file changes. They apply to the downloaded copy only; the loaded file is untouched. You can also tick or untick a correction directly on a problem. The number is how many problems of the selected file each correction solves.">?</span><i class="chev"></i></h2>
   <div class="body"><div id="fixes"></div>
-  <div class="note">Interpretive issues (units, plausibility, spikes, duplicate runs) are reported, never fixed.</div></div></section>
+  <div class="note">Units, plausibility, spikes and duplicate runs are reported, never changed.</div></div></section>
 </aside>
-<main>
- <div class="sum" id="sum"></div>
- <ul class="batch" id="batch"></ul>
- <div class="card" style="background:var(--card)"><h3>Files</h3><div class="tw" id="tS"><div class="empty">Open or drop LAS files, or load the example.</div></div></div>
- <div class="card" style="margin-top:12px;background:var(--card)"><h3 id="fT">Findings<span class="flt" id="flt"><button class="on" data-s="">All</button><button data-s="E">E</button><button data-s="W">W</button><button data-s="I">I</button></span></h3><div class="tw tall" id="tF"></div></div>
- <div class="cards" style="margin-top:12px">
-  <div class="card"><h3>Curve<span class="sp"></span><select id="cSel"></select><button data-png="cv">PNG</button></h3><canvas id="cv" class="cv2"></canvas></div>
-  <div class="card" style="background:var(--card)"><h3>Header<span class="hdrtabs" id="hT"><button class="on" data-t="W">~W</button><button data-t="C">~C</button><button data-t="P">~P</button><button data-t="V">~V</button></span></h3><div class="tw" id="tH" style="max-height:440px"></div></div>
- </div>
- <div class="card" style="margin-top:12px;background:var(--card)"><h3>Change log of the corrected file</h3><pre class="log" id="log">–</pre></div>
-</main></div>
+<main id="main"></main></div>
 
 <script>
 const $=id=>document.getElementById(id);
-const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';b.setAttribute('role','status');document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
   b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
-// Encode back in the file's own encoding: UTF-8, or windows-1252 when the file was not valid UTF-8.
+// Write back in the file's own encoding: UTF-8, or windows-1252 when the file was not valid UTF-8.
 const CP1252=(()=>{const d=new TextDecoder('windows-1252'),m=new Map();for(let b=0;b<256;b++)m.set(d.decode(new Uint8Array([b])),b);return m})();
 function encode(text,enc){if(enc!=='windows-1252')return new TextEncoder().encode(text);const o=new Uint8Array(text.length);for(let i=0;i<text.length;i++){const b=CP1252.get(text[i]);o[i]=b==null?63:b}return o}
 function download(name,data,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 
-const S={files:[],sel:-1,sev:'',hdr:'W',fixes:new Set(LAS.FIXES.filter(f=>f.defaultOn).map(f=>f.id)),batch:[]};
-function addText(name,text,enc){
-  let las,f;try{las=LAS.parse(text,name);f=LAS.check(las)}catch(e){las={name,sections:[],curves:[],data:[],rows:[],well:[],params:[],ver:{},lines:[]};f=[{sev:'E',rule:'file.read',line:null,msg:'Could not be read: '+e.message,fix:null}]}
+// ---- plain-language titles for each rule
+const T={'file.read':'The file could not be read','file.notlas':'This is not a LAS file','file.concat':'Several LAS files are stuck together','file.nodata':'The data section is empty','file.bom':'Invisible byte-order mark at the start','file.eol':'Old Mac line endings','file.tabs':'Tab characters','file.nonascii':'Special characters (°, µ, accents…)','file.utf16':'File encoded in UTF-16',
+ 'struct.missing':'A mandatory section is missing','struct.order':'Sections in the wrong order','struct.unknown':'Non-standard section','struct.dup':'A section appears twice',
+ 'ver.vers':'Version line missing or invalid','ver.las3':'LAS 3.0 file','ver.wrap':'WRAP line missing or invalid','ver.wrapyes':'Data wrapped over several lines','ver.layout':'Well header in the old LAS 1.2 layout',
+ 'hdr.parse':'Unreadable header line','hdr.nodot':'Header line without a dot','hdr.nocolon':'Header line without a colon','hdr.dotmnem':'Dot inside a name','hdr.unitspace':'Space between the dot and the unit','hdr.dotunit':'Unit containing a dot','hdr.dup':'Same item listed twice',
+ 'well.required':'Depth range or null value missing','well.name':'No well name','well.recommended':'Well information incomplete','well.location':'No country, state or province','well.uwi':'No unique well identifier','well.strtstop':'Start or stop depth does not match the data','well.step':'Declared step does not match the data','well.units':'Depth units disagree','well.depthunit':'Depths look like feet, the unit says metres','well.xy':'No usable well coordinates','well.kb':'No reference elevation (KB)',
+ 'curve.none':'No curve declared','curve.index':'First curve is not a depth or time','curve.count':'Curve list and data columns do not match','curve.dup':'Same curve name twice','curve.nounit':'Curves without unit',
+ 'data.rowlen':'Rows with missing or extra values','data.nonnumeric':'Text in the data','data.runon':'Numbers glued together','data.monotonic':'Depth goes backwards','data.dupindex':'Repeated depths','data.nullindex':'Missing depth values','data.wrap':'Wrapped data broken','data.comment':'Comment lines inside the data','data.exponent':'Numbers in exponent notation','data.nulls':'Other null markers than the declared one','data.commas':'Commas between values','data.allnull':'Empty curves','data.constant':'Constant curves','data.jitter':'Depth step varies slightly (rounding)',
+ 'plaus.range':'Values outside the usual range','plaus.spike':'Possible spikes',
+ 'batch.uwi':'Well identity conflict','batch.overlap':'Overlapping runs of the same well','batch.units':'Mixed depth units','batch.curveunits':'Same curve, different units'};
+const GRP={E:'Blocking',W:'To review',I:'For information'};
+
+const S={files:[],sel:-1,tab:'curves',hdr:'W',fixes:new Set(LAS.FIXES.filter(f=>f.defaultOn).map(f=>f.id)),batch:[],target:null};
+const cur=()=>S.files[S.sel];
+// write() is memoised per file and correction set: the change log is redrawn on every click
+function written(x){const k=[...S.fixes].sort().join();if(x._wk!==k){x._w=LAS.write(x.las,[...S.fixes]);x._wk=k}return x._w}
+
+function addText(name,text,enc,extra){
+  let las,f;try{las=LAS.parse(text,name);f=LAS.check(las)}catch(e){las={name,sections:[],curves:[],data:[],rows:[],well:[],params:[],ver:{},lines:[]};f=[{sev:'E',rule:'file.read',line:null,msg:e.message,fix:null}]}
+  if(extra)f.unshift(extra);
   S.files.push({name,las,f,enc,v:LAS.verdict(f)})}
 async function readFiles(list){
-  const fs=[...list];if(!fs.length)return;$('dataMsg').textContent=`Reading ${fs.length} file(s)…`;
-  for(const file of fs){try{const buf=await file.arrayBuffer();let text,enc='utf-8';
-      try{text=new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){text=new TextDecoder('windows-1252').decode(buf);enc='windows-1252'}
-      addText(file.name,text,enc)}catch(e){banner(`${file.name}: ${e.message}`,true)}}
-  if(S.sel<0)S.sel=0;refresh()}
+  const fs=[...list];if(!fs.length)return;const n0=S.files.length;
+  for(const file of fs){try{const buf=new Uint8Array(await file.arrayBuffer());let text,enc='utf-8',extra=null;
+      if((buf[0]===0xFF&&buf[1]===0xFE)||(buf[0]===0xFE&&buf[1]===0xFF)){text=new TextDecoder(buf[0]===0xFF?'utf-16le':'utf-16be').decode(buf);
+        extra={sev:'W',rule:'file.utf16',line:null,msg:'The file is UTF-16 (two bytes per character); most readers expect ASCII. The corrected file is written as UTF-8.',fix:null}}
+      else try{text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(buf)}catch(e){text=new TextDecoder('windows-1252').decode(buf);enc='windows-1252'}
+      addText(file.name,text,enc,extra)}catch(e){banner(`${file.name}: ${e.message}`,true)}}
+  S.sel=n0<S.files.length?n0:S.sel;refresh()}
 $('bOpen').onclick=()=>$('file').click();$('file').onchange=e=>{readFiles(e.target.files);e.target.value=''};
 $('bClear').onclick=()=>{S.files=[];S.sel=-1;refresh()};
 addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('dragging')});
 addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging')});
 addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('dragging');readFiles(e.dataTransfer.files)});
 
-// ---- fixes panel
-function drawFixes(){const fl=cur()?cur().f:[];
-  $('fixes').innerHTML=LAS.FIXES.map(x=>{const n=fl.filter(f=>f.fix===x.id).length;
-    return `<label class="fx"><input type="checkbox" data-id="${x.id}" ${S.fixes.has(x.id)?'checked':''}><span>${esc(x.label)}</span><small>${n?n+' finding'+(n>1?'s':''):''}</small></label>`}).join('');
-  $('fixes').querySelectorAll('input').forEach(i=>i.onchange=()=>{i.checked?S.fixes.add(i.dataset.id):S.fixes.delete(i.dataset.id);drawLog();drawFindings()})}
-const cur=()=>S.files[S.sel];
-
 function refresh(){
   S.batch=S.files.length>1?LAS.checkBatch(S.files.map(x=>x.las)):[];
-  const n=S.files.length,c=k=>S.files.filter(x=>x.v===k).length;
-  $('sum').innerHTML=n?`<div><b>${n}</b>file${n>1?'s':''}</div><div><b>${c('pass')}</b>conform</div><div><b>${c('warn')}</b>with warnings</div><div><b>${c('fail')}</b>with errors</div>`:'';
-  $('batch').innerHTML=S.batch.map(b=>`<li><span class="sev ${b.sev}">${b.sev}</span> <b>${esc(b.rule)}</b> — ${esc(b.msg)}</li>`).join('');
-  $('dataMsg').textContent=n?`${n} file(s) loaded. Click a row to see its findings.`:'No file yet.';
-  ['bLas','bAll','bCsv'].forEach(id=>$(id).disabled=!n);$('bAll').style.display=n>1?'':'none';
-  drawSummary();drawFixes();drawFindings();drawHeader();fillCurves();drawLog()}
-const vchip=v=>`<span class="chip ${v}">${v==='pass'?'conform':v==='warn'?'warnings':'errors'}</span>`;
-function drawSummary(){
-  if(!S.files.length){$('tS').innerHTML='<div class="empty">Open or drop LAS files, or load the example.</div>';return}
-  const cnt=(f,s)=>f.filter(x=>x.sev===s).length;
-  $('tS').innerHTML='<table><thead><tr><th>File</th><th>VERS</th><th>Well</th><th class="n">Curves</th><th class="n">Rows</th><th>Index range</th><th class="n">E</th><th class="n">W</th><th class="n">I</th><th>Verdict</th></tr></thead><tbody>'+
-    S.files.map((x,i)=>{const l=x.las,w=(l.well||[]).find(h=>h.mnem.toUpperCase()==='WELL'),ix=l.ix||{},u=l.curves&&l.curves[0]?l.curves[0].unit:'';
-      return `<tr data-i="${i}" class="${i===S.sel?'sel':''}"><td>${esc(x.name)}</td><td>${esc(l.ver&&l.ver.VERS||'–')}</td><td>${esc(w?w.value:'–')}</td><td class="n">${(l.curves||[]).length}</td><td class="n">${(l.data||[]).length}</td><td>${isFinite(ix.first)?`${LAS.fmtN(ix.first)} – ${LAS.fmtN(ix.last)} ${esc(u)}`:'–'}</td><td class="n">${cnt(x.f,'E')||''}</td><td class="n">${cnt(x.f,'W')||''}</td><td class="n">${cnt(x.f,'I')||''}</td><td>${vchip(x.v)}</td></tr>`}).join('')+'</tbody></table>';
-  $('tS').querySelectorAll('tbody tr').forEach(r=>r.onclick=()=>{S.sel=+r.dataset.i;drawSummary();drawFixes();drawFindings();drawHeader();fillCurves();drawLog()})}
-$('flt').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.sev=b.dataset.s;$('flt').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));drawFindings()});
-function drawFindings(){const x=cur();$('fT').firstChild.textContent=x?`Findings — ${x.name} `:'Findings ';
-  if(!x){$('tF').innerHTML='';return}
-  const rank={E:0,W:1,I:2},f=x.f.filter(y=>!S.sev||y.sev===S.sev).sort((a,b)=>rank[a.sev]-rank[b.sev]||(a.line||0)-(b.line||0));
-  if(!x.f.length){$('tF').innerHTML='<div class="empty">No finding: the file follows the LAS conventions checked here.</div>';return}
-  $('tF').innerHTML='<table><thead><tr><th>Sev.</th><th class="n">Line</th><th>Rule</th><th>Message</th><th>Fix</th></tr></thead><tbody>'+
-    f.map(y=>`<tr><td><span class="sev ${y.sev}">${y.sev}</span></td><td class="n">${y.line||''}</td><td>${esc(y.rule)}</td><td>${esc(y.msg)}</td><td>${y.fix?(S.fixes.has(y.fix)?'✔ '+esc(y.fix):'<span style="color:var(--mut)">'+esc(y.fix)+' (off)</span>'):''}</td></tr>`).join('')+'</tbody></table>'}
-$('hT').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.hdr=b.dataset.t;$('hT').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));drawHeader()});
-function drawHeader(){const x=cur();if(!x){$('tH').innerHTML='';return}const l=x.las;
-  const list={W:l.well,C:l.curves,P:l.params,V:l.vItems}[S.hdr]||[];
-  $('tH').innerHTML=list.length?'<table><thead><tr><th class="n">Line</th><th>Mnem</th><th>Unit</th><th>Value</th><th>Description</th></tr></thead><tbody>'+list.map(h=>`<tr><td class="n">${h.line}</td><td>${esc(h.mnem)}</td><td>${esc(h.unit)}</td><td>${esc(h.value)}</td><td>${esc(h.desc)}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">Section empty or missing.</div>'}
-function drawLog(){const x=cur();if(!x||!x.las.sections.length){$('log').textContent='–';return}
-  const {log}=LAS.write(x.las,[...S.fixes]);$('log').textContent=log.length?log.join('\n'):'No change: the corrected file would be identical (apart from CRLF line endings).'}
+  ['bAll','bCsv'].forEach(id=>$(id).disabled=!S.files.length);
+  if(S.sel>=S.files.length)S.sel=S.files.length-1;
+  drawList();drawFixes();drawMain()}
 
-// ---- curve plot (index downwards; min/max per pixel row for long files)
-function fillCurves(){const x=cur(),s=$('cSel');const c=x?x.las.curves.slice(1):[];const prev=s.value;
-  s.innerHTML=c.map((h,i)=>`<option value="${i+1}">${esc(h.mnem)}${h.unit?' ('+esc(h.unit)+')':''}</option>`).join('');
-  if([...s.options].some(o=>o.value===prev))s.value=prev;plot()}
-$('cSel').onchange=plot;addEventListener('resize',plot);
-function plot(){const cv=$('cv'),r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;cv.width=Math.max(10,r.width*dpr);cv.height=Math.max(10,r.height*dpr);
-  const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);const Wd=r.width,H=r.height;g.fillStyle='#fff';g.fillRect(0,0,Wd,H);
-  const x=cur(),j=+$('cSel').value;g.fillStyle='#5c5a52';g.font='12px Inter,system-ui,sans-serif';
-  if(!x||!j||!x.las.data.length){g.fillText('No curve to show.',16,24);return}
-  const l=x.las,nul=y=>LAS.isNull(l,y)||LAS.NUM_NULL.includes(y);  // other null markers are not drawn either
-  const pts=l.data.map(rw=>[rw[0],rw[j]]).filter(p=>!LAS.isNull(l,p[0]));
-  const v=pts.map(p=>p[1]).filter(y=>!nul(y));if(!v.length){g.fillText('Curve entirely NULL.',16,24);return}
-  const c=l.curves[j],logx=/^(RT|RD|ILD|ILM|LLD|LLS|MSFL|SFLU|SFL|RILD|RILM|AT\d0|RXO|RS|RM|RES.*)$/i.test(c.mnem)&&LAS.amin(v)>0;
-  const tx=logx?Math.log10:(y=>y);let lo=LAS.amin(v.map(tx)),hi=LAS.amax(v.map(tx));if(lo===hi){lo-=1;hi+=1}
-  const zs=pts.map(p=>p[0]),z0=LAS.amin(zs),z1=LAS.amax(zs)||z0+1;
-  const L=54,R=12,T=26,B=14,X=y=>L+(tx(y)-lo)/(hi-lo)*(Wd-L-R),Y=z=>T+(z-z0)/((z1-z0)||1)*(H-T-B);
-  g.strokeStyle='#e2ded3';g.lineWidth=1;g.textAlign='right';
-  for(let k=0;k<=6;k++){const z=z0+(z1-z0)*k/6,y=Y(z);g.beginPath();g.moveTo(L,y);g.lineTo(Wd-R,y);g.stroke();g.fillText(LAS.fmtN(+z.toPrecision(5)),L-4,y+4)}
-  g.textAlign='left';g.fillText(`${c.mnem}${c.unit?' ('+c.unit+')':''}${logx?' — log scale':''}`,L,14);g.textAlign='right';
-  g.fillText((logx?'1e'+lo.toFixed(1):LAS.fmtN(+lo.toPrecision(4)))+' … '+(logx?'1e'+hi.toFixed(1):LAS.fmtN(+hi.toPrecision(4))),Wd-R,14);
-  g.strokeStyle='#4a5a4e';g.lineWidth=1.2;
-  const px=Math.max(1,Math.floor(pts.length/(H-T-B)));
-  g.beginPath();let pen=false;
-  for(let i=0;i<pts.length;i+=px){let mn=Infinity,mx=-Infinity,ok=false;for(let k=i;k<Math.min(i+px,pts.length);k++){const y=pts[k][1];if(nul(y)||(logx&&y<=0))continue;ok=true;if(y<mn)mn=y;if(y>mx)mx=y}
-    if(!ok){pen=false;continue}const yy=Y(pts[i][0]);if(!pen){g.moveTo(X(mn),yy);pen=true}else g.lineTo(X(mn),yy);if(mx!==mn)g.lineTo(X(mx),yy)}
-  g.stroke()}
-document.querySelectorAll('[data-png]').forEach(b=>b.onclick=()=>{const c=$(b.dataset.png);c.toBlob(bl=>download((cur()?cur().name.replace(/\.\w+$/,''):'curve')+'_'+$('cSel').selectedOptions[0].text.split(' ')[0]+'.png',bl,'image/png'))});
+function drawList(){
+  $('flist').innerHTML=S.files.map((x,i)=>{const n=x.f.filter(f=>f.sev!=='I').length;
+    return `<li tabindex="0" data-i="${i}" class="${i===S.sel?'sel':''}" title="${esc(x.name)}"><span class="st ${x.v}"></span><span class="nm">${esc(x.name)}</span><small>${x.v==='pass'?'ready':n+' to fix'}</small><button data-rm="${i}" aria-label="Remove ${esc(x.name)}">✕</button></li>`}).join('');
+  $('flist').querySelectorAll('li').forEach(li=>{const go=()=>{S.sel=+li.dataset.i;S.target=null;drawList();drawFixes();drawMain()};li.onclick=e=>{if(e.target.dataset.rm!=null){S.files.splice(+e.target.dataset.rm,1);if(S.sel>=+e.target.dataset.rm)S.sel--;if(S.sel<0&&S.files.length)S.sel=0;refresh();return}go()};li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}})}
+
+function drawFixes(){const fl=cur()?cur().f:[];
+  $('fixes').innerHTML=LAS.FIXES.map(x=>{const n=fl.filter(f=>f.fix===x.id).length;
+    return `<label class="fx"><input type="checkbox" data-id="${x.id}" ${S.fixes.has(x.id)?'checked':''}><span>${esc(x.label)}</span><small>${n||''}</small></label>`}).join('');
+  $('fixes').querySelectorAll('input').forEach(i=>i.onchange=()=>setFix(i.dataset.id,i.checked))}
+function setFix(id,on){on?S.fixes.add(id):S.fixes.delete(id);drawFixes();drawMain(true)}
+
+// ---- main column
+const ICON={pass:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 20.5l5.5 5.5L29 14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ warn:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4L37 34H3z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M20 15v9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="currentColor"/></svg>',
+ fail:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M13.5 13.5l13 13M26.5 13.5l-13 13" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>'};
+function drawMain(keepDetails){
+  const x=cur();
+  if(!x){$('main').innerHTML=`<section class="intro"><h2>Is this LAS file ready to load?</h2>
+    <p>Drop the well log files you received. Each one is checked against the LAS format and gets a clear verdict, the list of problems with their line, and a corrected copy when the problems are mechanical.</p>
+    <div class="dz"><b>Drop LAS files here</b><br><span style="color:var(--mut);font-size:.84rem">several at once is fine — nothing is uploaded</span>
+    <div class="row"><button class="pri" id="bOpen2">Choose files…</button><button id="bEx2">Try the example</button></div></div>
+    <dl><div><dt>Structure and header</dt><dd>Sections, version, wrap, header line syntax, well name, UWI, depth range, step, null value.</dd></div>
+    <div><dt>Data rows</dt><dd>Missing or glued values, text in numbers, depth going backwards or repeated, null markers that differ from the declared one.</dd></div>
+    <div><dt>Plausibility</dt><dd>GR, density, neutron, sonic and resistivity outside their usual range, neutron in % with a V/V unit, spikes, empty curves.</dd></div>
+    <div><dt>Across files</dt><dd>Same well with different identifiers, overlapping runs, mixed depth units.</dd></div></dl></section>`;
+    $('bOpen2').onclick=()=>$('file').click();$('bEx2').onclick=example;return}
+  const f=x.f,cnt=s=>f.filter(y=>y.sev===s).length,E=cnt('E'),Wn=cnt('W');
+  const l=x.las,g=k=>{const h=(l.well||[]).find(h=>h.mnem.toUpperCase()===k);return h?h.value:''},ix=l.ix||{},iu=l.curves&&l.curves[0]?l.curves[0].unit:'';
+  const fixable=f.filter(y=>y.fix&&S.fixes.has(y.fix)).length,log=l.sections.length?written(x).log:[];
+  const title={pass:'Ready to load',warn:`Loads, with ${Wn} point${Wn>1?'s':''} to review`,fail:`Will not load cleanly: ${E} blocking problem${E>1?'s':''}`}[x.v];
+  const sub=x.v==='pass'?'No problem found by the checks.':(fixable?`${fixable} problem${fixable>1?'s are':' is'} fixed automatically in the corrected file.`:'Nothing here can be fixed automatically: see the details below.');
+  const facts=[['Well',g('WELL')||'—'],['UWI',g('UWI')||g('API')||'—'],['Curves',Math.max(0,(l.curves||[]).length-1)],['Depth',isFinite(ix.first)?`${LAS.fmtN(ix.first)} – ${LAS.fmtN(ix.last)} ${iu}`:'—'],['Step',g('STEP')||'—'],['Null',g('NULL')||'—'],['Version',(l.ver&&l.ver.VERS)||'—']];
+  let h=`<section class="verdict ${x.v}" aria-live="polite">${ICON[x.v]}<h2>${esc(title)}</h2><div class="sub">${esc(x.name)} — ${esc(sub)}</div>
+    <div class="act"><button class="pri" id="bLas" ${l.sections.length?'':'disabled'}>Download corrected file</button><a id="aChanges" tabindex="0">${log.length?log.length+' change'+(log.length>1?'s':'')+' — see them':'no change needed'}</a></div>
+    <dl class="facts">${facts.map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section>`;
+  const bt=S.batch.filter(b=>b.file.includes(x.name));
+  if(bt.length)h+=`<section class="across"><h3>Across the loaded files</h3>${bt.map(b=>`<p><span class="sev ${b.sev}">${b.sev}</span> <b>${esc(T[b.rule]||b.rule)}</b> — ${esc(b.msg)}</p>`).join('')}</section>`;
+  for(const s of ['E','W','I']){const it=f.filter(y=>y.sev===s).sort((a,b)=>(a.line||0)-(b.line||0));if(!it.length)continue;
+    h+=`<section class="grp"><h3>${GRP[s]}<span class="c">${it.length}</span></h3>`+it.map((y,k)=>`<div class="pb ${s}"><b>${esc(T[y.rule]||y.rule)}</b><p>${esc(y.msg)}</p>
+      <div class="meta">${y.line?`<a data-line="${y.line}" tabindex="0">line ${y.line}</a>`:''}<span>${esc(y.rule)}</span></div>
+      ${y.fix?`<label class="fixit ${S.fixes.has(y.fix)?'':'off'}"><input type="checkbox" data-fix="${y.fix}" ${S.fixes.has(y.fix)?'checked':''}>Fix in the corrected file</label>`:''}</div>`).join('')+'</section>'}
+  if(!f.length)h+='<div class="allgood">Every check passed. You can load this file as it is.</div>';
+  h+=`<section class="det" id="det"><div class="tabs" role="tablist">${[['curves','Curves'],['header','Header'],['text','File text'],['changes','Changes']].map(([k,n])=>`<button role="tab" data-tab="${k}" class="${S.tab===k?'on':''}">${n}</button>`).join('')}</div>
+    <div class="pane" data-p="curves"><div class="trk" id="trk"><canvas id="cvT"></canvas></div><div id="trkRo">Move over the tracks to read the values.</div></div>
+    <div class="pane" data-p="header"><div class="htabs" id="hT">${['W','C','P','V'].map(t=>`<button data-t="${t}" class="${S.hdr===t?'on':''}">~${t}</button>`).join('')}</div><div class="tw" id="tH" style="max-height:440px"></div></div>
+    <div class="pane" data-p="text"><div class="srcbar">Go to line <input type="number" id="goLine" min="1"> <span style="color:var(--mut)">Lines with a problem are shaded.</span></div><pre class="src" id="src"></pre></div>
+    <div class="pane" data-p="changes"><pre class="log" id="log"></pre></div></section>`;
+  const y0=keepDetails?scrollY:null;$('main').innerHTML=h;if(y0!=null)scrollTo(0,y0);
+  $('bLas').onclick=()=>{if(exportOne(x))$('exportMsg').textContent='Saved '+fixedName(x.name)};
+  $('aChanges').onclick=()=>openTab('changes');$('aChanges').onkeydown=e=>{if(e.key==='Enter')openTab('changes')};
+  $('main').querySelectorAll('[data-fix]').forEach(c=>c.onchange=()=>setFix(c.dataset.fix,c.checked));
+  $('main').querySelectorAll('[data-line]').forEach(a=>{const go=()=>{S.target=+a.dataset.line;openTab('text')};a.onclick=go;a.onkeydown=e=>{if(e.key==='Enter')go()}});
+  $('det').querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>openTab(b.dataset.tab,true));
+  $('hT').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.hdr=b.dataset.t;$('hT').querySelectorAll('button').forEach(z=>z.classList.toggle('on',z===b));drawHeader()});
+  $('goLine').onchange=e=>{S.target=+e.target.value;drawSource()};
+  openTab(S.tab,false,true)}
+function openTab(t,noScroll,silent){S.tab=t;const d=$('det');if(!d)return;
+  d.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('on',b.dataset.tab===t);b.setAttribute('aria-selected',b.dataset.tab===t)});
+  d.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.dataset.p===t));
+  if(t==='curves')drawTracks();if(t==='header')drawHeader();if(t==='text')drawSource();if(t==='changes')drawLog();
+  if(!silent&&!noScroll)d.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}
+function drawHeader(){const x=cur();if(!x||!$('tH'))return;const l=x.las;
+  const list={W:l.well,C:l.curves,P:l.params,V:l.vItems}[S.hdr]||[];
+  $('tH').innerHTML=list.length?'<table><thead><tr><th>Line</th><th>Name</th><th>Unit</th><th>Value</th><th>Description</th></tr></thead><tbody>'+list.map(h=>`<tr><td>${h.line}</td><td>${esc(h.mnem)}</td><td>${esc(h.unit)}</td><td>${esc(h.value)}</td><td>${esc(h.desc)}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">This section is empty or missing.</div>'}
+function drawLog(){const x=cur();if(!x||!$('log'))return;if(!x.las.sections.length){$('log').textContent='Not a LAS file: nothing to write.';return}
+  const {log}=written(x);$('log').textContent=log.length?log.join('\n'):'No change: the corrected file is the same as the original (apart from Windows line endings).'}
+// File text: a window of lines around the target, shaded where a problem points
+function drawSource(){const x=cur(),el=$('src');if(!x||!el)return;const L=x.las.lines||[];
+  const mark=new Map();for(const f of x.f)if(f.line&&!mark.has(f.line))mark.set(f.line,f.sev);
+  const tgt=S.target||1,a=Math.max(0,tgt-60),b=Math.min(L.length,a+400);
+  el.innerHTML=(a>0?`<span class="ln"><i>…</i>${a} line(s) above</span>`:'')+L.slice(a,b).map((t,k)=>{const n=a+k+1;return `<span class="ln ${mark.get(n)||''} ${n===S.target?'tgt':''}" id="L${n}"><i>${n}</i>${esc(t)||' '}</span>`}).join('')+(b<L.length?`<span class="ln"><i>…</i>${L.length-b} more line(s)</span>`:'');
+  const t=$('L'+tgt);if(t&&S.target)el.scrollTop=t.offsetTop-el.clientHeight/3}
+
+// ---- log tracks: one track per curve, shared depth axis, min/max per pixel row
+const RES=/^(RT|RD|ILD|ILM|LLD|LLS|MSFL|SFLU|SFL|RILD|RILM|AT\d0|RXO|RS|RM|RES.*)$/i;
+function drawTracks(){const x=cur(),wrap=$('trk'),cv=$('cvT');if(!x||!cv)return;const l=x.las,nc=l.curves.length;
+  const g0=cv.getContext('2d');
+  if(nc<2||!l.data.length){cv.width=wrap.clientWidth;cv.height=60;g0.font='13px Inter,sans-serif';g0.fillStyle='#5c5a52';g0.fillText('No curve to show.',14,32);return}
+  const tw=130,axis=62,head=44,Wd=Math.max(wrap.clientWidth,axis+(nc-1)*tw),H=520,dpr=devicePixelRatio||1;
+  cv.style.width=Wd+'px';cv.width=Wd*dpr;cv.height=H*dpr;const g=g0;g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle='#fff';g.fillRect(0,0,Wd,H);
+  const nul=y=>LAS.isNull(l,y)||LAS.NUM_NULL.includes(y);
+  const rows=l.data.filter(r=>!LAS.isNull(l,r[0])),zs=rows.map(r=>r[0]),z0=LAS.amin(zs),z1=LAS.amax(zs);
+  const B=10,Y=z=>head+(z-z0)/((z1-z0)||1)*(H-head-B),tw2=(Wd-axis)/(nc-1);
+  g.font='11px Inter,system-ui,sans-serif';g.textAlign='right';g.fillStyle='#5c5a52';g.strokeStyle='#ece9e1';g.lineWidth=1;
+  for(let k=0;k<=8;k++){const z=z0+(z1-z0)*k/8,y=Y(z);g.beginPath();g.moveTo(axis,y);g.lineTo(Wd,y);g.stroke();g.fillText(LAS.fmtN(+z.toPrecision(6)),axis-6,y+4)}
+  g.save();g.translate(12,head+(H-head)/2);g.rotate(-Math.PI/2);g.textAlign='center';g.fillText(`${l.curves[0].mnem} (${l.curves[0].unit||'no unit'})`,0,0);g.restore();
+  const px=Math.max(1,Math.floor(rows.length/(H-head-B))),sc=[];
+  for(let j=1;j<nc;j++){const x0=axis+(j-1)*tw2,c=l.curves[j],v=rows.map(r=>r[j]).filter(y=>!nul(y));
+    g.strokeStyle='#c9c4b6';g.strokeRect(x0+.5,head+.5,tw2-1,H-head-B);
+    g.fillStyle='#232220';g.textAlign='center';g.font='600 12px Inter,system-ui,sans-serif';g.fillText(c.mnem,x0+tw2/2,15);
+    g.font='11px Inter,system-ui,sans-serif';g.fillStyle='#5c5a52';
+    if(!v.length){g.fillText('all null',x0+tw2/2,30);sc.push(null);continue}
+    const lg=RES.test(c.mnem)&&LAS.amin(v)>0,tx=lg?Math.log10:(y=>y);let lo=LAS.amin(v.map(tx)),hi=LAS.amax(v.map(tx));if(lo===hi){lo-=1;hi+=1}
+    const fx=y=>x0+3+(tx(y)-lo)/(hi-lo)*(tw2-6);sc.push({lg,lo,hi});
+    const lab=u=>lg?LAS.fmtN(+Math.pow(10,u).toPrecision(2)):LAS.fmtN(+u.toPrecision(3));
+    g.textAlign='left';g.fillText(lab(lo),x0+3,30);g.textAlign='right';g.fillText(lab(hi),x0+tw2-3,30);g.textAlign='center';g.fillText((c.unit||'')+(lg?' log':''),x0+tw2/2,41);
+    g.strokeStyle='#4a5a4e';g.lineWidth=1.1;g.beginPath();let pen=false;
+    for(let i=0;i<rows.length;i+=px){let mn=Infinity,mx=-Infinity,ok=false;for(let k=i;k<Math.min(i+px,rows.length);k++){const y=rows[k][j];if(nul(y)||(lg&&y<=0))continue;ok=true;if(y<mn)mn=y;if(y>mx)mx=y}
+      if(!ok){pen=false;continue}const yy=Y(rows[i][0]);if(!pen){g.moveTo(fx(mn),yy);pen=true}else g.lineTo(fx(mn),yy);if(mx!==mn)g.lineTo(fx(mx),yy)}
+    g.stroke()}
+  // read-out under the pointer
+  cv.onmousemove=e=>{const r=cv.getBoundingClientRect(),y=e.clientY-r.top;if(y<head){$('trkRo').textContent='Move over the tracks to read the values.';return}
+    const z=z0+(y-head)/(H-head-B)*(z1-z0);let bi=0,bd=Infinity;for(let i=0;i<rows.length;i+=Math.max(1,px>>2)){const d=Math.abs(rows[i][0]-z);if(d<bd){bd=d;bi=i}}
+    const rw=rows[bi];$('trkRo').textContent=`${l.curves[0].mnem} ${LAS.fmtN(rw[0])}  `+l.curves.slice(1).map((c,k)=>`${c.mnem} ${nul(rw[k+1])?'null':LAS.fmtN(+rw[k+1].toPrecision(5))}`).join('   ')};
+  cv.onmouseleave=()=>{$('trkRo').textContent='Move over the tracks to read the values.'}}
+addEventListener('resize',()=>{if(S.tab==='curves')drawTracks()});
 
 // ---- exports
 const fixedName=n=>n.replace(/(\.\w+)?$/,'_checked.las');
 function exportOne(x){if(!x.las.sections.length){banner(`${x.name}: not a LAS file, nothing to write.`,true);return false}
-  const {text}=LAS.write(x.las,[...S.fixes]);download(fixedName(x.name),encode(text,x.enc),'text/plain');return true}
-$('bLas').onclick=()=>{const x=cur();if(x&&exportOne(x))$('exportMsg').textContent='Saved '+fixedName(x.name)};
+  download(fixedName(x.name),encode(written(x).text,x.enc),'text/plain');return true}
 $('bAll').onclick=async()=>{let n=0;for(const x of S.files){if(exportOne(x))n++;await new Promise(r=>setTimeout(r,350))}$('exportMsg').textContent=`Saved ${n} file(s)`};
-$('bCsv').onclick=()=>{const q=s=>{s=String(s==null?'':s);return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
-  const L=['file,severity,line,rule,message,fix,fixed_in_download'];
-  for(const x of S.files)for(const f of x.f)L.push([x.name,f.sev,f.line||'',f.rule,f.msg,f.fix||'',f.fix&&S.fixes.has(f.fix)?'yes':''].map(q).join(','));
-  for(const b of S.batch)L.push([b.file,b.sev,'',b.rule,b.msg,'',''].map(q).join(','));
+$('bCsv').onclick=()=>{// cells starting with = + - @ are prefixed so a spreadsheet does not run them as formulas
+  const q=s=>{s=String(s==null?'':s);if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=['file,severity,line,rule,problem,details,correction,corrected_in_download'];
+  for(const x of S.files)for(const f of x.f)L.push([x.name,GRP[f.sev],f.line||'',f.rule,T[f.rule]||'',f.msg,f.fix||'',f.fix&&S.fixes.has(f.fix)?'yes':''].map(q).join(','));
+  for(const b of S.batch)L.push([b.file,GRP[b.sev],'',b.rule,T[b.rule]||'',b.msg,'',''].map(q).join(','));
   download('las_check_report.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved las_check_report.csv'};
 
 // ---- example: two synthetic files of the same well (main log with deliberate defects, overlapping repeat)
@@ -684,7 +803,7 @@ function lasText(o){const f=(v,d)=>v.toFixed(d).padStart(11);
 ~A  DEPT        GR      RHOB      NPHI        DT        RT
 ${rows.join('\n')}
 `}
-$('bExample').onclick=()=>{
+function example(){
   const a=synth(1500,400,3,{pct:true});
   a[0].fill(-999.25,1);a[1].fill(-999.25,1);                    // all-NULL rows at the top
   a[120][1]=-9999;a[121][1]=-9999;a[200][5]=-9999;              // other null marker
@@ -695,11 +814,12 @@ $('bExample').onclick=()=>{
   const b=synth(1540,140,9,{});
   const t2=lasText({rows:b,strt:(1540).toFixed(4),stop:(1540+139*0.1524).toFixed(4),step:'0.1524',srvc:'LOGCO',uwi:'EX-0002'});
   S.files=[];S.sel=0;addText('EX-1_main.las',t1,'utf-8');addText('EX-1_repeat.las',t2,'utf-8');refresh();
-  banner('Example: two synthetic files of the same well, the first with deliberate defects.')};
+  banner('Example: two synthetic files of the same well, the first with deliberate defects.')}
+$('bExample').onclick=example;
 
 document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
 refresh();
-if(location.hash==='#example')$('bExample').click();  // shareable link to the example
+if(location.hash==='#example')example();  // shareable link to the example
 window.DG={S,refresh,addText};
 </script>
 
