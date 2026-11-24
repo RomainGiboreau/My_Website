@@ -360,6 +360,243 @@ test('grid CSV: x, y, code, belt', () => {
   assert.equal(G.gridCsv(Gd), 'x,y,code,belt\n10,20,1,Coastal plain\n15,20,2,"Shoreface, upper"');
 });
 
+// =====================================================================================
+// ---------- v2: key lines, sources, bodies, mixed zones, layers (lithology, faults, objects) ----------
+const linesModel = (key, o = {}) => G.makeModel(key, Object.assign({ geom: 'lines', ext: { xmin: -20000, xmax: 20000, ymin: -20000, ymax: 20000 }, noise: { amp: 0, wl: 5000, seed: 1 }, warp: { on: false, R: 2000 } }, o));
+const clsIdx = (M, name) => arr(G.allBelts(M)).findIndex(b => b.name === name);
+test('signed distance to a polyline: sign on both sides, segments, vertices, ends extended', () => {
+  const L = [[0, 0], [10, 0], [20, 10]];
+  near(G.sdist(L, 5, -3), 3, 1e-9, 'right of the direction of travel is positive');
+  near(G.sdist(L, 5, 4), -4, 1e-9, 'left is negative');
+  near(G.sdist(L, 10.5, -3), Math.hypot(.5, 3), 1e-9, 'convex side of a vertex');
+  near(G.sdist(L, 10, 1), -Math.SQRT1_2, 1e-9, 'concave side');
+  near(G.sdist(L, -5, 2), -2, 1e-9, 'before the first vertex: the first segment extended');
+  near(G.sdist(L, 25, 20), -5 / Math.SQRT2, 1e-9, 'after the last vertex: the last segment extended');
+  near(G.sdist([[0, 0], [10, 0]], 3, 7), -7, 1e-9);
+});
+test('normalised shelf coordinate between two lines: 0 at the shoreline, 1 at the shelf edge, belts widen with the shelf', () => {
+  const S = [[-100, 0], [100, 0]], E = [[-100, -10], [0, -10], [100, -40]];
+  near(G.shelfCoord(S, E, -50, -2.5), .25, 1e-9);
+  near(G.shelfCoord(S, E, -50, -5), .5, 1e-9);
+  assert.ok(G.shelfCoord(S, E, 80, -5) < .25, 'wide shelf: the same distance from the coast is less far across the shelf');
+  assert.equal(G.shelfCoord(S, E, 0, 5), 0); assert.equal(G.shelfCoord(S, E, -50, -20), 1);
+  // in a model, d = prior position of the shoreline at the coast, of the shelf edge at the edge, proportional between
+  const M = linesModel('shelf', { lines: [{ name: 'Shoreline', k: 0, pts: [[-30000, 0], [30000, 0]] }, { name: 'Shelf edge', k: 3, pts: [[-30000, -4000], [-5000, -4000], [30000, -16000]] }] });
+  const p = arr(G.prior(M)), F = G.geoField(M);
+  near(F(-20000, 0), p[0], 1e-6); near(F(-20000, -4000), p[3], 1e-6); near(F(-20000, -2000), (p[0] + p[3]) / 2, 1e-6);
+  near(F(-20000, 3000), p[0] - 3000, 1e-6, 'land side: signed distance');
+  const u = (p[1] - p[0]) / (p[3] - p[0]), mod = G.build(M, []);
+  assert.equal(mod.beltAt(-20000, -4000 * u * .9), 1, 'narrow shelf: shoreface'); assert.equal(mod.beltAt(25000, -4000 * u * .9), 1);
+  assert.ok(mod.beltAt(-20000, -4000 * u * 1.5) === 2 && mod.beltAt(25000, -4000 * u * 1.5) === 1, 'the belt is wider where the shelf is wider');
+});
+test('source lobe shifts d basinward in front of it, not along strike; asymmetry deflects it to one side', () => {
+  const base = { lines: [{ name: 'Shoreline', k: 0, pts: [[-30000, 0], [30000, 0]] }] };
+  const M0 = linesModel('delta', base), F0 = G.geoField(M0);
+  const src = a => linesModel('delta', Object.assign({}, base, { sources: [{ kind: 'coast', line: 0, x: 0, y: 0, az: 180, L: 3000, open: 60, asym: a }] }));
+  const F = G.geoField(src(0));
+  assert.ok(F(0, -2000) < F0(0, -2000) - 2000, 'in front of the source: more proximal ' + F(0, -2000) + ' vs ' + F0(0, -2000));
+  near(F(18000, -2000), F0(18000, -2000), 1e-6, 'far along strike: unchanged');
+  near(F(0, 6000), F0(0, 6000), 1e-6, 'landward: unchanged');
+  const drop = (FF, x, y) => F0(x, y) - FF(x, y);
+  near(drop(F, -2500, -3000), drop(F, 2500, -3000), 1e-6, 'no drift: symmetric');
+  const Fa = G.geoField(src(.6)), Fb = G.geoField(src(-.6));
+  // axis towards the south (az 180): its right side is the west (x < 0)
+  assert.ok(drop(Fa, -3500, -3000) > drop(Fa, 3500, -3000) + 500, 'asym > 0: deflected to the right of the axis');
+  assert.ok(drop(Fb, 3500, -3000) > drop(Fb, -3500, -3000) + 500, 'asym < 0: to the left');
+  // variant classes away from the source
+  const M1 = src(0), mod = G.build(M1, []);
+  assert.equal(mod.beltAt(0, -3500), 1, 'delta front in front of the source, beyond the 3 km protrusion'); assert.equal(mod.beltAt(0, -1500), 0, 'the delta plain protrudes');
+  assert.equal(mod.beltAt(15000, -600), clsIdx(M1, 'Interdeltaic shoreface'), 'interdeltaic shoreface along strike');
+});
+test('fan source at the shelf edge: lobe in front, most distal belt beside it, shelf landward, canyon notch', () => {
+  const M = linesModel('fansand', { lines: [{ name: 'Shelf edge', k: -1, pts: [[-30000, 10000], [30000, 10000]] }], sources: [{ kind: 'fan', line: 0, x: 0, y: 10000, az: 180, L: 15000, open: 50, asym: 0 }] });
+  const mod = G.build(M, []), n = M.belts.length;
+  assert.equal(mod.beltAt(0, 9000), 0, 'canyon / slope at the mouth');
+  assert.equal(mod.beltAt(0, 2000), 2, 'suprafan lobes down the axis');
+  assert.equal(mod.beltAt(16000, 4000), n - 1, 'basin plain beside the fan');
+  assert.equal(mod.beltAt(8000, 14000), clsIdx(M, 'Shelf'), 'shelf landward of the shelf edge');
+  assert.equal(mod.beltAt(0, 10600), 0, 'canyon cut into the shelf');
+});
+test('isolated body: core and halos override the regional map, an inside well is honoured by enlarging the body', () => {
+  const M = G.makeModel('carbonate', { geom: 'linear', az: 90, src: [-20000, 0], span: 9000, ext: { xmin: -20000, xmax: 10000, ymin: -10000, ymax: 10000 }, noise: { amp: 0, wl: 5000, seed: 1 }, warp: { on: false, R: 1000 },
+    bodies: [{ type: 'pinnacle', shape: 'ellipse', x: 0, y: 0, a: 600, e: 1, rot: 0, w: [250, 700], irr: 0 }] });
+  const mod = G.build(M, []), n = M.belts.length;
+  assert.equal(mod.beltAt(0, 0), clsIdx(M, 'Reef core'));
+  assert.equal(mod.beltAt(700, 0), clsIdx(M, 'Reef flank / talus'));
+  assert.equal(mod.beltAt(0, -1200), clsIdx(M, 'Off-reef halo'));
+  assert.equal(mod.beltAt(3000, 0), n - 1, 'regional basin outside the halo');
+  const W = [{ name: 'P-1', x: 900, y: 0, env: 'Reef core' }, { name: 'B-1', x: 5000, y: 0, env: 'Basin' }];
+  const m2 = G.build(M, W);
+  assert.ok(m2.check.every(c => c.honoured), JSON.stringify(m2.check.map(c => [c.name, c.belt])));
+  assert.ok(m2.bodies.adj.length === 1 && m2.bodies.adj[0].scale > 1.5, 'body enlarged and reported');
+  const P = G.polygons(m2, M.ext, 100);
+  assert.ok(P.some(p => p.name === 'Reef core' && p.code === clsIdx(M, 'Reef core') + 1), 'exported with its own code');
+});
+test('traced channel (polyline with a width) and freehand polygon bodies: area, environment and code', () => {
+  const M = G.makeModel('fan', { geom: 'linear', az: 180, src: [0, 10000], span: 20000, ext: { xmin: -10000, xmax: 10000, ymin: -10000, ymax: 10000 }, noise: { amp: 0, wl: 5000, seed: 1 }, warp: { on: false, R: 1000 },
+    bodies: [{ type: 'custom', shape: 'ribbon', x: 0, y: 0, line: [[-5000, 0], [5000, 0]], width: 400, env: 'Channel fill', color: '#c0602a', w: [], irr: 0 },
+      { type: 'custom', shape: 'poly', x: 0, y: 5000, pts: [[-1000, -1000], [1000, -1000], [1000, 1000], [-1000, 1000]], env: 'Lobe sand', color: '#f0c040', w: [], irr: 0 }] });
+  const mod = G.build(M, []), g = G.nodeGrid(mod, M.ext, 50), ci = clsIdx(M, 'Channel fill') + 1, li = clsIdx(M, 'Lobe sand') + 1;
+  let a = 0, b = 0; for (const c of g.codes) { if (c === ci) a++; if (c === li) b++; }
+  near(a * 2500, 10000 * 400 + Math.PI * 200 * 200, 0.06 * 4e6, 'ribbon area');
+  near(b * 2500, 4e6, 0.06 * 4e6, 'polygon area');
+  assert.ok(arr(g.legend).some(([c, nm]) => c === ci && nm === 'Channel fill'));
+});
+test('mixed zone between two belts: own class “A + B”; wells “A / B” honoured in A, B or the mix', () => {
+  const M = G.makeModel('shelf', { geom: 'linear', az: 90, src: [-5000, 0], span: 6000, ext: { xmin: -5000, xmax: 5000, ymin: -5000, ymax: 5000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 }, mix: [{ k: 1, w: 400 }] });
+  const mi = clsIdx(M, 'Shoreface + Offshore transition');
+  assert.ok(mi > 0 && G.allBelts(M)[mi].kind === 'mix');
+  const mod = G.build(M, []), x = -5000 + mod.t[1];
+  assert.equal(mod.beltAt(x + 60, 0), mi); assert.equal(mod.beltAt(x - 60, 0), mi); assert.equal(mod.beltAt(x + 450, 0), 2); assert.equal(mod.beltAt(x - 450, 0), 1);
+  const W = [{ name: 'A', x: -4000, y: 0, env: 'shoreface' }, { name: 'AB', x: -2800, y: 0, env: 'Shoreface / offshore transition' }, { name: 'C', x: 0, y: 0, env: 'offshore shelf' }];
+  const m2 = G.build(M, W);
+  assert.ok(m2.check.every(c => c.honoured), JSON.stringify(m2.check.map(c => [c.name, c.b, c.belt])));
+  assert.equal(m2.check[1].belt, mi, 'the A / B well sits in the mixed zone');
+  // without a mixed zone the A / B well is honoured in A or B
+  const M0 = Object.assign({}, M, { mix: [] }), m0 = G.build(M0, W);
+  assert.ok(m0.check.every(c => c.honoured)); assert.ok([1, 2].includes(m0.check[1].belt));
+  const P = G.polygons(mod, M.ext, 50); assert.ok(P.some(p => p.code === mi + 1 && p.name === 'Shoreface + Offshore transition'));
+});
+const lithLayer = (o = {}) => Object.assign({ id: 'L1', name: 'test', role: 'lith', on: true, trend: { on: true, dir: 'distal', w: 1, smooth: 0 },
+  grid: (() => { const nx = 21, ny = 21, z = []; for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) z.push(-5000 + j * 500); return { nx, ny, x0: -5000, y0: -5000, dx: 500, dy: 500, z }; })() }, o);
+test('lithology layer as trend: weight 0 = model, 100 % = trend (normalised), direction flips, toggling the layer off restores the model', () => {
+  const M0 = G.makeModel('shelf', { geom: 'linear', az: 90, src: [-5000, 0], span: 8000, ext: { xmin: -5000, xmax: 5000, ymin: -5000, ymax: 5000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 } });
+  const D0 = G.build(M0, []).D, pts = [[-3000, -2000], [0, 0], [2500, 3500], [4000, -4000]];
+  const mk = (w, dir, on = true) => G.build(Object.assign({}, M0, { layers: [lithLayer({ on, trend: { on: true, dir, w, smooth: 0 } })] }), []).D;
+  const Dw0 = mk(0, 'distal'); for (const [x, y] of pts) near(Dw0(x, y), D0(x, y), 1e-6);
+  const D1 = mk(1, 'distal');
+  assert.ok(D1(0, 3000) > D1(0, -3000) + 1000, 'high values distal'); near(D1(-3000, 1000), D1(3000, 1000), 1e-6, 'model direction gone at 100 %');
+  near(D1(0, 4900) - D1(0, -4900), D0(4900, 0) - D0(-4900, 0), 0.06 * 9800, 'trend normalised to the range of d');
+  const Dp = mk(1, 'proximal'); assert.ok(Dp(0, 3000) < Dp(0, -3000) - 1000, 'direction flipped');
+  const Dh = mk(.5, 'distal'); near(Dh(1000, 2000), (D0(1000, 2000) + D1(1000, 2000)) / 2, 1e-6, 'half weight');
+  const Doff = mk(1, 'distal', false); for (const [x, y] of pts) near(Doff(x, y), D0(x, y), 1e-6, 'layer off');
+});
+test('trend grids: ZMAP+, Surfer ASCII and CSV x,y,z read back the same values; bilinear resampling', () => {
+  const nx = 5, ny = 4, z = []; for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) z.push(i * 10 + j);
+  const Gd = { name: 't', nx, ny, x0: 100, y0: 200, dx: 50, dy: 50, codes: z, legend: [] };
+  const a = G.parseGrid(G.zmap(Gd));
+  assert.deepEqual([a.nx, a.ny, a.x0, a.y0, a.dx, a.dy], [nx, ny, 100, 200, 50, 50]); assert.deepEqual(arr(a.z), z);
+  let s = `DSAA\n${nx} ${ny}\n100 300\n200 350\n0 43\n`; for (let j = 0; j < ny; j++) s += z.slice(j * nx, j * nx + nx).join(' ') + '\n';
+  const b = G.parseGrid(s); assert.deepEqual(arr(b.z), z); assert.equal(b.dx, 50);
+  let c = 'x,y,z\n'; for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) c += `${100 + 50 * i},${200 + 50 * j},${z[j * nx + i]}\n`;
+  const cc = G.parseGrid(c); assert.deepEqual(arr(cc.z), z); assert.equal(cc.x0, 100);
+  near(G.sampleGrid(a, 125, 225), (0 + 10 + 1 + 11) / 4, 1e-9);
+  const nul = Object.assign({}, a, { z: arr(a.z).map((v, i) => i === 0 ? null : v) }); assert.ok(isFinite(G.sampleGrid(nul, 110, 205)));
+  assert.ok(Number.isNaN(G.sampleGrid(a, 0, 0)), 'outside: no value');
+});
+test('paint grid (brush) round trip in the model file; pushes d distal where painted', () => {
+  const ex = G.examples.coast, M = JSON.parse(JSON.stringify(ex.M));
+  M.paint = G.paintGrid(M.ext, 64); G.paintStroke(M.paint, 30000, 20000, 6000, 1500);
+  const txt = G.saveModel(M, ex.wells), r = G.openModel(txt);
+  assert.deepEqual(arr(r.errors), []); assert.deepEqual(JSON.parse(JSON.stringify(r.M.paint)), JSON.parse(JSON.stringify(G.normModel(M).paint)));
+  assert.equal(G.saveModel(r.M, r.wells), txt);
+  const a = G.build(ex.M, [], { dist: false }).D, b = G.build(r.M, [], { dist: false }).D;
+  near(b(30000, 20000) - a(30000, 20000), 1500, 40); near(b(5000, 5000), a(5000, 5000), 1e-6);
+});
+test('v1 model file opens (no lines, no layers) and gives the v1 map', () => {
+  const v1 = JSON.stringify({ format: 'gde-model', version: 1, generator: 'GDE map generator', model: { template: 'delta', belts: G.templates.delta.belts.map(b => ({ name: b.name, color: b.color, w: b.w, alias: b.alias })),
+    geom: 'radial', az: 165, src: [12000, 30000], fan: 50, span: 32000, outside: 'strike', protrude: 9000, noise: { amp: 1500, wl: 8000, seed: 7 }, warp: { on: true, R: 4000 }, ext: { xmin: 0, xmax: 40000, ymin: 0, ymax: 30000 }, cell: 100,
+    channels: { on: false, n: 3, w: 530, sin: 1.3, host: [0, 0], name: 'Distributary channel', color: '#e8a33d' } }, wells: G.examples.delta.wells });
+  const r = G.openModel(v1); assert.deepEqual(arr(r.errors), []);
+  assert.equal(r.M.geom, 'radial'); assert.deepEqual(arr(r.M.lines), []); assert.deepEqual(arr(r.M.layers), []);
+  const a = G.build(r.M, r.wells), b = G.build(G.examples.delta.M, G.examples.delta.wells);
+  assert.deepEqual(arr(a.t), arr(b.t)); for (const [x, y] of [[5000, 5000], [20000, 20000], [35000, 10000]]) assert.equal(a.beltAt(x, y), b.beltAt(x, y));
+});
+test('image layer: affine georeferencing from 2, 3 and 4 points; colour bar inverted by CIE Lab; luminance fallback', () => {
+  const a2 = G.affine([[0, 0, 1000, 5000], [200, 100, 3000, 4000]]); near(a2.f([100, 50])[0], 2000, 1e-9); near(a2.f([100, 50])[1], 4500, 1e-9);
+  const P3 = [[0, 0], [100, 0], [0, 100], [100, 100]].map(([u, v]) => { const X = 10 + 2 * u * Math.cos(.3) - 2 * v * Math.sin(.3), Y = 20 - 2 * u * Math.sin(.3) - 2 * v * Math.cos(.3); return [u, v, X, Y]; });
+  const a4 = G.affine(P3), q = a4.inv(...a4.f([37, 61])); near(q[0], 37, 1e-6); near(q[1], 61, 1e-6); near(a4.rms, 0, 1e-6);
+  near(G.affine(P3.slice(0, 3)).f([50, 50])[0], (P3[1][2] + P3[2][2]) / 2, 1e-6);
+  // an image 40 x 10: colours blue -> red from left to right; the colour bar is row 8
+  const w = 40, h = 10, data = new Uint8ClampedArray(w * h * 4), col = t => [Math.round(255 * t), 40, Math.round(255 * (1 - t))];
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const c = col(i / (w - 1)); data.set([c[0], c[1], c[2], 255], 4 * (j * w + i)); }
+  const img = { w, h, data }, lut = G.barLut(img, [0, 8], [39, 8], 0, 100);
+  near(G.imgValue(img, 20, 2, { lut, tol: 10 }), 20 / 39 * 100, 3, 'value from the colour bar');
+  const lum = G.imgValue(img, 39, 2, {}), lum0 = G.imgValue(img, 0, 2, {}); assert.ok(lum > lum0 && lum <= 1 && lum0 >= 0, 'luminance 0..1');
+  const cal = G.affine([[0, 0, 0, 600], [40, 6, 4000, 0]]), g = G.imageGrid(img, cal, { lut, tol: 10 }, { nx: 5, ny: 3, x0: 0, y0: 0, dx: 1000, dy: 300 });
+  assert.ok(g.z.filter(v => v != null && isFinite(v)).length >= 10); near(g.z[2], 2000 / 4000 * 40 / 39 * 100, 6);
+});
+const blobs = () => { const nx = 120, ny = 100, z = new Array(nx * ny).fill(0);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i;
+    if (Math.abs(j - (30 + 8 * Math.sin(i / 9))) < 2.5 && i > 5 && i < 115) z[k] = 1;   // sinuous channel
+    if ((i - 60) ** 2 + (j - 75) ** 2 < 12 ** 2) z[k] = 1;                                // round blob
+    if (Math.abs(i - 100) < 2 && Math.abs(j - 90) < 2) z[k] = 1; }                       // speck
+  return { nx, ny, x0: 0, y0: 0, dx: 10, dy: 10, z }; };
+test('extract bodies: threshold + minimum area + elongation keeps a channel and drops a round blob and a speck', () => {
+  const r = G.extractBodies(blobs(), { mode: 'above', thr: .5, smooth: 0, minArea: 1000, minElong: 3, env: 'Channel fill', color: '#c0602a' });
+  assert.equal(r.bodies.length, 1, JSON.stringify(r.stats)); const b = r.bodies[0];
+  assert.equal(b.env, 'Channel fill'); assert.equal(b.shape, 'poly'); assert.ok(r.dropped >= 2);
+  const r2 = G.extractBodies(blobs(), { mode: 'above', thr: .5, smooth: 0, minArea: 1000, minElong: 0, env: 'Lobe' }); assert.equal(r2.bodies.length, 2);
+  const r3 = G.extractBodies(blobs(), { mode: 'above', pct: 90, smooth: 0, minArea: 100, minElong: 0, env: 'x' }); assert.ok(r3.bodies.length >= 1);
+});
+test('fault extraction: two straight faults in a discontinuity grid recovered as polylines, specks dropped', () => {
+  const nx = 150, ny = 120, z = new Array(nx * ny).fill(.1);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i;
+    if (Math.abs((j - 10) - 0.8 * (i - 20)) < 1.2 && i >= 20 && i <= 110) z[k] = .9;
+    if (Math.abs(i - 130) < 1.1 && j >= 15 && j <= 105) z[k] = .9;
+    if ((i - 60) ** 2 + (j - 100) ** 2 < 4) z[k] = .9; }
+  const F = G.extractFaults({ nx, ny, x0: 0, y0: 0, dx: 10, dy: 10, z }, { mode: 'above', thr: .5, minLen: 300, tol: 15 });
+  assert.equal(F.faults.length, 2, JSON.stringify(F.faults.map(f => f.pts.length)));
+  for (const f of F.faults) { const p = f.pts, a = p[0], b = p[p.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    assert.ok(L > 800, 'long ' + L);
+    for (const q of p) { const dd = Math.abs((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])) / L; assert.ok(dd < 25, 'straight ' + dd); } }
+  const vert = F.faults.find(f => Math.abs(f.pts[0][0] - 1300) < 30); assert.ok(vert, 'the vertical fault at x = 1300');
+});
+test('fault offset: d shifted distal on the downthrown side only, decaying to zero at the tips', () => {
+  const M0 = G.makeModel('lake', { geom: 'linear', az: 90, src: [-10000, 0], span: 16000, ext: { xmin: -10000, xmax: 10000, ymin: -10000, ymax: 10000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 } });
+  const M = Object.assign({}, M0, { faults: [{ pts: [[0, -6000], [0, 6000]], side: 1, off: 2000, taper: 4000 }] });   // heading north: right side = east downthrown
+  const a = G.build(M0, []).D, b = G.build(M, []).D;
+  near(b(300, 0) - a(300, 0), 2000, 60, 'hanging wall, mid fault'); near(b(-300, 0), a(-300, 0), 1e-6, 'footwall unchanged');
+  const tip = b(300, 5800) - a(300, 5800); assert.ok(tip < 300 && tip >= 0, 'decays to the tip ' + tip);
+  near(b(300, 9000), a(300, 9000), 1e-6, 'beyond the tip'); assert.ok(b(300, 3000) - a(300, 3000) > 1000);
+  const Mf = Object.assign({}, M, { faults: [Object.assign({}, M.faults[0], { side: -1 })] }), c = G.build(Mf, []).D;
+  near(c(-300, 0) - a(-300, 0), 2000, 60, 'side flipped');
+});
+test('fault-bounded source: a fan-delta lobe from the border fault into the hanging wall', () => {
+  const M = G.makeModel('lake', { geom: 'lines', ext: { xmin: -15000, xmax: 15000, ymin: -15000, ymax: 15000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 }, span: 16000,
+    lines: [{ name: 'Lake margin', k: 0, pts: [[-12000, -20000], [-12000, 20000]] }],
+    faults: [{ pts: [[12000, -12000], [12000, 12000]], side: -1, off: 0, taper: 3000 }], sources: [{ kind: 'fault', fault: 0, x: 12000, y: 0, az: 270, L: 3000, open: 70, asym: 0 }] });
+  const mod = G.build(M, []), n = M.belts.length;
+  assert.equal(mod.beltAt(11000, 0), 0, 'fan delta in front of the fault source'); assert.equal(mod.beltAt(11000, 9000), n - 1, 'profundal along the fault away from it');
+  assert.equal(mod.beltAt(-13000, 0), 0, 'flexural margin side unchanged');
+});
+test('layer toggling: bodies and faults of a layer switched off leave the map', () => {
+  const ex = G.examples.canyon, M = JSON.parse(JSON.stringify(G.normModel(ex.M)));
+  const lid = M.bodies.find(b => b.layer).layer, on = G.build(M, []), off = G.build(Object.assign({}, M, { layers: M.layers.map(l => l.id === lid ? Object.assign({}, l, { on: false }) : l) }), []);
+  assert.notEqual(G.nodeGrid(on, M.ext, 400).codes.join(), G.nodeGrid(off, M.ext, 400).codes.join());
+  const ri = G.examples.rift, Mr = JSON.parse(JSON.stringify(G.normModel(ri.M))), fl = Mr.faults.find(f => f.layer).layer;
+  const a1 = G.build(Mr, []), a0 = G.build(Object.assign({}, Mr, { layers: Mr.layers.map(l => l.id === fl ? Object.assign({}, l, { on: false }) : l) }), []);
+  assert.notEqual(G.nodeGrid(a1, Mr.ext, 400).codes.join(), G.nodeGrid(a0, Mr.ext, 400).codes.join());
+});
+test('key lines and faults export: IRAP lines and GeoJSON LineString', () => {
+  const ex = G.examples.coast, L = G.lineFeatures(ex.M);
+  assert.ok(L.length >= 2 && L.every(l => l.pts.length >= 10));
+  const ir = G.irapPolylines(L).trim().split('\n'); assert.equal(ir.filter(s => s.startsWith('999')).length, L.length);
+  const gj = JSON.parse(G.geojsonLines(L)); assert.equal(gj.features[0].geometry.type, 'LineString'); assert.ok(gj.features[0].properties.name);
+});
+test('propose a sketch: lines and sources from the wells honour them (delta, shelf, fan)', () => {
+  for (const [key, W] of [['delta', [{ name: 'a', x: 5000, y: 25000, env: 'Delta plain' }, { name: 'b', x: 9000, y: 17000, env: 'Delta front' }, { name: 'c', x: 12000, y: 9000, env: 'Prodelta' }, { name: 'd', x: 30000, y: 8000, env: 'Shelf' }]],
+    ['shelf', [{ name: 'a', x: 4000, y: 20000, env: 'coastal plain' }, { name: 'b', x: 15000, y: 15000, env: 'shoreface' }, { name: 'c', x: 25000, y: 10000, env: 'offshore shelf' }]],
+    ['fan', [{ name: 'a', x: 20000, y: 25000, env: 'channel-levee' }, { name: 'b', x: 18000, y: 15000, env: 'proximal lobes' }, { name: 'c', x: 22000, y: 6000, env: 'lobe fringe' }]]]) {
+    const M = G.makeModel(key, { ext: { xmin: 0, xmax: 40000, ymin: 0, ymax: 32000 }, noise: { amp: 600, wl: 6000, seed: 3 }, warp: { on: false, R: 2000 }, az: 135 });
+    const s = G.proposeSketch(M, W); Object.assign(M, s, { geom: 'lines' });
+    assert.ok(M.lines.length >= 1 && M.lines.every(l => l.pts.length >= 8), key);
+    const mod = G.build(M, W); assert.ok(mod.check.every(c => c.honoured), key + ' ' + JSON.stringify(mod.check.map(c => [c.name, c.b, c.belt])));
+  }
+});
+for (const k of ['coast', 'rimmed', 'canyon', 'rift']) test(`v2 example ${k}: uses key lines, every well honoured without warping`, () => {
+  const ex = G.examples[k]; assert.ok(ex, 'missing ' + k); const M = ex.M;
+  assert.equal(M.geom, 'lines'); assert.ok(M.lines.length >= 1);
+  const mod = G.build(M, ex.wells); for (const c of mod.check) assert.ok(c.honoured, `${c.name}: ${c.env} -> ${G.allBelts(M)[c.belt].name}`);
+  assert.deepEqual(arr(mod.warp.wells), []);
+  if (k === 'coast') { assert.equal(ex.wells.length, 5); assert.equal(M.sources.length, 2); assert.ok(Math.abs(M.sources[0].asym - M.sources[1].asym) >= .4, 'different polarity'); }
+  if (k === 'rimmed') { assert.equal(ex.wells.length, 4); assert.equal(M.bodies.filter(b => b.type === 'pinnacle').length, 3); assert.ok(ex.wells.some(w => /reef core/i.test(w.env))); }
+  if (k === 'canyon') { assert.equal(ex.wells.length, 3); assert.ok(M.layers.some(l => l.role === 'lith' && l.trend.on && l.trend.w > 0)); assert.ok(M.bodies.some(b => b.layer) && M.bodies.some(b => b.shape === 'ribbon')); }
+  if (k === 'rift') { assert.ok(M.faults.length >= 2 && M.faults.some(f => f.layer)); assert.ok(M.sources.some(s => s.kind === 'fault')); assert.ok(M.faults.some(f => f.off > 0)); }
+  const g = G.nodeGrid(mod, M.ext, 600), used = new Set(arr(g.codes)); assert.ok(used.size >= 5, 'classes ' + [...used]);
+  assert.equal(G.scaleHint(M), null);
+});
+
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
