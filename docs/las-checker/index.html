@@ -263,7 +263,81 @@ function checkBatch(lases){
   return out;
 }
 
-W.LAS={parse,check,verdict,checkBatch,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
+const FIXES=[
+  {id:'bom',label:'Remove the byte-order mark',defaultOn:true},
+  {id:'eol',label:'Normalise line endings (CRLF)',defaultOn:true},
+  {id:'tabs',label:'Replace tabs by spaces',defaultOn:true},
+  {id:'syntax',label:'Rewrite malformed header lines as MNEM.UNIT VALUE : DESC',defaultOn:true},
+  {id:'wrap',label:'Unwrap data (WRAP NO, one line per depth)',defaultOn:true},
+  {id:'vers',label:'Write as LAS 2.0 (VERS 2.0, 2.0 ~W layout)',defaultOn:true},
+  {id:'strtstop',label:'Set STRT / STOP to the first / last index',defaultOn:true},
+  {id:'step',label:'Set STEP to the data step (0 if irregular)',defaultOn:true},
+  {id:'nulls',label:'Replace other null markers by the declared NULL (changes values)',defaultOn:false},
+  {id:'emptyrows',label:'Drop all-NULL rows at the top and bottom of the data',defaultOn:true}];
+
+function fmtItem(h){const a=(' '+h.mnem.padEnd(4)+'.'+h.unit).padEnd(16)+' ';return (a+h.value).padEnd(40)+' : '+h.desc}
+
+function write(las,fixIds){
+  const on=new Set(fixIds),log=[],lines=las.lines.slice(),A=las.sections.find(s=>s.tag==='A');
+  const ver=parseFloat(las.ver.VERS),isLas3=ver===3;
+  const setItem=(h,patch,why)=>{const old=h.value;Object.assign(h,patch);lines[h.line-1]=fmtItem(h);if(why)log.push(`Line ${h.line}: ${h.mnem} ${old} → ${h.value} (${why})`)};
+  const item=(list,k)=>list.find(h=>up(h.mnem)===k);
+  if(las.bom&&on.has('bom'))log.push('Removed the byte-order mark.');
+  if(las.crOnly&&on.has('eol'))log.push('Converted CR line endings to CRLF.');
+  // ---- data rows
+  let rows=las.rows.map(r=>({...r,tokens:r.tokens.slice()})),dataChanged=false;
+  if(on.has('nulls')&&las.nullStr){let n=0;
+    for(const r of rows)r.tokens=r.tokens.map((t,j)=>{if(j===0&&!TEXT_NULL.test(t))return t;const v=NUM.test(t)?+t:NaN;
+      if(TEXT_NULL.test(t)||(NUM_NULL.includes(v)&&v!==las.nullVal)){n++;return las.nullStr}return t});
+    if(n){dataChanged=true;log.push(`Replaced ${n} null marker(s) by NULL = ${las.nullStr}.`)}}
+  if(on.has('emptyrows')){const empty=r=>r.ok&&r.tokens.slice(1).every(t=>TEXT_NULL.test(t)||(NUM.test(t)&&+t===las.nullVal));
+    let a=0,b=rows.length;while(a<b&&empty(rows[a]))a++;while(b>a&&empty(rows[b-1]))b--;
+    const k=rows.length-(b-a);if(k&&b>a){rows=rows.slice(a,b);dataChanged=true;log.push(`Dropped ${k} all-NULL row(s) at the top/bottom of the data.`)}}
+  const tabsInA=A&&las.lines.slice(A.start+1,A.end).some(l=>l.includes('\t'));
+  const unwrap=las.wrapped&&on.has('wrap');
+  if(unwrap)log.push('Unwrapped the data: one line per depth step.');
+  if(tabsInA&&on.has('tabs'))dataChanged=true;
+  // ---- header items
+  const wrapItem=item(las.vItems||[],'WRAP'),versItem=item(las.vItems||[],'VERS');
+  if(unwrap&&wrapItem)setItem(wrapItem,{value:'NO',desc:'One line per depth step'});
+  if(on.has('vers')&&!isLas3&&versItem&&(String(versItem.value).trim()!=='2.0'||las.layout12)){
+    if(String(versItem.value).trim()!=='2.0')setItem(versItem,{value:'2.0',desc:'CWLS log ASCII Standard - version 2.0'},'LAS 2.0');
+    if(las.layout12){for(const h of las.well)if(h.from12)setItem(h,{desc:h.mnem==='WELL'?'WELL':h.mnem},null);log.push('Rewrote the ~W text items in the LAS 2.0 layout (value before the colon).')}}
+  const okRows=rows.filter(r=>r.ok&&NUM.test(r.tokens[0])&&+r.tokens[0]!==las.nullVal);
+  if(okRows.length>1){
+    const f=okRows[0].tokens[0],l=okRows[okRows.length-1].tokens[0];
+    const S=item(las.well,'STRT'),T=item(las.well,'STOP'),P=item(las.well,'STEP');
+    const ix=indexInfo({data:okRows.map(r=>[+r.tokens[0]]),nullVal:las.nullVal});
+    const tol=Math.abs(ix.step)*0.01||1e-6,trimmed=log.some(x=>x.startsWith('Dropped'));
+    if((on.has('strtstop')||trimmed)){
+      if(S&&(!NUM.test(S.value)||Math.abs(+S.value-+f)>tol))setItem(S,{value:f},'first index');
+      if(T&&(!NUM.test(T.value)||Math.abs(+T.value-+l)>tol))setItem(T,{value:l},'last index')}
+    if(on.has('step')&&P){const want=ix.regular?+ix.step.toFixed(6):0;
+      if(!NUM.test(P.value)||Math.abs(+P.value-want)>Math.abs(ix.step)*1e-3)setItem(P,{value:fmtN(want)},ix.regular?'data step':'irregular data')}}
+  // ---- syntax and tabs in the other header lines
+  const touched=new Set();
+  for(const list of [las.vItems||[],las.well,las.curves,las.params])for(const h of list){
+    if(on.has('syntax')&&(h.nodot||h.nocolon||(list===las.curves&&!h.unit&&/^[A-Za-z%][\w\/%*.\-]*$/.test(h.value)))){
+      if(list===las.curves&&!h.unit&&/^[A-Za-z%][\w\/%*.\-]*$/.test(h.value)){h.unit=h.value;h.value=''}
+      h.nodot=h.nocolon=false;lines[h.line-1]=fmtItem(h);touched.add(h.line);log.push(`Line ${h.line}: rewrote ${h.mnem} as MNEM.UNIT VALUE : DESC.`)}}
+  if(on.has('tabs')){let n=0;for(let i=0;i<lines.length;i++){if(A&&i>A.start&&i<A.end)continue;if(lines[i].includes('\t')){lines[i]=lines[i].replace(/\t+/g,' ');n++}}
+    if(n||tabsInA)log.push('Replaced tab characters by spaces.')}
+  // ---- assemble
+  let outLines=lines;
+  if(A&&(dataChanged||unwrap)){
+    const wrapOut=las.wrapped&&!unwrap,okR=rows.filter(r=>r.ok);
+    const wid=[];for(const r of okR)r.tokens.forEach((t,j)=>{wid[j]=Math.max(wid[j]||0,t.length)});
+    const fmtRow=r=>{if(!r.ok)return [r.tokens.join(' ')];const t=r.tokens.map((x,j)=>x.padStart(wid[j]));
+      if(!wrapOut)return [t.join(' ')];const o=[r.tokens[0]];let cur='';for(const x of t.slice(1)){if((cur+' '+x).length>79){o.push(cur);cur=''}cur+=' '+x}if(cur)o.push(cur);return o};
+    const items=[...rows.map(r=>[r.line,fmtRow(r)]),...las.aComments.map(n=>[n,[las.lines[n-1]]])].sort((a,b)=>a[0]-b[0]);
+    outLines=[...lines.slice(0,A.start+1),...items.flatMap(x=>x[1]),...lines.slice(A.end)];
+  }
+  let text=outLines.join('\r\n')+'\r\n';
+  if(las.bom&&!on.has('bom'))text='﻿'+text;
+  return {text,log};
+}
+
+W.LAS={parse,check,verdict,checkBatch,FIXES,write,fmtItem,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
 })(window);
 </script>
 </body></html>

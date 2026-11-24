@@ -124,6 +124,64 @@ test('batch: same WELL different UWI, overlapping runs, mixed depth units', () =
   for (const w of ['batch.uwi', 'batch.overlap', 'batch.units']) assert.ok(r.includes(w), `${w}; got ${r.join(', ')}`);
 });
 
+// ---- fixes + writer
+const BROKEN = '﻿' + CLEAN
+  .replace('WRAP.                  NO', 'WRAP.                 YES')
+  .replace('1000.0000 ', '999.0000  ').replace('0.2500', '0.0000')
+  .replace(' COMP.         ACME OIL                : COMPANY', ' COMP.         ACME\tOIL')
+  .replace(/~A[\s\S]*$/, '~A\n1000.00\n 45.2 2.45 0.2100\n 12.5\n1000.25\n -9999 2.44 0.22\n 11.9\n1000.50\n 80.1 2.52 0.30\n 3.2\n1000.75\n -999.25 2.50 0.29\n 3.5\n1001.00\n 52.0 2.46 0.23\n 10.1\n');
+const defaults = () => [...LAS.FIXES].filter(x => x.defaultOn).map(x => x.id);
+
+test('FIXES: ids and defaults', () => {
+  assert.deepEqual([...LAS.FIXES].map(x => x.id), ['bom', 'eol', 'tabs', 'syntax', 'wrap', 'vers', 'strtstop', 'step', 'nulls', 'emptyrows']);
+  assert.equal(LAS.FIXES.find(x => x.id === 'nulls').defaultOn, false);
+});
+test('write with default fixes resolves every fixable finding except nulls; values unchanged', () => {
+  const las = LAS.parse(BROKEN, 'b.las');
+  const before = new Set(rules(LAS.check(las)));
+  for (const r of ['file.bom', 'file.tabs', 'ver.wrapyes', 'well.strtstop', 'well.step', 'hdr.nocolon', 'data.nulls']) assert.ok(before.has(r), 'fixture lacks ' + r);
+  const { text, log } = LAS.write(las, defaults());
+  const las2 = LAS.parse(text, 'b2.las'), after = LAS.check(las2);
+  const fixed = [...after].filter(x => x.fix && x.fix !== 'nulls');
+  assert.deepEqual(fixed.map(x => x.rule), []);
+  assert.ok(rules(after).includes('data.nulls'));
+  assert.equal(las2.ver.WRAP, 'NO');
+  assert.deepEqual(JSON.stringify(las2.data), JSON.stringify(las.data));
+  assert.ok(log.length >= 5, log.join('\n'));
+  assert.ok(text.includes(' 0.2100'), 'number text reformatted');
+  assert.ok(!text.includes('\t') && text.charCodeAt(0) !== 0xFEFF);
+});
+test('write with nulls fix replaces sentinels by the declared NULL', () => {
+  const las = LAS.parse(BROKEN, 'b.las');
+  const { text } = LAS.write(las, [...defaults(), 'nulls']);
+  const las2 = LAS.parse(text, 'b2.las');
+  assert.ok(!rules(LAS.check(las2)).includes('data.nulls'));
+  assert.equal(las2.data[1][1], -999.25);
+  assert.ok(!/-9999\b/.test(text.split('~A')[1]));
+});
+test('write without fixes keeps the file content (modulo line endings)', () => {
+  const t = CLEAN;
+  const { text, log } = LAS.write(LAS.parse(t, 'c.las'), []);
+  assert.equal(text.replace(/\r\n/g, '\n'), t);
+  assert.equal(log.length, 0);
+});
+test('emptyrows trims leading/trailing all-null rows and STRT follows', () => {
+  const t = withData('999.75 -999.25 -999.25 -999.25 -999.25\n1000.00 45 2.4 0.2 1\n1000.25 46 2.4 0.2 1\n1000.50 47 2.4 0.2 1\n1000.75 -999.25 -999.25 -999.25 -999.25\n1001.00 -999.25 -999.25 -999.25 -999.25\n').replace('1000.0000 ', '999.7500  ');
+  const { text } = LAS.write(LAS.parse(t, 'e.las'), defaults());
+  const las2 = LAS.parse(text, 'e2.las');
+  assert.equal(las2.data.length, 3);
+  assert.equal(+las2.well.find(h => h.mnem === 'STRT').value, 1000);
+  assert.equal(+las2.well.find(h => h.mnem === 'STOP').value, 1000.5);
+});
+test('1.2 layout rewritten as 2.0 with vers fix', () => {
+  const t = CLEAN.replace(' 2.0 : CWLS', ' 1.2 : CWLS').replace(' COMP.         ACME OIL                : COMPANY', ' COMP.  : ACME OIL').replace(' WELL.         ACME-1                  : WELL', ' WELL.  : ACME-1').replace(' FLD .         NORTH FIELD             : FIELD', ' FLD .  : NORTH FIELD');
+  const { text } = LAS.write(LAS.parse(t, 'o.las'), defaults());
+  const las2 = LAS.parse(text, 'o2.las');
+  assert.equal(las2.ver.VERS, '2.0');
+  assert.equal(las2.layout12, false);
+  assert.equal(las2.well.find(h => h.mnem === 'WELL').value, 'ACME-1');
+});
+
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
