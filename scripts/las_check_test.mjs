@@ -116,6 +116,11 @@ test('plaus: spike', () => { const rows = []; for (let i = 0; i < 60; i++) rows.
 test('LAS 3.0 detected as info', () => { const { f } = run(CLEAN.replace(' 2.0 : CWLS', ' 3.0 : CWLS')); assert.ok(f.some(x => x.rule === 'ver.las3' && x.sev === 'I')); });
 test('verdict: fail / warn', () => { assert.equal(LAS.verdict(run(withData('1000 x\n')).f), 'fail'); assert.equal(LAS.verdict(run(CLEAN.replace(/ COMP\..*\n/, '')).f), 'warn'); });
 
+test('a truncated row does not make the step irregular', () => {
+  const { f } = run(withData('1000.00 45 2.4 0.2 1\n1000.25 46 2.4 0.2\n1000.50 47 2.4 0.2 1\n1000.75 47 2.4 0.2 1\n1001.00 47 2.4 0.2 1\n'));
+  assert.ok(!rules(f).includes('well.step'), rules(f).join(', '));
+});
+
 // ---- batch
 test('batch: same WELL different UWI, overlapping runs, mixed depth units', () => {
   const a = LAS.parse(CLEAN, 'a.las'), b = LAS.parse(CLEAN.replace('NO-1234', 'NO-9999'), 'b.las');

@@ -2,6 +2,129 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>LAS checker</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/las-checker/">
+<meta name="description" content="QC of LAS 1.2 / 2.0 well log files before loading: structure, header syntax, mandatory items, data rows, null markers, plausibility, batch consistency, with a corrected file. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head><body>
 <script id="las-core">
 /* LAS checker core: parse / check / write. No DOM access; exposed as window.LAS. */
@@ -93,7 +216,8 @@ const fmtN=v=>String(+(+v).toPrecision(10));
 
 // index statistics shared by check() and write()
 function indexInfo(las){
-  const idx=las.data.map(r=>r[0]).filter(v=>!isNull(las,v));
+  // every row whose index token is a number, even if the rest of the row is bad: a truncated row must not leave a gap
+  const idx=(las.rows?las.rows.filter(r=>NUM.test(r.tokens[0])).map(r=>+r.tokens[0]):las.data.map(r=>r[0])).filter(v=>!isNull(las,v));
   const d=[];for(let i=1;i<idx.length;i++)d.push(idx[i]-idx[i-1]);
   const md=median(d),tol=Math.abs(md)*1e-3||1e-6;
   const regular=d.length>0&&d.every(x=>Math.abs(x-md)<=tol);
@@ -303,7 +427,7 @@ function write(las,fixIds){
   if(on.has('vers')&&!isLas3&&versItem&&(String(versItem.value).trim()!=='2.0'||las.layout12)){
     if(String(versItem.value).trim()!=='2.0')setItem(versItem,{value:'2.0',desc:'CWLS log ASCII Standard - version 2.0'},'LAS 2.0');
     if(las.layout12){for(const h of las.well)if(h.from12)setItem(h,{desc:h.mnem==='WELL'?'WELL':h.mnem},null);log.push('Rewrote the ~W text items in the LAS 2.0 layout (value before the colon).')}}
-  const okRows=rows.filter(r=>r.ok&&NUM.test(r.tokens[0])&&+r.tokens[0]!==las.nullVal);
+  const okRows=rows.filter(r=>NUM.test(r.tokens[0])&&+r.tokens[0]!==las.nullVal);
   if(okRows.length>1){
     const f=okRows[0].tokens[0],l=okRows[okRows.length-1].tokens[0];
     const S=item(las.well,'STRT'),T=item(las.well,'STOP'),P=item(las.well,'STEP');
@@ -339,5 +463,296 @@ function write(las,fixIds){
 
 W.LAS={parse,check,verdict,checkBatch,FIXES,write,fmtItem,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
 })(window);
+</script>
+<style>
+.side .drop{position:static;display:block;border:2px dashed var(--line);border-radius:8px;padding:14px 10px;text-align:center;color:var(--mut);font-size:.82rem;pointer-events:auto}
+body.dragging .side .drop{border-color:var(--acc);background:rgba(74,90,78,.08)}
+.fx{display:flex;gap:6px;align-items:flex-start;font-size:.8rem;margin:4px 0}.fx input{margin-top:3px}.fx small{color:var(--mut);margin-left:auto;white-space:nowrap}
+.chip.fail{background:#a8623a;color:#f5f3ed}.chip.pass{background:#4a5a4e;color:#f5f3ed}
+.sev{display:inline-block;width:18px;text-align:center;border-radius:3px;font-weight:700;font-size:.72rem;color:#f5f3ed}
+.sev.E{background:#a8623a}.sev.W{background:#c2924a}.sev.I{background:#8c8a80}
+#tF td,#tF th,#tH td,#tH th{text-align:left;vertical-align:top}
+#tF td.n,#tS td.n,#tS th.n{text-align:right}
+#tS td,#tS th{text-align:left}
+#tS tr.sel{background:rgba(74,90,78,.16)}
+.flt{display:flex;gap:4px;margin-left:auto}.flt button{padding:.05rem .45rem;font-size:.72rem}
+.log{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;max-height:220px;overflow:auto;margin:0}
+.batch{margin:0 0 10px;padding:0;list-style:none}.batch li{background:var(--card);border:1px solid var(--line);border-left:4px solid #c2924a;border-radius:6px;padding:5px 10px;margin:4px 0;font-size:.8rem}
+.cv2{height:460px!important}
+main{min-width:0}#tF td:last-child{white-space:nowrap}
+.hdrtabs{display:flex;gap:4px;margin-left:auto}.hdrtabs button{padding:.05rem .45rem;font-size:.72rem}
+@media (max-width:700px){.cards{grid-template-columns:1fr}.card canvas.cv2{height:380px!important}}
+</style>
+<div class="top"><h1>LAS checker</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button class="pri" id="bLas" disabled title="Selected file with the ticked fixes applied (LAS 2.0, CRLF)">Corrected LAS</button>
+  <button id="bAll" disabled title="One corrected file per loaded file">All corrected</button>
+  <button id="bCsv" disabled title="Every finding of every file, one line each">Report CSV</button><span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the files are read in memory and never uploaded. Each file is checked against the LAS 1.2 / 2.0 conventions (sections, ~V, header line syntax, mandatory ~W items, curves, data rows) and a few plausibility rules. E = error (import fails or data is wrong), W = warning (non-conforming, imports with risk), I = information. Mechanical problems can be fixed in the downloaded copy; values are never changed unless you tick the null-marker fix.">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Files<i class="chev"></i></h2>
+  <div class="body"><div class="drop">Drop one or several <b style="font-size:.9rem">.las</b> files here<br>or anywhere on the page</div>
+  <input type="file" id="file" accept=".las,.LAS,.txt,text/*" multiple hidden>
+  <div class="row"><button class="pri" id="bOpen">Open files…</button><button id="bExample">Example</button><button id="bClear">Clear</button></div>
+  <div class="msg" id="dataMsg">No file yet.</div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Fixes for the download<span class="tt" tabindex="0" data-tip="Applied only to the downloaded copy; the loaded file is untouched. The number on the right is how many findings of the selected file each fix resolves. The change log below lists every modification.">?</span><i class="chev"></i></h2>
+  <div class="body"><div id="fixes"></div>
+  <div class="note">Interpretive issues (units, plausibility, spikes, duplicate runs) are reported, never fixed.</div></div></section>
+</aside>
+<main>
+ <div class="sum" id="sum"></div>
+ <ul class="batch" id="batch"></ul>
+ <div class="card" style="background:var(--card)"><h3>Files</h3><div class="tw" id="tS"><div class="empty">Open or drop LAS files, or load the example.</div></div></div>
+ <div class="card" style="margin-top:12px;background:var(--card)"><h3 id="fT">Findings<span class="flt" id="flt"><button class="on" data-s="">All</button><button data-s="E">E</button><button data-s="W">W</button><button data-s="I">I</button></span></h3><div class="tw tall" id="tF"></div></div>
+ <div class="cards" style="margin-top:12px">
+  <div class="card"><h3>Curve<span class="sp"></span><select id="cSel"></select><button data-png="cv">PNG</button></h3><canvas id="cv" class="cv2"></canvas></div>
+  <div class="card" style="background:var(--card)"><h3>Header<span class="hdrtabs" id="hT"><button class="on" data-t="W">~W</button><button data-t="C">~C</button><button data-t="P">~P</button><button data-t="V">~V</button></span></h3><div class="tw" id="tH" style="max-height:440px"></div></div>
+ </div>
+ <div class="card" style="margin-top:12px;background:var(--card)"><h3>Change log of the corrected file</h3><pre class="log" id="log">–</pre></div>
+</main></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+// Encode back in the file's own encoding: UTF-8, or windows-1252 when the file was not valid UTF-8.
+const CP1252=(()=>{const d=new TextDecoder('windows-1252'),m=new Map();for(let b=0;b<256;b++)m.set(d.decode(new Uint8Array([b])),b);return m})();
+function encode(text,enc){if(enc!=='windows-1252')return new TextEncoder().encode(text);const o=new Uint8Array(text.length);for(let i=0;i<text.length;i++){const b=CP1252.get(text[i]);o[i]=b==null?63:b}return o}
+function download(name,data,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+
+const S={files:[],sel:-1,sev:'',hdr:'W',fixes:new Set(LAS.FIXES.filter(f=>f.defaultOn).map(f=>f.id)),batch:[]};
+function addText(name,text,enc){
+  let las,f;try{las=LAS.parse(text,name);f=LAS.check(las)}catch(e){las={name,sections:[],curves:[],data:[],rows:[],well:[],params:[],ver:{},lines:[]};f=[{sev:'E',rule:'file.read',line:null,msg:'Could not be read: '+e.message,fix:null}]}
+  S.files.push({name,las,f,enc,v:LAS.verdict(f)})}
+async function readFiles(list){
+  const fs=[...list];if(!fs.length)return;$('dataMsg').textContent=`Reading ${fs.length} file(s)…`;
+  for(const file of fs){try{const buf=await file.arrayBuffer();let text,enc='utf-8';
+      try{text=new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){text=new TextDecoder('windows-1252').decode(buf);enc='windows-1252'}
+      addText(file.name,text,enc)}catch(e){banner(`${file.name}: ${e.message}`,true)}}
+  if(S.sel<0)S.sel=0;refresh()}
+$('bOpen').onclick=()=>$('file').click();$('file').onchange=e=>{readFiles(e.target.files);e.target.value=''};
+$('bClear').onclick=()=>{S.files=[];S.sel=-1;refresh()};
+addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('dragging')});
+addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging')});
+addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('dragging');readFiles(e.dataTransfer.files)});
+
+// ---- fixes panel
+function drawFixes(){const fl=cur()?cur().f:[];
+  $('fixes').innerHTML=LAS.FIXES.map(x=>{const n=fl.filter(f=>f.fix===x.id).length;
+    return `<label class="fx"><input type="checkbox" data-id="${x.id}" ${S.fixes.has(x.id)?'checked':''}><span>${esc(x.label)}</span><small>${n?n+' finding'+(n>1?'s':''):''}</small></label>`}).join('');
+  $('fixes').querySelectorAll('input').forEach(i=>i.onchange=()=>{i.checked?S.fixes.add(i.dataset.id):S.fixes.delete(i.dataset.id);drawLog();drawFindings()})}
+const cur=()=>S.files[S.sel];
+
+function refresh(){
+  S.batch=S.files.length>1?LAS.checkBatch(S.files.map(x=>x.las)):[];
+  const n=S.files.length,c=k=>S.files.filter(x=>x.v===k).length;
+  $('sum').innerHTML=n?`<div><b>${n}</b>file${n>1?'s':''}</div><div><b>${c('pass')}</b>conform</div><div><b>${c('warn')}</b>with warnings</div><div><b>${c('fail')}</b>with errors</div>`:'';
+  $('batch').innerHTML=S.batch.map(b=>`<li><span class="sev ${b.sev}">${b.sev}</span> <b>${esc(b.rule)}</b> — ${esc(b.msg)}</li>`).join('');
+  $('dataMsg').textContent=n?`${n} file(s) loaded. Click a row to see its findings.`:'No file yet.';
+  ['bLas','bAll','bCsv'].forEach(id=>$(id).disabled=!n);$('bAll').style.display=n>1?'':'none';
+  drawSummary();drawFixes();drawFindings();drawHeader();fillCurves();drawLog()}
+const vchip=v=>`<span class="chip ${v}">${v==='pass'?'conform':v==='warn'?'warnings':'errors'}</span>`;
+function drawSummary(){
+  if(!S.files.length){$('tS').innerHTML='<div class="empty">Open or drop LAS files, or load the example.</div>';return}
+  const cnt=(f,s)=>f.filter(x=>x.sev===s).length;
+  $('tS').innerHTML='<table><thead><tr><th>File</th><th>VERS</th><th>Well</th><th class="n">Curves</th><th class="n">Rows</th><th>Index range</th><th class="n">E</th><th class="n">W</th><th class="n">I</th><th>Verdict</th></tr></thead><tbody>'+
+    S.files.map((x,i)=>{const l=x.las,w=(l.well||[]).find(h=>h.mnem.toUpperCase()==='WELL'),ix=l.ix||{},u=l.curves&&l.curves[0]?l.curves[0].unit:'';
+      return `<tr data-i="${i}" class="${i===S.sel?'sel':''}"><td>${esc(x.name)}</td><td>${esc(l.ver&&l.ver.VERS||'–')}</td><td>${esc(w?w.value:'–')}</td><td class="n">${(l.curves||[]).length}</td><td class="n">${(l.data||[]).length}</td><td>${isFinite(ix.first)?`${LAS.fmtN(ix.first)} – ${LAS.fmtN(ix.last)} ${esc(u)}`:'–'}</td><td class="n">${cnt(x.f,'E')||''}</td><td class="n">${cnt(x.f,'W')||''}</td><td class="n">${cnt(x.f,'I')||''}</td><td>${vchip(x.v)}</td></tr>`}).join('')+'</tbody></table>';
+  $('tS').querySelectorAll('tbody tr').forEach(r=>r.onclick=()=>{S.sel=+r.dataset.i;drawSummary();drawFixes();drawFindings();drawHeader();fillCurves();drawLog()})}
+$('flt').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.sev=b.dataset.s;$('flt').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));drawFindings()});
+function drawFindings(){const x=cur();$('fT').firstChild.textContent=x?`Findings — ${x.name} `:'Findings ';
+  if(!x){$('tF').innerHTML='';return}
+  const rank={E:0,W:1,I:2},f=x.f.filter(y=>!S.sev||y.sev===S.sev).sort((a,b)=>rank[a.sev]-rank[b.sev]||(a.line||0)-(b.line||0));
+  if(!x.f.length){$('tF').innerHTML='<div class="empty">No finding: the file follows the LAS conventions checked here.</div>';return}
+  $('tF').innerHTML='<table><thead><tr><th>Sev.</th><th class="n">Line</th><th>Rule</th><th>Message</th><th>Fix</th></tr></thead><tbody>'+
+    f.map(y=>`<tr><td><span class="sev ${y.sev}">${y.sev}</span></td><td class="n">${y.line||''}</td><td>${esc(y.rule)}</td><td>${esc(y.msg)}</td><td>${y.fix?(S.fixes.has(y.fix)?'✔ '+esc(y.fix):'<span style="color:var(--mut)">'+esc(y.fix)+' (off)</span>'):''}</td></tr>`).join('')+'</tbody></table>'}
+$('hT').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.hdr=b.dataset.t;$('hT').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));drawHeader()});
+function drawHeader(){const x=cur();if(!x){$('tH').innerHTML='';return}const l=x.las;
+  const list={W:l.well,C:l.curves,P:l.params,V:l.vItems}[S.hdr]||[];
+  $('tH').innerHTML=list.length?'<table><thead><tr><th class="n">Line</th><th>Mnem</th><th>Unit</th><th>Value</th><th>Description</th></tr></thead><tbody>'+list.map(h=>`<tr><td class="n">${h.line}</td><td>${esc(h.mnem)}</td><td>${esc(h.unit)}</td><td>${esc(h.value)}</td><td>${esc(h.desc)}</td></tr>`).join('')+'</tbody></table>':'<div class="empty">Section empty or missing.</div>'}
+function drawLog(){const x=cur();if(!x||!x.las.sections.length){$('log').textContent='–';return}
+  const {log}=LAS.write(x.las,[...S.fixes]);$('log').textContent=log.length?log.join('\n'):'No change: the corrected file would be identical (apart from CRLF line endings).'}
+
+// ---- curve plot (index downwards; min/max per pixel row for long files)
+function fillCurves(){const x=cur(),s=$('cSel');const c=x?x.las.curves.slice(1):[];const prev=s.value;
+  s.innerHTML=c.map((h,i)=>`<option value="${i+1}">${esc(h.mnem)}${h.unit?' ('+esc(h.unit)+')':''}</option>`).join('');
+  if([...s.options].some(o=>o.value===prev))s.value=prev;plot()}
+$('cSel').onchange=plot;addEventListener('resize',plot);
+function plot(){const cv=$('cv'),r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;cv.width=Math.max(10,r.width*dpr);cv.height=Math.max(10,r.height*dpr);
+  const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);const Wd=r.width,H=r.height;g.fillStyle='#fff';g.fillRect(0,0,Wd,H);
+  const x=cur(),j=+$('cSel').value;g.fillStyle='#5c5a52';g.font='12px Inter,system-ui,sans-serif';
+  if(!x||!j||!x.las.data.length){g.fillText('No curve to show.',16,24);return}
+  const l=x.las,nul=y=>LAS.isNull(l,y)||LAS.NUM_NULL.includes(y);  // other null markers are not drawn either
+  const pts=l.data.map(rw=>[rw[0],rw[j]]).filter(p=>!LAS.isNull(l,p[0]));
+  const v=pts.map(p=>p[1]).filter(y=>!nul(y));if(!v.length){g.fillText('Curve entirely NULL.',16,24);return}
+  const c=l.curves[j],logx=/^(RT|RD|ILD|ILM|LLD|LLS|MSFL|SFLU|SFL|RILD|RILM|AT\d0|RXO|RS|RM|RES.*)$/i.test(c.mnem)&&Math.min(...v)>0;
+  const tx=logx?Math.log10:(y=>y);let lo=Math.min(...v.map(tx)),hi=Math.max(...v.map(tx));if(lo===hi){lo-=1;hi+=1}
+  const zs=pts.map(p=>p[0]),z0=Math.min(...zs),z1=Math.max(...zs)||z0+1;
+  const L=54,R=12,T=26,B=14,X=y=>L+(tx(y)-lo)/(hi-lo)*(Wd-L-R),Y=z=>T+(z-z0)/((z1-z0)||1)*(H-T-B);
+  g.strokeStyle='#e2ded3';g.lineWidth=1;g.textAlign='right';
+  for(let k=0;k<=6;k++){const z=z0+(z1-z0)*k/6,y=Y(z);g.beginPath();g.moveTo(L,y);g.lineTo(Wd-R,y);g.stroke();g.fillText(LAS.fmtN(+z.toPrecision(5)),L-4,y+4)}
+  g.textAlign='left';g.fillText(`${c.mnem}${c.unit?' ('+c.unit+')':''}${logx?' — log scale':''}`,L,14);g.textAlign='right';
+  g.fillText((logx?'1e'+lo.toFixed(1):LAS.fmtN(+lo.toPrecision(4)))+' … '+(logx?'1e'+hi.toFixed(1):LAS.fmtN(+hi.toPrecision(4))),Wd-R,14);
+  g.strokeStyle='#4a5a4e';g.lineWidth=1.2;
+  const px=Math.max(1,Math.floor(pts.length/(H-T-B)));
+  g.beginPath();let pen=false;
+  for(let i=0;i<pts.length;i+=px){let mn=Infinity,mx=-Infinity,ok=false;for(let k=i;k<Math.min(i+px,pts.length);k++){const y=pts[k][1];if(nul(y)||(logx&&y<=0))continue;ok=true;if(y<mn)mn=y;if(y>mx)mx=y}
+    if(!ok){pen=false;continue}const yy=Y(pts[i][0]);if(!pen){g.moveTo(X(mn),yy);pen=true}else g.lineTo(X(mn),yy);if(mx!==mn)g.lineTo(X(mx),yy)}
+  g.stroke()}
+document.querySelectorAll('[data-png]').forEach(b=>b.onclick=()=>{const c=$(b.dataset.png);c.toBlob(bl=>download((cur()?cur().name.replace(/\.\w+$/,''):'curve')+'_'+$('cSel').selectedOptions[0].text.split(' ')[0]+'.png',bl,'image/png'))});
+
+// ---- exports
+const fixedName=n=>n.replace(/(\.\w+)?$/,'_checked.las');
+function exportOne(x){if(!x.las.sections.length){banner(`${x.name}: not a LAS file, nothing to write.`,true);return false}
+  const {text}=LAS.write(x.las,[...S.fixes]);download(fixedName(x.name),encode(text,x.enc),'text/plain');return true}
+$('bLas').onclick=()=>{const x=cur();if(x&&exportOne(x))$('exportMsg').textContent='Saved '+fixedName(x.name)};
+$('bAll').onclick=async()=>{let n=0;for(const x of S.files){if(exportOne(x))n++;await new Promise(r=>setTimeout(r,350))}$('exportMsg').textContent=`Saved ${n} file(s)`};
+$('bCsv').onclick=()=>{const q=s=>{s=String(s==null?'':s);return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=['file,severity,line,rule,message,fix,fixed_in_download'];
+  for(const x of S.files)for(const f of x.f)L.push([x.name,f.sev,f.line||'',f.rule,f.msg,f.fix||'',f.fix&&S.fixes.has(f.fix)?'yes':''].map(q).join(','));
+  for(const b of S.batch)L.push([b.file,b.sev,'',b.rule,b.msg,'',''].map(q).join(','));
+  download('las_check_report.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved las_check_report.csv'};
+
+// ---- example: two synthetic files of the same well (main log with deliberate defects, overlapping repeat)
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function synth(z0,n,seed,opt){const r=rng(seed),rows=[];
+  for(let i=0;i<n;i++){const z=z0+i*0.1524,sh=0.5+0.5*Math.sin(z/7)+(r()-0.5)*0.3,s=Math.max(0,Math.min(1,sh));
+    let gr=25+110*s+(r()-0.5)*8,rhob=2.62-0.25*(1-s)*0.8+(r()-0.5)*0.03,nphi=0.08+0.25*s+(r()-0.5)*0.02,dt=70+40*s+(r()-0.5)*3,rt=Math.pow(10,1.4-1.2*s+(r()-0.5)*0.2);
+    if(opt.pct)nphi*=100;rows.push([z,gr,rhob,nphi,dt,rt])}
+  return rows}
+function lasText(o){const f=(v,d)=>v.toFixed(d).padStart(11);
+  const rows=o.rows.map(rw=>f(rw[0],4)+f(rw[1],3)+f(rw[2],4)+f(rw[3],4)+f(rw[4],3)+f(rw[5],4));
+  return `~Version Information
+ VERS.                  2.0 : CWLS LOG ASCII STANDARD - VERSION 2.0
+ WRAP.                   NO : ONE LINE PER DEPTH STEP
+~Well Information
+ STRT.M           ${o.strt} : START DEPTH
+ STOP.M           ${o.stop} : STOP DEPTH
+ STEP.M           ${o.step} : STEP
+ NULL.            -999.2500 : NULL VALUE
+ COMP.            EXAMPLE OPERATOR : COMPANY
+ WELL.            EX-1 : WELL
+ FLD .            SYNTHETIC FIELD : FIELD
+ LOC .            BLOCK 1 : LOCATION
+ CTRY.            NOWHERE : COUNTRY
+ SRVC.            ${o.srvc} : SERVICE COMPANY
+ DATE.            2025-03-14 : LOG DATE
+ UWI .            ${o.uwi} : UNIQUE WELL ID
+ X   .M           500000.0 : SURFACE X
+ Y   .M           6500000.0 : SURFACE Y
+ EKB .M           24.5 : KB ELEVATION
+~Curve Information
+ DEPT.M                     : MEASURED DEPTH
+ GR  .GAPI                  : GAMMA RAY
+ RHOB.G/C3                  : BULK DENSITY
+ NPHI.V/V                   : NEUTRON POROSITY
+ DT  .US/F                  : SONIC
+ RT  .OHMM                  : DEEP RESISTIVITY
+~Parameter Information
+ BHT .DEGC        86.0 : BOTTOM HOLE TEMPERATURE${o.extra||''}
+~A  DEPT        GR      RHOB      NPHI        DT        RT
+${rows.join('\n')}
+`}
+$('bExample').onclick=()=>{
+  const a=synth(1500,400,3,{pct:true});
+  a[0].fill(-999.25,1);a[1].fill(-999.25,1);                    // all-NULL rows at the top
+  a[120][1]=-9999;a[121][1]=-9999;a[200][5]=-9999;              // other null marker
+  a[260][1]=950;                                                 // spike
+  let t1=lasText({rows:a,strt:'1500.0000',stop:'1561.0000',step:'0.1500',srvc:'LOGCO',uwi:'EX-0001',extra:'\n MUDW.G/C3      1.18\n RMF .OHMM      0.08 : MUD FILTRATE RESISTIVITY'});
+  t1=t1.replace(' SRVC.            LOGCO','\tSRVC.            LOGCO');   // tab
+  const lines=t1.split('\n'),k=lines.findIndex(l=>l.startsWith('~A'))+300;lines[k]=lines[k].replace(/\s+\S+$/,'');t1=lines.join('\n');  // truncated row
+  const b=synth(1540,140,9,{});
+  const t2=lasText({rows:b,strt:(1540).toFixed(4),stop:(1540+139*0.1524).toFixed(4),step:'0.1524',srvc:'LOGCO',uwi:'EX-0002'});
+  S.files=[];S.sel=0;addText('EX-1_main.las',t1,'utf-8');addText('EX-1_repeat.las',t2,'utf-8');refresh();
+  banner('Example: two synthetic files of the same well, the first with deliberate defects.')};
+
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+refresh();
+if(location.hash==='#example')$('bExample').click();  // shareable link to the example
+window.DG={S,refresh,addText};
+</script>
+
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Digitization',[['Plot digitizer','digitizer'],['Map digitizer','mapdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what": "Runs entirely in your browser: the files are read in memory and never uploaded. Quality control of transmitted LAS well log files before loading them in an interpretation package: a file that follows the LAS conventions passes with nothing to do; otherwise every problem is listed with its line, and the mechanical ones can be fixed in a downloaded copy.", "method": ["Parsing: sections start with “~”; header lines are split as MNEM.UNIT VALUE : DESCRIPTION — the mnemonic ends at the first dot, the unit at the first space after it, the description starts at the first colon preceded by a space (so hh:mm units and 23:15 values survive), otherwise at the last colon. LAS 1.2 ~W layout (value after the colon) is detected.", "Data: whitespace-separated values; wrapped files (WRAP YES) are read record by record (index alone on its line, then values until the curve count is reached).", "Checks, by severity: E = import fails or data is wrong (missing sections, unreadable lines, STRT/STOP/STEP/NULL missing, empty WELL, curve count ≠ data columns, truncated rows, non-numeric or glued values, index not monotonic); W = non-conforming, imports with risk (BOM, tabs, non-ASCII, missing dot or colon, duplicate mnemonics, STRT/STOP/STEP inconsistent with the data, unit mismatch, wrapped data, comments in ~A, other null markers); I = worth a look (no coordinates or KB, LAS 3.0, implausible ranges, spikes, all-NULL or constant curves).", "Plausibility ranges (report only): GR 0–1000 GAPI; RHOB 1.0–3.2 g/cm³; NPHI −0.15–1 V/V or −15–100 %; DT 40–200 µs/ft or 130–650 µs/m; caliper 0–40; resistivity > 0. Spike: isolated jump of more than 10 robust σ (MAD) of the sample-to-sample change, on curves of ≥ 20 samples.", "Batch (several files): same WELL with different UWI or the reverse, overlapping depth ranges on the same curve for one well (duplicate runs), mixed depth units, same mnemonic with different units.", "Fixes, applied to the downloaded copy only: byte-order mark, line endings, tabs, malformed header lines, unwrap, LAS 2.0 version and ~W layout, STRT/STOP from the first/last index, STEP from the data (0 if irregular), all-NULL rows at the top/bottom. Replacing other null markers by the declared NULL changes values and is off by default. Number text is copied as is, never reformatted."], "sources": [["LAS 2.0 structure: ~V first, ~W, ~C, ~A last; ~P, ~O optional; numeric data; space separators", "Kansas Geological Survey, LAS 2.0/3.0 reader help (kgs.ku.edu)", "published"], ["Header line syntax, colons in values, dotted units, missing dot, duplicate mnemonics", "lasio documentation, header section (lasio.readthedocs.io)", "published"], ["Glued (run-on) values, other null markers seen in practice, non-numeric tokens", "lasio documentation, data section", "published"], ["Importer behaviour: wrapped files rejected, WELL falls back to file name, X/Y and KB mnemonics", "VRGS LAS well log import guide (docs.vrgeoscience.com)", "published"], ["LAS 2.0 standard itself (mandatory ~W items, wrap line length of 80 characters)", "Canadian Well Logging Society, LAS 2.0 (cwls.org); the PDF was not read", "memory"], ["Plausibility ranges, spike rule, batch checks", "Standard log QC practice; thresholds are the author's", "memory"]], "validation": ["Self-check script (scripts/las_check_test.mjs): one clean LAS 2.0 file with no error or warning, one broken variant per rule, wrapped reading, and round trips of the writer (each fix resolves its findings; values unchanged unless the null fix is ticked; no fix = identical file)."], "limits": ["LAS 3.0: version detected, typed sections and Definition/Data pairs not validated.", "Units and mnemonics are not checked against a dictionary; plausibility ranges cover only the common curves.", "Encoding: UTF-8, otherwise read as Windows-1252 and written back the same way.", "Corrected files are written unwrapped LAS 2.0 with CRLF line endings; ~O and comments are copied as they are."], "date": "24 November 2026"});
 </script>
 </body></html>
