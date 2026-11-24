@@ -101,7 +101,169 @@ function indexInfo(las){
   return {idx,d,step:md,regular,jitter,first:idx[0],last:idx[idx.length-1]};
 }
 
-W.LAS={parse,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
+const lineList=a=>a.slice(0,5).join(', ')+(a.length>5?` … (${a.length} in all)`:'');
+const DEPTH_UNITS=/^(M|FT|F|FEET|METERS?|METRES?)$/i,TIME_UNITS=/^(S|MS|MIN|H|HR|SEC|US)$/i;
+const normDU=u=>/^(F|FT|FEET)$/i.test(u)?'FT':/^(M|METERS?|METRES?)$/i.test(u)?'M':up(u);
+const KNOWN_SEC=new Set(['V','W','C','P','O','A']);
+// plausibility: [mnemonic regex, test(unit) -> [lo, hi] or null, label]
+const RANGES=[
+  [/^(GR|SGR|CGR|GRC|GR_EDTC|HSGR|HCGR)$/i,u=>[0,1000],'gamma ray'],
+  [/^(RHOB|RHOZ|DEN|ZDEN|RHO8)$/i,u=>/K\/?M3|KG/i.test(u)?[1000,3200]:[1.0,3.2],'bulk density'],
+  [/^(NPHI|TNPH|NPOR|CNC|NPHS|NPHE|CN|NEUT|APLC)$/i,u=>/%|PU/i.test(u)?[-15,100]:[-0.15,1],'neutron porosity'],
+  [/^(DT|DTC|DTCO|AC|DT4P|DTP)$/i,u=>/M/i.test(u)&&!/F/i.test(u)?[130,650]:[40,200],'sonic'],
+  [/^(CALI|CAL|HCAL|C1|C2|CALS)$/i,u=>[0,40],'caliper'],
+  [/^(RT|RD|ILD|ILM|LLD|LLS|MSFL|SFLU|SFL|RILD|RILM|AT90|AT60|AT30|AT10|RXO|RS|RM|RES.*)$/i,u=>[1e-9,1e6],'resistivity']];
+
+function check(las){
+  const out=[...las.findings];const P=(...a)=>out.push(F(...a));
+  if(!las.sections.length){const csv=las.lines.slice(0,5).some(l=>(l.match(/,/g)||[]).length>=2);
+    P('E','file.notlas',null,'No “~” section found: this is not a LAS file'+(csv?' (looks like a CSV renamed .las)':'')+'.');return out}
+  // ---- file level
+  if(las.nVersion>1){const ls=las.sections.filter(s=>s.tag==='V').map(s=>s.start+1);P('E','file.concat',ls[1],`${las.nVersion} ~V sections: several LAS files are concatenated (lines ${ls.join(', ')}). Split them before loading.`)}
+  if(las.bom)P('W','file.bom',1,'UTF-8 byte-order mark at the start of the file; some readers fail on it.','bom');
+  if(las.crOnly)P('W','file.eol',null,'Old Mac line endings (CR only); many readers see a single line.','eol');
+  const tabs=[],nona=[];las.lines.forEach((l,i)=>{if(l.includes('\t'))tabs.push(i+1);if(/[^\x00-\x7F]/.test(l))nona.push(i+1)});
+  if(tabs.length)P('W','file.tabs',tabs[0],`Tab characters on lines ${lineList(tabs)}; LAS columns are separated by spaces.`,'tabs');
+  if(nona.length)P('W','file.nonascii',nona[0],`Non-ASCII characters (°, µ, accents…) on lines ${lineList(nona)}; LAS is ASCII and the encoding of these bytes is ambiguous.`);
+  // ---- structure
+  const S=las.sections,tags=S.map(s=>s.tag);
+  const ver=parseFloat(las.ver.VERS),las3=ver===3;
+  const miss=['V','W','C','A'].filter(t=>!tags.includes(t));
+  if(miss.length)P('E','struct.missing',null,`Missing mandatory section(s): ${miss.map(t=>'~'+t).join(', ')}.`);
+  if(tags[0]!=='V')P('E','struct.order',S[0].start+1,'~V (version) must be the first section.');
+  if(tags.includes('A')&&las.nVersion<2&&tags[tags.length-1]!=='A')P('E','struct.order',S[S.length-1].start+1,'~A (data) must be the last section.');
+  if(tags[0]==='V'&&tags.includes('W')&&tags[1]!=='W')P('W','struct.order',S[1].start+1,'~W should be the second section.');
+  const unk=S.filter(s=>!KNOWN_SEC.has(s.tag));
+  if(unk.length)P(las3?'I':'W','struct.unknown',unk[0].start+1,`Non-standard section(s) ${unk.map(s=>'~'+s.title.split(/\s/)[0]).join(', ')}: ignored by most readers.`);
+  if(las.nVersion<2)for(const t of ['W','C','P','A']){const n=tags.filter(x=>x===t).length;if(n>1)P('W','struct.dup',S.filter(s=>s.tag===t)[1].start+1,`Section ~${t} appears ${n} times; only the first is read.`)}
+  // ---- ~V
+  const V=las.ver;
+  if(!('VERS' in V))P('E','ver.vers',null,'VERS missing in ~V.');
+  else if(!['1.2','2.0','3.0','1.20','2','3'].includes(String(V.VERS).trim()))P('E','ver.vers',null,`VERS = “${V.VERS}”: expected 1.2, 2.0 or 3.0.`,'vers');
+  if(las3)P('I','ver.las3',null,'LAS 3.0 file: typed sections and Definition/Data pairs are not validated; only the basic checks ran.');
+  if(!('WRAP' in V)||!['YES','NO'].includes(up(V.WRAP).trim()))P('E','ver.wrap',null,`WRAP ${'WRAP' in V?`= “${V.WRAP}”`:'missing'}: expected YES or NO.`);
+  else if(las.wrapped)P('W','ver.wrapyes',null,'Wrapped file (WRAP YES): several importers only read unwrapped LAS.','wrap');
+  if(las.layout12&&ver!==1.2)P('W','ver.layout',null,`VERS ${V.VERS} but ~W uses the LAS 1.2 layout (value after the colon).`,'vers');
+  // ---- header syntax
+  for(const [list,sec] of [[las.vItems||[],'V'],[las.well,'W'],[las.curves,'C'],[las.params,'P']]){
+    const seen={};
+    for(const h of list){
+      if(h.nodot)P('W','hdr.nodot',h.line,`No dot after the mnemonic “${h.mnem}” (expected MNEM.UNIT).`,'syntax');
+      else if(h.nocolon)P('W','hdr.nocolon',h.line,`No colon before the description in “${h.raw.trim().slice(0,50)}”.`,'syntax');
+      if(/^\./.test(h.value)&&h.unit)P('W','hdr.dotmnem',h.line,`Mnemonic “${h.mnem}.${h.unit}” seems to contain a dot: readers split it at the first dot.`);
+      if(sec==='C'&&!h.unit&&/^[A-Za-z%][\w\/%*.\-]*$/.test(h.value))P('W','hdr.unitspace',h.line,`Space between the dot and the unit “${h.value}” of ${h.mnem}: the unit is read as empty.`,'syntax');
+      if(/\./.test(h.unit)&&!/^\.\d/.test(h.unit))P('I','hdr.dotunit',h.line,`Unit “${h.unit}” contains a dot; some readers mis-split it.`);
+      const k=up(h.mnem);if(seen[k])P('W',sec==='C'?'curve.dup':'hdr.dup',h.line,`Duplicate mnemonic ${h.mnem} in ~${sec} (also line ${seen[k]}${up(h.mnem)!==h.mnem||k!==up(list.find(x=>x.line===seen[k]).mnem)?'':''}); readers rename or drop one.`);else seen[k]=h.line}}
+  // ---- ~W
+  const w={};for(const h of las.well)if(!(up(h.mnem) in w))w[up(h.mnem)]=h;
+  const all={...Object.fromEntries(las.params.map(h=>[up(h.mnem),h])),...w};
+  for(const k of ['STRT','STOP','STEP','NULL'])if(!w[k])P('E','well.required',null,`${k} missing in ~W.`);else if(!NUM.test(w[k].value))P('E','well.required',w[k].line,`${k} = “${w[k].value}” is not a number.`);
+  if(!w.WELL||!w.WELL.value.trim())P('E','well.name',w.WELL?w.WELL.line:null,'WELL name is empty: importers fall back to the file name and cannot match the well.');
+  const rec=['COMP','FLD','LOC','SRVC','DATE'].filter(k=>!w[k]||!w[k].value.trim());
+  if(rec.length)P('W','well.recommended',null,`Missing or empty in ~W: ${rec.join(', ')}.`);
+  if(!['PROV','CNTY','STAT','CTRY'].some(k=>w[k]&&w[k].value.trim()))P('W','well.location',null,'None of PROV, CNTY, STAT, CTRY given.');
+  if(!['UWI','API'].some(k=>w[k]&&w[k].value.trim()))P('W','well.uwi',null,'No UWI or API identifier: the well cannot be matched safely on import.');
+  const ix=indexInfo(las);las.ix=ix;
+  const num=k=>w[k]&&NUM.test(w[k].value)?+w[k].value:NaN;
+  const strt=num('STRT'),stop=num('STOP'),step=num('STEP');
+  if(ix.idx.length>1){const tol=Math.abs(ix.step)*0.01||1e-6;
+    const bad=[];if(isFinite(strt)&&Math.abs(strt-ix.first)>tol)bad.push(`STRT ${w.STRT.value} ≠ first index ${fmtN(ix.first)}`);
+    if(isFinite(stop)&&Math.abs(stop-ix.last)>tol)bad.push(`STOP ${w.STOP.value} ≠ last index ${fmtN(ix.last)}`);
+    if(bad.length)P('W','well.strtstop',(w.STRT||w.STOP).line,bad.join('; ')+'.','strtstop');
+    if(isFinite(step)){
+      if(step===0&&ix.regular)P('W','well.step',w.STEP.line,`STEP = 0 (irregular) but the data step is constant (${fmtN(ix.step)}).`,'step');
+      else if(step!==0&&!ix.regular)P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is irregular: it should be 0.`,'step');
+      else if(step!==0&&Math.sign(step)!==Math.sign(ix.step))P('W','well.step',w.STEP.line,`STEP sign (${w.STEP.value}) does not match the index direction (${fmtN(ix.first)} → ${fmtN(ix.last)}).`,'step');
+      else if(step!==0&&Math.abs(step-ix.step)>Math.abs(ix.step)*1e-3)P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is ${fmtN(ix.step)}.`,'step');
+      if(ix.regular&&ix.jitter>1e-9&&ix.jitter>Math.abs(ix.step)*1e-6)P('I','data.jitter',null,`Index step varies by up to ${ix.jitter.toExponential(1)} around ${fmtN(ix.step)} (rounding).`)}}
+  const c0=las.curves[0],iu=c0?c0.unit:'';
+  const wu=['STRT','STOP','STEP'].filter(k=>w[k]).map(k=>w[k].unit);
+  if(c0&&INDEX.test(c0.mnem)&&!/^(TIME|ETIM)$/i.test(c0.mnem)){
+    const diff=wu.filter(u=>normDU(u)!==normDU(iu));
+    if(diff.length)P('W','well.units',w.STRT?w.STRT.line:null,`STRT/STOP/STEP unit (${[...new Set(wu)].join(', ')||'none'}) differs from the index curve unit (${iu||'none'}).`);
+    else if(iu&&!DEPTH_UNITS.test(iu))P('W','well.units',c0.line,`Index unit “${iu}” is not M or FT.`);
+    else if(!iu)P('W','well.units',c0.line,'Index curve has no unit.');
+    if(normDU(iu)==='M'&&Math.max(Math.abs(ix.first||0),Math.abs(ix.last||0))>12000)P('I','well.depthunit',null,`Depth reaches ${fmtN(Math.max(Math.abs(ix.first),Math.abs(ix.last)))} with unit M: probably feet.`)}
+  const anyOf=ks=>ks.map(k=>all[k]).find(h=>h&&h.value.trim()&&NUM.test(h.value)&&+h.value!==0);
+  const X=anyOf(['X','XCOORD','SURFX','XWELL','EAST','EASTING','X_COORD']),Y=anyOf(['Y','YCOORD','SURFY','YWELL','NORTH','NORTHING','Y_COORD']);
+  const LA=anyOf(['LAT','SLAT','LATI','LATITUDE']),LO=anyOf(['LON','SLON','LONG','LONGITUDE']);
+  if(!(X&&Y)&&!(LA&&LO))P('I','well.xy',null,'No surface X/Y (or lat/lon): importers place the well at the origin.');
+  if(LA&&Math.abs(+LA.value)>90)P('W','well.xy',LA.line,`Latitude ${LA.value} out of range.`);
+  if(LO&&Math.abs(+LO.value)>180)P('W','well.xy',LO.line,`Longitude ${LO.value} out of range.`);
+  if(!anyOf(['EKB','KB','EREF','EDF','EGL','ELEV','KBE','APD','GL']))P('I','well.kb',null,'No KB / reference elevation (EKB, EREF, EGL…): offset taken as 0.');
+  // ---- ~C
+  const nc=las.curves.length;
+  if(tags.includes('C')&&!nc)P('E','curve.none',null,'~C declares no curve.');
+  if(c0&&!INDEX.test(c0.mnem))P('E','curve.index',c0.line,`First curve “${c0.mnem}” is not an index (DEPT, DEPTH, TIME…).`);
+  const nou=las.curves.filter(h=>!h.unit&&!(h.value&&/^[A-Za-z%]/.test(h.value)));
+  if(nou.length)P('W','curve.nounit',nou[0].line,`Curve(s) without unit: ${nou.map(h=>h.mnem).join(', ')}.`);
+  // ---- ~A
+  const A=S.find(s=>s.tag==='A');
+  if(A&&!las.rows.length){P('E','file.nodata',A.start+1,'~A contains no data.');return out}
+  if(!A||!nc)return out;
+  const lens=[...new Set(las.rows.map(r=>r.tokens.length))];
+  const runon=las.rows.filter(r=>r.tokens.some(t=>!NUM.test(t)&&!TEXT_NULL.test(t)&&/^[-+]?\d*\.\d+[-+]?\d*\.\d+/.test(t)));
+  if(runon.length)P('E','data.runon',runon[0].line,`Values glued together (no space), e.g. “${runon[0].tokens.find(t=>/^[-+]?\d*\.\d+[-+]?\d*\.\d+/.test(t))}” on lines ${lineList(runon.map(r=>r.line))}.`);
+  if(lens.length===1&&lens[0]!==nc)P('E','curve.count',las.rows[0].line,`~C lists ${nc} curves but every data row has ${lens[0]} values.`);
+  else{const bad=las.rows.filter(r=>r.tokens.length!==nc&&!runon.includes(r));
+    if(bad.length)P('E','data.rowlen',bad[0].line,`${bad.length} row(s) without ${nc} values (lines ${lineList(bad.map(r=>r.line))}); truncated line or missing column.`)}
+  const nn=[],tn=new Map();
+  for(const r of las.rows)r.tokens.forEach(t=>{if(NUM.test(t))return;if(TEXT_NULL.test(t))tn.set(t,(tn.get(t)||0)+1);else if(!runon.includes(r))nn.push([r.line,t])});
+  if(nn.length)P('E','data.nonnumeric',nn[0][0],`Non-numeric value(s) “${[...new Set(nn.map(x=>x[1]))].slice(0,5).join('”, “')}” on lines ${lineList([...new Set(nn.map(x=>x[0]))])}.`);
+  if(las.aComments.length)P('W','data.comment',las.aComments[0],`Comment line(s) inside ~A (lines ${lineList(las.aComments)}).`);
+  const ex=las.rows.filter(r=>r.tokens.some(t=>/e/i.test(t)&&NUM.test(t)));
+  if(ex.length)P('W','data.exponent',ex[0].line,`Exponent notation (e.g. 1.2E+03) on lines ${lineList(ex.map(r=>r.line))}; a few readers reject it.`);
+  if(las.wrapped&&las.wrapIssues&&las.wrapIssues.length)P('W','data.wrap',las.wrapIssues[0][0],`Wrapped data malformed: ${las.wrapIssues[0][1]} (lines ${lineList(las.wrapIssues.map(x=>x[0]))}).`);
+  // index
+  const idx=las.data.map(r=>r[0]);
+  const nidx=las.rows.filter(r=>r.ok&&isNull(las,r.vals[0]));
+  if(nidx.length)P('W','data.nullindex',nidx[0].line,`NULL in the index column on lines ${lineList(nidx.map(r=>r.line))}.`);
+  const okr=las.rows.filter(r=>r.ok&&!isNull(las,r.vals[0]));
+  if(okr.length>2){const dir=Math.sign(okr[okr.length-1].vals[0]-okr[0].vals[0])||1;const back=[],dup=[];
+    for(let i=1;i<okr.length;i++){const d=(okr[i].vals[0]-okr[i-1].vals[0])*dir;if(d<0)back.push(okr[i].line);else if(d===0)dup.push(okr[i].line)}
+    if(back.length)P('E','data.monotonic',back[0],`Index goes backwards on lines ${lineList(back)}.`);
+    if(dup.length)P('E','data.dupindex',dup[0],`Duplicate index values on lines ${lineList(dup)}.`)}
+  // nulls
+  const sent=new Map();
+  for(const r of las.rows)r.tokens.forEach((t,j)=>{if(j===0&&!TEXT_NULL.test(t))return;const v=NUM.test(t)?+t:NaN;
+    if(TEXT_NULL.test(t)||(NUM_NULL.includes(v)&&v!==las.nullVal))sent.set(t,(sent.get(t)||0)+1)});
+  if(sent.size)P('W','data.nulls',null,`Null markers other than NULL = ${las.nullStr}: ${[...sent].map(([k,n])=>`${k} (${n}×)`).join(', ')}.`,'nulls');
+  // per curve
+  const allnull=[],constant=[];
+  for(let j=1;j<nc;j++){const v=las.data.map(r=>r[j]).filter(x=>!isNull(las,x)&&!NUM_NULL.includes(x));
+    if(!v.length){allnull.push(las.curves[j].mnem);continue}
+    if(v.length>2&&v.every(x=>x===v[0]))constant.push(las.curves[j].mnem);
+    const c=las.curves[j],R=RANGES.find(x=>x[0].test(c.mnem));
+    if(R){const [lo,hi]=R[1](c.unit),o=v.filter(x=>x<lo||x>hi);
+      if(o.length){const pct=/neutron/.test(R[2])&&!/%|PU/i.test(c.unit)&&median(v)>1.5?' — values look like % with a V/V unit':'';
+        P('I','plaus.range',null,`${c.mnem} (${R[2]}, ${c.unit||'no unit'}): ${o.length} value(s) outside ${lo}–${hi}, min ${fmtN(Math.min(...v))}, max ${fmtN(Math.max(...v))}${pct}.`)}
+      if(/neutron/.test(R[2])&&/%|PU/i.test(c.unit)&&v.length>2&&Math.max(...v.map(Math.abs))<1)P('I','plaus.range',null,`${c.mnem} unit ${c.unit} but all values < 1: probably a fraction (V/V).`)}
+    if(v.length>=20){const d=[];for(let i=1;i<v.length;i++)d.push(v[i]-v[i-1]);const md=median(d),mad=median(d.map(x=>Math.abs(x-md)))*1.4826||1e-12;
+      let n=0;for(let i=1;i<d.length;i++)if(Math.abs(d[i-1]-md)>10*mad&&Math.abs(d[i]-md)>10*mad&&Math.sign(d[i-1])!==Math.sign(d[i]))n++;
+      if(n)P('I','plaus.spike',null,`${c.mnem}: ${n} possible spike(s) (isolated jump > 10 robust σ of the sample-to-sample change).`)}}
+  if(allnull.length)P('I','data.allnull',null,`Curve(s) entirely NULL: ${allnull.join(', ')}.`);
+  if(constant.length)P('I','data.constant',null,`Constant curve(s): ${constant.join(', ')}.`);
+  return out;
+}
+const verdict=f=>f.some(x=>x.sev==='E')?'fail':f.some(x=>x.sev==='W')?'warn':'pass';
+
+function checkBatch(lases){
+  const out=[],P=(sev,rule,file,msg)=>out.push({...F(sev,rule,null,msg),file});
+  const info=lases.filter(l=>l.sections.length).map(l=>{const g=k=>{const h=l.well.find(x=>up(x.mnem)===k);return h?h.value.trim():''};
+    const ix=indexInfo(l);return {l,well:up(g('WELL')),uwi:up(g('UWI')||g('API')),du:l.curves[0]?normDU(l.curves[0].unit):'',lo:Math.min(ix.first,ix.last),hi:Math.max(ix.first,ix.last)}});
+  const by=(key)=>{const m=new Map();for(const i of info){const k=i[key];if(!k)continue;if(!m.has(k))m.set(k,[]);m.get(k).push(i)}return m};
+  for(const [wn,g] of by('well')){const u=[...new Set(g.map(i=>i.uwi).filter(Boolean))];if(u.length>1)P('W','batch.uwi',g.map(i=>i.l.name).join(', '),`Well ${wn} has different UWI/API: ${u.join(', ')}.`)}
+  for(const [uw,g] of by('uwi')){const n=[...new Set(g.map(i=>i.well).filter(Boolean))];if(n.length>1)P('W','batch.uwi',g.map(i=>i.l.name).join(', '),`UWI ${uw} has different well names: ${n.join(', ')}.`)}
+  for(const [wn,g] of by('well'))for(let a=0;a<g.length;a++)for(let b=a+1;b<g.length;b++){const A=g[a],B=g[b];
+    if(!(A.lo<B.hi&&B.lo<A.hi))continue;const ca=new Set(A.l.curves.slice(1).map(c=>up(c.mnem))),cm=B.l.curves.slice(1).map(c=>up(c.mnem)).filter(m=>ca.has(m));
+    if(cm.length)P('W','batch.overlap',`${A.l.name}, ${B.l.name}`,`Well ${wn}: ${A.l.name} and ${B.l.name} overlap (${fmtN(Math.max(A.lo,B.lo))}–${fmtN(Math.min(A.hi,B.hi))}) on ${cm.slice(0,6).join(', ')}: duplicate runs?`)}
+  const du=[...new Set(info.map(i=>i.du).filter(Boolean))];if(du.length>1)P('W','batch.units',info.map(i=>`${i.l.name}: ${i.du}`).join(', '),`Mixed depth units in the batch: ${du.join(', ')}.`);
+  const cu=new Map();for(const i of info)for(const c of i.l.curves.slice(1)){const k=up(c.mnem);if(!cu.has(k))cu.set(k,new Set());cu.get(k).add(up(c.unit))}
+  const mix=[...cu].filter(([k,s])=>s.size>1);if(mix.length)P('I','batch.curveunits','',`Same mnemonic, different units: ${mix.slice(0,8).map(([k,s])=>`${k} (${[...s].join('/')||'none'})`).join(', ')}.`);
+  return out;
+}
+
+W.LAS={parse,check,verdict,checkBatch,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
 })(window);
 </script>
 </body></html>
