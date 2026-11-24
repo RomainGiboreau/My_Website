@@ -245,6 +245,8 @@ function drawChart(cv,spec){
     cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
 function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)})}
 
+</script>
+<script id="mat-core">
 // =====================================================================================
 //  Thermal maturity. EASY%Ro: Sweeney & Burnham (1990, AAPG Bull. 74, 1559-1570), Table 1 and Appendix 1.
 //  Units: temperature K inside the kinetics, time in s inside the kinetics, Ea in kcal/mol, R = 1.987e-3 kcal/(mol K), A in 1/s.
@@ -264,8 +266,6 @@ const BASIN={id:'basin',name:'Basin%Ro',A:Math.exp(60.9856)/3.15576e13,c:Math.lo
 const MODELS=[EASY,DL,BASIN];
 const RG=1.987e-3,SEC_MA=3.15576e13;   // kcal/mol/K; seconds per Ma (Julian year 365.25 d)
 const AA1=2.334733,AA2=0.250621,BB1=3.330657,BB2=1.681534;   // Appendix 1, eq. 10 (Braun & Burnham 1987 approximation of the temperature integral)
-const D={table:null,gr:[],hr:[],rates:[]};
-const activeModels=()=>MODELS.filter(m=>$('m_'+m.id).checked);
 // temperature integral  I(T) = ∫0^T A exp(-E/RT') dT'  (eq. 10); T in K
 function Iint(E,T,A){const x=E/(RG*T);return T*A*Math.exp(-x)*(1-(x*x+AA1*x+AA2)/(x*x+BB1*x+BB2))}
 // advance the unreacted fractions w[i] over a segment T1 -> T2 (K) lasting dt seconds (constant heating rate, eq. 7-9)
@@ -285,6 +285,11 @@ function integrate(rows,age,doTti,ms){ms=ms||[EASY];const W={};for(const M of ms
       for(const M of ms)step(W[M.id],M,T1+273.15,T2+273.15,dt*SEC_MA);if(doTti)tti+=ttiRate(0.5*(T1+T2))*dt;
       out.push(snap(age?a.t-dt*s:a.t+dt*s,T2,s===n?j:0))}}
   return out}
+window.DG={integrate,step,Fof,RoOf,Iint,EASY,DL,BASIN,MODELS};
+</script>
+<script>
+const D={table:null,gr:[],hr:[],rates:[]};
+const activeModels=()=>MODELS.filter(m=>$('m_'+m.id).checked);
 // ---- data
 function guess(head){const f=re=>head.findIndex(h=>re.test(normName(h)));let t=f(/^(age|time|ma|myr)/),T=f(/^(temp|t$|tc|degc|tk)/),z=f(/^(depth|prof|md|tvd|z$)/),g=f(/^(layer|group|unit|well|name|horizon|sample)/);
   if(t<0)t=0;if(T<0||T===t)T=head.findIndex((_,i)=>i!==t&&i!==z);return[t,T,z,g]}
@@ -357,7 +362,6 @@ function example(){const L=['Layer\tAge (Ma)\tDepth (m)\tTemperature (°C)'],H={
       'Uplifted':[[150,0,20],[100,2500,85],[70,3500,120],[40,3800,135],[20,2500,95],[0,1800,70]]};
   for(const g in H)for(const r of H[g])L.push(`${g}\t${r[0]}\t${r[1]}\t${r[2]}`);$('paste').value=L.join('\n');loadText($('paste').value)}
 $('bExample').onclick=example;
-window.DG={integrate,step,Fof,RoOf,Iint,EASY,DL,BASIN,MODELS};
 
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
