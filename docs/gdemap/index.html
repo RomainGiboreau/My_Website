@@ -180,48 +180,194 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
 (function(){
 const RAD=Math.PI/180,TAPER=35;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
-// ---------- templates: belts proximal -> distal, relative widths, conventional GDE colours ----------
-const T=(name,geom,belts,outside)=>({name,geom,outside:outside||'distal',belts:belts.map(([n,c,w,al])=>({name:n,color:c,w,alias:al||[]}))});
+// ---------- library of depositional systems: belts proximal -> distal [name, colour, relative width, aliases], conventional GDE colours ----------
+// group (select in the UI), geometry, what lies beside a radial fan, typical overall scale (km, shown as an indication), default fan angle,
+// default channels (sub-environment ribbons), and the sources of the belts and widths with an honest status tag.
+const groups=['Continental','Coastal & deltaic','Shelf & carbonate','Deep water','Lacustrine','Custom'];
+const T=(name,group,geom,outside,scale,belts,refs,o={})=>({name,group,geom,outside:outside||'distal',scale,fan:o.fan||90,ch:o.ch||null,refs,
+  belts:belts.map(([n,c,w,al])=>({name:n,color:c,w,alias:al||[]}))});
+// sources read in this session (24 Nov 2026), quoted in several templates
+const R={
+ psuShelf:['Continental shelves average about 75 km wide, shelf break at 120–130 m; slopes average about 20 km wide at about 4°','Penn State, EARTH 107 Coastal Processes, “Coastal Zones: The Margins of Continents” (courses.ems.psu.edu)','published (second hand)'],
+ psuDelta:['River-dominated deltas elongate and digitate (Mississippi), wave-influenced deltas with smooth arcuate shorelines and beach ridges (Danube), tide-dominated deltas with shore-perpendicular tidal passes and sand bodies parallel to the tidal flow (Fly); ternary classification','Galloway (1975), as presented by Penn State, EARTH 107, “Delta Morphologies and Driving Processes”','published (second hand)'],
+ prelat:['Submarine lobes: unconfined lobes average 14 km wide × 35 km long × 12 m thick (Tanqua Karoo, Amazon, Zaïre); confined lobes 5 × 8 km × 30 m (Corsica, Kutai, Nigeria); lobe volumes 1–2 km³ whatever the size of the system — “big systems do not build big lobes, rather more lobes”','Prélat, A., Covault, J. A., Hodgson, D. M., Fildani, A. & Flint, S. S. (2010), Are the dimensions of submarine lobe systems independent of allogenic factors? EGU General Assembly, Geophysical Research Abstracts 12, EGU2010-11637 (the full paper: Sedimentary Geology 232, 66–76)','published (abstract)'],
+ gorsline:['Fan size classes: < 10 km simple cones or lobes (suprafan lobes); 10–100 km lobes and leveed channels; 100–1000 km dominated by channel systems; > 1000 km giant fans with large-scale channels','Gorsline, D. S. (1987), Global classification of spectrum of submarine fan types, AAPG Bulletin 71(5) (abstract, OSTI 6221375)','published (abstract)'],
+ bouma:['Two end members: sand-rich, coarse-grained fans (common on active margins) and mud-rich, fine-grained, bypassing fans (common on passive margins, e.g. Gulf of Mexico, West Africa); mixed systems borrow from both','Bouma, A. H. (2000), Deep marine depositional systems, AAPG Annual Convention abstract, Search and Discovery #90914; full paper: Marine and Petroleum Geology 17, 137–143','published (abstract)'],
+ rr:['Reading & Richards (1994) classes: point-source fans, multiple-source ramps, linear-source slope aprons × mud-rich, mud/sand-rich, sand-rich, gravel-rich; as grain size decreases the source area, the system and its downcurrent length increase; channel size and stability decrease towards a linear source','Reading, H. G. & Richards, M. (1994), AAPG Bulletin 78(5), 792–822, as summarised by Gardea, H. N. & Ramadhan, R. D. (2014), GCAGS abstract, Search and Discovery #90196','published (second hand)'],
+ harris:['Rimmed platform (South Florida, Bahamas): open shelf (reef tract) an arcuate belt 5 to 10 km wide; reef-derived sand belt 1 to 2 km wide and 40 km long; lagoons may lie several tens of kilometres from the open sea; carbonates mixed with, then replaced by, quartz sands towards the clastic source','Harris, P. M., Moore, C. H. & Wilson, J. L. (1985), Carbonate platforms, Colorado School of Mines Quarterly 80(4), 31–60, reprinted as Harris (2009), Search and Discovery #60032','published'],
+ werner:['Carbonate ramp: gradient < 1°, no slope break; inner ramp above fair-weather wave base, mid ramp between fair-weather and storm wave base (HCS, storm beds), outer ramp below storm wave base, basin; ramps hundreds of km across on passive margins, about 100 km in foreland basins, a few hundred km in intrashelf basins, < 20 km in salt-withdrawal basins; a 10 m sea-level fall exposes 20–50 km of inner and mid ramp','Burchette, T. P. & Wright, V. P. (1992), Carbonate ramp depositional systems, Sedimentary Geology 79, 3–57, as summarised by Werner, M., “Carbonate ramp depositional environments” (course essay, criba.edu.ar)','published (second hand)'],
+ dalrymple:['Tripartite estuary: outer marine-dominated zone, low-energy central zone, inner river-dominated zone; in tide-dominated estuaries the marine sand body is elongate sand bars and sand flats, the central zone tight meanders passing into straighter tidal-fluvial channels, no bay-head delta','Dalrymple, R., Zaitlin, B. & Boyd, R. (1992), A conceptual model of facies distribution in incised-valley estuaries, AAPG Search and Discovery #91012 (abstract; full paper: Journal of Sedimentary Petrology 62, 1130–1146)','published (abstract)'],
+ ridges:['Tidal sand ridges: longer than 10 km, spacing typically 5–10 km, 5–30 m high, in 30–50 m of water','Coastal Wiki, “Sand ridges in shelf seas” (after Van de Meene 1994, Liu et al. 2013, Shen et al. 2013)','published (second hand)'],
+ erg:['An erg is a desert area of more than 125 km² of wind-blown sand covering more than 20 % of the surface; dunes in ergs typically wider or longer than 500 m; Rub’ al Khali more than 600 000 km²','Wikipedia, “Erg (landform)” (read 24 Nov 2026)','published (second hand)'],
+ fanWiki:['Alluvial fans from a few metres to about 150 km across, giant fans almost 20 000 km²','Boggs (2006) p. 246 and Leeder (2011) p. 285, as quoted by Wikipedia, “Alluvial fan”','published (second hand)'],
+ bohacs:['Lake-basin types overfilled, balanced-fill and underfilled, from potential accommodation versus sediment + water supply; balanced-fill lakes hold the most prolific lacustrine source rocks; overfilled-lake parasequences resemble shallow-marine ones','Bohacs, K. M. (1999), Lake-basin type, source potential, and hydrocarbon character, AAPG Search and Discovery #90027 (abstract)','published (abstract)'],
+ domack:['Ice-shelf model from the grounding line seaward: grounding-line proximal zone of coarse granulated diamict (about 1.5 km wide at one Ross Sea site), sub-ice-shelf laminated to massive mud, a “null zone” of fine, well-sorted sediment where the ice shelf is wider than 5–10 km, a concentration of iceberg-rafted debris at the calving line, then siliceous mud and ooze with rare IRD in open water','Domack, E. W. & Harris, P. T. (1998), A new depositional model for ice shelves, based upon sediment cores from the Ross Sea and the Mac. Robertson shelf, Antarctica, Annals of Glaciology 27, 281–284','published'],
+ shoreface:['Shoreface: from the low-water line to where waves hardly move sediment (outer closure depth), divided into upper and lower shoreface at the inner closure depth','Coastal Wiki, “Shoreface”','published (second hand)'],
+ succession:['Facies belts succeed each other laterally in the order they stack vertically','Walther (1894); standard textbooks: Reading (ed.) (1996), Sedimentary Environments, 3rd ed.; Walker & James (eds.) (1992), Facies Models','memory']};
+const W_=(s)=>['Relative widths '+s,'Reasoned guess for this page, editable; no compilation of belt widths was found for this system','memory'];
 const templates={
- shelf:T('Wave-dominated shelf','linear',[
-  ['Coastal plain','#b8c978',1.6,['coastal','alluvial plain','strandplain','continental']],
-  ['Shoreface','#f3d955',0.7,['upper shoreface','lower shoreface','beach','foreshore','shoreline','shallow marine sand']],
-  ['Offshore transition','#cfe5c6',1,['transition zone','offshore transition zone']],
-  ['Offshore shelf','#a9d3ec',2.4,['offshore','shelf','inner shelf','outer shelf','open shelf']],
-  ['Slope','#6c9fcd',1.4,['continental slope']],
-  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]]),
- delta:T('River-dominated delta','radial',[
-  ['Delta plain','#9fc46e',3,['upper delta plain','lower delta plain','deltaic plain','distributary channel']],
-  ['Delta front','#f3d34f',1,['mouth bar','delta front sand']],
-  ['Prodelta','#c8dcc0',1.5,['pro delta']],
-  ['Shelf','#a9d3ec',2.5,['offshore shelf','offshore','open shelf']],
-  ['Slope','#6c9fcd',1.5,['continental slope']],
-  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]],'strike'),
- fan:T('Deep-water fan','radial',[
-  ['Slope / canyon','#97a9bd',2,['upper slope','feeder canyon','slope channel']],
-  ['Channel–levee complex','#e7a043',2.5,['channel levee','channel levee system','channel','leveed channel','inner fan']],
-  ['Proximal lobes','#f4d35e',2,['lobe','mid fan','middle fan','lobe complex']],
-  ['Distal lobes / lobe fringe','#f6ebb0',2,['outer fan','distal fan','fringe']],
-  ['Basin plain','#5a80b3',2,['basin floor','basin','abyssal plain']]]),
- carbonate:T('Carbonate platform','linear',[
-  ['Inner platform / lagoon','#9edfd3',3,['platform interior','tidal flat','restricted platform']],
-  ['Platform margin (reef / shoal)','#e98fb1',0.8,['shelf margin','barrier','oolite shoal','margin']],
-  ['Fore-reef slope','#64b3c7',1.5,['foreslope','fore reef','slope']],
-  ['Basin','#3c6aa3',2,['basin floor','deep basin']]]),
- fluvial:T('Fluvial','linear',[
-  ['Alluvial fan / proximal','#a8703d',1.5,['alluvial fan','fanglomerate']],
-  ['Braided plain','#d29f5a',2,['braided river','braided']],
-  ['Meandering belt','#e5c784',2.5,['meandering river','meander belt','meandering']],
-  ['Floodplain–coastal plain','#a5c47a',2,['floodplain','coastal plain','flood plain']]]),
- custom:T('Custom','linear',[['Proximal','#c9a66b',1],['Intermediate','#f0d65e',1],['Distal','#7fb0d8',1]])};
+ // ---- Continental
+ fluvial:T('Fluvial (alluvial fan to coastal plain)','Continental','linear','distal',[10,500],[
+  ['Alluvial fan / proximal','#a8703d',1.5,['fanglomerate','debris flow','sheetflood','proximal fan','alluvial cone','conglomerate']],
+  ['Braided plain','#d29f5a',2,['braided river','braided','braidplain','braided channel','braided stream','gravelly braided river','sandy braided river']],
+  ['Meandering belt','#e5c784',2.5,['meandering river','meander belt','meandering','point bar','meandering channel','channel belt','lateral accretion']],
+  ['Floodplain–coastal plain','#a5c47a',2,['floodplain','coastal plain','flood plain','overbank','crevasse splay','paleosol','palaeosol','floodbasin','levee']]],
+  [R.succession,R.fanWiki,['Braided reaches pass downstream into meandering ones as the gradient and grain size fall','Miall (1996), The Geology of Fluvial Deposits; Reading (ed.) (1996)','memory'],W_('alluvial fan 1.5, braided 2, meandering 2.5, floodplain open-ended; typical scale 10–500 km')],
+  {ch:{name:'Active channel',host:[1,3]}}),
+ aeolian:T('Aeolian / desert (erg)','Continental','linear','distal',[10,1000],[
+  ['Alluvial fan','#a8703d',1,['mountain front fan','fanglomerate','debris flow','proximal fan']],
+  ['Wadi plain','#c99a5b',1.5,['wadi','dry wadi','ephemeral stream','ephemeral river','ephemeral fluvial','sheetflood','flash flood deposit']],
+  ['Sand sheet','#efdcae',1,['aeolian sand sheet','zibar','dune fringe']],
+  ['Dune field (erg)','#f2c46b',4,['dune','aeolian dune','sand sea','draa','barchan','star dune','linear dune','erg core','aeolian','eolian','eolian dune','aeolianite']],
+  ['Interdune-dominated erg margin','#dcc79a',1.5,['interdune','wet interdune','damp interdune','dry interdune','erg margin','interdune pond']],
+  ['Sabkha / playa','#c9b3d6',2,['inland sabkha','coastal sabkha','salt flat','evaporite','salt pan','saline pan','evaporitic mudflat']]],
+  [R.succession,R.erg,['Dry, wet and stabilised aeolian systems; erg margins richer in interdunes, passing into sabkha','Kocurek, G. & Havholm, K. G. (1993), in Weimer & Posamentier (eds.), AAPG Memoir 58','memory'],
+   W_('alluvial fan 1, wadi plain 1.5, sand sheet 1, dune field 4, interdune margin 1.5, sabkha open-ended; the erg is the widest belt; typical scale 10–1000 km (an erg is at least about 11 km across)')]),
+ // ---- Coastal & deltaic
+ estuary:T('Tide-dominated delta / estuary','Coastal & deltaic','radial','strike',[10,200],[
+  ['Tidal-fluvial channel','#c9a66b',1.5,['tidal fluvial','upper estuary','inner estuary','fluvial tidal transition','tidally influenced channel','tidally influenced fluvial']],
+  ['Tidal flats and meanders','#b7c98a',2,['tidal flat','mud flat','mudflat','mixed flat','salt marsh','marsh','tidal meander','central estuary','middle estuary','inclined heterolithic stratification','ihs','tidal creek','supratidal flat']],
+  ['Tidal sand bars','#f1d35a',2,['tidal bar','tidal sand bar','sand flat','outer estuary','estuary mouth','estuarine sand bar','elongate tidal bar','tidal channel','estuary funnel','tidal dune']],
+  ['Tidal sand ridges','#e6dc9a',2.5,['tidal ridge','sand ridge','offshore tidal ridge','shelf sand ridge','sand bank','tidal sand bank']],
+  ['Offshore shelf','#a9d3ec',3,['shelf','offshore','shelf mud','open shelf','inner shelf','outer shelf']],
+  ['Slope and basin','#3c6aa3',2,['slope','basin','deep marine','continental slope','basin floor']]],
+  [R.dalrymple,R.psuDelta,R.ridges,W_('tidal-fluvial 1.5, flats and meanders 2, sand bars 2, sand ridges 2.5 (several ridges 5–10 km apart), shelf 3; funnel opening 40°; typical scale 10–200 km')],
+  {fan:40,ch:{name:'Tidal channel',host:[0,2]}}),
+ wavedelta:T('Wave-dominated delta','Coastal & deltaic','radial','strike',[10,150],[
+  ['Delta plain','#9fc46e',2,['upper delta plain','lower delta plain','deltaic plain','delta top','interdistributary bay','coal']],
+  ['Beach-ridge strandplain','#d9d27a',1,['beach ridge','strandplain','strand plain','beach ridge plain','chenier','coastal dune','foredune']],
+  ['Delta-front shoreface','#f3d955',0.6,['shoreface','upper shoreface','lower shoreface','beach','foreshore','delta front','mouth bar','wave reworked mouth bar']],
+  ['Prodelta–offshore transition','#cfe5c6',1,['prodelta','offshore transition','transition zone','hcs sandstone','pro delta']],
+  ['Shelf','#a9d3ec',3,['offshore shelf','offshore','open shelf','inner shelf','outer shelf']],
+  ['Slope','#6c9fcd',1.2,['continental slope','upper slope']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]],
+  [R.psuDelta,R.psuShelf,W_('delta plain 2, strandplain 1, shoreface 0.6, prodelta 1, shelf 3, slope 1.2 (slope about a quarter to a third of the shelf, as in the shelf averages); wide fan (110°) for an arcuate to cuspate delta; typical scale 10–150 km')],
+  {fan:110,ch:{name:'Distributary channel',host:[0,0]}}),
+ delta:T('River-dominated delta','Coastal & deltaic','radial','strike',[10,300],[
+  ['Delta plain','#9fc46e',3,['upper delta plain','lower delta plain','deltaic plain','distributary channel','delta top','interdistributary bay','crevasse splay']],
+  ['Delta front','#f3d34f',1,['mouth bar','delta front sand','distributary mouth bar','delta front sandstone']],
+  ['Prodelta','#c8dcc0',1.5,['pro delta','prodelta mudstone']],
+  ['Shelf','#a9d3ec',2.5,['offshore shelf','offshore','open shelf','inner shelf','outer shelf']],
+  ['Slope','#6c9fcd',1.5,['continental slope','upper slope']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]],
+  [R.psuDelta,R.psuShelf,W_('delta plain 3, delta front 1, prodelta 1.5, shelf 2.5, slope 1.5; lobe protruding from the coast (belts along strike); typical scale 10–300 km')],
+  {fan:50,ch:{name:'Distributary channel',host:[0,0]}}),
+ // ---- Shelf & carbonate
+ shelf:T('Wave-dominated shoreface–shelf','Shelf & carbonate','linear','distal',[10,300],[
+  ['Coastal plain','#b8c978',1.6,['coastal','alluvial plain','strandplain','continental','backbarrier','washover']],
+  ['Shoreface','#f3d955',0.5,['upper shoreface','middle shoreface','lower shoreface','beach','foreshore','shoreline','shallow marine sand','barrier island','swaley cross stratified sandstone','scs sandstone']],
+  ['Offshore transition','#cfe5c6',0.8,['transition zone','offshore transition zone','hcs sandstone','hummocky cross stratified sandstone','storm bed','tempestite','heterolithic shelf']],
+  ['Offshore shelf','#a9d3ec',3,['offshore','shelf','inner shelf','outer shelf','open shelf','shelf mudstone']],
+  ['Slope','#6c9fcd',1.1,['continental slope','upper slope']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]],
+  [R.shoreface,R.psuShelf,['Shoreface to offshore-transition succession, HCS beds between fair-weather and storm wave base','Walker, R. G. & Plint, A. G. (1992), Wave- and storm-dominated shallow marine systems, in Walker & James (eds.), Facies Models','memory'],
+   W_('shoreface 0.5 and offshore transition 0.8 (a few km each), offshore shelf 3, slope 1.1: the shelf (shoreface to shelf break, 4.3) is about 3.9 times the slope, close to the 75 km / 20 km averages; typical scale 10–300 km')],
+  {ch:{name:'Incised valley fill',host:[0,0]}}),
+ carbonate:T('Rimmed carbonate platform','Shelf & carbonate','linear','distal',[10,300],[
+  ['Tidal flat / sabkha','#d7c9a3',1.2,['supratidal','peritidal','intertidal flat','algal mat','stromatolite']],
+  ['Platform interior / lagoon','#9edfd3',4,['restricted platform','inner platform','restricted lagoon','shelf lagoon']],
+  ['Open platform / back-reef','#b6e3c0',1,['back reef','backreef','open shelf','patch reef','skeletal sand','grapestone']],
+  ['Platform margin (reef / shoal)','#e98fb1',0.25,['shelf margin','barrier reef','oolite shoal','ooid shoal','margin','reef crest','shelf edge','reef front','grainstone shoal']],
+  ['Fore-reef slope','#64b3c7',0.6,['foreslope','fore reef','slope','reef talus','megabreccia','periplatform']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','basinal','pelagic']]],
+  [R.harris,['Standard facies belts from basin to supratidal, the platform margin (reef or shoal) between the fore-slope and the open platform','Wilson, J. L. (1975), Carbonate Facies in Geologic History, Springer','memory'],
+   ['Lagoon 4, open platform 1, margin 0.25: a lagoon “several tens of km” wide (≈ 30 km), an open shelf 5–10 km (≈ 7.5 km) and a 1–2 km margin sand belt, in ratio','Harris, Moore & Wilson (1985), above','published'],
+   W_('tidal flat 1.2 and fore-reef slope 0.6; typical scale 10–300 km')]),
+ ramp:T('Carbonate ramp','Shelf & carbonate','linear','distal',[10,500],[
+  ['Inner-ramp lagoon / peritidal','#d7e7b0',2,['inner ramp','peritidal','restricted inner ramp','tidal flat','sabkha','back shoal']],
+  ['Inner-ramp shoal','#f2d577',0.6,['ooid shoal','oolite shoal','oolitic shoal','grainstone shoal','shoal','skeletal shoal','barrier','beach','shoreface']],
+  ['Mid ramp','#a7dccd',2,['middle ramp','tempestite','storm bed','hummocky cross stratification','hcs']],
+  ['Outer ramp','#76b5c5',2.5,['below storm wave base','marl','nodular limestone']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','basinal','intrashelf basin']]],
+  [R.werner,['Ramps are distinct from rimmed shelves: no slope break, gradual offshore energy gradient, belts shift with sea level instead of flooding or exposing a flat top','Burchette & Wright (1992), as summarised by Werner (above)','published (second hand)'],
+   W_('inner-ramp lagoon 2, shoal 0.6, mid ramp 2, outer ramp 2.5; the inner and mid ramp span tens of km (20–50 km exposed by a 10 m fall); typical scale 10–500 km')]),
+ mixed:T('Mixed carbonate–siliciclastic shelf','Shelf & carbonate','linear','distal',[10,200],[
+  ['Coastal plain','#b8c978',1.2,['alluvial plain','coastal','continental']],
+  ['Siliciclastic shoreface','#f3d955',0.4,['shoreface','beach','upper shoreface','lower shoreface','foreshore','siliciclastic sand']],
+  ['Mixed inner shelf','#cfe0b6',1.5,['mixed carbonate siliciclastic','mixed shelf','inner shelf','muddy shelf','marly shelf']],
+  ['Carbonate shoals / patch reefs','#f0a8c4',0.6,['carbonate shoal','ooid shoal','bioherm','reef','carbonate bank']],
+  ['Outer carbonate shelf','#9edfd3',1.5,['outer shelf','carbonate shelf','open marine carbonate','bioclastic limestone']],
+  ['Slope','#6c9fcd',1,['continental slope','upper slope']],
+  ['Basin','#3c6aa3',2,['basin floor','deep basin','deep marine']]],
+  [R.harris,['Mixing of carbonate and siliciclastic sediment across a shelf (punctuated, facies and in-situ mixing)','Mount, J. F. (1984), Mixing of siliciclastic and carbonate sediments in shallow shelf environments, Geology 12','memory'],
+   W_('siliciclastic shoreface 0.4, mixed inner shelf 1.5, carbonate shoals 0.6, outer carbonate shelf 1.5, slope 1: carbonates take over away from the clastic input; typical scale 10–200 km')]),
+ glacial:T('Glaciomarine (ice shelf)','Shelf & carbonate','linear','distal',[5,300],[
+  ['Grounded ice (subglacial)','#c7c3d6',1,['subglacial','till','diamictite','grounding zone wedge','subglacial till','lodgement till','tillite']],
+  ['Grounding-line proximal','#a29bc0',1.5,['grounding line fan','ice contact','ice proximal','granulated diamict','subaqueous outwash fan','subaqueous fan']],
+  ['Sub-ice-shelf distal mud','#b9cfe0',5,['ice distal','laminated mud','glaciomarine mud','cyclopel','rhythmite']],
+  ['Null zone (far under the ice shelf)','#d7e4ec',8,['well sorted mud','sub ice shelf fines']],
+  ['Calving line (iceberg-rafted debris)','#9fb7c9',2,['ice front','ird','dropstone','calving front','iceberg zone']],
+  ['Open marine','#5f8fb8',3,['open marine mud','siliceous ooze','siliceous mud','diatom ooze','hemipelagic','open shelf']]],
+  [R.domack,['Grounding-line proximal 1.5 and distal mud 5: the proximal zone about 1.5 km wide and the null zone reached 5–10 km from the grounding line, in ratio','Domack & Harris (1998), above','published'],
+   W_('grounded ice 1 (open-ended up-ice), null zone 8, calving-line zone 2: they depend on the width of the ice shelf (tens to hundreds of km); typical scale 5–300 km; for a tidewater glacier in a fjord use a smaller map and custom belts')]),
+ // ---- Deep water
+ fan:T('Deep-water fan (mixed sand–mud)','Deep water','radial','distal',[10,300],[
+  ['Slope / canyon','#97a9bd',2,['upper slope','feeder canyon','slope channel','canyon fill']],
+  ['Channel–levee complex','#e7a043',2.5,['channel levee','channel levee system','channel','leveed channel','inner fan','upper fan','levee','overbank wedge']],
+  ['Proximal lobes','#f4d35e',2,['lobe','mid fan','middle fan','lobe complex','lobe axis','channel mouth lobe','sheet sand','frontal splay']],
+  ['Distal lobes / lobe fringe','#f6ebb0',2,['outer fan','distal fan','fringe','lower fan','lobe off axis']],
+  ['Basin plain','#5a80b3',2,['basin floor','basin','abyssal plain','hemipelagite','pelagic']]],
+  [R.prelat,R.gorsline,R.rr,W_('slope / canyon 2, channel–levee 2.5, proximal lobes 2, distal lobes 2: the two lobe belts take about half of the span, i.e. about one unconfined lobe length (35 km) for a 70 km fan; typical scale 10–300 km')],
+  {fan:40,ch:{name:'Feeder channel',host:[1,2]}}),
+ fansand:T('Sand-rich fan (canyon-fed)','Deep water','radial','distal',[3,60],[
+  ['Canyon / slope','#97a9bd',1.5,['feeder canyon','canyon fill','upper slope','slope gully']],
+  ['Feeder channel','#e7a043',0.8,['inner fan channel','upper fan channel','channel fill','fan channel','inner fan']],
+  ['Suprafan lobes','#f4d35e',3,['suprafan','mid fan','proximal lobe','lobe','sand rich lobe','amalgamated sandstone','lobe complex']],
+  ['Lobe fringe','#f6ebb0',1.5,['distal lobe','outer fan','fringe','lower fan','thin bedded turbidite']],
+  ['Basin plain','#5a80b3',2,['basin floor','basin','abyssal plain','hemipelagite']]],
+  [R.bouma,R.gorsline,R.rr,R.prelat,W_('canyon 1.5, short feeder channel 0.8, suprafan lobes 3, fringe 1.5: lobes dominate a small fan (a few confined lobes 5 × 8 km); wide fan angle 70°; typical scale 3–60 km')],
+  {fan:70,ch:{name:'Lobe channel',host:[1,2]}}),
+ fanmud:T('Mud-rich fan (delta-fed)','Deep water','radial','distal',[100,3000],[
+  ['Canyon / upper slope','#97a9bd',1,['feeder canyon','canyon','upper slope','canyon fill']],
+  ['Channel–levee complex','#e7a043',5,['channel levee','channel levee system','leveed channel','upper fan','middle fan','levee','overbank','channel']],
+  ['Lobes (frontal splays)','#f4d35e',1,['lobe','lobe complex','channel mouth lobe','sheet sand','lower fan','frontal lobe']],
+  ['Lobe fringe','#f6ebb0',0.6,['distal lobe','fringe','outer fan','thin bedded turbidite','distal fan']],
+  ['Basin plain','#5a80b3',2,['basin floor','basin','abyssal plain','hemipelagite','pelagic']]],
+  [R.bouma,R.gorsline,R.rr,R.prelat,W_('canyon 1, channel–levee 5, lobes 1, fringe 0.6: channel–levee systems dominate fans of 100–1000 km (Gorsline) while lobes keep their size (Prélat), so the lobe belts are a small part of the span; typical scale 100–3000 km')],
+  {fan:50,ch:{name:'Feeder channel',host:[1,2]}}),
+ apron:T('Slope apron / mass-transport','Deep water','linear','distal',[3,80],[
+  ['Shelf edge','#a9d3ec',1,['outer shelf','shelf break','shelf margin']],
+  ['Upper slope (gullies, bypass)','#8fb0cf',1.2,['slope gully','gully','bypass slope','slope channel']],
+  ['Slope (mass-transport complexes)','#b08fb8',1.5,['mtc','mass transport deposit','mtd','slump','slide','debrite','debris flow','olistostrome']],
+  ['Base-of-slope apron','#e9c46a',1.5,['toe of slope','base of slope','slope apron','apron','base of slope fan','turbidite apron','slope fan']],
+  ['Basin plain','#5a80b3',2,['basin floor','basin','abyssal plain','distal turbidite','hemipelagite']]],
+  [R.rr,R.psuShelf,W_('shelf edge 1, upper slope 1.2, mass-transport slope 1.5, base-of-slope apron 1.5; the slope (about 20 km on average) is most of the span; typical scale 3–80 km')]),
+ // ---- Lacustrine
+ lake:T('Rift lake (balanced-filled)','Lacustrine','linear','distal',[5,150],[
+  ['Alluvial fan / fan delta','#a8703d',1.2,['gilbert delta','border fault fan','fanglomerate','braided delta','alluvial']],
+  ['Lake shoreline','#f3d955',0.5,['shoreline','beach','lacustrine shoreface','lake margin sandstone','lacustrine delta front','mouth bar','strandline','lacustrine beach']],
+  ['Littoral','#bfe0b0',1.3,['sublittoral','littoral zone','nearshore lacustrine','lake margin','microbialite','stromatolite','coquina','lacustrine carbonate','shallow lacustrine']],
+  ['Profundal','#5f7f8c',2,['profundal zone','deep lake','offshore lacustrine','lacustrine shale','oil shale','anoxic lake','lake centre','deep lacustrine','lacustrine turbidite']]],
+  [R.bohacs,['Rift lakes: narrow border-fault margin with fan deltas, broad flexural margin with deltas and shorelines; littoral to profundal zonation','Standard lacustrine facies models, e.g. Talbot & Allen (1996) in Reading (ed.), Sedimentary Environments','memory'],
+   W_('fan delta 1.2, shoreline 0.5, littoral 1.3, profundal open-ended; seen from the flexural margin; typical scale 5–150 km')]),
+ playa:T('Shallow lake / playa (underfilled)','Lacustrine','linear','distal',[3,100],[
+  ['Alluvial fan','#a8703d',1.2,['fanglomerate','debris flow','proximal fan','alluvial']],
+  ['Sandflat (sheetflood)','#e2c48e',1.5,['sand flat','sheet flood','ephemeral stream','dry mudflat','wadi']],
+  ['Saline mudflat','#d6c1a6',1.5,['mudflat','mud flat','saline mud flat','sabkha','inland sabkha','evaporitic mudflat']],
+  ['Playa / ephemeral lake','#c9b3d6',2,['salt pan','salina','evaporite','halite','perennial saline lake','playa lake']]],
+  [R.bohacs,['Closed-basin succession alluvial fan – sandflat – saline mudflat – saline pan','Standard playa facies models, e.g. Hardie, Smoot & Eugster (1978)','memory'],
+   W_('alluvial fan 1.2, sandflat 1.5, saline mudflat 1.5, playa open-ended; typical scale 3–100 km')]),
+ // ---- Custom
+ custom:T('Custom','Custom','linear','distal',null,[['Proximal','#c9a66b',1],['Intermediate','#f0d65e',1],['Distal','#7fb0d8',1]],
+  [['Belts, order, colours and relative widths','Your own list, edited in panel 3 and remembered by this browser','on the page']])};
 // ---------- environment names -> belt index (case-insensitive, punctuation and plural tolerant) ----------
 const norm=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
-  .split(' ').map(w=>w.length>3&&w.endsWith('s')&&!w.endsWith('ss')?w.slice(0,-1):w).join(' ');
-const keys=b=>[b.name,...(b.alias||[]),...String(b.name).split(/[\/()]/)].map(norm).filter(Boolean);
+  .split(' ').map(w=>w.length>4&&/(x|ch|sh)es$/.test(w)?w.slice(0,-2):w.length>3&&w.endsWith('s')&&!w.endsWith('ss')?w.slice(0,-1):w).join(' ');
+const keysOf=b=>[b.name,...(b.alias||[]),...String(b.name).split(/[\/()]/)].map(norm).filter(Boolean);
+// lithology and generic words dropped before the second attempt (“mouth-bar sandstones” -> “mouth bar”)
+const GENERIC=new Set('sandstone sand sst mudstone mud shale siltstone silt claystone limestone dolomite dolostone grainstone packstone wackestone marl conglomerate deposit facies environment setting succession interval unit sediment rock bed'.split(' '));
+const strip=e=>e.split(' ').filter(w=>!GENERIC.has(w)).join(' ');
 function matchBelt(env,belts){const e=norm(env);if(!e)return -1;
   for(let i=0;i<belts.length;i++)if(norm(belts[i].name)===e)return i;
-  for(let i=0;i<belts.length;i++)if(keys(belts[i]).includes(e))return i;
-  return -1}
+  const K=belts.map(keysOf);
+  for(let i=0;i<belts.length;i++)if(K[i].includes(e))return i;
+  const s=strip(e);if(!s)return -1;
+  for(let i=0;i<belts.length;i++)if(K[i].includes(s))return i;
+  // longest name or alias contained in the description as whole words (at least 4 letters); a tie between two belts matches nothing
+  let best=-1,bl=0,tie=false;const pad=' '+s+' ';
+  for(let i=0;i<belts.length;i++)for(const k of K[i])if(k.length>=4&&pad.includes(' '+k+' ')){
+    if(k.length>bl){best=i;bl=k.length;tie=false}else if(k.length===bl&&i!==best)tie=true}
+  return tie?-1:best}
 // ---------- wells table: name, x, y, environment (tab, ';', ',' or spaces) ----------
 const NUMRE=/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
 const num=v=>{v=String(v??'').replace(/\s/g,'');if(/^[-+]?\d*,\d+$/.test(v))v=v.replace(',','.');return NUMRE.test(v)?+v:NaN};
@@ -235,12 +381,77 @@ function parseWells(text){const wells=[],errors=[];
     errors.push(`Line ${i+1}: expected name, x, y, environment — got “${s.slice(0,60)}”.`)});
   return{wells,errors}}
 // ---------- model ----------
+// channels: optional sub-environment drawn as sinuous ribbons along the transport direction inside the host belts (host = [first, last] belt index)
+function channelDefaults(M){const t=templates[M&&M.template]||{},c=t.ch||{},n=M&&M.belts?M.belts.length:3,sp=+(M&&M.span)||10000;
+  return{on:false,n:3,w:+(sp/40).toPrecision(2),sin:1.4,host:[Math.min(c.host?c.host[0]:0,n-1),Math.min(c.host?c.host[1]:0,n-1)],name:c.name||'Channel',color:'#e8a33d'}}
 function makeModel(key,o={}){const t=templates[key]||templates.shelf;
   const M={template:templates[key]?key:'shelf',belts:t.belts.map(b=>({name:b.name,color:b.color,w:b.w,alias:b.alias.slice()})),geom:t.geom,
-    az:90,src:[0,0],fan:90,span:10000,outside:t.outside,protrude:3000,noise:{amp:0,wl:5000,seed:1},warp:{on:true,R:2000},ext:{xmin:0,xmax:20000,ymin:0,ymax:20000},cell:100};
+    az:90,src:[0,0],fan:t.fan||90,span:10000,outside:t.outside,protrude:3000,noise:{amp:0,wl:5000,seed:1},warp:{on:true,R:2000},ext:{xmin:0,xmax:20000,ymin:0,ymax:20000},cell:100};
   for(const k in o)M[k]=o[k];
   M.noise=Object.assign({amp:0,wl:5000,seed:1},o.noise||{});M.warp=Object.assign({on:true,R:2000},o.warp||{});
+  M.channels=Object.assign(channelDefaults(M),o.channels||{});
   return M}
+// all belts: the ordered belts, then the channel belt when channels are on (code n + 1, not part of the proximal-distal order)
+const chOn=M=>!!(M.channels&&M.channels.on&&M.channels.n>0&&M.channels.w>0&&M.belts.length);
+const allBelts=M=>chOn(M)?M.belts.concat([{name:M.channels.name||'Channel',color:M.channels.color||'#e8a33d',w:0,alias:[],channel:true}]):M.belts;
+// ---------- model file (JSON): template, belts, geometry, irregularity, warping, extent, channels, wells ----------
+const fin=(v,d)=>{v=+v;return isFinite(v)?v:d};
+function normModel(M){const c=Object.assign(channelDefaults(M),M.channels||{}),nb=M.belts.length;
+  const h=[0,1].map(i=>Math.max(0,Math.min(nb-1,Math.round(fin(c.host&&c.host[i],0)))));
+  return{template:templates[M.template]?M.template:'custom',
+    belts:M.belts.map(b=>({name:String(b.name),color:String(b.color).toLowerCase(),w:+b.w,alias:(b.alias||[]).map(String)})),
+    geom:M.geom==='radial'?'radial':'linear',az:fin(M.az,90),src:[fin(M.src&&M.src[0],0),fin(M.src&&M.src[1],0)],fan:fin(M.fan,90),span:fin(M.span,10000),
+    outside:M.outside==='strike'?'strike':'distal',protrude:fin(M.protrude,0),
+    noise:{amp:fin(M.noise&&M.noise.amp,0),wl:fin(M.noise&&M.noise.wl,5000),seed:Math.round(fin(M.noise&&M.noise.seed,1))},
+    warp:{on:!!(M.warp&&M.warp.on),R:fin(M.warp&&M.warp.R,2000)},
+    ext:{xmin:fin(M.ext.xmin,0),xmax:fin(M.ext.xmax,1),ymin:fin(M.ext.ymin,0),ymax:fin(M.ext.ymax,1)},cell:fin(M.cell,100),
+    channels:{on:!!c.on,n:Math.max(0,Math.round(fin(c.n,3))),w:fin(c.w,100),sin:Math.max(1,fin(c.sin,1.4)),host:[Math.min(h[0],h[1]),Math.max(h[0],h[1])],name:String(c.name||'Channel'),color:String(c.color||'#e8a33d').toLowerCase()}}}
+const normWell=w=>{const o={name:String(w.name),x:+w.x,y:+w.y,env:String(w.env??'')};if(typeof w.b==='number'&&w.b>=0)o.b=w.b;return o};
+function saveModel(M,wells){return JSON.stringify({format:'gde-model',version:1,generator:'GDE map generator',model:normModel(M),wells:(wells||[]).map(normWell)},null,1)+'\n'}
+function openModel(text){const errors=[];let J;
+  try{J=JSON.parse(text)}catch(e){return{errors:['Not a JSON file: '+e.message]}}
+  if(!J||J.format!=='gde-model'||!J.model)return{errors:['Not a GDE model file (format “gde-model” expected).']};
+  const m=J.model,B=Array.isArray(m.belts)?m.belts:[];
+  if(B.length<2)errors.push('The model needs at least two belts.');
+  B.forEach((b,i)=>{if(!b||typeof b.name!=='string'||!b.name.trim())errors.push(`Belt ${i+1}: no name.`);
+    if(!b||!/^#[0-9a-f]{6}$/i.test(String(b.color)))errors.push(`Belt ${i+1}: colour must be #rrggbb.`);
+    if(!b||!(+b.w>0))errors.push(`Belt ${i+1}: relative width must be > 0.`)});
+  const e=m.ext||{};if(!(+e.xmax>+e.xmin)||!(+e.ymax>+e.ymin))errors.push('Map extent: xmax > xmin and ymax > ymin expected.');
+  if(errors.length)return{errors};
+  const wells=[];(Array.isArray(J.wells)?J.wells:[]).forEach((w,i)=>{if(!w||!isFinite(+w.x)||!isFinite(+w.y)){errors.push(`Well ${i+1}: x, y expected.`);return}
+    const v=Object.assign({name:'W-'+(i+1)},w);if(!(typeof v.b==='number'&&v.b>=0&&v.b<=B.length))delete v.b;wells.push(normWell(v))});
+  const key=templates[m.template]?m.template:'custom';
+  return{M:normModel(Object.assign(makeModel(key),m,{belts:B,channels:Object.assign(channelDefaults(Object.assign({},m,{belts:B})),m.channels||{})})),wells,errors}}
+// ---------- typical scale: a gentle note when the map is far smaller or larger than the template's typical system ----------
+function scaleHint(M){const t=templates[M.template];if(!t||!t.scale)return null;
+  const e=M.ext,km=Math.max(e.xmax-e.xmin,e.ymax-e.ymin)/1000,[lo,hi]=t.scale,f=v=>v>=10?Math.round(v):+v.toPrecision(2);
+  if(km<lo/4)return`This map is ${f(km)} km across; a ${t.name.toLowerCase()} is typically ${lo}–${hi} km. The template keeps its proportions, so the map may show only one or two belts: fine for a detail map, otherwise check the coordinate unit (metres expected).`;
+  if(km>hi*4)return`This map is ${f(km)} km across; a ${t.name.toLowerCase()} is typically ${lo}–${hi} km. One system may not fill such an area: several systems, or a larger-scale template, may be more realistic.`;
+  return null}
+// amplitude A of y = A sin(2 pi x / L) whose sinuosity (length along the curve / L) is s
+function sinuosityOf(A,L){const k=2*Math.PI*A/L;let s=0;const N=256;for(let i=0;i<N;i++){const c=Math.cos(2*Math.PI*(i+.5)/N);s+=Math.sqrt(1+k*k*c*c)}return s/N}
+function sineAmp(s,L){if(!(s>1))return 0;let a=0,b=2*L;for(let i=0;i<60;i++){const m=(a+b)/2;if(sinuosityOf(m,L)<s)a=m;else b=m}return(a+b)/2}
+// ribbons: centreline = base + A sin(2 pi s / L + p1) + A/4 sin(2 pi s / (0.43 L) + p2) in (along, across) coordinates; linear: along = projection
+// on the transport direction, across = distance to its right; radial: along = r, across = r * angle from the axis (channels fan out from the source).
+// One ribbon goes through each well in the channel belt; the others are spread across the map (linear) or the fan opening (radial), with a
+// seeded jitter, and shifted sideways when they would cover a well of another belt inside the host belts. Wavelength L = 12 channel widths.
+function makeChannels(M,W,nb,baseAt){const C=M.channels,w=+C.w,L=12*w,A=sineAmp(+C.sin||1,L),rad=M.geom==='radial';
+  const a=M.az*RAD,ux=Math.sin(a),uy=Math.cos(a),h0=C.host[0],h1=C.host[1],rnd=mulberry32((+M.noise.seed|0)^0x2545f491);
+  const sa=(x,y)=>{const dx=x-M.src[0],dy=y-M.src[1],p=dx*ux+dy*uy,q=dx*uy-dy*ux;if(!rad)return[p,q];const r=Math.hypot(p,q);return[r,r?r*Math.atan2(q,p):0]};
+  const R=[];const mk=(base,i)=>({base,p1:2*Math.PI*rnd(),p2:2*Math.PI*rnd()});
+  const off=(c,s)=>{const g=rad?Math.min(1,s/L):1,u=2*Math.PI/L,v=u/.43;
+    return[g*(A*Math.sin(u*s+c.p1)+A/4*Math.sin(v*s+c.p2)),g*(A*u*Math.cos(u*s+c.p1)+A/4*v*Math.cos(v*s+c.p2))]};
+  const inside=(c,x,y)=>{const [s,q]=sa(x,y);if(rad&&s<=0)return false;const [o,d]=off(c,s),ctr=rad?s*c.base+o:c.base+o;return Math.abs(q-ctr)/Math.sqrt(1+d*d)<w/2};
+  const chW=W.filter(x=>x.b===nb&&isFinite(x.x)&&isFinite(x.y));
+  for(const x of chW){const c=mk(0),[s,q]=sa(x.x,x.y),o=off(c,s)[0];c.base=rad?(s>0?(q-o)/s:0):q-o;c.well=x.name;R.push(c)}
+  const m=Math.max(0,Math.round(C.n)-chW.length),others=W.filter(x=>x.b>=0&&x.b<nb&&isFinite(x.x)&&isFinite(x.y)&&(()=>{const k=baseAt(x.x,x.y);return k>=h0&&k<=h1})());
+  let lo,hi;if(rad){lo=-.42*M.fan*RAD;hi=.42*M.fan*RAD}else{const e=M.ext,qs=[[e.xmin,e.ymin],[e.xmax,e.ymin],[e.xmin,e.ymax],[e.xmax,e.ymax]].map(([x,y])=>sa(x,y)[1]);lo=Math.min(...qs);hi=Math.max(...qs)}
+  const sp=(hi-lo)/Math.max(1,m);
+  for(let i=0;i<m;i++){const c=mk(0),b0=lo+(i+.5)*sp+(rnd()-.5)*.5*sp;let ok=false;
+    for(let t=0;t<9&&!ok;t++){const sh=(t%2?1:-1)*Math.ceil(t/2)*1.3*(w+2*A);c.base=rad?b0+sh/Math.max(1,(M.span||1)*.5):b0+sh;ok=!others.some(x=>inside(c,x.x,x.y))}
+    if(ok)R.push(c)}
+  const at=(x,y)=>{for(const c of R)if(inside(c,x,y))return true;return false};
+  return{ribbons:R,at,host:[h0,h1],A,L}}
 // prior boundaries: belt k starts at the sum of the widths before it, scaled so that the most distal belt starts at `span` from the source
 function prior(M){const w=M.belts.map(b=>Math.max(1e-9,+b.w||1)),n1=w.length-1,c=[];let s=0;
   for(let k=0;k<n1;k++){s+=w[k];c.push(s)}
@@ -337,24 +548,26 @@ function target(d,b,t){const n1=t.length,A=b>0?t[b-1]:-Infinity,B=b<n1?t[b]:Infi
   if(isFinite(A)&&isFinite(B)){const m=.3*(B-A);return clamp(d,A+m,B-m)}
   return isFinite(A)?Math.max(d,A+.3*wf):Math.min(d,B-.3*wf)}
 // ---------- model build ----------
-function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),F=field(M);
-  const W=(wells||[]).map(w=>({name:w.name,x:+w.x,y:+w.y,env:w.env,b:(typeof w.b==='number'&&w.b>=0&&w.b<n)?w.b:matchBelt(w.env,M.belts)}));
+function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),F=field(M),AB=allBelts(M);
+  const W=(wells||[]).map(w=>({name:w.name,x:+w.x,y:+w.y,env:w.env,b:(typeof w.b==='number'&&w.b>=0&&w.b<AB.length)?w.b:matchBelt(w.env,AB)}));
   const dw=W.map(w=>F(w.x,w.y)),bw=W.map(w=>w.b);
   const cal=calibrate(dw,bw,p,{names:W.map(w=>w.name),belts:M.belts.map(b=>b.name)}),t=cal.t;
   const R=+(M.warp&&M.warp.R)||0,warp={on:!!(M.warp&&M.warp.on),R,wells:[],centres:[],lam:[]};let Wf=null;
   if(warp.on&&R>0){const R2=R*R,bad=[];
-    W.forEach((w,i)=>{if(w.b>=0&&isFinite(dw[i])&&classify(dw[i],t)!==w.b)bad.push(i)});
-    if(bad.length){const sel=W.map((w,i)=>i).filter(i=>W[i].b>=0&&isFinite(dw[i])&&bad.some(j=>Math.hypot(W[i].x-W[j].x,W[i].y-W[j].y)<3*R));
+    W.forEach((w,i)=>{if(w.b>=0&&w.b<n&&isFinite(dw[i])&&classify(dw[i],t)!==w.b)bad.push(i)});
+    if(bad.length){const sel=W.map((w,i)=>i).filter(i=>W[i].b>=0&&W[i].b<n&&isFinite(dw[i])&&bad.some(j=>Math.hypot(W[i].x-W[j].x,W[i].y-W[j].y)<3*R));
       const del=sel.map(i=>bad.includes(i)?target(dw[i],W[i].b,t)-dw[i]:0);
       const A=sel.map(i=>sel.map(j=>kern((W[i].x-W[j].x)**2+(W[i].y-W[j].y)**2,R2)+(i===j?1e-9:0)));
       const lam=solve(A,del);
       if(lam){const cx=sel.map(i=>W[i].x),cy=sel.map(i=>W[i].y);warp.wells=bad;warp.centres=sel;warp.lam=lam;
         Wf=(x,y)=>{let s=0;for(let k=0;k<cx.length;k++){const dx=x-cx[k],dy=y-cy[k],r2=dx*dx+dy*dy;if(r2<9*R2)s+=lam[k]*kern(r2,R2)}return s}}}}
   const D=Wf?(x,y)=>F(x,y)+Wf(x,y):F;
-  const beltAt=(x,y)=>classify(D(x,y),t);
-  const mod={M,t,prior:p,cal,warp,D,beltAt,wells:W};
+  const base=(x,y)=>classify(D(x,y),t),ch=chOn(M)?makeChannels(M,W,n,base):null;
+  const beltAt=ch?(x,y)=>{const k=base(x,y);return k>=ch.host[0]&&k<=ch.host[1]&&ch.at(x,y)?n:k}:base;
+  const mod={M,t,prior:p,cal,warp,D,beltAt,wells:W,ch,belts:AB};
   mod.check=W.map((w,i)=>{const bm=beltAt(w.x,w.y);
-    return{name:w.name,x:w.x,y:w.y,env:w.env,b:w.b,i,d:dw[i],belt:bm,honoured:w.b>=0&&bm===w.b,warped:warp.wells.includes(i),
+    const chOut=!!ch&&w.b===n&&bm!==n&&(()=>{const k=base(w.x,w.y);return k<ch.host[0]||k>ch.host[1]})();
+    return{name:w.name,x:w.x,y:w.y,env:w.env,b:w.b,i,d:dw[i],belt:bm,honoured:w.b>=0&&bm===w.b,warped:warp.wells.includes(i),chOut,
       conflict:cal.conflicts.includes(i),dist:opt.dist===false?NaN:distToBoundary(mod,w.x,w.y,M.ext)}});
   return mod}
 // distance from (x, y) to the nearest belt boundary: 72 rays marched in steps of 1/400 of the extent diagonal, then bisection
@@ -391,20 +604,21 @@ function fitAzimuth(M,wells,opt={}){const n=M.belts.length;
 function nodeGrid(mod,ext,cell,name){const nx=Math.max(2,Math.floor((ext.xmax-ext.xmin)/cell+1e-9)+1),ny=Math.max(2,Math.floor((ext.ymax-ext.ymin)/cell+1e-9)+1);
   const codes=new Int16Array(nx*ny);
   for(let j=0;j<ny;j++){const y=ext.ymin+j*cell;for(let i=0;i<nx;i++)codes[j*nx+i]=mod.beltAt(ext.xmin+i*cell,y)+1}
-  return{name:name||'GDE',nx,ny,x0:ext.xmin,y0:ext.ymin,dx:cell,dy:cell,codes,legend:mod.M.belts.map((b,i)=>[i+1,b.name])}}
+  return{name:name||'GDE',nx,ny,x0:ext.xmin,y0:ext.ymin,dx:cell,dy:cell,codes,legend:allBelts(mod.M).map((b,i)=>[i+1,b.name])}}
 // polygons: cell raster exactly covering the extent (row 0 at ymax), traced and simplified with shared arcs, in map coordinates
 function polygons(mod,ext,cell,opt={}){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.ymin,nx=Math.max(1,Math.round(W/cell)),ny=Math.max(1,Math.round(H/cell)),cx=W/nx,cy=H/ny;
   const L=new Int16Array(nx*ny),s=Math.max(1,opt.stride|0);
   if(s===1)for(let j=0;j<ny;j++){const y=ext.ymax-(j+.5)*cy;for(let i=0;i<nx;i++)L[j*nx+i]=mod.beltAt(ext.xmin+(i+.5)*cx,y)}
   else{// preview: d evaluated every s cells and interpolated bilinearly (d is smooth); exact where a corner is infinite (outside the fan)
-    const mx=Math.ceil((nx-1)/s)+1,my=Math.ceil((ny-1)/s)+1,Dg=new Float64Array(mx*my),t=mod.t,X=i=>ext.xmin+(Math.min(i,nx-1)+.5)*cx,Y=j=>ext.ymax-(Math.min(j,ny-1)+.5)*cy;
+    const mx=Math.ceil((nx-1)/s)+1,my=Math.ceil((ny-1)/s)+1,Dg=new Float64Array(mx*my),t=mod.t,ch=mod.ch,nb=mod.M.belts.length,X=i=>ext.xmin+(Math.min(i,nx-1)+.5)*cx,Y=j=>ext.ymax-(Math.min(j,ny-1)+.5)*cy;
     for(let b=0;b<my;b++)for(let a=0;a<mx;a++)Dg[b*mx+a]=mod.D(X(a*s),Y(b*s));
     for(let b=0;b<my-1;b++)for(let a=0;a<mx-1;a++){const i0=a*s,j0=b*s,i1=Math.min((a+1)*s,nx-1),j1=Math.min((b+1)*s,ny-1);
       const d00=Dg[b*mx+a],d10=Dg[b*mx+a+1],d01=Dg[(b+1)*mx+a],d11=Dg[(b+1)*mx+a+1],ok=isFinite(d00+d10+d01+d11);
       for(let j=j0;j<=j1;j++){const v=j1>j0?(j-j0)/(j1-j0):0;for(let i=i0;i<=i1;i++){const u=i1>i0?(i-i0)/(i1-i0):0;
-        L[j*nx+i]=ok?classify((d00*(1-u)+d10*u)*(1-v)+(d01*(1-u)+d11*u)*v,t):mod.beltAt(ext.xmin+(i+.5)*cx,ext.ymax-(j+.5)*cy)}}}}
+        let k=ok?classify((d00*(1-u)+d10*u)*(1-v)+(d01*(1-u)+d11*u)*v,t):mod.beltAt(ext.xmin+(i+.5)*cx,ext.ymax-(j+.5)*cy);
+        if(ok&&ch&&k>=ch.host[0]&&k<=ch.host[1]&&ch.at(ext.xmin+(i+.5)*cx,ext.ymax-(j+.5)*cy))k=nb;L[j*nx+i]=k}}}}
   const r=polygonize(L,nx,ny,{minArea:opt.minArea??4,tol:opt.tol??.7});
-  const groups=mod.M.belts.map((b,i)=>({code:i+1,name:b.name}));
+  const groups=allBelts(mod.M).map((b,i)=>({code:i+1,name:b.name}));
   const P=toMap(r.polys,q=>[ext.xmin+q[0]*cx,ext.ymax-q[1]*cy],groups);P.raster={L:r.L,nx,ny,cx,cy};return P}
 
 // ---- copied from the Discrete map digitizer (md-discrete-core): number formatting, components, tracing, shared-arc simplification, writers
@@ -548,8 +762,18 @@ const examples={
    wells:[{name:'Delta-1',x:14500,y:24600,env:'Delta plain'},{name:'Delta-2',x:18900,y:20200,env:'Delta front'},{name:'Delta-3',x:14900,y:13700,env:'Prodelta'},{name:'Delta-4',x:30200,y:19500,env:'Shelf'}]},
  fan:{title:'Deep-water fan, 3 wells',M:makeModel('fan',{az:182,src:[25000,39500],fan:40,span:34500,noise:{amp:1800,wl:9000,seed:11},warp:{on:true,R:5000},
    ext:{xmin:0,xmax:50000,ymin:0,ymax:40000},cell:100}),
-   wells:[{name:'Fan-1',x:24600,y:28500,env:'Channel-levee complex'},{name:'Fan-2',x:16800,y:17500,env:'Proximal lobes'},{name:'Fan-3',x:30500,y:7000,env:'Distal lobes'}]}};
-window.GDE={templates,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
+   wells:[{name:'Fan-1',x:24600,y:28500,env:'Channel-levee complex'},{name:'Fan-2',x:16800,y:17500,env:'Proximal lobes'},{name:'Fan-3',x:30500,y:7000,env:'Distal lobes'}]},
+ estuary:{title:'Tide-dominated estuary, 5 wells',M:makeModel('estuary',{az:8,src:[21000,1500],fan:40,span:38000,outside:'strike',protrude:7000,noise:{amp:1200,wl:7000,seed:5},warp:{on:true,R:3500},
+   ext:{xmin:0,xmax:42000,ymin:0,ymax:48000},cell:100}),
+   wells:[{name:'Est-1',x:21600,y:4800,env:'Tidal-fluvial channel'},{name:'Est-2',x:23200,y:10200,env:'Tidal flat'},{name:'Est-3',x:21500,y:17500,env:'Tidal bar'},
+    {name:'Est-4',x:27800,y:25500,env:'Tidal sand ridge'},{name:'Est-5',x:17500,y:41000,env:'Offshore shelf'}]},
+ ramp:{title:'Carbonate ramp, 4 wells',M:makeModel('ramp',{az:115,src:[2000,30000],span:50000,noise:{amp:1800,wl:9000,seed:21},warp:{on:true,R:4000},
+   ext:{xmin:0,xmax:60000,ymin:0,ymax:40000},cell:100}),
+   wells:[{name:'Ramp-1',x:9000,y:31000,env:'Peritidal'},{name:'Ramp-2',x:17500,y:22000,env:'Ooid shoal'},{name:'Ramp-3',x:26000,y:23000,env:'Mid ramp'},{name:'Ramp-4',x:41000,y:13000,env:'Outer ramp'}]},
+ lake:{title:'Rift lake, 4 wells',M:makeModel('lake',{az:268,src:[30000,20000],span:20000,noise:{amp:700,wl:5000,seed:9},warp:{on:true,R:2500},
+   ext:{xmin:0,xmax:30000,ymin:0,ymax:36000},cell:50}),
+   wells:[{name:'Lake-1',x:26500,y:24000,env:'Fan delta'},{name:'Lake-2',x:20200,y:15000,env:'Lake shoreline'},{name:'Lake-3',x:15000,y:22000,env:'Littoral'},{name:'Lake-4',x:6000,y:17000,env:'Profundal'}]}};
+window.GDE={templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
 })();
 

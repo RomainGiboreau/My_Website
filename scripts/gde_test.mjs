@@ -55,6 +55,110 @@ test('parseWells: tab, semicolon (decimal comma) and comma tables, header skippe
   assert.equal(d.wells[0].env, 'delta front');
 });
 
+// ---------- library of depositional systems ----------
+const GROUPS = ['Continental', 'Coastal & deltaic', 'Shelf & carbonate', 'Deep water', 'Lacustrine', 'Custom'];
+const STATUS = /^(published|published \(abstract\)|published \(second hand\)|existence confirmed|memory|on the page)$/;
+test('library: every system and group present, grouped in the UI order', () => {
+  for (const k of ['fluvial', 'aeolian', 'estuary', 'wavedelta', 'delta', 'shelf', 'carbonate', 'ramp', 'mixed', 'glacial', 'fan', 'fansand', 'fanmud', 'apron', 'lake', 'playa', 'custom'])
+    assert.ok(G.templates[k], 'missing template ' + k);
+  assert.deepEqual(arr(G.groups), GROUPS);
+  for (const g of GROUPS) assert.ok(Object.values(G.templates).some(t => t.group === g), 'empty group ' + g);
+});
+test('library: >= 3 belts, unique names, valid colours, widths > 0, a group, a source entry, a typical scale', () => {
+  for (const [k, t] of Object.entries(G.templates)) {
+    assert.ok(t.belts.length >= 3, k);
+    assert.ok(GROUPS.includes(t.group), k + ' group ' + t.group);
+    assert.equal(new Set(t.belts.map(b => G.norm(b.name))).size, t.belts.length, k + ' duplicate belt names');
+    for (const b of t.belts) assert.ok(/^#[0-9a-f]{6}$/i.test(b.color) && b.w > 0 && b.name, k + ' ' + b.name);
+    assert.ok(Array.isArray(t.refs) && t.refs.length >= 1, k + ' sources');
+    for (const r of t.refs) { assert.equal(r.length, 3, k); assert.ok(r[0] && r[1], k); assert.ok(STATUS.test(r[2]), k + ' status ' + r[2]); }
+    if (k !== 'custom') { assert.ok(t.scale && t.scale[0] > 0 && t.scale[1] > t.scale[0], k + ' scale'); }
+    assert.ok(['linear', 'radial'].includes(t.geom) && ['distal', 'strike'].includes(t.outside), k);
+  }
+});
+test('library: aliases unique within a template (no name or alias shared by two belts)', () => {
+  for (const [k, t] of Object.entries(G.templates)) {
+    const seen = new Map();
+    t.belts.forEach((b, i) => { for (const key of new Set(G.keysOf(b))) { assert.ok(!seen.has(key) || seen.get(key) === i, `${k}: “${key}” in ${seen.has(key) ? t.belts[seen.get(key)].name : ''} and ${b.name}`); seen.set(key, i); } });
+  }
+});
+test('matching: common well descriptions find the expected belt', () => {
+  const cases = [['shelf', 'upper shoreface', 'Shoreface'], ['shelf', 'Lower shoreface', 'Shoreface'], ['shelf', 'HCS sandstone', 'Offshore transition'], ['shelf', 'foreshore', 'Shoreface'],
+    ['delta', 'mouth bar', 'Delta front'], ['delta', 'Mouth-bar sandstones', 'Delta front'], ['wavedelta', 'beach ridges', 'Beach-ridge strandplain'],
+    ['estuary', 'tidal bar', 'Tidal sand bars'], ['estuary', 'tidal flat', 'Tidal flats and meanders'], ['estuary', 'tidal sand ridge', 'Tidal sand ridges'],
+    ['aeolian', 'interdune', 'Interdune-dominated erg margin'], ['aeolian', 'aeolian dune sandstone', 'Dune field (erg)'], ['aeolian', 'dry wadi', 'Wadi plain'], ['aeolian', 'sabkha', 'Sabkha / playa'],
+    ['ramp', 'outer ramp', 'Outer ramp'], ['ramp', 'ooid shoal', 'Inner-ramp shoal'], ['ramp', 'mid-ramp tempestites', 'Mid ramp'],
+    ['carbonate', 'reef', 'Platform margin (reef / shoal)'], ['carbonate', 'lagoon', 'Platform interior / lagoon'],
+    ['lake', 'profundal', 'Profundal'], ['lake', 'fan delta', 'Alluvial fan / fan delta'], ['lake', 'littoral', 'Littoral'], ['playa', 'saline mudflat', 'Saline mudflat'],
+    ['fan', 'lobe fringe', 'Distal lobes / lobe fringe'], ['fansand', 'suprafan lobe', 'Suprafan lobes'], ['fanmud', 'channel-levee', 'Channel–levee complex'],
+    ['apron', 'mass transport complex', 'Slope (mass-transport complexes)'], ['glacial', 'grounding-line fan', 'Grounding-line proximal'], ['mixed', 'patch reef', 'Carbonate shoals / patch reefs'],
+    ['fluvial', 'point bar', 'Meandering belt']];
+  for (const [k, env, want] of cases) {
+    const B = G.templates[k].belts, i = G.matchBelt(env, B);
+    assert.ok(i >= 0 && B[i].name === want, `${k}: “${env}” -> ${i >= 0 ? B[i].name : 'no match'}, expected ${want}`);
+  }
+  assert.equal(G.matchBelt('reef', G.templates.fan.belts), -1, 'no partial match across words');
+  assert.equal(G.matchBelt('sandstone', G.templates.shelf.belts), -1, 'a lithology alone matches nothing');
+});
+// ---------- scale hint ----------
+test('scale hint: a 10x mismatch with the typical scale gives a note, within 3x none', () => {
+  const t = G.templates.fanmud, lo = t.scale[0] * 1000, hi = t.scale[1] * 1000;
+  const M = s => G.makeModel('fanmud', { ext: { xmin: 0, xmax: s, ymin: 0, ymax: s * .7 } });
+  assert.ok(G.scaleHint(M(lo / 10)), 'map 10x smaller than the smallest typical');
+  assert.equal(G.scaleHint(M(lo / 3)), null, 'within 3x');
+  assert.equal(G.scaleHint(M(Math.sqrt(lo * hi))), null);
+  assert.equal(G.scaleHint(M(hi * 2.9)), null);
+  assert.ok(G.scaleHint(M(hi * 10)), 'map 10x larger');
+  assert.match(G.scaleHint(M(lo / 10)), /km/);
+  assert.equal(G.scaleHint(G.makeModel('custom', { ext: { xmin: 0, xmax: 10, ymin: 0, ymax: 10 } })), null, 'custom: no typical scale');
+});
+// ---------- save / open model ----------
+test('model file: save -> open gives an identical model and wells; bad files are rejected', () => {
+  const ex = G.examples.delta, M = JSON.parse(JSON.stringify(ex.M));
+  M.template = 'custom'; M.belts[1].name = 'Delta front sands'; M.belts.push({ name: 'Abyssal plain', color: '#22446a', w: 3, alias: [] });
+  M.channels = Object.assign(G.channelDefaults(M), { on: true, n: 4, w: 350, sin: 1.4 });
+  const W = ex.wells.map(w => Object.assign({}, w)); W[0].b = 0;
+  const txt = G.saveModel(M, W), r = G.openModel(txt);
+  assert.deepEqual(arr(r.errors), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.M)), JSON.parse(JSON.stringify(G.normModel(M))));
+  assert.deepEqual(JSON.parse(JSON.stringify(r.wells)), arr(W).map(w => ({ name: w.name, x: w.x, y: w.y, env: w.env, ...(w.b != null ? { b: w.b } : {}) })));
+  assert.equal(G.saveModel(r.M, r.wells), txt, 'second round trip byte-identical');
+  assert.deepEqual(arr(G.build(r.M, r.wells).t), arr(G.build(M, W).t));
+  assert.ok(G.openModel('not json').errors.length);
+  assert.ok(G.openModel('{"format":"something else"}').errors.length);
+  assert.ok(G.openModel(JSON.stringify({ format: 'gde-model', version: 1, model: { belts: [{ name: 'A', color: 'red', w: 1 }] } })).errors.length);
+});
+// ---------- channels (sub-environments) ----------
+test('channels: ribbons only inside their host belts, a channel well is honoured, other wells avoided', () => {
+  const ex = G.examples.delta, M = JSON.parse(JSON.stringify(ex.M));
+  M.channels = Object.assign(G.channelDefaults(M), { on: true, n: 3, w: 400, sin: 1.3 });
+  const nb = M.belts.length, AB = G.allBelts(M);
+  assert.equal(AB.length, nb + 1); assert.equal(AB[nb].name, 'Distributary channel');
+  const W = ex.wells.concat([{ name: 'Ch-1', x: 13000, y: 26500, env: 'distributary channel' }]);
+  const mod = G.build(M, W);
+  for (const c of mod.check) assert.ok(c.honoured, `${c.name}: ${c.belt} vs ${c.b}`);
+  assert.equal(mod.check[4].b, nb);
+  const g = G.nodeGrid(mod, M.ext, 200);
+  let inCh = 0, bad = 0;
+  for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) { if (g.codes[j * g.nx + i] !== nb + 1) continue; inCh++;
+    const x = g.x0 + i * g.dx, y = g.y0 + j * g.dy, base = G.classify(mod.D(x, y), mod.t); if (base < M.channels.host[0] || base > M.channels.host[1]) bad++; }
+  assert.ok(inCh > 50, 'channels drawn: ' + inCh); assert.equal(bad, 0, 'channel cells outside the host belts');
+  const off = G.build(Object.assign({}, M, { channels: Object.assign({}, M.channels, { on: false }) }), ex.wells);
+  assert.deepEqual(arr(off.t), arr(mod.t), 'channel wells do not move the belt boundaries');
+  const P = G.polygons(mod, M.ext, 150);
+  assert.ok(P.some(p => p.code === nb + 1 && p.name === 'Distributary channel'));
+  const e = M.ext, cell = Math.sqrt((e.xmax - e.xmin) * (e.ymax - e.ymin) / 250000);
+  const a = G.polygons(mod, e, cell, { minArea: 0, tol: 0 }).raster.L, b = G.polygons(mod, e, cell, { minArea: 0, tol: 0, stride: 3 }).raster.L;
+  let diff = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) diff++;
+  assert.ok(diff / a.length < 0.005, `preview with channels: ${diff} of ${a.length}`);
+});
+test('channels: sinuosity of the drawn centreline matches the requested value', () => {
+  for (const s of [1.1, 1.5, 2]) { const A = G.sineAmp(s, 1000); let L = 0, px = 0, py = 0;
+    for (let i = 1; i <= 4000; i++) { const x = i / 4000 * 1000, y = A * Math.sin(2 * Math.PI * x / 1000); L += Math.hypot(x - px, y - py); px = x; py = y; }
+    near(L / 1000, s, 0.01, 'sinuosity ' + s); }
+  assert.equal(G.sineAmp(1, 1000), 0);
+});
+
 // ---------- threshold calibration ----------
 const P5 = [1000, 2000, 3000, 4000, 5000];        // 6 belts, prior boundaries
 test('calibrate: wells in belts 1, 2, 4 compatible with the prior keep the prior', () => {
@@ -186,14 +290,17 @@ test('warping: a conflicting well ends in its belt, the map beyond 3 radii is un
 });
 
 // ---------- examples ----------
-for (const k of ['delta', 'fan']) test(`example ${k}: every well honoured, belts in order away from the source`, () => {
+for (const k of ['delta', 'fan', 'estuary', 'ramp', 'lake']) test(`example ${k}: every well honoured without warping, belts in order away from the source`, () => {
   const ex = G.examples[k];
-  assert.ok(ex.wells.length === (k === 'delta' ? 4 : 3));
+  assert.ok(ex, 'missing example ' + k);
+  if (k === 'delta') assert.equal(ex.wells.length, 4); else if (k === 'fan') assert.equal(ex.wells.length, 3); else assert.ok(ex.wells.length >= 3);
   const mod = G.build(ex.M, ex.wells);
   for (const c of mod.check) { assert.ok(c.b >= 0, c.name + ' matched'); assert.ok(c.honoured, `${c.name}: ${c.belt} vs ${c.b}`); assert.ok(c.dist > 0); }
+  assert.deepEqual(arr(mod.warp.wells), [], 'no warping needed');
   const t = arr(mod.t); for (let i = 1; i < t.length; i++) assert.ok(t[i] > t[i - 1]);
   const g = G.nodeGrid(mod, ex.M.ext, 500);
   const used = new Set(arr(g.codes)); assert.ok(used.size >= 4, 'belts on the map ' + [...used]);
+  assert.equal(G.scaleHint(ex.M), null, 'example at a typical scale');
 });
 
 // ---------- distance to the nearest boundary ----------
@@ -213,7 +320,7 @@ test('polygons: straight belts give one polygon per belt, areas add up to the ex
   for (const p of P) assert.ok(G.sArea(p.outer) > 0, 'exterior counter-clockwise (y up)');
 });
 test('preview polygons (d interpolated every 3 cells) agree with the exact raster on > 99.5 % of the cells', () => {
-  for (const k of ['delta', 'fan']) {
+  for (const k of Object.keys(G.examples)) {
     const ex = G.examples[k], mod = G.build(ex.M, ex.wells), e = ex.M.ext, cell = Math.sqrt((e.xmax - e.xmin) * (e.ymax - e.ymin) / 250000);
     const a = G.polygons(mod, ex.M.ext, cell, { minArea: 0, tol: 0 }).raster.L, b = G.polygons(mod, ex.M.ext, cell, { minArea: 0, tol: 0, stride: 3 }).raster.L;
     let diff = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) diff++;
