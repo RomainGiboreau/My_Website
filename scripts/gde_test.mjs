@@ -912,6 +912,48 @@ test('facies export: GeoJSON with EOD and facies levels (polygons and centreline
   const ir = G.irapLevels(E, F).trim().split('\n'); assert.equal(ir.filter(l => l.startsWith('999')).length, E.reduce((s, p) => s + 1 + p.holes.length, 0) + F.polys.length + F.lines.length);
   assert.ok(ir.some(l => / 1(0[1-9]|1[0-9])\.000000$/.test(l)), 'facies polygon codes 101+');
 });
+test('examples select: every example listed once and named, grouped by type, buttons replaced; each example loads with all its wells honoured', () => {
+  const keys = Object.keys(G.examples), listed = G.EXGROUPS.flatMap(g => g[1]);
+  assert.deepEqual([...listed].sort(), [...keys].sort(), 'the select lists every example'); assert.equal(new Set(listed).size, listed.length, 'once');
+  for (const k of listed) assert.ok(G.EXNAMES[k], 'name ' + k);
+  assert.deepEqual(G.EXGROUPS[0][1], ['atlas', 'atlastr'], 'atlas-style margins first');
+  assert.ok(/id="iEx"/.test(html) && /id="tbEx"/.test(html) && !/id="iCoast"/.test(html) && !/id="iDelta"/.test(html), 'a select replaces the example buttons');
+  assert.ok(/GDE\.EXGROUPS/.test(html) && /loadExample\(k\)/.test(html), 'the select is filled from the catalogue and loads without asking');
+  for (const k of ['coast', 'rimmed']) assert.ok(G.examples[k], 'old hash link #' + k);
+  for (const k of listed) { const ex = G.examples[k], mod = G.build(ex.M, ex.wells); for (const c of mod.check) assert.ok(c.honoured, `${k}: ${c.name} (${c.env}) not honoured`); }
+});
+const eodKeysOf = (mod, M, cell) => { const E = G.eodPolygons(mod, M.ext, cell), a = new Map(); for (const p of E) a.set(p.key, (a.get(p.key) || 0) + p.area); return { E, a }; };
+test('atlas example 1: equatorial passive margin with a marginal plateau — eight EOD domains, slope wrapping the plateau, deltas, fairways, fans, platforms, MTCs; wells honoured', () => {
+  const ex = G.examples.atlas, M = ex.M, mod = G.build(M, ex.wells), e = M.ext, A = extA(e);
+  assert.equal(ex.view, 'facies'); assert.ok(ex.wells.length >= 7 && ex.wells.length <= 10, ex.wells.length + ' wells');
+  for (const c of mod.check) assert.ok(c.honoured && !c.warped, `${c.name} (${c.env})`);
+  assert.ok(new Set(mod.check.filter(c => c.ft).map(c => c.ft)).size >= 3, 'wells described as facies objects of 3 types or more');
+  const { E, a } = eodKeysOf(mod, M, 1500);
+  for (const k of ['basement', 'fluvdelta', 'clastshelf', 'isslope', 'carbshelf', 'slope', 'deep', 'abyssal']) assert.ok((a.get(k) || 0) > .004 * A, 'EOD domain ' + k);
+  // the slope wraps around the plateau: its domain spans most of the map both ways; the carbonate shelf is much wider on the plateau
+  const sl = E.filter(p => p.key === 'slope'), bb = sl.flatMap(p => p.outer), xs = bb.map(q => q[0]), ys = bb.map(q => q[1]);
+  assert.ok(Math.max(...xs) - Math.min(...xs) > .8 * (e.xmax - e.xmin) && Math.max(...ys) - Math.min(...ys) > .45 * (e.ymax - e.ymin), 'slope wraps the plateau');
+  const at = G.eodAt(mod), wid = x => { let n = 0; for (let y = e.ymin; y < e.ymax; y += 1000) if (G.EOD[at(x, y)].key === 'carbshelf') n++; return n; };
+  assert.ok(wid(e.xmin + .7 * (e.xmax - e.xmin)) > 3 * wid(e.xmin + .1 * (e.xmax - e.xmin)), 'plateau: wide carbonate shelf');
+  const F = mod.facies, n = t => F.filter(o => o.type === t).length;
+  assert.ok(n('lobe') >= 4 && n('river') >= 4, 'several rivers and deltaic lobes along the coast'); assert.ok(n('fairway') >= 2, 'canyon-fed fairways'); assert.ok(n('fan') >= 4, 'a string of basin-floor fans');
+  assert.ok(n('mtc') >= 1 && n('platform') >= 2, 'MTCs, carbonate platforms');
+  for (const o of F.filter(o => o.type === 'platform')) assert.equal(G.EOD[at(o.x, o.y)].key, 'carbshelf', 'platform on the carbonate shelf');
+  for (const o of F.filter(o => o.type === 'mtc')) assert.ok(['slope', 'deep', 'abyssal'].includes(G.EOD[at(o.x, o.y)].key), 'MTC on the slope or at its toe');
+});
+test('atlas example 2: the same margin at a transgressive interval — carbonate platform belt near the coast, fluvial-deltaic restricted landward, shelf shales, fairways fed from the west', () => {
+  const ex = G.examples.atlastr, M = ex.M, mod = G.build(M, ex.wells), e = M.ext, A = extA(e), W = e.xmax - e.xmin;
+  assert.equal(ex.view, 'facies'); for (const c of mod.check) assert.ok(c.honoured && !c.warped, `${c.name} (${c.env})`);
+  const { a } = eodKeysOf(mod, M, 1500), a1 = eodKeysOf(G.build(G.examples.atlas.M, G.examples.atlas.wells), G.examples.atlas.M, 1500).a;
+  assert.ok((a.get('fluvdelta') || 0) < .75 * (a1.get('fluvdelta') || 0), 'fluvial-deltaic restricted landward');
+  const sh = M.lines.find(l => /shoreline/i.test(l.name)), at = G.eodAt(mod); let carb = 0, tot = 0;
+  for (let x = e.xmin + .05 * W; x < e.xmax; x += .05 * W) { for (let y = e.ymin; y < e.ymax; y += 500) if (G.sdist(sh.pts, x, y) > 6000) { tot++; if (G.EOD[at(x, y)].key === 'carbshelf') carb++; break; } }
+  assert.ok(carb >= .8 * tot, `carbonate platform belt just basinward of the coast (${carb}/${tot})`);
+  assert.ok(M.belts.some(b => /shale/i.test(b.name)), 'shelf shales');
+  const fw = mod.facies.filter(o => o.type === 'fairway'); assert.ok(fw.length >= 2);
+  for (const o of fw) assert.ok(o.path[0][0] < e.xmin + .45 * W, 'fairway fed from the west ' + o.path[0][0]);
+  assert.equal(JSON.stringify(G.examples.atlas.M.lines.find(l => /toe/i.test(l.name)).pts), JSON.stringify(M.lines.find(l => /toe/i.test(l.name)).pts), 'same margin (toe of slope)');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
