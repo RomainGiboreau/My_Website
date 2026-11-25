@@ -619,6 +619,154 @@ for (const k of ['coast', 'rimmed', 'canyon', 'rift']) test(`v2 example ${k}: us
   assert.equal(G.scaleHint(M), null);
 });
 
+
+// =====================================================================================
+// ---------- margin profile: domains, one system per domain, presets, transitions, linked feeders ----------
+const DOMS = ['cont', 'coast', 'shelf', 'slope', 'deep'];
+// straight margin: mountain front y = 36 km, shoreline 20 km, shelf edge 0, toe of slope -8 km; basin to the south (lines drawn eastward)
+const marginModel = (preset = 'passive', o = {}) => {
+  const sp = G.marginSpec(G.MARGINS[preset].doms), Y = { mf: 36000, sh: 20000, se: 0, toe: -8000 };
+  const lines = sp.lines.map(([name, k, role]) => ({ name, k, pts: [[-60000, Y[role]], [60000, Y[role]]] }));
+  return G.makeMargin(preset, Object.assign({ ext: { xmin: -30000, xmax: 30000, ymin: -30000, ymax: 40000 }, noise: { amp: 0, wl: 5000, seed: 1 }, warp: { on: false, R: 2000 }, lines }, o));
+};
+const nameAt = (mod, x, y) => G.allBelts(mod.M)[mod.beltAt(x, y)].name;
+test('margin: domains along the profile from the key lines (continental, coastal, shelf, slope, deep; a domain without its line is omitted)', () => {
+  const M = marginModel(), mod = G.build(M, []);
+  assert.equal(G.domainAt(mod, 0, 30000), 'cont'); assert.equal(G.domainAt(mod, 0, 24000), 'cont');
+  assert.equal(G.domainAt(mod, 0, 19000), 'coast'); assert.equal(G.domainAt(mod, 0, 5000), 'shelf');
+  assert.equal(G.domainAt(mod, 0, -4000), 'slope'); assert.equal(G.domainAt(mod, 0, -15000), 'deep');
+  assert.equal(G.domainAt(mod, 0, 38000), 'cont', 'hinterland beyond the mountain front');
+  const sp = G.marginSpec(G.MARGINS.passive.doms);
+  assert.deepEqual(sp.lines.map(l => l[2]), ['mf', 'sh', 'se', 'toe']);
+  // rift lake: no slope domain, so no toe-of-slope line; the slope break separates littoral (shelf) and profundal (deep)
+  const r = G.marginSpec(G.MARGINS.rift.doms);
+  assert.ok(!r.belts.some(b => b.dom === 'slope')); assert.ok(!r.lines.some(l => l[2] === 'toe'));
+  const Mr = marginModel('rift'), mr = G.build(Mr, []);
+  assert.equal(G.domainAt(mr, 0, 10000), 'shelf'); assert.equal(G.domainAt(mr, 0, -2000), 'deep');
+});
+test('margin: one system per domain, each domain uses its system’s belts; selects filtered by domain', () => {
+  for (const d of DOMS) { const keys = G.domSystems(d); assert.ok(keys.length >= 2, d); for (const k of keys) assert.equal(G.DOMSYS[d][k].dom, d); }
+  const M = marginModel(), sp = G.marginSpec(G.MARGINS.passive.doms);
+  for (const d of DOMS) {
+    const want = G.DOMSYS[d][G.MARGINS.passive.doms[d]].belts.map(b => b[0]);
+    assert.deepEqual(M.belts.filter(b => b.dom === d).map(b => b.name), want, d);
+  }
+  // domains in profile order, belts of a domain contiguous
+  const order = M.belts.map(b => DOMS.indexOf(b.dom)); for (let i = 1; i < order.length; i++) assert.ok(order[i] >= order[i - 1]);
+  // another continental system: only the continental belts change
+  const doms = Object.assign({}, G.MARGINS.passive.doms, { cont: 'aeolian' }), s2 = G.marginSpec(doms);
+  assert.deepEqual(s2.belts.filter(b => b.dom === 'cont').map(b => b.name), G.DOMSYS.cont.aeolian.belts.map(b => b[0]));
+  assert.deepEqual(s2.belts.filter(b => b.dom !== 'cont').map(b => b.name), sp.belts.filter(b => b.dom !== 'cont').map(b => b.name));
+  // the map: a point in each domain is drawn with a belt of that domain's system
+  const mod = G.build(M, []);
+  for (const [y, d] of [[30000, 'cont'], [17000, 'coast'], [5000, 'shelf'], [-4000, 'slope'], [-15000, 'deep']]) {
+    const c = G.allBelts(M)[mod.beltAt(25000, y)]; assert.equal(c.dom, d, `${y}: ${c.name}`);
+  }
+});
+test('margin presets fill all domains (siliciclastic passive, carbonate rimmed, mixed, rift lake, arid) and build', () => {
+  for (const k of ['passive', 'carbonate', 'mixed', 'rift', 'arid']) {
+    const P = G.MARGINS[k]; assert.ok(P && P.name, k);
+    for (const d of DOMS) { assert.ok(d in P.doms, k + ' ' + d); if (P.doms[d]) assert.ok(G.DOMSYS[d][P.doms[d]], k + ' ' + d + ' ' + P.doms[d]); }
+    if (k !== 'rift') for (const d of DOMS) assert.ok(P.doms[d], k + ' fills ' + d);
+    const M = marginModel(k); assert.equal(M.template, 'margin'); assert.equal(M.margin.preset, k);
+    const doms = new Set(M.belts.map(b => b.dom)); for (const d of DOMS) assert.equal(doms.has(d), !!P.doms[d], k + ' ' + d);
+    const mod = G.build(M, []), g = G.nodeGrid(mod, M.ext, 1000), used = new Set(arr(g.codes).map(c => G.allBelts(M)[c - 1].dom));
+    for (const d of DOMS) if (P.doms[d]) assert.ok(used.has(d), `${k}: domain ${d} on the map`);
+  }
+  assert.equal(G.MARGINS.carbonate.doms.shelf, 'rimmed'); assert.equal(G.MARGINS.passive.doms.cont, 'fluvial');
+});
+test('margin transitions: mixed zones on by default at the domain boundaries, the map grades across them', () => {
+  const M = marginModel(), sp = G.marginSpec(G.MARGINS.passive.doms), B = M.belts;
+  const bnd = []; for (let k = 0; k < B.length - 1; k++) if (B[k].dom !== B[k + 1].dom) bnd.push(k);
+  const mk = M.mix.map(m => m.k);
+  for (const k of bnd) if (!(B[k].dom === 'slope' && sp.inf != null)) assert.ok(mk.includes(k), 'mixed zone at ' + B[k].name + ' | ' + B[k + 1].name);
+  assert.ok(M.mix.every(m => m.w > 0));
+  const mod = G.build(M, []);
+  assert.equal(nameAt(mod, 0, 0), B[mk.find(k => B[k].dom === 'shelf')].name + ' + ' + B[mk.find(k => B[k].dom === 'shelf') + 1].name, 'hatched transition on the shelf edge');
+  const sharp = G.build(Object.assign({}, M, { mix: [] }), []); assert.ok(!/\+/.test(nameAt(sharp, 0, 0)));
+  // the interdeltaic coast grades too: transition of the along-strike variants
+  const cls = new Set(); for (let y = 14000; y < 26000; y += 100) cls.add(nameAt(mod, 25000, y));
+  assert.ok([...cls].some(n => /\+/.test(n)), [...cls].join(', '));
+});
+const feeder = (o = {}) => Object.assign({ line: 1, x: 0, y: 20000, az: 180, river: { on: true, w: 1500, sin: 1.25 }, delta: { on: true, L: 6000, open: 55, asym: 0 }, canyon: { on: false, w: 900 }, fan: { on: false, L: 14000, open: 50, asym: 0 } }, o);
+test('feeder: a river valley landward of the delta apex, the delta plain spreads seaward from the apex (no delta plain landward of it)', () => {
+  const M = marginModel('passive', { feeders: [feeder()] }), mod = G.build(M, []), apexY = 20000 + .6 * 6000;
+  const valley = G.allBelts(M).find(c => c.kind === 'valley'); assert.ok(valley && valley.dom === 'cont', 'valley class');
+  let onV = 0; for (let x = -8000; x <= 8000; x += 100) if (nameAt(mod, x, 26000) === valley.name) onV++;
+  assert.ok(onV >= 8, 'the valley crosses the floodplain (y = 26 km) near the feeder axis ' + onV);
+  assert.equal(nameAt(mod, 22000, 26000), 'Floodplain–coastal plain'); assert.equal(G.domainAt(mod, 22000, 26000), 'cont');
+  for (let y = apexY + 300; y < 34000; y += 400) for (let x = -7000; x <= 7000; x += 500) assert.notEqual(nameAt(mod, x, y), 'Delta plain', `delta plain landward of the apex at ${x}, ${y}`);
+  assert.equal(nameAt(mod, 0, 17000), 'Delta plain', 'delta plain seaward of the apex');
+  const seq = []; for (let y = 19800; y > 2000; y -= 200) { const n = nameAt(mod, 0, y); if (seq[seq.length - 1] !== n) seq.push(n); }
+  const core = seq.filter(n => !/\+/.test(n));
+  assert.deepEqual(core.slice(0, 3), ['Delta plain', 'Delta front', 'Prodelta'], seq.join(' > '));
+  assert.ok(!seq.some(n => G.allBelts(M).find(c => c.name === n).dom === 'cont'), 'no continental belt seaward of the shoreline on the axis');
+  // the delta plain fans out: wider at the shoreline than near the apex
+  const width = y => { let c = 0; for (let x = -9000; x <= 9000; x += 100) if (nameAt(mod, x, y) === 'Delta plain') c++; return c; };
+  assert.ok(width(17000) > width(22500) + 10, `fan: ${width(22500)} near the apex, ${width(17000)} seaward`);
+  const M0 = marginModel('passive', { feeders: [feeder({ river: { on: false, w: 1500, sin: 1.25 } })] }), g0 = G.nodeGrid(G.build(M0, []), M0.ext, 500);
+  assert.ok(!arr(g0.codes).some(c => G.allBelts(M0)[c - 1].kind === 'valley'), 'no valley without the river');
+});
+test('feeder: canyon at the shelf edge in line with the delta, basin-floor fan at the toe of slope at the canyon mouth', () => {
+  const f = feeder({ canyon: { on: true, w: 900 }, fan: { on: true, L: 14000, open: 50, asym: 0 } }), M = marginModel('passive', { feeders: [f] }), FG = G.feederGeom(M);
+  assert.equal(FG.canyons.length, 1); const C = FG.canyons[0].pts, h = C[0], e = C[C.length - 1];
+  assert.ok(Math.abs(h[0]) < 300 && h[1] > 0 && h[1] < 6000, 'canyon head on the axis, cut into the outer shelf ' + h);
+  assert.ok(Math.abs(e[1] + 8000) < 400 && Math.abs(e[0]) < 1500, 'canyon mouth at the toe of slope ' + e);
+  const fan = FG.sources.find(s => s.kind === 'fan'); assert.ok(fan, 'fan source');
+  assert.ok(Math.abs(fan.x - e[0]) < 400 && Math.abs(fan.y - e[1]) < 400 && Math.abs(((fan.az - 180) + 540) % 360 - 180) < 15, JSON.stringify(fan));
+  assert.equal(M.lines[fan.line].name, 'Toe of slope');
+  const mod = G.build(M, []), cn = G.allBelts(M).find(c => c.kind === 'canyon').name;
+  assert.equal(nameAt(mod, 0, -4000), cn); assert.notEqual(nameAt(mod, 10000, -4000), cn); assert.equal(G.domainAt(mod, 10000, -4000), 'slope');
+  assert.equal(G.allBelts(M)[mod.beltAt(0, -12000)].dom, 'deep'); assert.notEqual(nameAt(mod, 0, -12000), 'Basin plain', 'fan in front of the canyon');
+  assert.equal(nameAt(mod, 22000, -15000), 'Basin plain', 'basin plain beside the fan');
+  // an oblique feeder: the canyon head stays on the feeder axis
+  const a = 200 * Math.PI / 180, f2 = feeder({ az: 200, canyon: { on: true, w: 900 }, fan: { on: true, L: 14000, open: 50, asym: 0 } }), C2 = G.feederGeom(marginModel('passive', { feeders: [f2] })).canyons[0].pts[0];
+  const off = Math.abs((C2[0] - 0) * Math.cos(a) - (C2[1] - 20000) * Math.sin(a)); assert.ok(off < 400, 'head on the oblique axis ' + off);
+});
+test('fan deltas along a border fault: lobes elongated along the fault and coalescing (bajada), not concentric targets', () => {
+  const base = { geom: 'lines', ext: { xmin: -15000, xmax: 15000, ymin: -15000, ymax: 15000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 }, span: 16000,
+    lines: [{ name: 'Lake margin', k: 0, pts: [[-12000, -20000], [-12000, 20000]] }], faults: [{ pts: [[12000, -14000], [12000, 14000]], side: -1, off: 0, taper: 3000 }] };
+  const one = G.build(G.makeModel('lake', Object.assign({}, base, { sources: [{ kind: 'fault', fault: 0, x: 12000, y: 0, az: 270, L: 3000, open: 70, asym: 0 }] })), []);
+  let along = 0, across = 0; for (let y = 0; y < 14000; y += 50) if (one.beltAt(11900, y) === 0) along = y;
+  for (let x = 12000; x > 0; x -= 50) if (one.beltAt(x, 0) === 0) across = 12000 - x;
+  assert.ok(along > 1.8 * across, `elongated along the fault: ${along} along vs ${across} across`);
+  const two = G.build(G.makeModel('lake', Object.assign({}, base, { sources: [-3500, 3500].map(y => ({ kind: 'fault', fault: 0, x: 12000, y, az: 270, L: 3000, open: 70, asym: 0 })) })), []);
+  for (let y = -3500; y <= 3500; y += 250) assert.equal(two.beltAt(11500, y), 0, 'coalesced fan-delta apron along the fault at ' + y);
+});
+test('legend grouped by domain: every class once, domains in profile order', () => {
+  const M = marginModel('passive', { feeders: [feeder({ canyon: { on: true, w: 900 }, fan: { on: true, L: 14000, open: 50, asym: 0 } })] });
+  const Gr = G.legendGroups(M), AB = G.allBelts(M);
+  assert.deepEqual(Gr.map(g => g.dom), DOMS); assert.ok(Gr.every(g => g.name));
+  const all = Gr.flatMap(g => g.items); assert.deepEqual([...all].sort((a, b) => a - b), AB.map((c, i) => i));
+  for (const g of Gr) for (const i of g.items) if (AB[i].kind === 'belt' || AB[i].kind === 'variant') assert.equal(AB[i].dom, g.dom, AB[i].name);
+  const v2 = G.legendGroups(G.examples.canyon.M); assert.equal(v2.length, 1); assert.equal(v2[0].items.length, G.allBelts(G.examples.canyon.M).length);
+});
+test('margin model file: save -> open identical (margin, belts with domains, feeders); v2 files without them still open', () => {
+  const M = marginModel('passive', { feeders: [feeder({ canyon: { on: true, w: 900 }, fan: { on: true, L: 14000, open: 50, asym: .2 } })] });
+  const W = [{ name: 'A', x: 0, y: 17000, env: 'delta plain' }], txt = G.saveModel(M, W), r = G.openModel(txt);
+  assert.deepEqual(arr(r.errors), []); assert.equal(r.M.template, 'margin'); assert.equal(r.M.margin.preset, 'passive');
+  assert.deepEqual(r.M.belts.map(b => b.dom), M.belts.map(b => b.dom)); assert.equal(r.M.feeders.length, 1);
+  assert.equal(G.saveModel(r.M, r.wells), txt, 'byte-identical second round trip');
+  const a = G.build(M, W), b = G.build(r.M, r.wells); for (const [x, y] of [[0, 17000], [0, -4000], [5000, -12000], [-20000, 30000]]) assert.equal(a.beltAt(x, y), b.beltAt(x, y));
+  const v2 = G.openModel(G.saveModel(G.examples.canyon.M, G.examples.canyon.wells)); assert.deepEqual(arr(v2.errors), []); assert.equal(v2.M.template, 'fansand'); assert.ok(!v2.M.margin);
+});
+for (const k of ['margin', 'carbmargin', 'rift']) test(`margin example ${k}: every well honoured without warping, one map from hinterland to basin`, () => {
+  const ex = G.examples[k]; assert.ok(ex, 'missing ' + k); const M = ex.M;
+  const mod = G.build(M, ex.wells); for (const c of mod.check) assert.ok(c.honoured, `${c.name}: ${c.env} -> ${G.allBelts(M)[c.belt].name}`);
+  assert.deepEqual(arr(mod.warp.wells), []);
+  const g = G.nodeGrid(mod, M.ext, 800), doms = new Set(arr(g.codes).map(c => G.allBelts(M)[c - 1].dom));
+  if (k === 'margin') {
+    assert.equal(M.template, 'margin'); assert.equal(ex.wells.length, 6); for (const d of DOMS) assert.ok(doms.has(d), 'domain ' + d);
+    assert.equal(M.feeders.length, 2); assert.ok(Math.abs(M.feeders[0].delta.asym - M.feeders[1].delta.asym) >= .4, 'two deltas of different polarity');
+    assert.ok(M.feeders.every(f => f.river.on)); assert.equal(M.feeders.filter(f => f.canyon.on && f.fan.on).length, 1, 'one canyon and fan, in line with the larger delta');
+    const big = M.feeders.reduce((a, b) => b.delta.L > a.delta.L ? b : a); assert.ok(big.canyon.on);
+    assert.ok(M.bodies.some(b => b.type === 'mtc'), 'MTC apron on the slope');
+    const wd = new Set(ex.wells.map(w => G.allBelts(M)[mod.check.find(c => c.name === w.name).belt].dom)); assert.ok(wd.size >= 5, 'wells across the domains ' + [...wd]);
+    assert.equal(G.examples.coast, ex, 'the old #coast link opens the passive margin');
+  }
+  if (k === 'carbmargin') { assert.equal(M.margin.preset, 'carbonate'); assert.equal(M.bodies.filter(b => b.type === 'pinnacle').length, 3); assert.ok(doms.has('cont')); assert.equal(G.examples.rimmed, ex, 'the old #rimmed link opens the carbonate margin'); }
+  if (k === 'rift') { assert.ok(M.sources.filter(s => s.kind === 'fault').length >= 3); }
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
