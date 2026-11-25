@@ -492,7 +492,7 @@ test('paint grid (brush) round trip in the model file; pushes d distal where pai
   assert.deepEqual(arr(r.errors), []); assert.deepEqual(JSON.parse(JSON.stringify(r.M.paint)), JSON.parse(JSON.stringify(G.normModel(M).paint)));
   assert.equal(G.saveModel(r.M, r.wells), txt);
   const a = G.build(ex.M, [], { dist: false }).D, b = G.build(r.M, [], { dist: false }).D;
-  near(b(30000, 20000) - a(30000, 20000), 1500, 40); near(b(5000, 5000), a(5000, 5000), 1e-6);
+  near(b(30000, 20000) - a(30000, 20000), 1500, 40); near(b(5000, 45000), a(5000, 45000), 1e-6);
 });
 test('v1 model file opens (no lines, no layers) and gives the v1 map', () => {
   const v1 = JSON.stringify({ format: 'gde-model', version: 1, generator: 'GDE map generator', model: { template: 'delta', belts: G.templates.delta.belts.map(b => ({ name: b.name, color: b.color, w: b.w, alias: b.alias })),
@@ -593,7 +593,7 @@ test('key line import: CSV x,y, IRAP lines (999 separators) and GeoJSON LineStri
 test('key lines and faults export: IRAP lines and GeoJSON LineString', () => {
   const ex = G.examples.coast, L = G.lineFeatures(ex.M);
   assert.ok(L.length >= 2 && L.every(l => l.pts.length >= 10));
-  const ir = G.irapPolylines(L).trim().split('\n'); assert.equal(ir.filter(s => s.startsWith('999')).length, L.length);
+  const ir = G.irapPolylines(L).trim().split('\n'); assert.equal(ir.filter(s => s === '999.000000 999.000000 999.000000').length, L.length);
   const gj = JSON.parse(G.geojsonLines(L)); assert.equal(gj.features[0].geometry.type, 'LineString'); assert.ok(gj.features[0].properties.name);
 });
 test('propose a sketch: lines and sources from the wells honour them (delta, shelf, fan)', () => {
@@ -611,7 +611,7 @@ for (const k of ['coast', 'rimmed', 'canyon', 'rift']) test(`v2 example ${k}: us
   assert.equal(M.geom, 'lines'); assert.ok(M.lines.length >= 1);
   const mod = G.build(M, ex.wells); for (const c of mod.check) assert.ok(c.honoured, `${c.name}: ${c.env} -> ${G.allBelts(M)[c.belt].name}`);
   assert.deepEqual(arr(mod.warp.wells), []);
-  if (k === 'coast') { assert.equal(ex.wells.length, 5); assert.equal(M.sources.length, 2); assert.ok(Math.abs(M.sources[0].asym - M.sources[1].asym) >= .4, 'different polarity'); }
+  if (k === 'coast') { assert.equal(ex.wells.length, 6); assert.equal(M.feeders.length, 2); assert.ok(Math.abs(M.feeders[0].delta.asym - M.feeders[1].delta.asym) >= .4, 'different polarity'); }
   if (k === 'rimmed') { assert.equal(ex.wells.length, 4); assert.equal(M.bodies.filter(b => b.type === 'pinnacle').length, 3); assert.ok(ex.wells.some(w => /reef core/i.test(w.env))); }
   if (k === 'canyon') { assert.equal(ex.wells.length, 3); assert.ok(M.layers.some(l => l.role === 'lith' && l.trend.on && l.trend.w > 0)); assert.ok(M.bodies.some(b => b.layer) && M.bodies.some(b => b.shape === 'ribbon')); }
   if (k === 'rift') { assert.ok(M.faults.length >= 2 && M.faults.some(f => f.layer)); assert.ok(M.sources.some(s => s.kind === 'fault')); assert.ok(M.faults.some(f => f.off > 0)); }

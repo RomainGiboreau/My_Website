@@ -494,7 +494,7 @@ function normV2(M,nb){const col=c=>/^#[0-9a-f]{6}$/i.test(String(c))?String(c).t
     paint:null,variants:(M.variants||[]).filter(v=>v&&v.k>=0&&v.k<nb&&v.name).map(v=>({k:Math.round(v.k),name:String(v.name),color:col(v.color),alias:(v.alias||[]).map(String)})),
     ctx:M.ctx&&M.ctx.name?{name:String(M.ctx.name),color:col(M.ctx.color),alias:(M.ctx.alias||[]).map(String)}:null,inf:M.inf!=null&&isFinite(+M.inf)?Math.round(+M.inf):null};
   const pg=normGrid(M.paint);if(pg&&M.paint.v.length===pg.nx*pg.ny&&M.paint.v.some(v=>+v))o.paint=Object.assign(pg,{v:M.paint.v.map(v=>r6(fin(v,0)))});
-  if(M.template==='margin'&&M.margin&&M.margin.doms)o.margin={preset:MARGINS[M.margin.preset]?M.margin.preset:null,doms:Object.fromEntries(DOMAINS.map(([d])=>[d,M.margin.doms[d]&&DOMSYS[d][M.margin.doms[d]]?M.margin.doms[d]:null]))};
+  if(M.template==='margin'&&M.margin&&M.margin.doms)o.margin={preset:MARGINS[M.margin.preset]?M.margin.preset:null,doms:Object.fromEntries(DOMAINS.map(([d])=>[d,M.margin.doms[d]&&DOMSYS[d][M.margin.doms[d]]?M.margin.doms[d]:null])),af:clamp(Math.round(fin(M.margin.af,0)),0,30)};
   const F=(M.feeders||[]).filter(f=>f&&isFinite(+f.x)&&isFinite(+f.y)).map(normFeeder);if(F.length)o.feeders=F;
   return o}
 // feeder (source-to-sink): river valley landward, delta on the shoreline, canyon at the shelf edge, fan at the toe of slope, in line
@@ -655,9 +655,9 @@ function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),AB=allBelts(M),
   const W=(wells||[]).map(w=>{let b,pair=null;if(typeof w.b==='number'&&w.b>=0&&w.b<AB.length)b=w.b;else{const r=matchEnv(w.env,AB,n);b=r.b;pair=r.pair}
     if(b>=0&&AB[b].kind==='mix')pair=[AB[b].a,AB[b].b];return{name:w.name,x:+w.x,y:+w.y,env:w.env,b,pair}});
   const BD=prepBodies(M,AB,W),cb=W.map(w=>w.body!=null?-1:calIdx(w,AB,n));
-  const mixAt=new Array(n).fill(-1),mixVarAt=new Array(n).fill(-1),mixW=new Array(n).fill(0),varAt=new Array(n).fill(-1);let ctx=-1,vlI=-1,cyI=-1,vFrom=n;
+  const mixAt=new Array(n).fill(-1),mixVarAt=new Array(n).fill(-1),mixW=new Array(n).fill(0),varAt=new Array(n).fill(-1);let ctx=-1,vlI=-1,cyI=-1,vFrom=n,dsI=-1,dsK=-1;
   AB.forEach((c,i)=>{if(c.kind==='mix'){if(c.vmix)mixVarAt[c.a]=i;else{mixAt[c.a]=i;mixW[c.a]=+((M.mix||[]).find(m=>m.k===c.a)||{}).w||0}}else if(c.kind==='variant')varAt[c.k]=i;else if(c.kind==='ctx')ctx=i;
-    else if(c.kind==='valley'){vlI=i;vFrom=c.from}else if(c.kind==='canyon')cyI=i});
+    else if(c.kind==='valley'){vlI=i;vFrom=c.from}else if(c.kind==='canyon')cyI=i;else if(c.kind==='distrib'){dsI=i;dsK=c.host}});
   const FE=FD.FE;
   const dw=W.map(w=>F(w.x,w.y));
   const cal=calibrate(dw,cb,p,{names:W.map(w=>w.name),belts:M.belts.map(b=>b.name),mixK:mixAt.map((v,k)=>v>=0?k:-1).filter(k=>k>=0),
@@ -681,6 +681,7 @@ function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),AB=allBelts(M),
     if(ctx>=0&&d<0)return ctx;const k=classify(d,t);
     if(FE){if(cyI>=0&&FE.canyonAt(x,y))return cyI;if(vlI>=0&&k>=vFrom&&k<n&&M.belts[k].dom==='cont'&&FE.valleyAt(x,y))return vlI}
     let vr=null;const inVar=()=>vr==null?(vr=!!(FD.mem&&FD.mem(x,y)<0)):vr;
+    if(dsI>=0&&k===dsK&&FE.distribAt(x,y)&&!inVar())return dsI;
     for(const j of [k-1,k])if(j>=0&&mixAt[j]>=0){const wl=Math.max(1,3*mixW[j]),hw=mixW[j]/2*(1+.45*mixN.f(x/wl+.31,y/wl+.77,.5)/.75);if(Math.abs(d-t[j])<hw)return mixVarAt[j]>=0&&inVar()?mixVarAt[j]:mixAt[j]}
     if(varAt[k]>=0&&inVar())return varAt[k];
     if(ch&&k>=ch.host[0]&&k<=ch.host[1]&&ch.at(x,y))return n;
@@ -938,8 +939,8 @@ const DS=(dom,name,belts,o={})=>Object.assign({dom,name,belts},o);
 const DOMSYS={
  cont:{
   fluvial:DS('cont','Fluvial: alluvial fans, braided plain, floodplain crossed by rivers',[
-   ['Alluvial fan / proximal','#a8703d',1.2,['fanglomerate','debris flow','sheetflood','proximal fan','alluvial cone','conglomerate','alluvial fan']],
-   ['Braided plain','#d29f5a',1.6,['braided river','braided','braidplain','braided channel','braided stream','gravelly braided river','sandy braided river']],
+   ['Alluvial fan / proximal','#a8703d',.6,['fanglomerate','debris flow','sheetflood','proximal fan','alluvial cone','conglomerate','alluvial fan']],
+   ['Braided plain','#d29f5a',1.4,['braided river','braided','braidplain','braided channel','braided stream','gravelly braided river','sandy braided river']],
    ['Floodplain–coastal plain','#a5c47a',3.2,['floodplain','coastal plain','flood plain','overbank','crevasse splay','paleosol','palaeosol','floodbasin','levee','alluvial plain']]],
    {mf:true,valley:['Meandering channel belt','#e5c784',['meandering river','meander belt','meandering belt','meandering','point bar','meandering channel','channel belt','lateral accretion','fluvial channel','incised valley','incised valley fill','river channel'],2]}),
   aeolian:DS('cont','Aeolian erg with wadis',[
@@ -1027,11 +1028,11 @@ const MARGINS={
  passive:{name:'Siliciclastic passive margin',doms:{cont:'fluvial',coast:'deltas',shelf:'clastic',slope:'apron',deep:'fans'}},
  carbonate:{name:'Carbonate rimmed margin',doms:{cont:'coastsabkha',coast:'tidalflat',shelf:'rimmed',slope:'forereef',deep:'basin'}},
  mixed:{name:'Mixed carbonate–siliciclastic margin',doms:{cont:'fluvial',coast:'wavedeltas',shelf:'mixedshelf',slope:'apron',deep:'mudfans'}},
- rift:{name:'Rift lake',doms:{cont:'riftfan',coast:'lakeshore',shelf:'littoral',slope:null,deep:'profundal'}},
+ rift:{name:'Rift lake',doms:{cont:'riftfan',coast:'lakeshore',shelf:'littoral',slope:null,deep:'profundal'},mixAt:['shelf']},
  arid:{name:'Arid margin',doms:{cont:'aeolian',coast:'sabkha',shelf:'ramp',slope:'apron',deep:'basin'}}};
 const domSystems=d=>Object.keys(DOMSYS[d]||{});
 // belts, key lines [name, k, role], variants, context class, deep-water rule and default transitions of a margin
-function marginSpec(doms){const belts=[],vars=[],start={},sys={};
+function marginSpec(doms,mixAt){const belts=[],vars=[],start={},sys={};
   for(const [d] of DOMAINS){const k=doms&&doms[d],S=k&&DOMSYS[d][k];if(!S)continue;start[d]=belts.length;sys[d]=S;
     S.belts.forEach(([n,c,w,al])=>belts.push({name:n,color:c,w,alias:(al||[]).slice(),dom:d}));
     for(const [i,n,c,al] of S.vars||[])vars.push({k:start[d]+i,name:n,color:c,alias:al.slice()})}
@@ -1044,13 +1045,14 @@ function marginSpec(doms){const belts=[],vars=[],start={},sys={};
   if(sys.slope&&!last('slope'))lines.push(['Toe of slope',end('slope'),'toe']);
   const inf=sys.deep&&sys.deep.inf&&start.deep>0?start.deep-1:null;
   // transitions: one mixed zone on each domain boundary (not where deep water jumps to the basin plain outside the lobes)
-  const mix=[];for(let i=0;i+1<pres.length;i++){const k=end(pres[i]);if(pres[i+1]==='deep'&&inf!=null)continue;mix.push({k,wf:.3})}
+  const mix=[];for(let i=0;i+1<pres.length;i++){const k=end(pres[i]);if(pres[i+1]==='deep'&&inf!=null||mixAt&&!mixAt.includes(pres[i]))continue;mix.push({k,wf:.3})}
   return{belts,vars,lines,inf,mix,start,sys,ctx:sys.cont&&sys.cont.mf?{name:HINT[0],color:HINT[1],alias:HINT[2].slice()}:null}}
 // a margin model: one system per domain from a preset key or {cont, coast, shelf, slope, deep}
 function makeMargin(p,o={}){const pre=typeof p==='string'&&MARGINS[p]?p:null,doms=Object.assign({},pre?MARGINS[pre].doms:(p&&p.doms)||p||{});
   for(const [d] of DOMAINS)if(!(doms[d]&&DOMSYS[d][doms[d]]))doms[d]=null;
-  const sp=marginSpec(doms),M=makeModel('custom',Object.assign({geom:'lines',span:40000},o));
-  Object.assign(M,{template:'margin',margin:{preset:pre,doms},belts:sp.belts,variants:sp.vars,ctx:sp.ctx,inf:sp.inf,feeders:o.feeders||[]});
+  const sp=marginSpec(doms,pre&&MARGINS[pre].mixAt),M=makeModel('custom',Object.assign({geom:'lines',span:40000},o));
+  const e=M.ext,af=o.af!=null?o.af:sp.sys.cont&&sp.sys.cont.mf?clamp(Math.round(Math.max(e.xmax-e.xmin,e.ymax-e.ymin)/12000),2,9):0;
+  Object.assign(M,{template:'margin',margin:{preset:pre,doms,af},belts:sp.belts,variants:sp.vars,ctx:sp.ctx,inf:sp.inf,feeders:o.feeders||[]});
   M.mix=o.mix||marginMix(M,sp);M.channels=Object.assign(channelDefaults(M),o.channels||{});return M}
 function marginMix(M,sp){const p=prior(M),wd=k=>k<0?0:k?p[k]-p[k-1]:p[0];
   return sp.mix.map(m=>({k:m.k,w:+(m.wf*Math.min(wd(m.k),m.k+1<p.length?wd(m.k+1):wd(m.k))).toPrecision(3)}))}
@@ -1080,6 +1082,8 @@ function allBelts(M){const n=M.belts.length,out=M.belts.map((b,i)=>Object.assign
     // margin feeders: river valleys (continental) and canyons (slope)
     if(mg){const F=(M.feeders||[]).filter(Boolean),cs=feederSys(M);
       if(cs.valley&&F.some(f=>f.river&&f.river.on!==false)&&!has(cs.valley[0]))out.push({name:cs.valley[0],color:cs.valley[1],w:0,alias:cs.valley[2].slice(),kind:'valley',dom:'cont',from:cs.vfrom});
+      const kd=M.belts.findIndex(b=>b.dom==='coast');
+      if(kd>=0&&cs.deltas&&F.some(f=>f.delta&&f.delta.on!==false&&f.river&&f.river.on!==false)&&!has(DISTRIB[0]))out.push({name:DISTRIB[0],color:DISTRIB[1],w:0,alias:DISTRIB[2].slice(),kind:'distrib',dom:'coast',host:kd});
       if(F.some(f=>f.canyon&&f.canyon.on)&&!has(CANYON[0]))out.push({name:CANYON[0],color:CANYON[1],w:0,alias:CANYON[2].slice(),kind:'canyon',dom:'slope'})}}
   for(const m of M.mix||[])if(m&&m.k>=0&&m.k<n-1&&+m.w>0){const A=M.belts[m.k],B=M.belts[m.k+1],nm=A.name+' + '+B.name;
     if(!has(nm))out.push({name:nm,color:mixColor(A.color,B.color),w:0,alias:[A.name+' / '+B.name],kind:'mix',a:m.k,b:m.k+1,hatch:[A.color,B.color],dom:dk(m.k)});
@@ -1088,10 +1092,11 @@ function allBelts(M){const n=M.belts.length,out=M.belts.map((b,i)=>Object.assign
       if(!has(n2))out.push({name:n2,color:mixColor(a.color,b.color),w:0,alias:[a.name+' / '+b.name],kind:'mix',vmix:true,a:m.k,b:m.k+1,hatch:[a.color,b.color],dom:dk(m.k)})}}
   for(const b of activeBodies(M)){const T=BODY[b.type];for(const [nm,col,,al] of bodyBelts(b))if(!has(nm))out.push({name:nm,color:col,w:0,alias:al||[],kind:'body',btype:b.type,dom:T&&T.dom||null})}
   return out}
+const DISTRIB=['Distributary channel','#e3b04b',['distributary channel','distributary','delta channel','distributary channel fill']];
 const CANYON=['Canyon / slope channel','#a9744f',['canyon','canyon fill','feeder canyon','slope channel','slope valley','submarine canyon']];
 // continental system of a margin (for the valley class): from the domains of its belts and the margin's systems
-function feederSys(M){const k=M.margin&&M.margin.doms&&M.margin.doms.cont,S=k&&DOMSYS.cont[k];if(!S||!S.valley)return{};
-  const c0=M.belts.findIndex(b=>b.dom==='cont');return{valley:S.valley,vfrom:c0+S.valley[3]}}
+function feederSys(M){const D=M.margin&&M.margin.doms||{},S=D.cont&&DOMSYS.cont[D.cont],C=D.coast&&DOMSYS.coast[D.coast],o={deltas:!!(C&&C.src==='coast'&&C.sh)};if(!S||!S.valley)return o;
+  const c0=M.belts.findIndex(b=>b.dom==='cont');return Object.assign(o,{valley:S.valley,vfrom:c0+S.valley[3]})}
 // classes grouped by domain for the legend (one group without heading for the other models)
 function classDom(M,c){return c.dom!=null?c.dom:null}
 function legendGroups(M){const AB=allBelts(M);if(!M.belts.some(b=>DOMIDX[b.dom]!=null))return[{dom:null,name:'',items:AB.map((c,i)=>i)}];
@@ -1144,10 +1149,10 @@ const smooth01=t=>t<=0?0:t>=1?1:t*t*(3-2*t);
 // Source lobe metric rho: distance from the source inside its opening (bent towards one side and elongated downdrift by the asymmetry), r / (1 - u^2)
 // in the TAPER degrees beyond, infinite further. Lobe field: coast d = v + g (rho - L) (the lobe stands out by L, g = belt-scale of the zone);
 // fan d = v + rho (vend - v) / L (most distal belt from rho = L); fault-bounded or k = -1 lines: d = rho v' / L. The field is smin(regional, lobes).
-const BEND=35;let MEMV=0,INLOBE=false;
+const BEND=35;let MEMV=0,INLOBE=false,FLOORV=-Infinity;
 function lobeR(s,x,y){const dx=x-s.x+s.b*s.ux,dy=y-s.y+s.b*s.uy,r=Math.hypot(dx,dy);if(r===0)return 0;
   // fan deltas on a border fault: elliptical lobes stretched along the fault (E = along / across, from the fault segment), lobate toes; they coalesce into a bajada
-  if(s.kind==='fault'){const p=dx*s.ux+dy*s.uy;if(p<0)return Infinity;const q=dx*s.uy-dy*s.ux-s.asym*.6*p;return Math.hypot(p,q/s.E)*(1+.05*Math.sin(q/(.45*s.L)+s.ph))}
+  if(s.kind==='fault'){const p=dx*s.ux+dy*s.uy;if(p<0)return Infinity;const q=dx*s.uy-dy*s.ux-s.asym*.6*p;return Math.hypot(p,q/s.E)*(1+.08*Math.sin(q/(.5*s.L)+s.ph))}
   const p=dx*s.ux+dy*s.uy,q=dx*s.uy-dy*s.ux;let a=Math.atan2(q,p)/RAD;
   a-=s.asym*BEND*Math.min(1,r/s.L);
   const h=Math.max(3,s.open/2*(1+.5*s.asym*Math.tanh(a/12))),e=Math.abs(a)-h,rr=r/(1+.35*Math.abs(s.asym)*smooth01(.5+a*Math.sign(s.asym)/24));
@@ -1156,7 +1161,7 @@ function lobeR(s,x,y){const dx=x-s.x+s.b*s.ux,dy=y-s.y+s.b*s.uy,r=Math.hypot(dx,
 // largest deflection w of the sine-generated curve theta = w sin(2 pi s / lambda) (Langbein & Leopold 1966) whose sinuosity 1 / J0(w) is `sin`
 function sineGenAmp(sin){if(!(sin>1))return 0;const J0=w=>{let s=0;const N=64;for(let i=0;i<N;i++)s+=Math.cos(w*Math.sin(2*Math.PI*(i+.5)/N));return s/N};
   let a=0,b=2.4;for(let i=0;i<50;i++){const m=(a+b)/2;if(1/J0(m)<sin)a=m;else b=m}return(a+b)/2}
-function feederGeom(M,LC){const out={sources:[],valleys:[],canyons:[]};if(!linesOn(M))return out;
+function feederGeom(M,LC){const out={sources:[],valleys:[],canyons:[],distribs:[]};if(!linesOn(M))return out;
   const lines=LC||(M.lines||[]).map(l=>l&&Array.isArray(l.pts)&&l.pts.length>=2?curve(l.pts):null);
   const R=marginRoles(M),li=k=>(M.lines||[]).findIndex(l=>l&&Math.round(+l.k)===k),se=R.se!=null?li(R.se):-1,toe=R.toe!=null?li(R.toe):-1,mf=li(-1);
   const e=M.ext,diag=Math.hypot(e.xmax-e.xmin,e.ymax-e.ymin),seed=(M.noise&&M.noise.seed)|0;
@@ -1175,6 +1180,12 @@ function feederGeom(M,LC){const out={sources:[],valleys:[],canyons:[]};if(!lines
         if(MF&&sdistF(MF,px,py)<0)break;if(px<e.xmin-.1*diag||px>e.xmax+.1*diag||py<e.ymin-.1*diag||py>e.ymax+.1*diag)break}
       let len=0;for(let i=1;i<pts.length;i++)len+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
       out.valleys.push({P:Float64Array.from(flat(pts)),pts,w,len,feeder:fi})}
+    // distributary channels of the delta plain: two channels from the apex, each splitting once, fanning out to the delta front
+    if(dOn&&r.on!==false){const w=.3*Math.max(1,fin(r.w,1500)),op=clamp(fin(d.open,60),10,160)*RAD,Ax=x-ux*.55*dL,Ay=y-uy*.55*dL,asy=clamp(fin(d.asym,0),-1,1);
+      const path=(x0,y0,th,len,ph)=>{const P=[[x0,y0]],st=len/40;let px=x0,py=y0;for(let s=st;s<=len+1e-6;s+=st){const t=th+.35*Math.sin(2*Math.PI*s/(14*w)+ph)*smooth01(s/(5*w));px+=Math.sin(t)*st;py+=Math.cos(t)*st;P.push([px,py])}return P};
+      const base=a+asy*.25*op,ch=[];for(const sg of [-1,1]){const th=base+sg*.17*op*(.8+.4*rnd()),L1=(.5+.15*rnd())*dL,P1=path(Ax,Ay,th,L1,6.3*rnd()),q=P1[P1.length-1];ch.push(P1);
+        for(const sg2 of [-1,1])ch.push(path(q[0],q[1],th+sg2*.13*op*(.7+.6*rnd()),(.5+.3*rnd())*dL+.05*dL,6.3*rnd()))}
+      out.distribs=(out.distribs||[]).concat(ch.map(pts=>{let len=0;for(let i=1;i<pts.length;i++)len+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return{P:Float64Array.from(flat(pts)),pts,w,len,feeder:fi}}))}
     // canyon: head cut into the outer shelf where the feeder axis meets the shelf edge, then down the slope (normal to the lines) to the toe
     let mouth=null,maz=az;const c=f.canyon||{},SE=se>=0?lines[se]:null,TO=toe>=0&&toe!==se?lines[toe]:null;
     if(c.on&&SE){const s1=cross(SE,x,y,ux,uy,3*diag);if(s1!=null){const w=Math.max(1,fin(c.w,800)),X=x+ux*s1,Y=y+uy*s1,head=clamp(.12*s1,1.5*w,6*w),pts=[];
@@ -1199,9 +1210,24 @@ function feederClasses(M,FE){const P=perlin(((M.noise&&M.noise.seed)|0)+53),f=P.
   const V=FE.valleys.map(v=>Object.assign({},v,{box:box(v)})),C=FE.canyons.map(c=>Object.assign({},c,{box:box(c)})),inB=(b,x,y)=>x>=b[0]&&x<=b[1]&&y>=b[2]&&y<=b[3];
   const valleyAt=(x,y)=>{for(const v of V){if(!inB(v.box,x,y))continue;const q=nearF(v.P,x,y);if(q.d>v.w)continue;
     const hw=.5*v.w*(1-.4*Math.min(1,q.s/Math.max(1,v.len)))*(1+.2*f(x/(1.5*v.w)+o[0][0],y/(1.5*v.w)+o[0][1],.3));if(q.d<hw)return true}return false};
+  const DI=(FE.distribs||[]).map(v=>Object.assign({},v,{box:box(v)}));
+  const distribAt=(x,y)=>{for(const v of DI){if(!inB(v.box,x,y))continue;const q=nearF(v.P,x,y);if(q.d>v.w)continue;if(q.d<.5*v.w*(1-.45*Math.min(1,q.s/Math.max(1,v.len))))return true}return false};
   const canyonAt=(x,y)=>{for(const c of C){if(!inB(c.box,x,y))continue;const q=nearF(c.P,x,y);if(q.d>c.w)continue;
     const hw=.5*c.w*(.55+.45*Math.min(1,q.s/Math.max(1,c.len)))*(1+.15*f(x/c.w+o[1][0],y/c.w+o[1][1],.8));if(q.d<hw)return true}return false};
-  return{valleyAt,canyonAt,V,C}}
+  return{valleyAt,canyonAt,distribAt,V,C,DI}}
+// alluvial fans along the mountain front of a margin (M.margin.af fans, seeded): cones whose apex sits at the front, radius about a fifth of the
+// distance to the shoreline, so the continental belts are lobate (a bajada) instead of bands parallel to the front
+function mountainFans(M,LC,p){const n=Math.round(+(M.margin&&M.margin.af)||0);if(!(n>0))return[];
+  const li=(M.lines||[]).findIndex(l=>l&&Math.round(+l.k)===-1),sh=(M.lines||[]).findIndex(l=>l&&Math.round(+l.k)>=0);if(li<0||!LC[li])return[];
+  const P=LC[li],N=P.length/2,acc=[0];for(let i=1;i<N;i++)acc.push(acc[i-1]+Math.hypot(P[2*i]-P[2*i-2],P[2*i+1]-P[2*i-1]));
+  const e=M.ext,rnd=mulberry32(((M.noise&&M.noise.seed)|0)*131+977),inExt=(x,y)=>x>=e.xmin&&x<=e.xmax&&y>=e.ymin&&y<=e.ymax,o=[];
+  // the part of the front inside the map
+  let a0=null,a1=null;for(let i=0;i<N;i++)if(inExt(P[2*i],P[2*i+1])){if(a0==null)a0=acc[i];a1=acc[i]}if(a0==null){a0=0;a1=acc[N-1]}
+  const at=s=>{let i=1;while(i<N-1&&acc[i]<s)i++;const t=(s-acc[i-1])/Math.max(1e-9,acc[i]-acc[i-1]);return[P[2*i-2]+t*(P[2*i]-P[2*i-2]),P[2*i-1]+t*(P[2*i+1]-P[2*i-1]),P[2*i]-P[2*i-2],P[2*i+1]-P[2*i-1]]};
+  for(let i=0;i<n;i++){const s=a0+(a1-a0)*(i+.5+.5*(rnd()-.5))/n,[x,y,tx,ty]=at(s),tl=Math.hypot(tx,ty)||1,nx=ty/tl,ny=-tx/tl,az=(Math.atan2(nx,ny)/RAD+360)%360;
+    const W=sh>=0&&LC[sh]?Math.abs(sdistF(LC[sh],x,y)):20000,L=clamp(.22*W*(.7+.6*rnd()),500,1e6);
+    o.push({kind:'coast',af:true,line:li,x,y,az:+(az+16*(rnd()-.5)).toFixed(1),L,open:120+40*rnd(),asym:.5*(rnd()-.5)})}
+  return o}
 function lineModel(M){const p=prior(M),n=M.belts.length,L=[];
   const LC=(M.lines||[]).map(l=>l&&Array.isArray(l.pts)&&l.pts.length>=2?curve(l.pts):null);
   (M.lines||[]).forEach((l,oi)=>{if(!LC[oi])return;const k=clamp(Math.round(fin(l.k,0)),-1,p.length-1);L.push({P:LC[oi],k,v:k<0?0:p[k],oi})});
@@ -1212,24 +1238,34 @@ function lineModel(M){const p=prior(M),n=M.belts.length,L=[];
     const d=L[L.length-1].v+s;return inf!=null&&d>=inf?Infinity:d};
   const FL=(M.faults||[]).map(f=>f&&Array.isArray(f.pts)&&f.pts.length>=2?flat(f.pts):null);
   // margin feeders: their deltas and fans join the sources
-  const FE=M.template==='margin'&&(M.feeders||[]).length?feederGeom(M,LC):null;
-  const SRC=(M.sources||[]).concat(FE?FE.sources:[]);
+  const mg=M.template==='margin',FE=mg&&(M.feeders||[]).length?feederGeom(M,LC):null;
+  const SRC=(M.sources||[]).concat(FE?FE.sources:[],mg?mountainFans(M,LC,p):[]);
   const S=SRC.map((s,si)=>{const a=fin(s.az,180)*RAD,o={x:fin(s.x,0),y:fin(s.y,0),ux:Math.sin(a),uy:Math.cos(a),L:Math.max(1,fin(s.L,1000)),open:clamp(fin(s.open,60),5,300),
       asym:clamp(fin(s.asym,0),-1,1),kind:s.kind==='fan'?'fan':s.kind==='fault'?'fault':'coast',canyon:s.canyon!==false};o.tp=clamp(.5*o.open,12,TAPER);
     if(o.kind==="fault"){o.v=0;o.g=pend/o.L;o.k=.15*pend;o.b=.12*o.L;o.off=o.b;o.ph=2.1*si+.7;
       // elongation along the fault from the length of fault left on either side of the source (a short segment or a relay ramp gives a rounder fan)
-      const F=FL[Math.round(fin(s.fault,0))];let tip=Infinity;if(F){const q=nearF(F,o.x,o.y);tip=Math.min(q.s,q.len-q.s)}o.E=clamp(.85*tip/o.L,1,2.8);return o}
+      o.fi=Math.round(fin(s.fault,0));const F=FL[o.fi];let tip=Infinity;if(F){const q=nearF(F,o.x,o.y);tip=Math.min(q.s,q.len-q.s);o.sf=q.s;o.FP=F}o.E=clamp(.85*tip/o.L,1,2.2);return o}
     const li=L.find(l=>l.oi===Math.round(fin(s.line,0)))||L[0];o.v=li.v;
     if(o.kind==='fan'){o.g=Math.max(1e-6,pend-li.v)/o.L;o.k=.12*(pend-li.v);o.off=0}
     else if(li.k<0){o.g=(p[0]||1)/o.L;o.k=.15*(p[0]||1);o.off=0}
     else{const j=L.indexOf(li),nx=L[j+1];let g=1;if(nx){const W=Math.abs(sdistF(nx.P,o.x,o.y));if(W>0)g=clamp((nx.v-li.v)/W,.05,20)}o.g=g;o.k=.3*o.L*g;o.off=o.L;
       // a delta lowers d down to inside its plain, never into the belts landward of it (no coastal plain or river belts inside the delta)
-      if(li.k>=1)o.floor=p[li.k-1]+.3*(p[li.k]-p[li.k-1])}
-    o.b=(o.kind==='coast'?.6:o.kind==='fault'?.3:.08)*o.L;o.off+=o.b;o.W0=o.b*Math.tan(Math.min(70,o.open/2)*RAD)+.25*o.L;return o});
+      if(li.k>=1){o.floor=p[li.k-1]+.3*(p[li.k]-p[li.k-1]);o.fl2=p[li.k-1]+.6*(p[li.k]-p[li.k-1])}}
+    o.b=(o.kind==='coast'?.6:o.kind==='fault'?.3:.08)*o.L;o.off+=o.b;o.W0=o.b*Math.tan(Math.min(70,o.open/2)*RAD)+.25*o.L;
+    // the prodelta bulge fades between f0 L and (f0 + f1) L from the apex (margins: closer, so the shelf belts are not ringed by every delta)
+    o.f0=mg?1.1:1.5;o.f1=mg?1.4:2.5;
+    // alluvial fans at the mountain front: cones from an apex just inside the hinterland, the fan belt reaching L
+    if(s.af){o.af=true;o.b=.15*o.L;o.off=o.b;o.g=(p[0]||1)/o.L;o.k=.2*(p[0]||1)}
+    return o});
   const p0=p[0]||1,m0=-2*Math.max(1,...S.map(s=>s.L*s.g));
-  const f=(x,y)=>{const dr=reg(x,y);let d=dr,m=m0;INLOBE=false;
-    for(const s of S){if(s.kind==='fault')continue;const rho=lobeR(s,x,y),ds=s.v+s.g*(rho-(s.kind==='coast'?s.off*(1-smooth01((rho-s.b-1.5*s.L)/(2.5*s.L))):s.off));if(ds<dr)INLOBE=true;
-      const d0=d;d=smin(d,ds,s.k);if(s.floor!=null&&d<s.floor)d=Math.min(d0,s.floor);
+  const f=(x,y)=>{const dr=reg(x,y);let d=dr,m=m0;INLOBE=false;FLOORV=-Infinity;
+    for(const s of S){if(s.kind==='fault'||(s.kind==='coast'&&!isFinite(dr)))continue;
+      const rho=lobeR(s,x,y);if(s.af&&rho>3*s.L)continue;const ds=s.af?(p[0]||1)*Math.pow(Math.max(0,rho-s.off)/s.L,1.7):s.v+s.g*(rho-(s.kind==='coast'?s.off*(1-smooth01((rho-s.b-s.f0*s.L)/(s.f1*s.L))):s.off));if(ds<dr)INLOBE=true;
+      const d0=d;d=smin(d,ds,s.k);if(s.floor!=null&&d<s.floor){d=Math.min(d0,s.floor)}if(s.floor!=null&&ds<d0&&d>=s.floor)FLOORV=Math.max(FLOORV,s.floor);
+      // upper delta plain: the wedge between the apex and the shoreline inside the opening (the fan narrows to the apex at the valley mouth)
+      if(s.floor!=null&&d<s.fl2){const dx=x-s.x+s.b*s.ux,dy=y-s.y+s.b*s.uy,pa=dx*s.ux+dy*s.uy;if(pa>0&&pa<s.b*1.05){const q=Math.abs(dx*s.uy-dy*s.ux),hw=pa*Math.tan(.5*s.open*RAD);
+        if(q<hw){const v=s.fl2-(s.fl2-s.floor)*smooth01(q/hw);if(v>d){d=v;FLOORV=Math.max(FLOORV,s.floor)}}}}
+      if(s.af)continue;
       if(s.kind==='fan'&&s.canyon){const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;if(pp<0){const q=Math.abs(dx*s.uy-dy*s.ux),Lc=.12*s.L,c=.5*p0*(1-Math.max(q/(.035*s.L*(1+.85*pp/Lc)),-pp/Lc));if(c>d)d=c}}
       // membership of the delta (along-strike variants elsewhere): where the lobe is more proximal than the regional belts; the delta plain
       // spreads seaward from the apex (no upstream spike: landward of the apex the river valley and the continental belts)
@@ -1270,17 +1306,26 @@ function fieldD(M,opt={}){const LM=linesOn(M)?lineModel(M):null,geo=LM?LM.f:geoF
   const TL=(M.layers||[]).filter(l=>layerOn(l)&&l.role==='lith'&&l.trend&&l.trend.on&&+l.trend.w>0).map(l=>({l,g:layerGrid(l,M.ext)})).filter(x=>x.g);
   const PG=M.paint&&Array.isArray(M.paint.v)&&M.paint.v.some(v=>v)?Object.assign({},M.paint,{z:M.paint.v}):null,FA=prepFaults(M);
   const nzm=memOn?noiseFn(M,17):null;
-  const exactGeo=(x,y)=>{let d=geo(x,y);if(nz&&isFinite(d))d=nz(x,y,d);return d};
+  // the noise does not push a delta plain into the belts landward of it (FLOORV: floor of the delta lobe at this point)
+  const nzF=(x,y,d)=>{const fl=FLOORV,v=nz(x,y,d);return fl>-Infinity&&d>=fl&&v<fl?fl:v};
+  const exactGeo=(x,y)=>{let d=geo(x,y);if(nz&&isFinite(d))d=nzF(x,y,d);return d};
   // fault-bounded sources build on the hanging wall: their lobes are applied after the fault throw
-  const FS=lines?LM.S.filter(s=>s.kind==='fault'):[],FE=LM&&LM.FE?feederClasses(M,LM.FE):null;
+  const FS=lines?LM.S.filter(s=>s.kind==='fault'):[],FE=LM&&LM.FE?feederClasses(M,LM.FE):null,pend0=LM?LM.p[Math.max(0,M.belts.length-2)]:0;
+  // neighbouring fault-bounded sources (same fault, closer than about 3.5 lobe lengths) linked by a bajada apron
+  const FP=[];{const byF=new Map();for(const s of FS)if(s.FP){if(!byF.has(s.fi))byF.set(s.fi,[]);byF.get(s.fi).push(s)}
+    for(const L of byF.values()){L.sort((a,b)=>a.sf-b.sf);for(let i=0;i+1<L.length;i++)if(L[i+1].sf-L[i].sf<1.75*(L[i].L+L[i+1].L))FP.push([L[i],L[i+1]])}}
   const post=(x,y,d)=>{if(PG&&isFinite(d)){const v=sampleGrid(PG,x,y);if(v===v)d+=v}if(FA.length&&isFinite(d))d+=faultShift(FA,x,y,d);
-    for(const s of FS)if((x-s.x)*s.ux+(y-s.y)*s.uy>0){let ds=s.g*(lobeR(s,x,y)-s.off);if(nz&&isFinite(ds))ds=nz(x,y,ds);d=smin(d,ds,s.k)}return d};
+    for(const s of FS)if((x-s.x)*s.ux+(y-s.y)*s.uy>0){let ds=s.g*(lobeR(s,x,y)-s.off);if(nz&&isFinite(ds))ds=nz(x,y,ds);d=smin(d,ds,s.k)}
+    // bajada: between neighbouring fan deltas of a fault, an apron along the fault, narrowest half-way (re-entrants between the fan toes)
+    for(const [a,b] of FP){const q=nearF(a.FP,x,y);if(q.s<=a.sf||q.s>=b.sf||(x-a.x)*a.ux+(y-a.y)*a.uy<=0)continue;const t=(q.s-a.sf)/(b.sf-a.sf),Lt=a.L*(1-t)+b.L*t,w=.4+.6*(2*t-1)**2;
+      let ds=pend0*q.d/(w*Lt);if(nz)ds=nz(x,y,ds);d=smin(d,ds,a.k)}
+    return d};
   if(!lines&&!TL.length){const D=(PG||FA.length||FS.length)?(x,y)=>post(x,y,exactGeo(x,y)):exactGeo;return{D,mem:null,FA,FE}}
   const e=M.ext,mx=.03*(e.xmax-e.xmin),my=.03*(e.ymax-e.ymin),gx0=e.xmin-mx,gy0=e.ymin-my,GW=e.xmax-e.xmin+2*mx,GH=e.ymax-e.ymin+2*my;
   const c=Math.sqrt(GW*GH/(opt.fast?12000:40000)),nx=Math.max(3,Math.ceil(GW/c)+1),ny=Math.max(3,Math.ceil(GH/c)+1),dx=GW/(nx-1),dy=GH/(ny-1);
   const D0=new Float64Array(nx*ny),MM=memOn?new Float64Array(nx*ny):null;
   for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const x=gx0+i*dx,y=gy0+j*dy,k=j*nx+i;let d=geo(x,y);
-    if(MM)MM[k]=Math.max(-1e9,MEMV+(nzm?nzm(x,y,0):0));if(nz&&isFinite(d))d=nz(x,y,d);D0[k]=d}
+    if(MM)MM[k]=Math.max(-1e9,MEMV+(nzm?nzm(x,y,0):0));if(nz&&isFinite(d))d=nzF(x,y,d);D0[k]=d}
   let TW=null,TS=null;
   if(TL.length){TW=new Float64Array(nx*ny);TS=new Float64Array(nx*ny);
     const inExt=[];for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const x=gx0+i*dx,y=gy0+j*dy;if(x>=e.xmin&&x<=e.xmax&&y>=e.ymin&&y<=e.ymax)inExt.push(j*nx+i)}
@@ -1546,22 +1591,30 @@ function proposeSketch(M,wells,opt={}){const mg=M.template==='margin'&&M.margin,
 // sinuous centreline from a to b (amplitude A, wavelength L), for the synthetic amplitude channels
 function wiggle(a,b,A,L,ph,n=60){const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len,o=[];
   for(let i=0;i<=n;i++){const s=i/n,w=A*Math.sin(2*Math.PI*s*len/L+ph)*Math.min(1,4*s)+.5*A*Math.sin(2*Math.PI*s*len/(2.7*L)+2*ph);o.push([+(a[0]+dx*s-uy*w).toFixed(1),+(a[1]+dy*s+ux*w).toFixed(1)])}return o}
-function exCoast(){const M=makeModel('delta',{geom:'lines',az:175,span:24000,noise:{amp:1100,wl:7000,seed:4},warp:{on:true,R:4000},ext:{xmin:0,xmax:60000,ymin:0,ymax:45000},cell:100,
-  lines:[{name:'Shoreline',k:0,pts:[[-4000,27500],[5000,29500],[12000,28800],[18000,26800],[24000,24800],[30000,25600],[36000,28600],[42000,30400],[49000,29600],[56000,27200],[64000,26400]]},
-    {name:'Shelf edge',k:3,pts:[[-4000,8000],[8000,7400],[18000,5200],[28000,6800],[38000,10500],[48000,9800],[64000,7000]]},
-    {name:'Toe of slope',k:4,pts:[[-4000,1500],[16000,-500],[34000,3500],[50000,2600],[64000,1000]]}],
-  sources:[{kind:'coast',line:0,x:18000,y:26800,az:168,L:7500,open:55,asym:.05},{kind:'coast',line:0,x:44500,y:30300,az:182,L:5500,open:80,asym:.7}]});
-  return{title:'Curved coast, two deltas of different polarity, 5 wells',M,wells:[{name:'Coast-1',x:17500,y:29600,env:'Delta plain'},{name:'Coast-2',x:19500,y:17500,env:'Delta front'},
-    {name:'Coast-3',x:31500,y:24300,env:'Interdeltaic shoreface'},{name:'Coast-4',x:40000,y:22000,env:'Prodelta'},{name:'Coast-5',x:30000,y:12000,env:'Shelf'}]}}
-function exRimmed(){const M=makeModel('carbonate',{geom:'lines',az:90,span:30000,noise:{amp:700,wl:5000,seed:12},warp:{on:true,R:3000},ext:{xmin:0,xmax:50000,ymin:0,ymax:40000},cell:100,
-  lines:[{name:'Shoreline',k:0,pts:[[4000,-3000],[5500,6000],[4200,14000],[6500,22000],[5000,30000],[6800,43000]]},
-    {name:'Platform margin',k:3,pts:[[24000,-3000],[26500,5000],[23500,11000],[27000,17000],[25000,23000],[28500,30000],[26000,37000],[27500,43000]]},
-    {name:'Toe of slope',k:4,pts:[[29000,-3000],[31000,6000],[29000,13000],[32000,20000],[30500,28000],[33500,36000],[32000,43000]]}],
-  mix:[{k:1,w:1800}],
-  bodies:[{type:'pinnacle',shape:'ellipse',x:38500,y:30500,a:800,e:.75,rot:30,w:[300,900]},{type:'pinnacle',shape:'ellipse',x:42500,y:13500,a:650,e:.8,rot:-20,w:[250,800]},
-    {type:'pinnacle',shape:'ellipse',x:46000,y:24500,a:550,e:.7,rot:60,w:[250,700]}]});
-  return{title:'Rimmed carbonate shelf, irregular margin, three pinnacle reefs, 4 wells',M,wells:[{name:'Carb-1',x:13500,y:19000,env:'Platform interior / lagoon'},{name:'Carb-2',x:26600,y:16500,env:'Platform margin'},
-    {name:'Carb-3',x:40000,y:6000,env:'Basin'},{name:'Carb-4',x:38700,y:30300,env:'Reef core'}]}}
+// full passive margin (source to sink): fluvial hinterland with alluvial fans and two rivers, two deltas of different polarity, interdeltaic shoreface,
+// shelf, shelf edge with a canyon in line with the larger delta, slope with an MTC apron, basin-floor fan, basin plain; 6 wells across the domains
+function exMargin(){const M=makeMargin('passive',{ext:{xmin:0,xmax:90000,ymin:0,ymax:80000},cell:150,span:40000,noise:{amp:1200,wl:8000,seed:4},warp:{on:true,R:4000},
+  lines:[{name:'Mountain front (depositional limit)',k:-1,pts:[[-5000,75500],[12000,77000],[28000,75000],[44000,77500],[60000,76000],[76000,78000],[95000,76500]]},
+    {name:'Shoreline',k:3,pts:[[-5000,53500],[10000,55500],[22000,53500],[34000,50500],[46000,52000],[58000,55500],[70000,57000],[82000,55500],[95000,53500]]},
+    {name:'Shelf edge',k:7,pts:[[-5000,32500],[12000,33500],[24000,31000],[36000,28500],[50000,30000],[64000,33500],[78000,34500],[95000,33000]]},
+    {name:'Toe of slope',k:9,pts:[[-5000,22500],[15000,23000],[30000,19500],[44000,19500],[60000,22500],[78000,24000],[95000,23000]]}],
+  feeders:[{line:1,x:34000,y:50500,az:178,river:{on:true,w:2200,sin:1.4},delta:{on:true,L:8000,open:55,asym:.1},canyon:{on:true,w:2000},fan:{on:true,L:17000,open:46,asym:-.15}},
+    {line:1,x:66000,y:56700,az:186,river:{on:true,w:1500,sin:1.5},delta:{on:true,L:4500,open:85,asym:.7},canyon:{on:false,w:800},fan:{on:false,L:12000,open:50,asym:0}}],
+  bodies:[{type:'mtc',shape:'poly',x:60500,y:23000,w:[600],irr:350,pts:[[-1800,6500],[400,6800],[2200,5000],[2600,2000],[4200,-1500],[4600,-4500],[2500,-6800],[-500,-7400],[-3400,-6600],[-5000,-4000],[-4200,-800],[-2600,2200]]}]});
+  // the river well: on the larger river, a few km upstream of its delta apex
+  const V=feederGeom(M).valleys[0].pts;let a=0,i=1;for(;i<V.length&&a<7000;i++)a+=Math.hypot(V[i][0]-V[i-1][0],V[i][1]-V[i-1][1]);
+  return{title:'Passive margin from the hinterland to the basin floor: two rivers and deltas, canyon and basin-floor fan, 6 wells',M,wells:[{name:'Margin-1',x:Math.round(V[i][0]),y:Math.round(V[i][1]),env:'Meandering channel belt'},
+    {name:'Margin-2',x:35500,y:41500,env:'Delta front'},{name:'Margin-3',x:50500,y:51000,env:'Interdeltaic shoreface'},{name:'Margin-4',x:14000,y:38000,env:'Outer shelf'},
+    {name:'Margin-5',x:76000,y:28500,env:'Lower slope'},{name:'Margin-6',x:32000,y:11500,env:'Proximal lobes'}]}}
+// carbonate rimmed margin: coastal plain and supratidal sabkha landward, tidal flat, lagoon, irregular rim, fore-reef slope, basin with three pinnacles
+function exCarbMargin(){const M=makeMargin('carbonate',{span:30000,noise:{amp:700,wl:5000,seed:12},warp:{on:true,R:3000},ext:{xmin:0,xmax:60000,ymin:0,ymax:45000},cell:100,
+  lines:[{name:'Shoreline',k:2,pts:[[11000,-3000],[12500,6000],[10800,14000],[13000,22000],[11200,30000],[12800,38000],[11500,48000]]},
+    {name:'Platform margin',k:5,pts:[[33000,-3000],[35500,5000],[32500,11000],[36000,17000],[34000,23000],[37500,30000],[35000,37000],[36500,48000]]},
+    {name:'Toe of slope',k:6,pts:[[37500,-3000],[39500,6000],[37500,13000],[40500,20000],[39000,28000],[42000,36000],[40500,48000]]}],
+  bodies:[{type:'pinnacle',shape:'ellipse',x:48500,y:33500,a:800,e:.75,rot:30,w:[300,900]},{type:'pinnacle',shape:'ellipse',x:52500,y:15500,a:650,e:.8,rot:-20,w:[250,800]},
+    {type:'pinnacle',shape:'ellipse',x:56000,y:26500,a:550,e:.7,rot:60,w:[250,700]}]});
+  return{title:'Carbonate rimmed margin: coastal plain and sabkha, lagoon, irregular rim, three pinnacle reefs, 4 wells',M,wells:[{name:'Carb-1',x:22500,y:21000,env:'Platform interior / lagoon'},{name:'Carb-2',x:35600,y:17500,env:'Platform margin'},
+    {name:'Carb-3',x:50000,y:6000,env:'Basin'},{name:'Carb-4',x:48700,y:33300,env:'Reef core'}]}}
 function exCanyon(){const ext={xmin:0,xmax:40000,ymin:0,ymax:36000};
   const ch=[{pts:wiggle([17200,30200],[19500,15500],650,3600,.4),w:420},{pts:wiggle([17400,29000],[12500,13500],550,3200,1.9),w:380},{pts:wiggle([18200,29500],[26500,11000],600,3400,3.1),w:360}];
   const synth={kind:'amp',seed:5,ext,px:480,v0:0,v1:100,ch,lobes:[{x:20500,y:12500,rx:4200,ry:3000},{x:12000,y:11000,rx:3500,ry:2800},{x:27500,y:8500,rx:3800,ry:2600},{x:19000,y:20500,rx:3000,ry:2500}]};
@@ -1586,11 +1639,13 @@ function exRift(){const ext={xmin:0,xmax:30000,ymin:0,ymax:40000},border=[[26800
   FX.sort((a,b)=>b.pts[0][0]-a.pts[0][0]);
   if(FX[0])Object.assign(FX[0],{side:-1,off:9000,taper:6000,fw:1});
   if(FX[1])Object.assign(FX[1],{side:1,off:2500,taper:7000,fw:0});
-  const M=makeModel('lake',{geom:'lines',az:90,span:14000,noise:{amp:500,wl:4000,seed:6},warp:{on:true,R:2500},ext,cell:50,
+  const M=makeMargin('rift',{span:14000,noise:{amp:500,wl:4000,seed:6},warp:{on:true,R:2500},ext,cell:50,
     lines:[{name:'Lake margin',k:0,pts:[[5200,-3000],[4300,7000],[6000,16000],[4800,25000],[6200,33000],[5400,43000]]},
       {name:'Slope break',k:2,pts:[[8500,-3000],[10500,8000],[12500,18000],[15500,28000],[18000,43000]]}],
-    faults:FX,layers:[coh],mix:[{k:1,w:1400}],
-    sources:[{kind:'fault',fault:0,x:26450,y:21000,az:262,L:3600,open:80,asym:.2},{kind:'fault',fault:0,x:26300,y:8500,az:268,L:2600,open:70,asym:-.2},{kind:'fault',fault:0,x:26100,y:32000,az:272,L:2000,open:70,asym:0}]});
+    faults:FX,layers:[coh],
+    // a bajada: fan deltas every 6-8 km along the border fault, coalescing, larger where the fault is longest
+    sources:[[3500,2800,-.2],[11000,3800,.1],[18500,4400,.2],[26000,3600,-.1],[33500,2700,0]].map(([y,L,asym],i)=>({kind:'fault',fault:0,x:Math.round(26600-300*Math.sin(y/7000)),y,az:268+4*Math.sin(i*1.7),L,open:80,asym}))});
+  for(const s of M.sources){const F=FX[0];if(F){const P=flat(F.pts),q=nearF(P,s.x,s.y),n=P.length/2;let acc=0;for(let i=0;i<n-1;i++){const L=Math.hypot(P[2*i+2]-P[2*i],P[2*i+3]-P[2*i+1]);if(acc+L>=q.s){const t=(q.s-acc)/L;s.x=Math.round(P[2*i]+t*(P[2*i+2]-P[2*i]));s.y=Math.round(P[2*i+1]+t*(P[2*i+3]-P[2*i+1]));break}acc+=L}}}
   return{title:'Half-graben lake: border-fault fan deltas, belts stepping across an intra-basin fault, 4 wells',M,wells:[{name:'Rift-1',x:24800,y:20600,env:'Fan delta'},{name:'Rift-2',x:6600,y:30000,env:'Lake shoreline'},
     {name:'Rift-3',x:9000,y:12000,env:'Littoral'},{name:'Rift-4',x:20000,y:30500,env:'Profundal'}]}}
 const examples={
@@ -1611,8 +1666,10 @@ const examples={
    ext:{xmin:0,xmax:30000,ymin:0,ymax:36000},cell:50}),
    wells:[{name:'Lake-1',x:26500,y:24000,env:'Fan delta'},{name:'Lake-2',x:20200,y:15000,env:'Lake shoreline'},{name:'Lake-3',x:15000,y:22000,env:'Littoral'},{name:'Lake-4',x:6000,y:17000,env:'Profundal'}]}};
 // v2 examples built on first use (the synthetic attribute images take a moment)
-for(const [k,fn] of [['coast',exCoast],['rimmed',exRimmed],['canyon',exCanyon],['rift',exRift]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
-window.GDE={marginLn,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
+for(const [k,fn] of [['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
+// the v2 links: #coast opens the passive margin (it replaces the two-delta coast), #rimmed the carbonate margin
+for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.defineProperty(examples,a,{enumerable:false,get(){return examples[b]}});
+window.GDE={marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
   layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
   templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
