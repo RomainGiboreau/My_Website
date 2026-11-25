@@ -108,6 +108,20 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
 .chg{border-top:1px dashed var(--line);margin-top:8px;padding-top:6px}
 .chg .pg{grid-template-columns:96px 1fr}
 .cal{font-size:.78rem;margin-top:6px}.cal p{margin:3px 0}.cal .c{color:var(--acc2)}
+.grp{font:600 .7rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:6px 2px -4px;display:flex;align-items:center;gap:8px}
+.grp::after{content:"";flex:1;border-top:1px solid var(--line)}
+.lst{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.it{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:5px 6px;font-size:.78rem}
+.it.sel{border-color:var(--acc);box-shadow:inset 3px 0 0 var(--acc)}
+.it .hd{display:flex;gap:6px;align-items:center}.it .hd b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.it .pg{grid-template-columns:96px 1fr;margin:4px 0 0}
+.it button{padding:0 .4rem;font-size:.74rem}
+.it input,.it select{font-size:.76rem;padding:.1rem .3rem}
+.tag{font-size:.68rem;color:var(--mut);border:1px solid var(--line);border-radius:8px;padding:0 6px;white-space:nowrap}
+.tb{display:flex;flex-wrap:wrap;gap:3px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 6px;margin-bottom:6px}
+.tb button,.tb select{font-size:.76rem;padding:.12rem .45rem}
+.tb .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+.hint2{position:absolute;left:8px;bottom:8px;z-index:3;font-size:.76rem;color:var(--mut);background:rgba(245,243,237,.92);border:1px solid var(--line);border-radius:4px;padding:2px 8px;max-width:60%;pointer-events:none}
 @media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
 </style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head><body>
@@ -119,6 +133,8 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
   <button id="bPcsv" title="One row per polygon vertex: polygon, ring, ring_type, code, class, vertex, x, y">Polygons CSV</button>
   <button id="bZmap" title="ZMAP+ grid of belt codes at the export cell size, legend in ! comment lines">ZMAP+</button>
   <button id="bGcsv" title="x, y, code, belt at every node of the export grid">Grid CSV</button>
+  <button id="bLines" title="Key lines and faults as IRAP Classic lines (x y z, z = line number; faults 101, 102…), 999 after each line">Lines IRAP</button>
+  <button id="bLinesG" title="Key lines and faults as GeoJSON LineString features (name, kind, code)">Lines GeoJSON</button>
   <button id="bWcsv" title="The wells check table">Wells CSV</button>
   <span class="msg" id="exportMsg"></span>
   <span class="tt" tabindex="0" data-tip="Everything runs in your browser: nothing is uploaded. The polygons and grids are computed at the export cell size of panel 1 (the map on screen uses a coarser preview grid of at most 250 000 cells). Belt codes: 1 = most proximal belt, then in the order of the legend.">?</span>
@@ -126,25 +142,35 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
 <aside class="side">
+ <div class="grp">Map</div>
  <section class="panel"><h2><span class="n">1</span>Map extent and grid<span class="tt" tabindex="0" data-tip="Rectangle of the map in your coordinates (projected, e.g. metres; the scale bar assumes metres). The export cell size sets the grid of the ZMAP+ / CSV exports and the resolution of the polygons. “Fit to wells” puts the wells inside with a margin of 40 % of their spread.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="grid3"><span>xmin</span><input type="number" id="ex0" step="any"><span>xmax</span><input type="number" id="ex1" step="any">
    <span>ymin</span><input type="number" id="ey0" step="any"><span>ymax</span><input type="number" id="ey1" step="any">
    <span>cell</span><input type="number" id="ecell" step="any" min="0" title="Export cell size, map units"><span></span><button id="bFitExt">Fit to wells</button></div>
   <div class="msg" id="extMsg"></div></div></section>
- <section class="panel"><h2><span class="n">2</span>Wells<span class="tt" tabindex="0" data-tip="Paste a table with one well per line: name, x, y, environment (tab, semicolon, comma or space separated; a header line is skipped). The environment is matched to the belts of the model regardless of case, punctuation and plurals; a name that does not match is flagged and can be fixed with its drop-down. You can also click “Add on map” and click where the well is. Drag a well on the map to move it.">?</span><i class="chev"></i></h2>
+ <div class="grp">Wells</div>
+ <section class="panel"><h2><span class="n">2</span>Wells<span class="tt" tabindex="0" data-tip="Paste a table with one well per line: name, x, y, environment (tab, semicolon, comma or space separated; a header line is skipped). The environment is matched to the belts of the model regardless of case, punctuation and plurals; a name that does not match is flagged and can be fixed with its drop-down. You can also click “Add on map” and click where the well is. Drag a well on the map to move it. A well described “A / B” or “A + B” (two neighbouring belts, e.g. “shoreface / offshore transition”) is honoured in A, in B or in their mixed zone; a well whose environment is an isolated body (e.g. “reef core”) is honoured by the nearest such body, enlarged if needed.">?</span><i class="chev"></i></h2>
   <div class="body"><textarea id="wTxt" rows="4" placeholder="name, x, y, environment&#10;W-1, 12500, 8400, delta front"></textarea>
   <div class="row"><button class="pri" id="bWApply">Use this table</button><button id="bWAdd" title="Then click on the map where the well is">+ Add on map</button><button id="bWClear">Remove all</button></div>
   <div class="msg" id="wMsg"></div>
   <div class="wl" id="wList"></div></div></section>
- <section class="panel"><h2><span class="n">3</span>Depositional model<span class="tt" tabindex="0" data-tip="The a-priori depositional system: an ordered list of belts from proximal to distal with relative widths. Linear geometry: belts parallel to the shoreline, perpendicular to the transport azimuth. Radial geometry (delta, fan): belts are arcs around the source point inside the fan opening angle and close back to the source as rounded lobes beyond it; further out, either the most distal belt (deep-water fan) or belts continuing along strike, from which the lobe protrudes (delta). Belt span: distance from the source to the start of the most distal belt before calibration. Irregularity: seeded smooth noise added to the proximal–distal distance, so boundaries look natural; the same seed always gives the same map. Channels: optional sinuous ribbons (distributary, feeder, tidal channels…) drawn from the source along the transport direction inside the chosen belts; one goes through each well whose environment is the channel name. Download model saves everything, wells included, as a JSON file; your last custom belt list is also remembered by this browser.">?</span><i class="chev"></i></h2>
+ <div class="grp">Seismic</div>
+ <section class="panel"><h2><span class="n">3</span>Attribute layers<span class="tt" tabindex="0" data-tip="Seismic attribute maps as grids (ZMAP+, Surfer ASCII .grd, x y z text) or images (PNG, JPG screenshots), georeferenced by the corners of the map extent or by control points, values read from a colour bar (CIE Lab) or from the luminance. Each layer has a role. Lithology (RMS amplitude, sweetness, spectral decomposition): a trend that steers the proximal–distal distance (direction, weight, smoothing) and/or bodies extracted by threshold. Faults (variance, coherence, ant-tracking): fault traces extracted by threshold and thinning. Objects (amplitude or curvature showing channels, reefs, mounds): bodies extracted by threshold, size and elongation, given an environment. Switching a layer off removes its trend, bodies and faults from the map. One layer is shown under the map as a backdrop. Amplitude often reflects lithology or fluid rather than proximality: use the trend with care.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button id="bLAdd" title="ZMAP+, Surfer ASCII grid, x y z text, or an image">+ Load grid or image…</button><span class="msg" id="lMsg"></span></div>
+  <div class="pg" id="bdRow"><span>Backdrop</span><span class="two"><select id="bdSel" style="flex:1" aria-label="Layer shown under the map"></select><input type="range" id="bdOp" min="0" max="1" step="0.05" title="Opacity of the attribute over the map" style="width:70px;flex:none"></span></div>
+  <div class="lst" id="lList"></div></div></section>
+ <div class="grp">Concept</div>
+ <section class="panel"><h2><span class="n">4</span>Depositional system<span class="tt" tabindex="0" data-tip="The a-priori depositional system: an ordered list of belts from proximal to distal with relative widths. Linear geometry: belts parallel to the shoreline, perpendicular to the transport azimuth. Radial geometry (delta, fan): belts are arcs around the source point inside the fan opening angle and close back to the source as rounded lobes beyond it; further out, either the most distal belt (deep-water fan) or belts continuing along strike, from which the lobe protrudes (delta). Belt span: distance from the source to the start of the most distal belt before calibration. Irregularity: seeded smooth noise added to the proximal–distal distance, so boundaries look natural; the same seed always gives the same map. Channels: optional sinuous ribbons (distributary, feeder, tidal channels…) drawn from the source along the transport direction inside the chosen belts; one goes through each well whose environment is the channel name. Download model saves everything, wells included, as a JSON file; your last custom belt list is also remembered by this browser.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Template</span><select id="mTpl" title="Depositional system: ordered belts with relative widths sourced in Method &amp; sources"></select></div>
   <div class="note" id="tplNote" style="margin-top:0"></div><div class="note hint" id="scaleNote" hidden></div>
   <div class="br hd"><span></span><span>Belt (proximal → distal)</span><span>Width</span><span></span><span></span><span></span></div>
   <div class="bl" id="bList"></div>
   <div class="row"><button id="bBAdd">+ Add belt</button><span class="msg" id="bMsg" style="margin-left:auto"></span></div>
-  <div class="pg"><span>Geometry</span><select id="mGeom"><option value="linear">Linear (shoreline-parallel)</option><option value="radial">Radial (delta, fan)</option></select>
+  <div class="chg"><b style="font-size:.8rem">Mixed zones</b> <span class="tt" tabindex="0" data-tip="Interfingering of two neighbouring belts: a band of the given width (in proximal–distal units, about metres) centred on their boundary, drawn hatched and exported as its own class “A + B”. 0 or no zone = sharp contact.">?</span>
+   <div class="lst" id="mixList"></div><div class="row"><button id="bMixAdd">+ Mixed zone</button></div></div>
+  <div class="pg"><span>Geometry</span><select id="mGeom"><option value="lines">Key lines and sources (panel 5)</option><option value="linear">Linear (shoreline-parallel)</option><option value="radial">Radial (delta, fan)</option></select>
    <span>Transport azimuth</span><span class="two"><input type="range" id="mAzR" min="0" max="360" step="1"><input type="number" id="mAz" step="any" title="Degrees clockwise from north, towards the distal belts"></span>
-   <span>Source X, Y</span><span class="two"><input type="number" id="mSx" step="any" style="width:50%;flex:1"><input type="number" id="mSy" step="any" style="width:50%;flex:1"></span>
+   <span class="v1">Source X, Y</span><span class="two v1"><input type="number" id="mSx" step="any" style="width:50%;flex:1"><input type="number" id="mSy" step="any" style="width:50%;flex:1"></span>
    <span class="rad">Fan angle</span><span class="two rad"><input type="range" id="mFanR" min="20" max="200" step="1"><input type="number" id="mFan" step="any" min="5" max="340" title="Full opening angle, degrees"></span>
    <span class="rad">Outside the fan</span><select id="mOut" class="rad" title="What lies beside the fan opening"><option value="distal">Most distal belt (fan)</option><option value="strike">Belts along strike (delta)</option></select>
    <span class="rad strk">Lobe protrusion</span><input type="number" id="mPro" class="rad strk" step="any" min="0" title="How far the lobe tip stands out from the belts along strike, map units">
@@ -160,30 +186,54 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
     <span>Sinuosity</span><span class="two"><input type="range" id="chSinR" min="1" max="2.5" step="0.05"><input type="number" id="chSin" step="0.05" min="1" max="4" title="Length along the channel / straight length (1 = straight); meander wavelength 12 channel widths"></span></div></div></div>
   <div class="row" style="margin-top:8px"><button id="bMSave" title="Template, edited belts, geometry, irregularity, calibration, channels and wells as one JSON file">Download model</button><button id="bMOpen" title="Open a model saved with “Download model”">Open model…</button></div>
   </div></section>
- <section class="panel"><h2><span class="n">4</span>Calibration<span class="tt" tabindex="0" data-tip="Each boundary is placed between the wells of the belts on either side: at its prior position when it falls there, otherwise in the middle of the gap. Boundaries with wells on one side only keep the prior widths, scaled like the calibrated ones. Auto-fit scans the transport azimuth (and, in radial geometry, the source point) for the largest number of wells in the right order, then the widest gaps. Wells that still contradict the order can be honoured by local warping: a smooth bump of the proximal–distal distance around them (Gaussian, radius below, no effect beyond 3 radii), drawn as a dashed circle.">?</span><i class="chev"></i></h2>
+ <section class="panel"><h2><span class="n">5</span>Key lines, sources and faults<span class="tt" tabindex="0" data-tip="Key lines (shoreline or depositional limit, shelf edge or platform margin, toe of slope…) are smooth curves through their vertices, with the basin on the right of the drawing direction (“Flip” reverses it). The belts between two lines are stretched to fit, so they widen where the shelf widens. Each line sits on a belt boundary. Sources (deltas on the shoreline, fans at the shelf edge, fan deltas on a fault) push the belts basinward as lobes: length = how far the lobe reaches, opening angle, drift (−1…1: lobe bent and elongated to one side, as by longshore drift). Away from deltas some systems switch to interdeltaic belts. Faults (traced or extracted from a fault layer) shift the belts distal on the downthrown side by the throw, tapering to the tips; the footwall can be raised. Propose a sketch places lines and sources from the wells and the template.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><button class="pri" id="bSketch" title="Rebuild the key lines and sources from the wells, the template and the transport azimuth (undo restores)">Propose a sketch</button><span class="msg" id="skMsg"></span></div>
+  <div class="lst" id="lnList"></div><div class="row"><button id="bLnAdd">+ Add line</button></div>
+  <div class="lst" id="srcList"></div>
+  <div class="lst" id="fltList"></div></div></section>
+ <section class="panel"><h2><span class="n">6</span>Isolated bodies<span class="tt" tabindex="0" data-tip="Bodies that override the regional belts: pinnacle or patch reefs, isolated platforms, offshore bars or tidal ridges, islands, salt-related highs — each with its core and concentric halos of editable width — and bodies of one environment traced by hand (channel = polyline with a width, or polygon) or extracted from an attribute layer. Click “Body” or “Trace” in the map toolbar, then click on the map. A well whose environment is a body belt is honoured by enlarging the nearest body; a well of the regional belts inside a halo shrinks it.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Traced bodies</span><span class="two"><input type="color" id="trCol" value="#b5562a" style="width:30px;height:24px;padding:1px;flex:none" aria-label="Colour"><input type="text" id="trEnv" value="Channel fill" style="flex:1" aria-label="Environment of traced bodies"></span>
+   <span>Channel width</span><input type="number" id="trW" value="400" step="any" min="1" title="Width of a channel traced as a polyline, map units"></div>
+  <div class="lst" id="bdList"></div></div></section>
+ <div class="grp">Fit</div>
+ <section class="panel"><h2><span class="n">7</span>Calibration<span class="tt" tabindex="0" data-tip="Each boundary is placed between the wells of the belts on either side: at its prior position when it falls there, otherwise in the middle of the gap. Boundaries with wells on one side only keep the prior widths, scaled like the calibrated ones. Auto-fit scans the transport azimuth (and, in radial geometry, the source point) for the largest number of wells in the right order, then the widest gaps. Wells that still contradict the order can be honoured by local warping: a smooth bump of the proximal–distal distance around them (Gaussian, radius below, no effect beyond 3 radii), drawn as a dashed circle.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="row"><button class="pri" id="bFit">Auto-fit direction</button><label class="inl rad"><input type="checkbox" id="fitSrc" checked>also the source</label></div>
   <div class="row"><label class="inl"><input type="checkbox" id="wOn">Local warping for conflicting wells</label></div>
   <div class="pg"><span>Warping radius</span><input type="number" id="wR" step="any" min="0"></div>
+  <div class="pg"><span>Paint radius</span><input type="number" id="pR" step="any" min="0" title="Brush radius of the Paint tool, map units"><span>Paint strength</span><input type="number" id="pA" step="any" min="0" title="Shift of the proximal–distal distance per click at the brush centre"></div>
+  <div class="row"><button id="bPClear">Clear the painted trend</button></div>
   <div class="cal" id="calMsg"></div></div></section>
 </aside>
 <main>
  <section class="intro" id="intro"><h2>A GDE map from a few wells</h2>
   <p>Give the depositional environment interpreted at one or several wells and the depositional system you expect. The conceptual model draws the belts, the wells calibrate them — the way a GDE map is drawn by hand — and every well is checked: honoured or not, and how far from a boundary.</p>
   <div class="dz"><b>Drop a wells table here</b><br><span style="color:var(--mut);font-size:.84rem">name, x, y, environment — text or CSV, nothing is uploaded</span>
-   <div class="row"><button class="pri" id="iDelta">Example: delta, 4 wells</button><button id="iFan">Example: deep-water fan, 3 wells</button><button id="iEst">Estuary, 5 wells</button><button id="iRamp">Carbonate ramp, 4 wells</button><button id="iLake">Rift lake, 4 wells</button><button id="iBlank">Start from a template</button><button id="iOpen" title="A wells table (text, CSV) or a model saved with “Download model” (JSON)">Open a file…</button></div></div>
-  <dl><div><dt>Conceptual belts</dt><dd>17 systems: fluvial, aeolian; tide-, wave- and river-dominated deltas; shoreface–shelf, rimmed platform, ramp, mixed shelf, glaciomarine; mixed, sand-rich and mud-rich fans, slope apron; rift lake, playa — or your own belts. Widths and typical scales from the literature, sources listed.</dd></div>
+   <div class="row"><button class="pri" id="iCoast">Two deltas on a curved coast, 5 wells</button><button id="iRimmed">Rimmed shelf with pinnacles, 4 wells</button><button id="iCanyon">Canyon-fed fan with amplitude, 3 wells</button><button id="iRift">Half-graben with faults, 4 wells</button></div>
+   <div class="row" style="margin-top:4px"><span style="font-size:.8rem;color:var(--mut)">Simpler maps:</span><button id="iDelta">Delta, 4 wells</button><button id="iFan">Deep-water fan, 3 wells</button><button id="iEst">Estuary, 5 wells</button><button id="iRamp">Carbonate ramp, 4 wells</button><button id="iLake">Rift lake, 4 wells</button><button id="iBlank">Start from a template</button><button id="iOpen" title="A wells table (text, CSV) or a model saved with “Download model” (JSON)">Open a file…</button></div></div>
+  <dl><div><dt>Wells, seismic, concept</dt><dd>The three inputs of a hand-drawn GDE map: the wells calibrate, seismic attribute layers steer the belts and give channels, reefs and faults, the depositional concept is drawn with editable key lines, polarised sources and isolated bodies.</dd></div>
+   <div><dt>Conceptual belts</dt><dd>17 systems: fluvial, aeolian; tide-, wave- and river-dominated deltas; shoreface–shelf, rimmed platform, ramp, mixed shelf, glaciomarine; mixed, sand-rich and mud-rich fans, slope apron; rift lake, playa — or your own belts. Widths and typical scales from the literature, sources listed.</dd></div>
    <div><dt>Calibrated on the wells</dt><dd>Boundaries placed between wells of successive belts; transport direction and source fitted automatically.</dd></div>
    <div><dt>Natural boundaries</dt><dd>Seeded smooth irregularity, reproducible; optional local warping for a well that breaks the order.</dd></div>
    <div><dt>Ready for the project</dt><dd>PNG, IRAP lines for Petrel, GeoJSON, polygons CSV, ZMAP+ grid of belt codes, wells check table.</dd></div></dl></section>
  <div id="work" hidden>
   <section class="verdict none" id="verdict" aria-live="polite"></section>
-  <div class="stage" id="stage"><canvas id="cv"></canvas><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
+  <div class="tb" id="tbar" role="toolbar" aria-label="Map tools">
+    <button data-t="sel" class="on" title="Select and drag wells, sources, bodies and line vertices; drag the background to pan (V)">Select</button>
+    <button data-t="pan" title="Pan by dragging; the mouse wheel zooms anywhere (H)">Pan</button><span class="sep"></span>
+    <button data-t="line" title="Edit a key line: drag its vertices, click on it to add a vertex, double-click a vertex to remove it">Line</button><select id="tbLine" aria-label="Line to edit"></select>
+    <button data-t="src" title="Add a source: click on a key line (delta, fan) or on a fault (fan delta)">Source</button>
+    <button data-t="body" title="Add an isolated body: click where it is">Body</button><select id="tbBody" aria-label="Body type"></select>
+    <button data-t="trace" title="Trace: click points, double-click or Enter to finish, Esc to cancel">Trace</button><select id="tbTrace" aria-label="What to trace"><option value="ribbon">channel</option><option value="poly">polygon</option><option value="fault">fault</option></select>
+    <button data-t="paint" title="Paint the trend: drag to push the belts distal (+) or proximal (−)">Paint</button><select id="tbPaint" aria-label="Paint direction"><option value="1">+ distal</option><option value="-1">− proximal</option></select>
+    <button data-t="pick" title="Pick a pixel of the backdrop image (for its control points or colour bar)" hidden id="tbPick">Pick</button><span class="sep"></span>
+    <button id="bUndo" title="Undo (Ctrl+Z)">Undo</button><button id="bRedo" title="Redo (Ctrl+Y)">Redo</button><button id="bZoom0" title="Zoom to the map extent">Fit view</button></div>
+  <div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint2" id="hint2" hidden></div><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
    <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pNo">Cancel</button></div></div></div>
   <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th>X</th><th>Y</th><th class="l">Environment (given)</th><th class="l">Belt on the map</th><th>Honoured</th><th>To nearest boundary</th><th class="l">Note</th></tr></thead><tbody id="tb"></tbody></table></div></div>
  </div>
 </main>
 </div>
-<input type="file" id="file" accept=".csv,.txt,.tsv,.dat,.json,text/*,application/json" hidden><input type="file" id="mfile" accept=".json,application/json" hidden>
+<input type="file" id="lfile" accept=".zmap,.dat,.grd,.txt,.csv,.xyz,.asc,.png,.jpg,.jpeg,.webp,.gif,image/*" hidden><input type="file" id="file" accept=".csv,.txt,.tsv,.dat,.json,text/*,application/json" hidden><input type="file" id="mfile" accept=".json,application/json" hidden>
 <script id="gde-core">
 /* GDE map generator core: conceptual belts on a proximal-distal coordinate, calibrated on wells. Pure logic, no DOM; window.GDE.
    Tested by scripts/gde_test.mjs. Polygon tracing, shared-arc simplification and the IRAP / GeoJSON / CSV writers are copied from
@@ -1317,31 +1367,36 @@ window.GDE={V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineMo
 
 </script>
 <script>
-/* GDE map generator page: inputs -> GDE.build -> preview polygons -> canvas; wells check, exports */
+/* GDE map generator page: wells, seismic layers and concept -> GDE.build -> preview polygons -> canvas; map tools, undo, wells check, exports */
 if(/[?&]debug\b/.test(location.search))window.addEventListener('error',e=>{document.title='ERR '+e.message+' @'+e.lineno});
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cv=$('cv'),ctx=cv.getContext('2d');
-const S={M:null,wells:[],mod:null,P:null,tool:null,drag:null,started:false,full:null,hover:null};
+const S={M:null,wells:[],mod:null,P:null,Pext:null,tool:'sel',drag:null,started:false,full:null,view:{z:1,cx:0,cy:0},sel:null,lineSel:0,trace:null,
+  undo:[],redo:[],restoring:false,imgs:new Map(),srcs:new Map(),bd:null,bdOp:.55,pickFor:null,layerOpen:null};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const fmtN=v=>{if(!isFinite(v))return'—';const a=Math.abs(v);return a>=1e4?Math.round(v).toLocaleString('en-US'):String(+(+v).toPrecision(6))};
 const fmtLen=v=>!isFinite(v)?'—':Math.abs(v)>=1000?(v/1000).toFixed(Math.abs(v)>=1e5?0:1)+' km':Math.round(v)+' m';
 const numv=id=>{const v=parseFloat(String($(id).value).replace(',','.'));return isFinite(v)?v:NaN};
+const pnum=v=>{v=parseFloat(String(v).replace(',','.'));return isFinite(v)?v:NaN};
 document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
 let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},3500)}
 let banT=null;function banner(m,err){const b=$('banner');b.textContent=m;b.className='banner'+(err?' err':'');b.hidden=false;clearTimeout(banT);banT=setTimeout(()=>{b.hidden=true},err?8000:4500)}
+const on=(id,ev,f)=>$(id).addEventListener(ev,f);
 
 // ---------- model inputs ----------
 for(const g of GDE.groups){const og=document.createElement('optgroup');og.label=g;
   for(const [k,t] of Object.entries(GDE.templates))if(t.group===g){const o=document.createElement('option');o.value=k;o.textContent=t.name+(t.geom==='radial'?' (radial)':'');og.appendChild(o)}
   $('mTpl').appendChild(og)}
+$('tbBody').innerHTML=Object.entries(GDE.BODY).filter(([k])=>k!=='custom').map(([k,b])=>`<option value="${k}">${esc(b.name)}</option>`).join('');
 const AB=()=>GDE.allBelts(S.M);
-// last custom belt list, remembered by this browser (per-viewer convenience; may be unavailable)
 const LSK='gdemap.customBelts.v1';
 function saveCustom(){try{localStorage.setItem(LSK,JSON.stringify(S.M.belts.map(b=>({name:b.name,color:b.color,w:b.w,alias:b.alias||[]}))))}catch(e){}}
 function loadCustom(){try{const B=JSON.parse(localStorage.getItem(LSK)||'null');if(Array.isArray(B)&&B.length>=2&&B.every(b=>b&&typeof b.name==='string'&&/^#[0-9a-f]{6}$/i.test(b.color)&&+b.w>0))return B.map(b=>({name:b.name,color:b.color,w:+b.w,alias:Array.isArray(b.alias)?b.alias.map(String):[]}))}catch(e){}return null}
-const blankModel=()=>GDE.makeModel('shelf',{ext:{xmin:0,xmax:20000,ymin:0,ymax:15000},cell:50,src:[0,7500],az:90,span:16000,noise:{amp:700,wl:5000,seed:3},warp:{on:true,R:2500}});
+const blankModel=()=>{const M=GDE.makeModel('shelf',{ext:{xmin:0,xmax:20000,ymin:0,ymax:15000},cell:50,src:[0,7500],az:90,span:16000,noise:{amp:700,wl:5000,seed:3},warp:{on:true,R:2500}});
+  Object.assign(M,GDE.proposeSketch(M,[]),{geom:'lines'});return M};
 const diag=()=>{const e=S.M.ext;return Math.hypot(e.xmax-e.xmin,e.ymax-e.ymin)};
+const isLines=()=>S.M.geom==='lines';
 function syncInputs(){const M=S.M,e=M.ext;
   $('ex0').value=e.xmin;$('ex1').value=e.xmax;$('ey0').value=e.ymin;$('ey1').value=e.ymax;$('ecell').value=M.cell;
   $('mTpl').value=M.template;$('mGeom').value=M.geom;
@@ -1350,9 +1405,13 @@ function syncInputs(){const M=S.M,e=M.ext;
   $('mAmp').value=M.noise.amp;$('mAmpR').value=M.noise.amp;$('mWl').value=M.noise.wl;$('mSeed').value=M.noise.seed;
   $('wOn').checked=!!M.warp.on;$('wR').value=M.warp.R;
   $('mOut').value=M.outside||'distal';$('mPro').value=+(+M.protrude||0).toPrecision(8);
+  if(!(+$('pR').value>0))$('pR').value=Math.round(diag()*.06);if(!(+$('pA').value>0))$('pA').value=Math.round((+M.span||10000)*.06);
   syncChannels();tplNote();
   document.querySelectorAll('.rad').forEach(x=>x.style.display=M.geom==='radial'?'':'none');
-  document.querySelectorAll('.strk').forEach(x=>{if(M.geom==='radial')x.style.display=M.outside==='strike'?'':'none'})}
+  document.querySelectorAll('.v1').forEach(x=>x.style.display=M.geom==='lines'?'none':'');
+  document.querySelectorAll('.strk').forEach(x=>{if(M.geom==='radial')x.style.display=M.outside==='strike'?'':'none'});
+  $('bFit').textContent=isLines()?'Auto-fit direction (for the sketch)':'Auto-fit direction';
+  renderMix();renderConcept();renderLayers()}
 function syncChannels(){const C=S.M.channels,n=S.M.belts.length;C.host=[Math.min(C.host[0],n-1),Math.min(C.host[1],n-1)];if(C.host[0]>C.host[1])C.host=[C.host[1],C.host[0]];
   const opts=k=>S.M.belts.map((b,i)=>`<option value="${i}"${i===k?' selected':''}>${esc(b.name)}</option>`).join('');
   $('chFrom').innerHTML=opts(C.host[0]);$('chTo').innerHTML=opts(C.host[1]);
@@ -1362,12 +1421,11 @@ function tplNote(){const t=GDE.templates[S.M.template];
   const h=GDE.scaleHint(S.M);$('scaleNote').hidden=!h;$('scaleNote').textContent=h||''}
 function syncAz(){$('mAz').value=+(+S.M.az).toFixed(1);$('mAzR').value=S.M.az}
 function syncSrc(){$('mSx').value=Math.round(S.M.src[0]);$('mSy').value=Math.round(S.M.src[1])}
-const on=(id,ev,f)=>$(id).addEventListener(ev,f);
 function extFromInputs(){const v=['ex0','ex1','ey0','ey1'].map(numv),c=numv('ecell');
   if(v.some(x=>!isFinite(x))||!(v[1]>v[0])||!(v[3]>v[2])){$('extMsg').textContent='xmax must be larger than xmin and ymax larger than ymin.';$('extMsg').className='msg err';return}
-  S.M.ext={xmin:v[0],xmax:v[1],ymin:v[2],ymax:v[3]};if(c>0)S.M.cell=c;if(S.started)size();schedule()}
+  S.M.ext={xmin:v[0],xmax:v[1],ymin:v[2],ymax:v[3]};if(c>0)S.M.cell=c;if(S.started){size();zoomFit()}schedule()}
 ['ex0','ex1','ey0','ey1','ecell'].forEach(id=>on(id,'change',extFromInputs));
-on('mGeom','change',()=>{S.M.geom=$('mGeom').value;syncInputs();schedule()});
+on('mGeom','change',()=>{S.M.geom=$('mGeom').value;if(isLines()&&!S.M.lines.length)sketch(true);syncInputs();schedule()});
 on('mAzR','input',()=>{S.M.az=+$('mAzR').value;syncAz();schedule(true)});
 on('mAz','input',()=>{const v=numv('mAz');if(isFinite(v)){S.M.az=((v%360)+360)%360;$('mAzR').value=S.M.az;schedule()}});
 on('mSx','change',()=>{const v=numv('mSx');if(isFinite(v)){S.M.src=[v,S.M.src[1]];schedule()}});
@@ -1384,12 +1442,13 @@ on('mSeed','input',()=>{const v=numv('mSeed');if(isFinite(v)){S.M.noise.seed=Mat
 on('bSeed','click',()=>{S.M.noise.seed=1+Math.floor(Math.random()*99999);$('mSeed').value=S.M.noise.seed;schedule()});
 on('wOn','change',()=>{S.M.warp.on=$('wOn').checked;schedule()});
 on('wR','input',()=>{const v=numv('wR');if(v>0){S.M.warp.R=v;schedule()}});
-on('mTpl','change',()=>{const k=$('mTpl').value,t=GDE.templates[k];
-  if(k!=='custom'){S.M.belts=clone(t.belts);S.M.geom=t.geom;S.M.outside=t.outside;if(t.geom==='radial'&&t.fan)S.M.fan=t.fan;if(t.outside==='strike'&&!(S.M.protrude>0))S.M.protrude=Math.round(.3*S.M.span)}
+on('mTpl','change',()=>{const k=$('mTpl').value,t=GDE.templates[k],v2=GDE.V2[k]||GDE.V2.custom;
+  if(k!=='custom'){S.M.belts=clone(t.belts);if(!isLines())S.M.geom=t.geom;S.M.outside=t.outside;if(t.geom==='radial'&&t.fan)S.M.fan=t.fan;if(t.outside==='strike'&&!(S.M.protrude>0))S.M.protrude=Math.round(.3*S.M.span)}
   else{const B=loadCustom();if(B){S.M.belts=B;banner('Your last custom belt list, remembered by this browser.')}}
-  S.M.template=k;const d=GDE.channelDefaults(S.M);Object.assign(S.M.channels,{name:d.name,host:d.host,color:d.color,n:d.n});
+  S.M.template=k;Object.assign(S.M,{variants:(v2.vars||[]).map(([k2,name,color,alias])=>({k:k2,name,color,alias:alias.slice()})),ctx:v2.ctx?{name:v2.ctx[0],color:v2.ctx[1],alias:v2.ctx[2].slice()}:null,inf:v2.inf!=null?v2.inf:null,mix:[]});
+  const d=GDE.channelDefaults(S.M);Object.assign(S.M.channels,{name:d.name,host:d.host,color:d.color,n:d.n});
+  if(isLines()){sketch(true);banner('Key lines and sources re-proposed for this system from the wells (undo restores the previous ones).')}
   rematch();renderBelts();syncInputs();renderWells();schedule()});
-// channels
 on('chOn','change',()=>{S.M.channels.on=$('chOn').checked;rematch();syncChannels();renderWells();schedule()});
 on('chName','change',()=>{const v=$('chName').value.trim();if(v){S.wells.forEach(w=>{if(w.b===S.M.belts.length)w.env=v});S.M.channels.name=v}rematch();renderWells();schedule()});
 on('chCol','input',()=>{S.M.channels.color=$('chCol').value;schedule()});
@@ -1400,8 +1459,8 @@ on('chW','input',()=>{const v=numv('chW');if(v>0){S.M.channels.w=v;schedule()}})
 on('chSinR','input',()=>{S.M.channels.sin=+$('chSinR').value;$('chSin').value=S.M.channels.sin;schedule(true)});
 on('chSin','input',()=>{const v=numv('chSin');if(v>=1&&v<=4){S.M.channels.sin=v;$('chSinR').value=v;schedule()}});
 
-// ---------- belts editor ----------
-function beltsEdited(){if(S.M.template!=='custom'){S.M.template='custom';$('mTpl').value='custom'}saveCustom();syncChannels();tplNote()}
+// ---------- belts editor and mixed zones ----------
+function beltsEdited(){if(S.M.template!=='custom'){S.M.template='custom';$('mTpl').value='custom'}saveCustom();syncChannels();tplNote();renderMix()}
 function renderBelts(){const B=S.M.belts;
   $('bList').innerHTML=B.map((b,i)=>`<div class="br" data-i="${i}"><input type="color" value="${esc(b.color)}" data-k="color" aria-label="Colour"><input type="text" value="${esc(b.name)}" data-k="name" aria-label="Belt name"><input type="number" value="${b.w}" step="any" min="0" data-k="w" aria-label="Relative width" title="Relative width (the most distal belt is open-ended)"><button data-a="up" title="Move up (more proximal)" ${i?'':'disabled'}>↑</button><button data-a="dn" title="Move down (more distal)" ${i<B.length-1?'':'disabled'}>↓</button><button data-a="del" title="Remove" ${B.length>2?'':'disabled'}>×</button></div>`).join('');
   $('bList').querySelectorAll('.br').forEach(r=>{const i=+r.dataset.i;
@@ -1413,31 +1472,36 @@ function renderBelts(){const B=S.M.belts;
     r.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{const B=S.M.belts,a=bt.dataset.a;
       if(a==='del'){S.wells.forEach(w=>{if(w.b===i)w.b=-1});B.splice(i,1)}
       else{const j=a==='up'?i-1:i+1;[B[i],B[j]]=[B[j],B[i]]}
-      beltsEdited();rematch(true);renderBelts();schedule()})})}
+      S.M.mix=[];beltsEdited();rematch(true);renderBelts();schedule()})})}
 on('bBAdd','click',()=>{const B=S.M.belts;B.splice(B.length-1,0,{name:'New belt '+B.length,color:'#d8cfa8',w:1,alias:[]});beltsEdited();rematch(true);renderBelts();schedule()});
+function renderMix(){const B=S.M.belts,X=S.M.mix||(S.M.mix=[]);
+  $('mixList').innerHTML=X.map((m,i)=>`<div class="it" data-i="${i}"><div class="hd"><select data-k="k" aria-label="Boundary" style="flex:1;min-width:0">${B.slice(0,-1).map((b,k)=>`<option value="${k}"${k===m.k?' selected':''}>${esc(b.name)} + ${esc(B[k+1].name)}</option>`).join('')}</select><input type="number" data-k="w" value="${m.w}" step="any" min="0" style="width:70px" title="Width of the mixed zone (proximal–distal units, about metres)" aria-label="Width"><button data-a="del" title="Remove">×</button></div></div>`).join('')||'<div class="note" style="margin:0">None: sharp contacts.</div>';
+  $('mixList').querySelectorAll('.it').forEach(r=>{const m=X[+r.dataset.i];
+    r.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('change',()=>{const v=+inp.value;if(inp.dataset.k==='k')m.k=v;else if(v>=0)m.w=v;rematch();renderWells();schedule()}));
+    r.querySelector('[data-a=del]').onclick=()=>{X.splice(+r.dataset.i,1);renderMix();rematch();renderWells();schedule()}})}
+on('bMixAdd','click',()=>{const n=S.M.belts.length;if(n<2)return;const used=new Set(S.M.mix.map(m=>m.k));let k=0;while(used.has(k)&&k<n-2)k++;
+  const p=GDE.prior(S.M),w=Math.round(.4*((p[k+1]??p[k]*1.3)-(k?p[k-1]:0))/2);S.M.mix.push({k,w:Math.max(1,w)});renderMix();rematch();renderWells();schedule()});
 
 // ---------- wells ----------
-// keep the belt chosen by hand (b set, env = its name); a removed belt leaves the well unmatched
-function rematch(keepB){const B=AB();for(const w of S.wells){if(keepB&&w.b===-1&&w.manual)continue;w.b=GDE.matchBelt(w.env,B)}}
+function rematch(keepB){const B=AB(),n=S.M.belts.length;for(const w of S.wells){if(keepB&&w.b===-1&&w.manual)continue;if(w.manual&&w.b>=0&&w.b<B.length&&B[w.b].name===w.env)continue;const r=GDE.matchEnv(w.env,B,n);w.b=r.b;w.pair=r.pair}}
 function wellsTable(){return'name\tx\ty\tenvironment\n'+S.wells.map(w=>[w.name,w.x,w.y,w.env].join('\t')).join('\n')}
 function applyTable(text){const r=GDE.parseWells(text);
   if(!r.wells.length){$('wMsg').textContent=r.errors[0]||'No well found: one line per well, name, x, y, environment.';$('wMsg').className='msg err';return false}
-  S.wells=r.wells.map(w=>({...w,b:GDE.matchBelt(w.env,AB())}));
-  const un=S.wells.filter(w=>w.b<0).length;
+  S.wells=r.wells.map(w=>({...w}));rematch();
+  const un=S.wells.filter(w=>w.b<0&&!w.pair).length;
   $('wMsg').className='msg'+(un||r.errors.length?' err':'');
   $('wMsg').textContent=`${S.wells.length} well${S.wells.length>1?'s':''} read.`+(un?` ${un} environment${un>1?'s':''} not matched to a belt: choose ${un>1?'them':'it'} below.`:'')+(r.errors.length?' '+r.errors.length+' line(s) skipped: '+r.errors[0]:'');
   start();renderWells();schedule();return true}
 on('bWApply','click',()=>applyTable($('wTxt').value));
 on('bWClear','click',()=>{S.wells=[];$('wTxt').value='';$('wMsg').textContent='';renderWells();schedule()});
-on('bWAdd','click',()=>setTool(S.tool==='add'?null:'add'));
-function setTool(t){S.tool=t;$('bWAdd').classList.toggle('on',t==='add');cv.style.cursor=t==='add'?'crosshair':'';if(t==='add'){start();banner('Click on the map where the well is.')}}
+on('bWAdd','click',()=>setTool(S.tool==='add'?'sel':'add'));
 function renderWells(syncTxt=true){const B=AB();
-  $('wList').innerHTML=S.wells.map((w,i)=>`<div class="wr${w.b<0?' bad':''}" data-i="${i}"><input type="text" value="${esc(w.name)}" data-k="name" aria-label="Well name"><input type="number" step="any" value="${w.x}" data-k="x" aria-label="X"><input type="number" step="any" value="${w.y}" data-k="y" aria-label="Y">
-    <select data-k="b" aria-label="Environment">${w.b<0?`<option value="-1" selected>⚠ “${esc(w.env||'?')}” — choose a belt</option>`:''}${B.map((b,k)=>`<option value="${k}"${k===w.b?' selected':''}>${esc(b.name)}</option>`).join('')}</select><button data-a="del" title="Remove this well">Remove</button></div>`).join('');
+  $('wList').innerHTML=S.wells.map((w,i)=>`<div class="wr${w.b<0&&!w.pair?' bad':''}" data-i="${i}"><input type="text" value="${esc(w.name)}" data-k="name" aria-label="Well name"><input type="number" step="any" value="${w.x}" data-k="x" aria-label="X"><input type="number" step="any" value="${w.y}" data-k="y" aria-label="Y">
+    <select data-k="b" aria-label="Environment">${w.pair&&w.b<0?`<option value="-2" selected>${esc(w.env)} (either belt)</option>`:''}${w.b<0&&!w.pair?`<option value="-1" selected>⚠ “${esc(w.env||'?')}” — choose a belt</option>`:''}${B.map((b,k)=>`<option value="${k}"${k===w.b?' selected':''}>${esc(b.name)}</option>`).join('')}</select><button data-a="del" title="Remove this well">Remove</button></div>`).join('');
   $('wList').querySelectorAll('.wr').forEach(r=>{const w=S.wells[+r.dataset.i];
     r.querySelectorAll('input,select').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.k;
       if(k==='name')w.name=inp.value.trim()||w.name;
-      else if(k==='b'){w.b=+inp.value;w.env=AB()[w.b].name;w.manual=true;r.classList.remove('bad')}
+      else if(k==='b'){const v=+inp.value;if(v>=0){w.b=v;w.env=AB()[w.b].name;w.pair=null;w.manual=true;r.classList.remove('bad')}}
       else{const v=parseFloat(inp.value);if(isFinite(v))w[k]=v}
       $('wTxt').value=wellsTable();schedule()}));
     r.querySelector('[data-a=del]').onclick=()=>{S.wells.splice(+r.dataset.i,1);renderWells();schedule()}});
@@ -1445,165 +1509,424 @@ function renderWells(syncTxt=true){const B=AB();
 on('bFitExt','click',()=>{if(!S.wells.length){$('extMsg').textContent='No well yet.';$('extMsg').className='msg err';return}
   const xs=S.wells.map(w=>w.x),ys=S.wells.map(w=>w.y),sx=Math.max(...xs)-Math.min(...xs),sy=Math.max(...ys)-Math.min(...ys),s=Math.max(sx,sy,1000);
   const mx=Math.max(.4*sx,.25*s),my=Math.max(.4*sy,.25*s),r=v=>Math.round(v/100)*100;
-  S.M.ext={xmin:r(Math.min(...xs)-mx),xmax:r(Math.max(...xs)+mx),ymin:r(Math.min(...ys)-my),ymax:r(Math.max(...ys)+my)};syncInputs();if(S.started)size();schedule()});
+  S.M.ext={xmin:r(Math.min(...xs)-mx),xmax:r(Math.max(...xs)+mx),ymin:r(Math.min(...ys)-my),ymax:r(Math.max(...ys)+my)};syncInputs();if(S.started){size();zoomFit()}schedule()});
+const wellsOut=()=>S.wells.map(w=>({name:w.name,x:w.x,y:w.y,env:w.env,...(w.manual&&w.b>=0?{b:w.b}:{})}));
 
-// ---------- calibration ----------
-on('bFit','click',()=>{const radial=S.M.geom==='radial',f=GDE.fitAzimuth(S.M,S.wells,{source:radial&&$('fitSrc').checked});
+// ---------- calibration and sketch ----------
+on('bFit','click',()=>{const radial=S.M.geom==='radial',lin=isLines(),f=GDE.fitAzimuth(lin?Object.assign({},S.M,{geom:'linear',src:[(S.M.ext.xmin+S.M.ext.xmax)/2,(S.M.ext.ymin+S.M.ext.ymax)/2]}):S.M,S.wells,{source:radial&&$('fitSrc').checked});
   if(f.msg){banner(f.msg,true);return}
   S.M.az=f.az;if(radial&&$('fitSrc').checked)S.M.src=f.src;syncAz();syncSrc();schedule();
-  banner(`Transport azimuth ${f.az.toFixed(1)}°${radial&&$('fitSrc').checked?`, source at ${fmtN(f.src[0])}, ${fmtN(f.src[1])}`:''}: ${f.count} of ${f.n} wells in the right order.`,f.count<f.n)});
+  banner(`Transport azimuth ${f.az.toFixed(1)}°${radial&&$('fitSrc').checked?`, source at ${fmtN(f.src[0])}, ${fmtN(f.src[1])}`:''}: ${f.count} of ${f.n} wells in the right order.`+(lin?' Press “Propose a sketch” (panel 5) to redraw the key lines along it.':''),f.count<f.n)});
+function sketch(quiet){const s=GDE.proposeSketch(S.M,wellsOut());Object.assign(S.M,{lines:s.lines,sources:s.sources.concat((S.M.sources||[]).filter(q=>q.kind==='fault')),az:s.az,span:s.span,geom:'lines'});
+  S.lineSel=0;if(!quiet)banner(`Sketch: ${s.lines.length} key line${s.lines.length>1?'s':''} and ${s.sources.length} source${s.sources.length===1?'':'s'} from ${S.wells.length} well${S.wells.length===1?'':'s'}, transport azimuth ${s.az}°. Edit them with the Line and Select tools.`)}
+on('bSketch','click',()=>{if(!S.started)return need();sketch();syncInputs();schedule()});
+on('pR','change',()=>{});on('bPClear','click',()=>{S.M.paint=null;schedule()});
+
+// ---------- concept lists: key lines, sources, faults, bodies ----------
+const prior=()=>GDE.prior(S.M);
+const bndOpts=k=>{const B=S.M.belts;return`<option value="-1"${k===-1?' selected':''}>before ${esc(B[0].name)}</option>`+B.slice(0,-1).map((b,i)=>`<option value="${i}"${i===k?' selected':''}>${esc(b.name)} | ${esc(B[i+1].name)}</option>`).join('')};
+function selItem(kind,i){S.sel=kind?{kind,i}:null;renderConcept();draw()}
+function renderConcept(){const M=S.M,L=M.lines||[],sel=S.sel||{};
+  $('tbLine').innerHTML=L.map((l,i)=>`<option value="${i}"${i===S.lineSel?' selected':''}>${esc(l.name)}</option>`).join('')||'<option value="-1">no line</option>';
+  $('lnList').innerHTML=L.map((l,i)=>`<div class="it${sel.kind==='line'&&sel.i===i?' sel':''}" data-i="${i}"><div class="hd"><b title="Select">${esc(l.name)}</b><span class="tag">${l.pts.length} vertices</span><button data-a="flip" title="Reverse the drawing direction: the basin is on the right of the line">Flip</button><button data-a="del" title="Remove the line">×</button></div>
+    <div class="pg"><span>Name</span><input type="text" data-k="name" value="${esc(l.name)}" aria-label="Line name"><span>On boundary</span><select data-k="k" aria-label="Belt boundary">${bndOpts(l.k)}</select></div></div>`).join('')||(isLines()?'<div class="note" style="margin:0">No key line: press “Propose a sketch” or “Add line”.</div>':'<div class="note" style="margin:0">Key lines are used with the geometry “Key lines and sources” (panel 4).</div>');
+  $('lnList').querySelectorAll('.it').forEach(r=>{const i=+r.dataset.i,l=L[i];
+    r.querySelector('b').onclick=()=>{S.lineSel=i;selItem('line',i);setTool('line')};
+    r.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('change',()=>{if(inp.dataset.k==='k')l.k=+inp.value;else l.name=inp.value.trim()||l.name;renderConcept();schedule()}));
+    r.querySelector('[data-a=flip]').onclick=()=>{l.pts.reverse();schedule()};
+    r.querySelector('[data-a=del]').onclick=()=>{L.splice(i,1);M.sources.forEach(s=>{if(s.kind!=='fault'&&s.line>i)s.line--});S.lineSel=0;renderConcept();schedule()}});
+  const SR=M.sources||[];
+  $('srcList').innerHTML=(SR.length?'<b style="font-size:.8rem">Sources</b>':'')+SR.map((s,i)=>`<div class="it${sel.kind==='src'&&sel.i===i?' sel':''}" data-i="${i}"><div class="hd"><b title="Select">${s.kind==='fan'?'Fan':s.kind==='fault'?'Fan delta (fault)':'Delta / lobe'} ${i+1}</b><span class="tag">${fmtN(s.x)}, ${fmtN(s.y)}</span><button data-a="del" title="Remove">×</button></div>
+    <div class="pg"><span>Lobe length</span><input type="number" data-k="L" value="${Math.round(s.L)}" step="any" min="1" title="How far the lobe reaches beyond its line (delta: protrusion of the delta front; fan: start of the most distal belt), map units"><span>Opening</span><span class="two"><input type="range" data-k="open" min="10" max="160" step="1" value="${s.open}"><input type="number" data-k="open" value="${s.open}" step="any" style="width:58px"></span>
+    <span>Drift (asymmetry)</span><span class="two"><input type="range" data-k="asym" min="-1" max="1" step="0.05" value="${s.asym}"><input type="number" data-k="asym" value="${s.asym}" step="0.05" style="width:58px" title="−1…1: lobe bent and elongated to the left (−) or right (+) of its axis, as by longshore drift"></span><span>Axis azimuth</span><input type="number" data-k="az" value="${(+s.az).toFixed(0)}" step="any" title="Degrees from north; drag the arrow head on the map"></div></div>`).join('');
+  $('srcList').querySelectorAll('.it').forEach(r=>{const s=SR[+r.dataset.i];r.querySelector('b').onclick=()=>selItem('src',+r.dataset.i);
+    r.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('input',()=>{const v=pnum(inp.value);if(!isFinite(v))return;s[inp.dataset.k]=v;r.querySelectorAll(`[data-k=${inp.dataset.k}]`).forEach(o=>{if(o!==inp)o.value=v});schedule(inp.type==='range')}));
+    r.querySelector('[data-a=del]').onclick=()=>{SR.splice(+r.dataset.i,1);S.sel=null;renderConcept();rematch();renderWells();schedule()}});
+  const FL=M.faults||[];
+  $('fltList').innerHTML=(FL.length?'<b style="font-size:.8rem">Faults</b>':'')+FL.map((f,i)=>{const lay=(M.layers||[]).find(l=>l.id===f.layer);return`<div class="it${sel.kind==='fault'&&sel.i===i?' sel':''}" data-i="${i}"><div class="hd"><b title="Select">Fault ${i+1}</b><span class="tag">${lay?esc(lay.name)+(lay.on?'':' (off)'):'traced'}</span><button data-a="flip" title="Downthrown side to the other side">Flip side</button><button data-a="del" title="Remove">×</button></div>
+    <div class="pg"><span>Throw (d units)</span><input type="number" data-k="off" value="${Math.round(f.off)}" step="any" min="0" title="Shift of the belts towards distal on the downthrown side (hatched ticks), about metres of proximal–distal distance; 0 = drawn only"><span>Taper to tips</span><input type="number" data-k="taper" value="${Math.round(f.taper)}" step="any" min="0" title="Length over which the throw decreases to zero at both tips, map units"><span>Footwall raised</span><span class="two"><input type="range" data-k="fw" min="0" max="1" step="0.05" value="${f.fw||0}"><input type="number" data-k="fw" value="${f.fw||0}" step="0.05" style="width:58px" title="0: footwall unchanged; 1: footwall in the most proximal belt next to the fault"></span></div></div>`}).join('');
+  $('fltList').querySelectorAll('.it').forEach(r=>{const f=FL[+r.dataset.i];r.querySelector('b').onclick=()=>selItem('fault',+r.dataset.i);
+    r.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('input',()=>{const v=pnum(inp.value);if(!(v>=0))return;f[inp.dataset.k]=v;r.querySelectorAll(`[data-k=${inp.dataset.k}]`).forEach(o=>{if(o!==inp)o.value=v});schedule(inp.type==='range')}));
+    r.querySelector('[data-a=flip]').onclick=()=>{f.side=f.side<0?1:-1;schedule()};
+    r.querySelector('[data-a=del]').onclick=()=>{const i=+r.dataset.i;FL.splice(i,1);M.sources=M.sources.filter(s=>s.kind!=='fault'||s.fault!==i);M.sources.forEach(s=>{if(s.kind==='fault'&&s.fault>i)s.fault--});S.sel=null;renderConcept();schedule()}});
+  const BD=M.bodies||[];
+  $('bdList').innerHTML=BD.map((b,i)=>{const T=GDE.BODY[b.type]||GDE.BODY.custom,lay=(M.layers||[]).find(l=>l.id===b.layer),nm=T.belts?T.name:esc(b.env||'Body')+(b.shape==='ribbon'?' (channel)':b.shape==='poly'?' (polygon)':'');
+    let h=`<div class="it${sel.kind==='body'&&sel.i===i?' sel':''}" data-i="${i}"><div class="hd"><b title="Select">${T.belts?esc(nm):nm}</b><span class="tag">${lay?esc(lay.name)+(lay.on?'':' (off)'):b.shape==='ellipse'?fmtLen(b.a*2):'traced'}</span><button data-a="del" title="Remove">×</button></div>`;
+    if(sel.kind==='body'&&sel.i===i){h+='<div class="pg">';
+      if(b.shape==='ellipse')h+=`<span>Length (axis)</span><input type="number" data-k="a" value="${Math.round(b.a)}" step="any" min="1" title="Semi-major axis of the core, map units"><span>Elongation</span><input type="number" data-k="e" value="${b.e}" step="0.05" min="0.05" max="1" title="Minor / major axis"><span>Orientation</span><input type="number" data-k="rot" value="${b.rot||0}" step="any" title="Azimuth of the long axis, degrees">`;
+      if(b.shape==='ribbon')h+=`<span>Width</span><input type="number" data-k="width" value="${Math.round(b.width)}" step="any" min="1">`;
+      if(!T.belts)h+=`<span>Environment</span><span class="two"><input type="color" data-k="color" value="${esc(b.color)}" style="width:30px;height:22px;padding:1px;flex:none"><input type="text" data-k="env" value="${esc(b.env)}" style="flex:1"></span>`;
+      (T.belts||[]).slice(1).forEach((x,j)=>{h+=`<span>${esc(x[0])}</span><input type="number" data-w="${j}" value="${b.w&&b.w[j]!=null?b.w[j]:x[2]}" step="any" min="0" title="Halo width, map units">`});
+      h+='</div>'}
+    return h+'</div>'}).join('')||'<div class="note" style="margin:0">No body: “Body” or “Trace” in the map toolbar, or extract bodies from an attribute layer (panel 3).</div>';
+  $('bdList').querySelectorAll('.it').forEach(r=>{const i=+r.dataset.i,b=BD[i];r.querySelector('b').onclick=()=>selItem('body',S.sel&&S.sel.kind==='body'&&S.sel.i===i?null:i);
+    r.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.k;if(k==='env'||k==='color'){b[k]=inp.value.trim()||b[k];rematch();renderWells()}else{const v=pnum(inp.value);if(isFinite(v))b[k]=v}schedule()}));
+    r.querySelectorAll('[data-w]').forEach(inp=>inp.addEventListener('change',()=>{const v=pnum(inp.value);if(v>=0){const T=GDE.BODY[b.type];b.w=(T.belts.slice(1).map((x,j)=>b.w&&b.w[j]!=null?b.w[j]:x[2]));b.w[+inp.dataset.w]=v;schedule()}}));
+    r.querySelector('[data-a=del]').onclick=()=>{BD.splice(i,1);S.sel=null;renderConcept();rematch();renderWells();schedule()}})}
+on('bLnAdd','click',()=>{const M=S.M,e=M.ext,n=M.belts.length,used=new Set((M.lines||[]).map(l=>l.k));let k=0;while(used.has(k)&&k<n-2)k++;
+  const a=(+M.az||90)*Math.PI/180,ux=Math.sin(a),uy=Math.cos(a),cx=(e.xmin+e.xmax)/2,cy=(e.ymin+e.ymax)/2,H=diag()*.6,pts=[];
+  for(let i=0;i<=8;i++){const q=-H+2*H*i/8;pts.push([Math.round(cx-uy*q),Math.round(cy+ux*q)])}
+  M.lines.push({name:'Line '+(M.lines.length+1),k,pts});if(!isLines()){M.geom='lines';syncInputs()}S.lineSel=M.lines.length-1;renderConcept();setTool('line');schedule()});
+
+// ---------- seismic attribute layers ----------
+let lseq=1;const newId=()=>{let id;do id='L'+(lseq++);while((S.M.layers||[]).some(l=>l.id===id));return id};
+function imgOf(l){if(l.img)return l.img;if(l.synth){const r=GDE.synthImage(l.synth);return r.img}if(l.src&&S.imgs.has(l.src))return S.imgs.get(l.src).img;return null}
+function attachImgs(M){for(const l of M.layers||[]){if(l.src&&!l.src.startsWith('data:')&&S.srcs.has(l.src))l.src=S.srcs.get(l.src);if(l.src&&!S.imgs.has(l.src))decodeImg(l.src).then(()=>{l.img=null;S.full=null;schedule();draw()});l.img=null}}
+function decodeImg(src){return new Promise(res=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const g=c.getContext('2d');g.drawImage(im,0,0);
+  const d=g.getImageData(0,0,c.width,c.height);S.imgs.set(src,{img:{w:c.width,h:c.height,data:d.data,uid:'u'+S.imgs.size+'_'+src.length},el:c});res(true)};im.onerror=()=>res(false);im.src=src})}
+const canvOf=l=>{if(l.synth){const key='s:'+JSON.stringify(l.synth);if(!S.imgs.has(key)){const r=GDE.synthImage(l.synth),c=document.createElement('canvas');c.width=r.img.w;c.height=r.img.h;c.getContext('2d').putImageData(new ImageData(r.img.data,r.img.w,r.img.h),0,0);S.imgs.set(key,{img:r.img,el:c})}return S.imgs.get(key)}
+  return l.src?S.imgs.get(l.src):null};
+on('bLAdd','click',()=>$('lfile').click());
+on('lfile','change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(!S.started)start();
+  if(/^image\//.test(f.type)||/\.(png|jpe?g|gif|webp)$/i.test(f.name)){const r=new FileReader();r.onload=async()=>{const src=String(r.result);if(!(await decodeImg(src))){banner(f.name+': could not read the image.',true);return}
+      const im=S.imgs.get(src).img,e2=S.M.ext,id=newId();
+      S.M.layers.push({id,name:f.name.replace(/\.[^.]+$/,''),role:'lith',on:true,src,cal:[[0,0,e2.xmin,e2.ymax],[im.w,0,e2.xmax,e2.ymax],[0,im.h,e2.xmin,e2.ymin],[im.w,im.h,e2.xmax,e2.ymin]],channel:'lum',tol:12,op:.6,trend:{on:false,dir:'distal',w:.3,smooth:0}});
+      S.bd=id;S.layerOpen=id;renderLayers();schedule();banner(`${f.name}: georeferenced to the corners of the map extent; adjust the corners or control points in panel 3, and set a colour bar if the image has one.`)};r.readAsDataURL(f);return}
+  const r=new FileReader();r.onload=()=>{const g=GDE.parseGrid(String(r.result));if(g.err){banner(f.name+': '+g.err,true);return}const id=newId();
+    S.M.layers.push({id,name:f.name.replace(/\.[^.]+$/,''),role:'lith',on:true,grid:g,op:.6,trend:{on:true,dir:'distal',w:.3,smooth:0}});S.bd=id;S.layerOpen=id;renderLayers();schedule();
+    banner(`${f.name}: grid ${g.nx} × ${g.ny} read; used as a lithology trend at 30 % (panel 3).`)};r.readAsText(f)});
+const ROLE={lith:'Lithology',fault:'Faults',obj:'Objects'};
+function layerStats(l){const G=GDE.layerGrid(l,S.M.ext);if(!G)return null;const v=G.z.filter(x=>x!=null&&isFinite(x));if(!v.length)return null;v.sort((a,b)=>a-b);return{min:v[0],max:v[v.length-1],p:q=>v[Math.min(v.length-1,Math.floor(q/100*v.length))],n:v.length,G}}
+function renderLayers(){const M=S.M,L=M.layers||(M.layers=[]);if(S.bd&&!L.some(l=>l.id===S.bd))S.bd=null;
+  $('bdSel').innerHTML='<option value="">none</option>'+L.map(l=>`<option value="${esc(l.id)}"${l.id===S.bd?' selected':''}>${esc(l.name)}</option>`).join('');$('bdOp').value=S.bdOp;$('bdRow').hidden=!L.length;
+  $('tbPick').hidden=!L.some(l=>!l.grid);
+  $('lList').innerHTML=L.map((l,i)=>{const nb=(M.bodies||[]).filter(b=>b.layer===l.id).length,nf=(M.faults||[]).filter(f=>f.layer===l.id).length,open=S.layerOpen===l.id;
+    let h=`<div class="it${open?' sel':''}" data-i="${i}"><div class="hd"><input type="checkbox" data-k="on" ${l.on?'checked':''} title="Use this layer in the map (trend, bodies, faults)" aria-label="Layer on"><b title="Show the settings">${esc(l.name)}</b><span class="tag">${ROLE[l.role]}${l.trend.on&&l.role==='lith'?' · trend '+Math.round(l.trend.w*100)+' %':''}${nb?' · '+nb+' bodies':''}${nf?' · '+nf+' faults':''}</span><button data-a="del" title="Remove the layer and what was extracted from it">×</button></div>`;
+    if(open){const st=layerStats(l);h+=`<div class="pg"><span>Name</span><input type="text" data-k="name" value="${esc(l.name)}"><span>Role</span><select data-k="role"><option value="lith"${l.role==='lith'?' selected':''}>Lithology (trend, bodies)</option><option value="obj"${l.role==='obj'?' selected':''}>Objects (bodies)</option><option value="fault"${l.role==='fault'?' selected':''}>Faults</option></select></div>`;
+      if(!l.grid){const c=l.cal||[];h+=`<div class="note" style="margin:4px 0 0">Image ${(imgOf(l)||{}).w||'?'} × ${(imgOf(l)||{}).h||'?'} px. Control points: pixel column, row → X, Y (2 points without rotation, 3 or more for a full affine fit). “Pick” in the map toolbar then click the backdrop to read a pixel.</div>
+        <div class="lst">${c.map((q,j)=>`<div class="hd" data-c="${j}"><input type="number" data-q="0" value="${+(+q[0]).toFixed(1)}" step="any" style="width:52px" aria-label="Pixel column"><input type="number" data-q="1" value="${+(+q[1]).toFixed(1)}" step="any" style="width:52px" aria-label="Pixel row"><span>→</span><input type="number" data-q="2" value="${q[2]}" step="any" style="width:70px" aria-label="X"><input type="number" data-q="3" value="${q[3]}" step="any" style="width:70px" aria-label="Y"><button data-cdel="${j}" title="Remove">×</button></div>`).join('')}</div>
+        <div class="row"><button data-a="cadd">+ Point</button><button data-a="cext" title="The whole image covers the map extent">Image = map extent</button><span class="msg">${(()=>{const a=GDE.affine(c);return a.err?a.err:'residual '+a.rms.toFixed(2)+' px'})()}</span></div>
+        <div class="pg"><span>Value from</span><select data-k="vmode"><option value="lum"${!l.bar&&(l.channel||'lum')==='lum'?' selected':''}>luminance (0–1)</option><option value="r"${!l.bar&&l.channel==='r'?' selected':''}>red channel</option><option value="g"${!l.bar&&l.channel==='g'?' selected':''}>green channel</option><option value="b"${!l.bar&&l.channel==='b'?' selected':''}>blue channel</option><option value="bar"${l.bar?' selected':''}>colour bar</option></select></div>`;
+        if(l.bar)h+=`<div class="pg"><span>Bar start (px)</span><span class="two"><input type="number" data-b="a0" value="${+l.bar.a[0].toFixed(1)}" step="any"><input type="number" data-b="a1" value="${+l.bar.a[1].toFixed(1)}" step="any"></span><span>Value at start</span><input type="number" data-b="v0" value="${l.bar.v0}" step="any"><span>Bar end (px)</span><span class="two"><input type="number" data-b="b0" value="${+l.bar.b[0].toFixed(1)}" step="any"><input type="number" data-b="b1" value="${+l.bar.b[1].toFixed(1)}" step="any"></span><span>Value at end</span><input type="number" data-b="v1" value="${l.bar.v1}" step="any"><span>Colour tolerance</span><input type="number" data-k="tol" value="${l.tol||12}" step="any" min="1" title="Largest CIE Lab distance to the bar; other colours (text, lines) give no value"></div>`}
+      h+=`<div class="note" style="margin:4px 0 0">${st?`Values ${fmtN(st.min)} to ${fmtN(st.max)} (${st.n.toLocaleString('en-US')} nodes).`:'No value read yet: check the georeferencing and the colour bar.'}</div>`;
+      if(l.role==='lith')h+=`<label class="inl" style="margin-top:6px"><input type="checkbox" data-t="on" ${l.trend.on?'checked':''}>Trend on the proximal–distal distance</label><div class="pg"><span>High values are</span><select data-t="dir"><option value="distal"${l.trend.dir==='distal'?' selected':''}>distal</option><option value="proximal"${l.trend.dir==='proximal'?' selected':''}>proximal</option></select>
+        <span>Weight</span><span class="two"><input type="range" data-t="w" min="0" max="1" step="0.05" value="${l.trend.w}"><input type="number" data-t="w" value="${l.trend.w}" step="0.05" min="0" max="1" style="width:58px"></span><span>Smoothing</span><input type="number" data-t="smooth" value="${l.trend.smooth||0}" step="any" min="0" title="Radius of the moving average, map units"></div>
+        <div class="note" style="margin:2px 0 0">Amplitude often reflects lithology or fluid rather than proximality: a moderate weight, and wells, keep the concept in charge.</div>`;
+      const ex=l.ex||(l.ex={mode:'above',pct:90,thr:null,smooth:1,minArea:Math.round(((M.ext.xmax-M.ext.xmin)*(M.ext.ymax-M.ext.ymin))/2000),minElong:l.role==='obj'?3:0,env:l.role==='fault'?'':'Channel fill',color:'#b5562a',minLen:Math.round(diag()/15)});
+      h+=`<div class="chg"><b style="font-size:.78rem">${l.role==='fault'?'Extract fault traces':'Extract bodies'}</b><div class="pg"><span>Keep values</span><span class="two"><select data-x="mode" style="flex:1"><option value="above"${ex.mode==='above'?' selected':''}>above</option><option value="below"${ex.mode==='below'?' selected':''}>below</option></select><select data-x="by" style="flex:1"><option value="pct"${ex.thr==null?' selected':''}>percentile</option><option value="thr"${ex.thr!=null?' selected':''}>value</option></select></span>
+        <span>${ex.thr==null?'Percentile':'Threshold'}</span><input type="number" data-x="${ex.thr==null?'pct':'thr'}" value="${ex.thr==null?ex.pct:ex.thr}" step="any">
+        <span>Smoothing</span><input type="number" data-x="smooth" value="${ex.smooth}" step="1" min="0" title="Moving average before thresholding, grid nodes">`;
+      if(l.role==='fault')h+=`<span>Minimum length</span><input type="number" data-x="minLen" value="${ex.minLen}" step="any" min="0"></div><div class="row"><button class="pri" data-a="xf">Extract faults</button></div></div>`;
+      else h+=`<span>Minimum area</span><input type="number" data-x="minArea" value="${ex.minArea}" step="any" min="0" title="Map units squared"><span>Min. elongation</span><input type="number" data-x="minElong" value="${ex.minElong}" step="0.5" min="0" title="Perimeter² / (4π area): 1 for a disc, about 3 or more keeps channels, 0 keeps everything"><span>Environment</span><span class="two"><input type="color" data-x="color" value="${esc(ex.color)}" style="width:30px;height:22px;padding:1px;flex:none"><input type="text" data-x="env" value="${esc(ex.env)}" style="flex:1"></span></div><div class="row"><button class="pri" data-a="xb">Extract bodies</button></div></div>`;
+      h+=`<div class="row"><button data-a="xclr">Remove what was extracted</button></div>`}
+    return h+'</div>'}).join('')||'<div class="note" style="margin:0">No layer. Load a seismic attribute map: a grid, or an image (screenshot) with or without a colour bar.</div>';
+  $('lList').querySelectorAll('.it').forEach(r=>{const i=+r.dataset.i,l=L[i],q=s=>r.querySelector(s);
+    q('b').onclick=()=>{S.layerOpen=S.layerOpen===l.id?null:l.id;if(S.layerOpen)S.bd=l.id;renderLayers();draw()};
+    q('[data-k=on]').onchange=e=>{l.on=e.target.checked;renderConcept();rematch();renderWells();schedule()};
+    q('[data-a=del]').onclick=()=>{L.splice(i,1);M.bodies=M.bodies.filter(b=>b.layer!==l.id);M.faults=M.faults.filter(f=>f.layer!==l.id);M.sources=M.sources.filter(s=>s.kind!=='fault'||s.fault<M.faults.length);renderLayers();renderConcept();rematch();renderWells();schedule()};
+    r.querySelectorAll('[data-k]:not([data-k=on])').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.k;
+      if(k==='vmode'){if(inp.value==='bar'){const im=imgOf(l);l.bar=l.bar||{a:[im?im.w-10:0,im?im.h-10:0],b:[im?im.w-10:0,10],v0:0,v1:1}}else{l.bar=null;l.channel=inp.value}}
+      else if(k==='tol'){const v=pnum(inp.value);if(v>0)l.tol=v}else if(k==='role'){l.role=inp.value;l.ex=null}else l[k]=inp.value.trim()||l[k];
+      renderLayers();schedule()}));
+    r.querySelectorAll('[data-t]').forEach(inp=>inp.addEventListener(inp.type==='range'?'input':'change',()=>{const k=inp.dataset.t;
+      if(k==='on')l.trend.on=inp.checked;else if(k==='dir')l.trend.dir=inp.value;else{const v=pnum(inp.value);if(v>=0)l.trend[k]=k==='w'?Math.min(1,v):v}
+      if(k==='w')r.querySelectorAll('[data-t=w]').forEach(o=>{if(o!==inp)o.value=l.trend.w});schedule(inp.type==='range');if(inp.type!=='range')renderLayers()}));
+    r.querySelectorAll('[data-c] input').forEach(inp=>inp.addEventListener('change',()=>{const v=pnum(inp.value),j=+inp.closest('[data-c]').dataset.c;if(isFinite(v)){l.cal[j][+inp.dataset.q]=v;renderLayers();schedule()}}));
+    r.querySelectorAll('[data-cdel]').forEach(bt=>bt.onclick=()=>{l.cal.splice(+bt.dataset.cdel,1);renderLayers();schedule()});
+    r.querySelectorAll('[data-b]').forEach(inp=>inp.addEventListener('change',()=>{const v=pnum(inp.value),k=inp.dataset.b;if(!isFinite(v))return;if(k==='v0'||k==='v1')l.bar[k]=v;else l.bar[k[0]][+k[1]]=v;renderLayers();schedule()}));
+    const ca=q('[data-a=cadd]');if(ca)ca.onclick=()=>{const e=M.ext;l.cal.push([0,0,e.xmin,e.ymin]);renderLayers()};
+    const ce=q('[data-a=cext]');if(ce)ce.onclick=()=>{const im=imgOf(l),e=M.ext;if(!im)return;l.cal=[[0,0,e.xmin,e.ymax],[im.w,0,e.xmax,e.ymax],[0,im.h,e.xmin,e.ymin],[im.w,im.h,e.xmax,e.ymin]];renderLayers();schedule()};
+    r.querySelectorAll('[data-x]').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.x,ex=l.ex;
+      if(k==='by'){if(inp.value==='thr'){const st=layerStats(l);ex.thr=st?+st.p(ex.pct).toPrecision(4):0}else ex.thr=null;renderLayers();return}
+      if(k==='mode'||k==='env'||k==='color')ex[k]=inp.value;else{const v=pnum(inp.value);if(isFinite(v))ex[k]=v}}));
+    const xb=q('[data-a=xb]');if(xb)xb.onclick=()=>{const ex=l.ex,G=GDE.layerGrid(l,M.ext,160000);if(!G){banner('No value read from this layer yet.',true);return}
+      const r2=GDE.extractBodies(G,{mode:ex.mode,thr:ex.thr==null?undefined:ex.thr,pct:ex.thr==null?ex.pct:undefined,smooth:ex.smooth,minArea:ex.minArea,minElong:ex.minElong,env:ex.env||'Body',color:ex.color,layer:l.id});
+      M.bodies=M.bodies.filter(b=>b.layer!==l.id).concat(r2.bodies);renderLayers();renderConcept();rematch();renderWells();schedule();
+      banner(`${r2.bodies.length} bod${r2.bodies.length===1?'y':'ies'} “${ex.env}” kept, ${r2.dropped} region${r2.dropped===1?'':'s'} dropped (smaller than ${fmtN(ex.minArea)} or less elongated than ${ex.minElong}); threshold ${fmtN(r2.thr)}.`)};
+    const xf=q('[data-a=xf]');if(xf)xf.onclick=()=>{const ex=l.ex,G=GDE.layerGrid(l,M.ext,160000);if(!G){banner('No value read from this layer yet.',true);return}
+      const r2=GDE.extractFaults(G,{mode:ex.mode,thr:ex.thr==null?undefined:ex.thr,pct:ex.thr==null?ex.pct:undefined,smooth:ex.smooth,minLen:ex.minLen,tol:Math.abs(G.dx)*1.5,layer:l.id});
+      const keep=M.faults.filter(f=>f.layer!==l.id),old=M.faults.length;M.faults=keep.concat(r2.faults);M.sources=M.sources.filter(s=>s.kind!=='fault'||s.fault<keep.length||old===keep.length);
+      renderLayers();renderConcept();schedule();banner(`${r2.faults.length} fault trace${r2.faults.length===1?'':'s'} extracted (threshold ${fmtN(r2.thr)}). Set their throw and downthrown side in panel 5.`)};
+    const xc=q('[data-a=xclr]');if(xc)xc.onclick=()=>{M.bodies=M.bodies.filter(b=>b.layer!==l.id);M.faults=M.faults.filter(f=>f.layer!==l.id);M.sources=M.sources.filter(s=>s.kind!=='fault'||s.fault<M.faults.length);renderLayers();renderConcept();rematch();renderWells();schedule()}})}
+on('bdSel','change',()=>{S.bd=$('bdSel').value||null;draw()});
+on('bdOp','input',()=>{S.bdOp=+$('bdOp').value;draw()});
+
+// ---------- undo / redo (model + wells; layer images kept by reference) ----------
+function snap(){const M=GDE.normModel(S.M);for(const l of M.layers){if(l.src&&l.src.length>200){const k='ref:'+l.id+':'+l.src.length;S.srcs.set(k,l.src);l.src=k}}
+  return JSON.stringify({M,W:wellsOut(),bd:S.bd})}
+function pushUndo(){if(S.restoring)return;const s=snap();if(S.undo[S.undo.length-1]===s)return;S.undo.push(s);if(S.undo.length>60)S.undo.shift();S.redo=[];syncUR()}
+function restore(s){const o=JSON.parse(s);S.restoring=true;const r=GDE.openModel(JSON.stringify({format:'gde-model',version:2,model:o.M,wells:o.W}));
+  if(r.M){S.M=r.M;attachImgs(S.M);S.wells=clone(r.wells).map(w=>typeof w.b==='number'?{...w,manual:true}:{...w});S.bd=o.bd||null;rematch();syncInputs();renderBelts();renderWells();compute(false)}
+  S.restoring=false;syncUR()}
+function syncUR(){$('bUndo').disabled=S.undo.length<2;$('bRedo').disabled=!S.redo.length}
+function undo(){if(S.undo.length<2)return;S.redo.push(S.undo.pop());restore(S.undo[S.undo.length-1])}
+function redo(){if(!S.redo.length)return;const s=S.redo.pop();S.undo.push(s);restore(s)}
+on('bUndo','click',undo);on('bRedo','click',redo);
 
 // ---------- compute ----------
 let tmr=0;
-function schedule(fast){if(!S.started)return;clearTimeout(tmr);if(fast){compute(true);tmr=setTimeout(()=>compute(false),260)}else tmr=setTimeout(()=>compute(false),90)}
-function previewCell(max){const e=S.M.ext;return Math.max(S.M.cell||0,Math.sqrt((e.xmax-e.xmin)*(e.ymax-e.ymin)/max))}
+function schedule(fast){if(!S.started)return;clearTimeout(tmr);if(fast){compute(true);tmr=setTimeout(()=>compute(false),280)}else tmr=setTimeout(()=>compute(false),90)}
+// preview over the visible part of the map, at most ~max cells
+function viewExt(){const L=curL(),e=S.M.ext,x0=Math.max(e.xmin,L.ix(L.px0)),x1=Math.min(e.xmax,L.ix(L.px1)),y0=Math.max(e.ymin,L.iy(L.py1)),y1=Math.min(e.ymax,L.iy(L.py0));
+  return x1>x0&&y1>y0?{xmin:x0,xmax:x1,ymin:y0,ymax:y1}:e}
+function previewCell(ext,max){return Math.max(S.M.cell||0,Math.sqrt((ext.xmax-ext.xmin)*(ext.ymax-ext.ymin)/max))}
 function compute(fast){if(!(S.M.belts.length>=2))return;
-  S.mod=GDE.build(S.M,S.wells,{dist:!fast});S.full=null;
-  S.P=GDE.polygons(S.mod,S.M.ext,previewCell(fast?60000:250000),{stride:fast?2:3,minArea:fast?2:4,tol:.7});
+  try{S.mod=GDE.build(S.M,S.wells,{dist:!fast,fast});}catch(err){banner('Model error: '+err.message,true);console.error(err);return}
+  S.full=null;const ve=viewExt();
+  S.P=GDE.polygons(S.mod,ve,previewCell(ve,fast?60000:250000),{stride:fast?2:3,minArea:fast?2:4,tol:.7});S.Pext=ve;
   draw();
-  if(!fast){renderCheck();renderVerdict();renderCal();
+  if(!fast){renderCheck();renderVerdict();renderCal();pushUndo();
     const e=S.M.ext,nx=Math.floor((e.xmax-e.xmin)/S.M.cell+1e-9)+1,ny=Math.floor((e.ymax-e.ymin)/S.M.cell+1e-9)+1;
-    tplNote();$('extMsg').className='msg';$('extMsg').textContent=`Export grid ${nx} × ${ny} nodes (${(nx*ny).toLocaleString('en-US')}); map preview cell ${fmtN(previewCell(250000))}.`;
+    tplNote();$('extMsg').className='msg';$('extMsg').textContent=`Export grid ${nx} × ${ny} nodes (${(nx*ny).toLocaleString('en-US')}); map preview cell ${fmtN(previewCell(ve,250000))}.`;
     $('bMsg').textContent=S.M.template==='custom'?'custom belts':''}}
-function start(){if(S.started)return;S.started=true;$('intro').hidden=true;$('work').hidden=false;size();compute(false)}
+function start(){if(S.started)return;S.started=true;$('intro').hidden=true;$('work').hidden=false;size();zoomFit();compute(false)}
+
+// ---------- view: fit, pan, zoom ----------
+function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p;return(f<1.5?1:f<3.5?2:f<7.5?5:10)*p}
+function layout(W,H,o={}){const e=S.M.ext,leg=W>=640?210:0,m={l:66,r:14+leg,t:o.tb?44:14,b:40},ew=e.xmax-e.xmin,eh=e.ymax-e.ymin,pw=W-m.l-m.r,ph=H-m.t-m.b;
+  const v=o.view||S.view,k0=Math.min(pw/ew,ph/eh),k=k0*v.z,ox=m.l+pw/2,oy=m.t+ph/2;
+  return{k,ew,eh,leg,W,H,px0:m.l,px1:m.l+pw,py0:m.t,py1:m.t+ph,X:x=>ox+(x-v.cx)*k,Y:y=>oy-(y-v.cy)*k,ix:px=>v.cx+(px-ox)/k,iy:py=>v.cy-(py-oy)/k}}
+function zoomFit(){const e=S.M.ext;S.view={z:1,cx:(e.xmin+e.xmax)/2,cy:(e.ymin+e.ymax)/2}}
+on('bZoom0','click',()=>{zoomFit();schedule()});
+cv.addEventListener('wheel',e=>{if(!S.started)return;e.preventDefault();const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py),f=Math.exp(-e.deltaY*.0015),z=Math.min(40,Math.max(.4,S.view.z*f)),r=S.view.z/z;
+  S.view={z,cx:x-(x-S.view.cx)*r,cy:y-(y-S.view.cy)*r};draw();clearTimeout(tmr);tmr=setTimeout(()=>compute(false),220)},{passive:false});
 
 // ---------- drawing ----------
-function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p;return(f<1.5?1:f<3.5?2:f<7.5?5:10)*p}
-function layout(W,H){const e=S.M.ext,leg=W>=640?210:0,m={l:66,r:14+leg,t:14,b:40},ew=e.xmax-e.xmin,eh=e.ymax-e.ymin;
-  const k=Math.min((W-m.l-m.r)/ew,(H-m.t-m.b)/eh),ox=m.l+((W-m.l-m.r)-ew*k)/2,oy=m.t+((H-m.t-m.b)-eh*k)/2;
-  return{k,ox,oy,ew,eh,leg,W,H,X:x=>ox+(x-e.xmin)*k,Y:y=>oy+(e.ymax-y)*k,ix:px=>e.xmin+(px-ox)/k,iy:py=>e.ymax-(py-oy)/k}}
-function arrowGeom(L){const a=S.M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(S.M.src[0]),sy=L.Y(S.M.src[1]);
-  return{sx,sy,hx:sx+Math.sin(a)*len,hy:sy-Math.cos(a)*len,a,len}}
 function halo(c,t,x,y,col){c.lineWidth=3.2;c.strokeStyle='rgba(255,255,255,.92)';c.lineJoin='round';c.strokeText(t,x,y);c.fillStyle=col||'#232220';c.fillText(t,x,y)}
-function render(c,W,H,P,opt={}){const L=layout(W,H),e=S.M.ext,mod=S.mod,B=AB();
+const PAT=new Map();
+function hatch(c,a,b){const key=a+b;if(!PAT.has(key)){const p=document.createElement('canvas');p.width=p.height=10;const g=p.getContext('2d');g.fillStyle=a;g.fillRect(0,0,10,10);g.strokeStyle=b;g.lineWidth=3.2;
+    g.beginPath();g.moveTo(-2,12);g.lineTo(12,-2);g.moveTo(-7,7);g.lineTo(7,-7);g.moveTo(3,17);g.lineTo(17,3);g.stroke();PAT.set(key,p)}return c.createPattern(PAT.get(key),'repeat')}
+const curve=pts=>{const c=GDE.curve(pts),o=[];for(let i=0;i<c.length;i+=2)o.push([c[i],c[i+1]]);return o};
+function backdrop(c,L){const l=(S.M.layers||[]).find(q=>q.id===S.bd);if(!l)return 0;
+  if(l.grid){const G=l.grid;let mn=Infinity,mx=-Infinity;for(const v of G.z)if(v!=null&&isFinite(v)){if(v<mn)mn=v;if(v>mx)mx=v}if(!(mx>mn))return 0;
+    const key='g:'+l.id+':'+G.nx+'x'+G.ny+':'+mn+':'+mx;if(!S.imgs.has(key)){const cc=document.createElement('canvas');cc.width=G.nx;cc.height=G.ny;const g=cc.getContext('2d'),id=g.createImageData(G.nx,G.ny);
+      for(let j=0;j<G.ny;j++)for(let i=0;i<G.nx;i++){const v=G.z[j*G.nx+i],k=4*((G.ny-1-j)*G.nx+i);if(v==null||!isFinite(v))continue;const col=GDE.ampColor((v-mn)/(mx-mn));id.data.set([...col,255],k)}
+      g.putImageData(id,0,0);S.imgs.set(key,{el:cc})}
+    c.save();c.globalAlpha=1;c.imageSmoothingEnabled=true;const x0=L.X(G.x0-G.dx/2),y0=L.Y(G.y0+(G.ny-.5)*G.dy);c.drawImage(S.imgs.get(key).el,x0,y0,G.nx*G.dx*L.k,G.ny*G.dy*L.k);c.restore();return 1}
+  const im=canvOf(l);if(!im||!im.el||!l.cal)return 0;const a=GDE.affine(l.cal);if(a.err)return 0;
+  const p0=a.f([0,0]),p1=a.f([1,0]),p2=a.f([0,1]);c.save();
+  c.setTransform(...(()=>{const d=devicePixelRatio||1,T=c.getTransform();const A=[L.X(p1[0])-L.X(p0[0]),L.Y(p1[1])-L.Y(p0[1]),L.X(p2[0])-L.X(p0[0]),L.Y(p2[1])-L.Y(p0[1]),L.X(p0[0]),L.Y(p0[1])];
+    return[T.a*A[0],T.b*A[0]+T.d*A[1],T.a*A[2],T.d*A[3],T.a*A[4]+T.e,T.d*A[5]+T.f]})());
+  c.imageSmoothingEnabled=true;c.drawImage(im.el,0,0);c.restore();return 1}
+function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mod=S.mod,B=AB(),M=S.M;
   c.fillStyle='#fff';c.fillRect(0,0,W,H);
-  const x0=L.X(e.xmin),y0=L.Y(e.ymax),mw=L.ew*L.k,mh=L.eh*L.k;
+  const x0=Math.max(L.px0,L.X(e.xmin)),y0=Math.max(L.py0,L.Y(e.ymax)),x1=Math.min(L.px1,L.X(e.xmax)),y1=Math.min(L.py1,L.Y(e.ymin)),mw=x1-x0,mh=y1-y0;
+  c.save();c.beginPath();c.rect(L.px0,L.py0,L.px1-L.px0,L.py1-L.py0);c.clip();
+  const hasBd=!opt.noBackdrop&&backdrop(c,L);
   c.save();c.beginPath();c.rect(x0,y0,mw,mh);c.clip();
   const paths=P.map(p=>{const pa=new Path2D();for(const r of [p.outer,...p.holes]){r.forEach((q,i)=>i?pa.lineTo(L.X(q[0]),L.Y(q[1])):pa.moveTo(L.X(q[0]),L.Y(q[1])));pa.closePath()}return pa});
-  P.forEach((p,i)=>{const col=(B[p.code-1]||{}).color||'#ccc';c.fillStyle=col;c.fill(paths[i],'evenodd');c.strokeStyle=col;c.lineWidth=.8;c.stroke(paths[i])});
-  c.strokeStyle='rgba(35,34,32,.55)';c.lineWidth=1;c.lineJoin='round';paths.forEach(pa=>c.stroke(pa));
-  // warping radius
+  c.globalAlpha=hasBd?1-S.bdOp:1;
+  P.forEach((p,i)=>{const b=B[p.code-1]||{},col=b.color||'#ccc';c.fillStyle=b.hatch?hatch(c,b.hatch[0],b.hatch[1]):col;c.fill(paths[i],'evenodd');if(!b.hatch){c.strokeStyle=col;c.lineWidth=.8;c.stroke(paths[i])}});
+  c.globalAlpha=1;c.strokeStyle='rgba(35,34,32,.55)';c.lineWidth=1;c.lineJoin='round';paths.forEach(pa=>c.stroke(pa));
+  // painted trend: faint contour of the brush grid
+  if(M.paint&&!opt.export&&S.tool==='paint'){const G=M.paint;c.fillStyle='rgba(168,98,58,.25)';for(let j=0;j<G.ny;j++)for(let i=0;i<G.nx;i++){const v=G.v[j*G.nx+i];if(Math.abs(v)>1){c.globalAlpha=Math.min(.5,Math.abs(v)/(+$('pA').value||1)*.3);c.fillStyle=v>0?'#3c6aa3':'#a8623a';c.fillRect(L.X(G.x0+(i-.5)*G.dx),L.Y(G.y0+(j+.5)*G.dy),G.dx*L.k+1,G.dy*L.k+1)}}c.globalAlpha=1}
   if(mod&&mod.warp.wells.length){c.setLineDash([6,4]);c.strokeStyle='rgba(168,98,58,.9)';c.lineWidth=1.4;
     for(const i of mod.warp.wells){const w=mod.wells[i];c.beginPath();c.arc(L.X(w.x),L.Y(w.y),mod.warp.R*L.k,0,2*Math.PI);c.stroke()}c.setLineDash([])}
-  // source, fan opening and transport arrow (fan rays clipped to the map, arrow and source drawn on top, unclipped)
-  const A=arrowGeom(L);
-  if(S.M.geom==='radial'){c.setLineDash([5,5]);c.strokeStyle='rgba(35,34,32,.45)';c.lineWidth=1.2;const rl=Math.hypot(mw,mh);
-    for(const s of [-1,1]){const b=A.a+s*S.M.fan/2*Math.PI/180;c.beginPath();c.moveTo(A.sx,A.sy);c.lineTo(A.sx+Math.sin(b)*rl,A.sy-Math.cos(b)*rl);c.stroke()}c.setLineDash([])}
-  c.restore();c.save();
-  c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(A.sx,A.sy);c.lineTo(A.hx,A.hy);c.stroke();
-  c.strokeStyle='#232220';c.lineWidth=2.4;c.beginPath();c.moveTo(A.sx,A.sy);c.lineTo(A.hx,A.hy);c.stroke();
-  const hd=11,ha=.45;c.fillStyle='#232220';c.beginPath();c.moveTo(A.hx,A.hy);
-  c.lineTo(A.hx-hd*Math.sin(A.a-ha),A.hy+hd*Math.cos(A.a-ha));c.lineTo(A.hx-hd*Math.sin(A.a+ha),A.hy+hd*Math.cos(A.a+ha));c.closePath();c.fill();
-  if(opt.handles!==false){c.fillStyle='rgba(255,255,255,.85)';c.strokeStyle='#232220';c.lineWidth=1.2;c.beginPath();c.arc(A.hx,A.hy,5,0,2*Math.PI);c.fill();c.stroke()}
-  c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(A.sx,A.sy,7,0,2*Math.PI);c.fill();c.stroke();
+  c.restore();
+  // key lines (dashed), faults (ticks on the downthrown side), traced/selected bodies, sources
+  const sel=S.sel||{},editing=S.tool==='line'&&!opt.export;
+  if(isLines())(M.lines||[]).forEach((l,i)=>{const pts=curve(l.pts),act=editing&&i===S.lineSel;c.setLineDash(act?[]:[7,5]);c.strokeStyle=act?'#1d3f8a':'rgba(29,63,138,.75)';c.lineWidth=act?2.2:1.5;
+    c.beginPath();pts.forEach((q,j)=>j?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])));c.stroke();c.setLineDash([]);
+    if(!opt.export){const m=pts[Math.floor(pts.length*.5)],m2=pts[Math.min(pts.length-1,Math.floor(pts.length*.5)+3)],ang=Math.atan2(-(L.Y(m2[1])-L.Y(m[1])),L.X(m2[0])-L.X(m[0]));
+      c.save();c.translate(L.X(m[0]),L.Y(m[1]));c.rotate(-ang);c.font='italic 600 11px Inter,system-ui,sans-serif';c.textAlign='center';c.textBaseline='bottom';halo(c,l.name+' →',0,-4,'#1d3f8a');c.restore()}
+    if(act)l.pts.forEach(q=>{c.fillStyle='#fff';c.strokeStyle='#1d3f8a';c.lineWidth=1.6;c.beginPath();c.rect(L.X(q[0])-4,L.Y(q[1])-4,8,8);c.fill();c.stroke()})});
+  for(const [i,f] of (M.faults||[]).entries()){const lay=(M.layers||[]).find(l=>l.id===f.layer);if(lay&&!lay.on)continue;const act=sel.kind==='fault'&&sel.i===i;
+    c.strokeStyle=act?'#e0301e':'#b3261e';c.lineWidth=act?3:2.2;c.lineCap='round';c.beginPath();f.pts.forEach((q,j)=>j?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])));c.stroke();
+    if(f.off>0||f.fw>0){let acc=0;for(let j=1;j<f.pts.length;j++){const a=f.pts[j-1],b=f.pts[j],ax=L.X(a[0]),ay=L.Y(a[1]),bx=L.X(b[0]),by=L.Y(b[1]),len=Math.hypot(bx-ax,by-ay);if(!len)continue;
+      const nx=(by-ay)/len*f.side,ny=-(bx-ax)/len*f.side;// screen y down: right of travel in map = (dy, -dx) in map, = (-(by-ay)... ) flipped
+      for(let s=(18-acc%18);s<len;s+=18){const px=ax+(bx-ax)*s/len,py=ay+(by-ay)*s/len;c.lineWidth=1.6;c.beginPath();c.moveTo(px,py);c.lineTo(px-nx*6,py-ny*6);c.stroke()}acc+=len}}}
+  if(!opt.export)(M.bodies||[]).forEach((b,i)=>{if(!(sel.kind==='body'&&sel.i===i))return;c.strokeStyle='#1d3f8a';c.lineWidth=1.5;c.setLineDash([4,3]);c.beginPath();
+    if(b.shape==='ellipse'){c.save();c.translate(L.X(b.x),L.Y(b.y));c.rotate((b.rot||0)*Math.PI/180-Math.PI/2);c.ellipse(0,0,b.a*L.k,b.a*b.e*L.k,0,0,2*Math.PI);c.restore()}
+    else if(b.shape==='ribbon')(b.line||[]).forEach((q,j)=>j?c.lineTo(L.X(b.x+q[0]),L.Y(b.y+q[1])):c.moveTo(L.X(b.x+q[0]),L.Y(b.y+q[1])));
+    else{(b.pts||[]).forEach((q,j)=>j?c.lineTo(L.X(b.x+q[0]),L.Y(b.y+q[1])):c.moveTo(L.X(b.x+q[0]),L.Y(b.y+q[1])));c.closePath()}
+    c.stroke();c.setLineDash([]);c.fillStyle='#1d3f8a';c.beginPath();c.arc(L.X(b.x),L.Y(b.y),4,0,7);c.fill()});
+  if(S.trace&&!opt.export){c.strokeStyle='#1d3f8a';c.lineWidth=S.trace.kind==='ribbon'?Math.max(2,(+$('trW').value||200)*L.k):2;c.globalAlpha=S.trace.kind==='ribbon'?.45:1;c.lineCap='round';c.lineJoin='round';
+    c.beginPath();S.trace.pts.forEach((q,j)=>j?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])));if(S.trace.hover)c.lineTo(S.trace.hover[0],S.trace.hover[1]);c.stroke();c.globalAlpha=1}
+  if(isLines())(M.sources||[]).forEach((s,i)=>{const a=s.az*Math.PI/180,sx=L.X(s.x),sy=L.Y(s.y),len=Math.max(26,Math.min(90,s.L*L.k*.45)),hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;
+    c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();c.strokeStyle='#5a3218';c.lineWidth=2.4;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
+    const hd=10,ha=.45;c.fillStyle='#5a3218';c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-hd*Math.sin(a-ha),hy+hd*Math.cos(a-ha));c.lineTo(hx-hd*Math.sin(a+ha),hy+hd*Math.cos(a+ha));c.closePath();c.fill();
+    c.fillStyle='#a8623a';c.strokeStyle=sel.kind==='src'&&sel.i===i?'#1d3f8a':'#fff';c.lineWidth=2;c.beginPath();c.arc(sx,sy,6.5,0,2*Math.PI);c.fill();c.stroke()});
+  if(M.geom!=='lines'){const a=M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(M.src[0]),sy=L.Y(M.src[1]),hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;
+    if(M.geom==='radial'){c.setLineDash([5,5]);c.strokeStyle='rgba(35,34,32,.45)';c.lineWidth=1.2;const rl=2*Math.hypot(W,H);for(const s of [-1,1]){const b=a+s*M.fan/2*Math.PI/180;c.beginPath();c.moveTo(sx,sy);c.lineTo(sx+Math.sin(b)*rl,sy-Math.cos(b)*rl);c.stroke()}c.setLineDash([])}
+    c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();c.strokeStyle='#232220';c.lineWidth=2.4;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
+    const hd=11,ha=.45;c.fillStyle='#232220';c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-hd*Math.sin(a-ha),hy+hd*Math.cos(a-ha));c.lineTo(hx-hd*Math.sin(a+ha),hy+hd*Math.cos(a+ha));c.closePath();c.fill();
+    if(!opt.export){c.fillStyle='rgba(255,255,255,.85)';c.strokeStyle='#232220';c.lineWidth=1.2;c.beginPath();c.arc(hx,hy,5,0,2*Math.PI);c.fill();c.stroke()}
+    c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(sx,sy,7,0,2*Math.PI);c.fill();c.stroke();
+    c.font='600 12px Inter,system-ui,sans-serif';c.textBaseline='middle';c.textAlign='left';halo(c,M.geom==='radial'?'Source':'Reference point',sx+11,sy+13,'#7a4527')}
   c.font='600 12px Inter,system-ui,sans-serif';c.textBaseline='middle';c.textAlign='left';
-  halo(c,S.M.geom==='radial'?'Source':'Reference point',A.sx+11,A.sy+13,'#7a4527');
-  // wells
   if(mod)for(const w of mod.check){const x=L.X(w.x),y=L.Y(w.y);
     c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(x,y,5.5,0,2*Math.PI);c.fill();c.stroke();
     c.fillStyle='#232220';c.beginPath();c.arc(x,y,1.6,0,2*Math.PI);c.fill();
     c.font='600 12px Inter,system-ui,sans-serif';halo(c,w.name,x+9,y-9);const tw=c.measureText(w.name).width;
     c.font='700 13px Inter,system-ui,sans-serif';halo(c,w.honoured?'✓':'✗',x+12+tw,y-9,w.honoured?'#2e7d32':'#c62828')}
-  // north arrow
-  c.fillStyle='#232220';const nx=x0+mw-22,ny=y0+14;c.beginPath();c.moveTo(nx,ny);c.lineTo(nx+6,ny+16);c.lineTo(nx,ny+12);c.lineTo(nx-6,ny+16);c.closePath();c.fill();
+  // north arrow, scale bar
+  c.fillStyle='#232220';const nx=L.px1-22,ny=L.py0+14;c.beginPath();c.moveTo(nx,ny);c.lineTo(nx+6,ny+16);c.lineTo(nx,ny+12);c.lineTo(nx-6,ny+16);c.closePath();c.fill();
   c.font='700 11px Inter,system-ui,sans-serif';c.textAlign='center';halo(c,'N',nx,ny+26);
-  // scale bar
-  const sl=niceStep(L.ew/5),sp=sl*L.k,bx=x0+14,by=y0+mh-16;
+  const vw=(L.px1-L.px0)/L.k,sl=niceStep(vw/5),sp=sl*L.k,bx=L.px0+14,by=L.py1-16;
   c.fillStyle='rgba(255,255,255,.85)';c.fillRect(bx-6,by-18,sp+12+8,28);
   c.fillStyle='#232220';c.fillRect(bx,by,sp/2,5);c.strokeStyle='#232220';c.lineWidth=1;c.strokeRect(bx,by,sp,5);
   c.font='500 11px Inter,system-ui,sans-serif';c.textAlign='center';c.fillStyle='#232220';c.fillText(sl>=1000?`${sl/1000} km`:`${sl} m`,bx+sp/2,by-8);
   c.restore();
-  // frame and coordinates
-  c.strokeStyle='#232220';c.lineWidth=1;c.strokeRect(x0+.5,y0+.5,mw,mh);
+  // frame and coordinates of the visible window
+  c.strokeStyle='#232220';c.lineWidth=1;c.strokeRect(L.px0+.5,L.py0+.5,L.px1-L.px0,L.py1-L.py0);
   c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';
-  const tx=niceStep(L.ew/(mw/110)),ty=niceStep(L.eh/(mh/70));
+  const wx0=L.ix(L.px0),wx1=L.ix(L.px1),wy0=L.iy(L.py1),wy1=L.iy(L.py0),tx=niceStep((wx1-wx0)/((L.px1-L.px0)/110)),ty=niceStep((wy1-wy0)/((L.py1-L.py0)/70));
   c.textAlign='center';c.textBaseline='top';
-  for(let v=Math.ceil(e.xmin/tx)*tx;v<=e.xmax+1e-9;v+=tx){const x=L.X(v);c.beginPath();c.moveTo(x,y0+mh);c.lineTo(x,y0+mh+5);c.stroke();c.fillText(fmtN(v),x,y0+mh+7)}
+  for(let v=Math.ceil(wx0/tx)*tx;v<=wx1+1e-9;v+=tx){const x=L.X(v);c.beginPath();c.moveTo(x,L.py1);c.lineTo(x,L.py1+5);c.stroke();c.fillText(fmtN(v),x,L.py1+7)}
   c.textAlign='right';c.textBaseline='middle';
-  for(let v=Math.ceil(e.ymin/ty)*ty;v<=e.ymax+1e-9;v+=ty){const y=L.Y(v);c.beginPath();c.moveTo(x0,y);c.lineTo(x0-5,y);c.stroke();c.fillText(fmtN(v),x0-7,y)}
-  c.textAlign='center';c.textBaseline='top';c.fillText('X',x0+mw/2,y0+mh+22);c.save();c.translate(12,y0+mh/2);c.rotate(-Math.PI/2);c.textBaseline='middle';c.fillText('Y',0,0);c.restore();
-  // legend
-  if(L.leg){let lx=W-L.leg+6,ly=y0+4;const lw=L.leg-12;c.textAlign='left';c.textBaseline='top';
-    c.fillStyle='#232220';c.font='600 13px "Space Grotesk",Inter,sans-serif';c.fillText('GDE belts',lx,ly);ly+=18;
-    c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText('proximal → distal',lx,ly);ly+=17;
-    B.forEach((b,i)=>{c.fillStyle=b.color;c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.5)';c.strokeRect(lx+.5,ly+.5,17,12);
-      c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';
+  for(let v=Math.ceil(wy0/ty)*ty;v<=wy1+1e-9;v+=ty){const y=L.Y(v);c.beginPath();c.moveTo(L.px0,y);c.lineTo(L.px0-5,y);c.stroke();c.fillText(fmtN(v),L.px0-7,y)}
+  c.textAlign='center';c.textBaseline='top';c.fillText('X',(L.px0+L.px1)/2,L.py1+22);c.save();c.translate(12,(L.py0+L.py1)/2);c.rotate(-Math.PI/2);c.textBaseline='middle';c.fillText('Y',0,0);c.restore();
+  // legend: classes on the map
+  if(L.leg){let lx=W-L.leg+6,ly=L.py0+4;const lw=L.leg-12;c.textAlign='left';c.textBaseline='top';
+    c.fillStyle='#232220';c.font='600 13px "Space Grotesk",Inter,sans-serif';c.fillText('GDE classes',lx,ly);ly+=18;
+    c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText('code, proximal → distal, then others',lx,ly);ly+=17;
+    const used=new Set(P.map(p=>p.code-1));
+    B.forEach((b,i)=>{if(!used.has(i)&&b.kind!=='belt')return;c.fillStyle=b.hatch?hatch(c,b.hatch[0],b.hatch[1]):b.color;c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.5)';c.strokeRect(lx+.5,ly+.5,17,12);
+      c.fillStyle=used.has(i)?'#232220':'#8c8a80';c.font='12px Inter,system-ui,sans-serif';
       const words=`${i+1}  ${b.name}${b.channel?' (channels)':''}`.split(' ');let line='',yy=ly;
       for(const wd of words){const tst=line?line+' '+wd:wd;if(c.measureText(tst).width>lw-26&&line){c.fillText(line,lx+24,yy);line=wd;yy+=14}else line=tst}
-      c.fillText(line,lx+24,yy);ly=yy+20});
-    ly+=6;c.font='600 12px Inter,system-ui,sans-serif';c.fillStyle='#232220';
-    c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(lx+9,ly+7,5,0,2*Math.PI);c.fill();c.stroke();
+      c.fillText(line,lx+24,yy);ly=yy+19});
+    ly+=6;c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(lx+9,ly+7,5,0,2*Math.PI);c.fill();c.stroke();
     c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';c.fillText('Well',lx+24,ly);c.fillStyle='#2e7d32';c.font='700 12px Inter';c.fillText('✓',lx+60,ly);
     c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('honoured',lx+72,ly+1);ly+=17;
     c.fillStyle='#c62828';c.font='700 12px Inter';c.fillText('✗',lx+60,ly);c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('not honoured',lx+72,ly+1);ly+=20;
-    c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.fill();c.stroke();
-    c.strokeStyle='#232220';c.lineWidth=2;c.beginPath();c.moveTo(lx+16,ly+7);c.lineTo(lx+40,ly+7);c.stroke();
-    c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';c.fillText(S.M.geom==='radial'?'Source, transport':'Transport direction',lx+46,ly);ly+=20;
-    if(mod&&mod.warp.wells.length){c.setLineDash([5,3]);c.strokeStyle='#a8623a';c.lineWidth=1.4;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.stroke();c.setLineDash([]);
-      c.fillStyle='#232220';c.fillText('Warping radius',lx+24,ly);ly+=20}
+    c.font='12px Inter,system-ui,sans-serif';
+    if(isLines()&&(M.lines||[]).length){c.setLineDash([7,5]);c.strokeStyle='#1d3f8a';c.lineWidth=1.5;c.beginPath();c.moveTo(lx,ly+7);c.lineTo(lx+18,ly+7);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Key line (basin →)',lx+24,ly);ly+=18}
+    if(isLines()&&(M.sources||[]).length){c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(lx+6,ly+7,5.5,0,2*Math.PI);c.fill();c.stroke();c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.moveTo(lx+12,ly+7);c.lineTo(lx+22,ly+7);c.stroke();c.fillStyle='#232220';c.fillText('Source, lobe axis',lx+28,ly);ly+=18}
+    if(!isLines()){c.fillStyle='#a8623a';c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.fill();c.strokeStyle='#232220';c.lineWidth=2;c.beginPath();c.moveTo(lx+16,ly+7);c.lineTo(lx+40,ly+7);c.stroke();c.fillStyle='#232220';c.fillText(M.geom==='radial'?'Source, transport':'Transport direction',lx+46,ly);ly+=18}
+    if((M.faults||[]).length){c.strokeStyle='#b3261e';c.lineWidth=2.2;c.beginPath();c.moveTo(lx,ly+7);c.lineTo(lx+18,ly+7);c.moveTo(lx+9,ly+7);c.lineTo(lx+9,ly+12);c.stroke();c.fillStyle='#232220';c.fillText('Fault (ticks: down)',lx+24,ly);ly+=18}
+    if(mod&&mod.warp.wells.length){c.setLineDash([5,3]);c.strokeStyle='#a8623a';c.lineWidth=1.4;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Warping radius',lx+24,ly);ly+=18}
     c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';ly+=4;
-    const tpl=S.M.template==='custom'?'Custom belts':GDE.templates[S.M.template].name;
-    for(const s of [tpl+', '+(S.M.geom==='radial'?`radial, fan ${fmtN(S.M.fan)}°`:'linear'),`azimuth ${(+S.M.az).toFixed(0)}°, seed ${S.M.noise.seed}`])
-      {c.fillText(s,lx,ly);ly+=14}}}
-function fitStage(){const st=$('stage'),w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,h=Math.round((w-80-leg)*(e.ymax-e.ymin)/(e.xmax-e.xmin)+56);st.style.height=Math.max(380,Math.min(h,Math.round(innerHeight*.84)))+'px'}
+    const tpl=M.template==='custom'?'Custom belts':GDE.templates[M.template].name;
+    for(const s of [tpl,(M.geom==='lines'?'key lines':M.geom==='radial'?`radial, fan ${fmtN(M.fan)}°`:'linear')+`, seed ${M.noise.seed}`])if(ly<H-14){c.fillText(s,lx,ly);ly+=14}}}
+function fitStage(){const st=$('stage'),w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,h=Math.round((w-80-leg)*(e.ymax-e.ymin)/(e.xmax-e.xmin)+56);st.style.height=Math.max(420,Math.min(h,Math.round(innerHeight*.86)))+'px'}
 function size(){fitStage();const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
 function draw(){if(!S.started||!S.P)return;const d=devicePixelRatio||1,r=cv.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);render(ctx,r.width,r.height,S.P)}
 window.addEventListener('resize',()=>{if(S.started){size();draw()}});
 
-// ---------- map interaction: drag source, arrow head and wells; add wells ----------
-const RO0='Hover the map to read the belt';
+// ---------- map tools ----------
+const RO0='Hover the map to read the class';
 const evp=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
 const curL=()=>{const r=cv.getBoundingClientRect();return layout(r.width,r.height)};
-function hit(px,py){const L=curL(),A=arrowGeom(L),d=(x,y)=>Math.hypot(px-x,py-y);
-  if(S.mod)for(let i=S.wells.length-1;i>=0;i--){const w=S.wells[i];if(d(L.X(w.x),L.Y(w.y))<=8)return{k:'well',i}}
-  if(d(A.hx,A.hy)<=10)return{k:'head'};if(d(A.sx,A.sy)<=10)return{k:'src'};return null}
-cv.addEventListener('pointerdown',e=>{const [px,py]=evp(e),L=curL();
-  if(S.tool==='add'){openPop(px,py,L.ix(px),L.iy(py));return}
-  const h=hit(px,py);if(!h)return;S.drag=h;cv.setPointerCapture(e.pointerId);e.preventDefault()});
-cv.addEventListener('pointermove',e=>{const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py);
-  if(S.drag){const h=S.drag;
-    if(h.k==='src'){S.M.src=[x,y];syncSrc()}
-    else if(h.k==='head'){const sx=L.X(S.M.src[0]),sy=L.Y(S.M.src[1]);S.M.az=((Math.atan2(px-sx,sy-py)*180/Math.PI)+360)%360;syncAz()}
-    else{const w=S.wells[h.i];w.x=Math.round(x);w.y=Math.round(y)}
+const HINT={sel:'Drag wells, sources (along their line), bodies, the arrow heads; drag the background to pan; wheel to zoom.',pan:'Drag to pan; wheel to zoom.',
+  line:'Drag the square vertices; click on the line to add a vertex; double-click a vertex to remove it. Choose the line next to the button.',src:'Click on a key line to put a delta or fan there, or on a fault for a fault-bounded fan delta.',
+  body:'Click where the body is; set its size and halos in panel 6.',trace:'Click points; double-click or Enter to finish; Esc cancels. Environment and width in panel 6.',paint:'Drag over the map: + pushes the belts distal, − proximal (radius and strength in panel 7).',
+  add:'Click on the map where the well is.',pick:'Click the backdrop image: its pixel goes into the open layer (control point or colour bar end).'};
+function setTool(t){if(t==='line'&&!(S.M.lines||[]).length){banner('No key line yet: “Propose a sketch” or “Add line” in panel 5.',true);t='sel'}
+  S.tool=t;S.trace=null;document.querySelectorAll('#tbar [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$('bWAdd').classList.toggle('on',t==='add');
+  cv.style.cursor=t==='pan'?'grab':t==='sel'?'':'crosshair';$('hint2').hidden=!HINT[t]||t==='sel';$('hint2').textContent=HINT[t]||'';if(t==='add')start();draw()}
+document.querySelectorAll('#tbar [data-t]').forEach(b=>b.addEventListener('click',()=>setTool(S.tool===b.dataset.t&&b.dataset.t!=='sel'?'sel':b.dataset.t)));
+on('tbLine','change',()=>{S.lineSel=+$('tbLine').value;setTool('line')});
+const near2=(L,px,py,x,y)=>Math.hypot(px-L.X(x),py-L.Y(y));
+function nearLine(L,px,py,list){let best=null;(list||[]).forEach((l,i)=>{const c=curve(l.pts);for(let j=1;j<c.length;j++){const ax=L.X(c[j-1][0]),ay=L.Y(c[j-1][1]),bx=L.X(c[j][0]),by=L.Y(c[j][1]),ex=bx-ax,ey=by-ay,L2=ex*ex+ey*ey||1,t=Math.max(0,Math.min(1,((px-ax)*ex+(py-ay)*ey)/L2)),d=Math.hypot(ax+t*ex-px,ay+t*ey-py);
+  if(!best||d<best.d)best={i,d,x:L.ix(ax+t*ex),y:L.iy(ay+t*ey),tx:ex,ty:ey}}});return best}
+function hit(px,py){const L=curL(),M=S.M;
+  if(S.mod)for(let i=S.wells.length-1;i>=0;i--){const w=S.wells[i];if(near2(L,px,py,w.x,w.y)<=8)return{k:'well',i}}
+  if(isLines())for(let i=(M.sources||[]).length-1;i>=0;i--){const s=M.sources[i],a=s.az*Math.PI/180,len=Math.max(26,Math.min(90,s.L*L.k*.45)),hx=L.X(s.x)+Math.sin(a)*len,hy=L.Y(s.y)-Math.cos(a)*len;
+    if(Math.hypot(px-hx,py-hy)<=9)return{k:'srcaz',i};if(near2(L,px,py,s.x,s.y)<=9)return{k:'src',i}}
+  if(!isLines()){const a=M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(M.src[0]),sy=L.Y(M.src[1]);if(Math.hypot(px-sx-Math.sin(a)*len,py-sy+Math.cos(a)*len)<=10)return{k:'head'};if(Math.hypot(px-sx,py-sy)<=10)return{k:'v1src'}}
+  for(let i=(M.bodies||[]).length-1;i>=0;i--){const b=M.bodies[i];if(near2(L,px,py,b.x,b.y)<=9)return{k:'body',i};
+    if(S.mod){const c=S.mod.bodies.list.find(B=>B.src===b);if(c&&c.sd(L.ix(px),L.iy(py),c.s)<0)return{k:'body',i}}}
+  const f=nearLine(L,px,py,M.faults);if(f&&f.d<=6)return{k:'fault',i:f.i};
+  return null}
+let down=null;
+cv.addEventListener('pointerdown',e=>{if(!S.started)return;const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py),M=S.M,t=S.tool;
+  if(e.button===1||t==='pan'){S.drag={k:'pan',px,py,v:{...S.view}};cv.setPointerCapture(e.pointerId);return}
+  if(t==='add'){openPop(px,py,x,y);return}
+  if(t==='pick'){const l=(M.layers||[]).find(q=>q.id===S.layerOpen&&!q.grid)||(M.layers||[]).find(q=>q.id===S.bd&&!q.grid);if(!l){banner('Open an image layer in panel 3 first.',true);return}
+    const a=GDE.affine(l.cal);if(a.err){banner(a.err,true);return}const q=a.inv(x,y);
+    if(l.bar&&e.shiftKey){l.bar.b=[+q[0].toFixed(1),+q[1].toFixed(1)]}else if(l.bar&&e.altKey){l.bar.a=[+q[0].toFixed(1),+q[1].toFixed(1)]}
+    else l.cal.push([+q[0].toFixed(1),+q[1].toFixed(1),Math.round(x),Math.round(y)]);
+    renderLayers();banner(`Pixel ${q[0].toFixed(1)}, ${q[1].toFixed(1)}${l.bar&&(e.shiftKey||e.altKey)?' set as the colour-bar '+(e.shiftKey?'end':'start'):' added as a control point: type its true X, Y in panel 3'} (Alt-click: bar start, Shift-click: bar end).`);return}
+  if(t==='line'){const l=M.lines[S.lineSel];if(!l)return;const vi=l.pts.findIndex(q=>near2(L,px,py,q[0],q[1])<=7);
+    if(vi>=0){if(e.detail>=2&&l.pts.length>2){l.pts.splice(vi,1);schedule();return}S.drag={k:'vtx',i:vi};cv.setPointerCapture(e.pointerId);return}
+    const n=nearLine(L,px,py,[l]);if(n&&n.d<=8){// insert a vertex between the two control points around the clicked spot
+      let bi=0,bd=Infinity;for(let j=1;j<l.pts.length;j++){const a=l.pts[j-1],b=l.pts[j],ex=b[0]-a[0],ey=b[1]-a[1],L2=ex*ex+ey*ey||1,tt=Math.max(0,Math.min(1,((x-a[0])*ex+(y-a[1])*ey)/L2)),d=Math.hypot(a[0]+tt*ex-x,a[1]+tt*ey-y);if(d<bd){bd=d;bi=j}}
+      l.pts.splice(bi,0,[Math.round(n.x),Math.round(n.y)]);S.drag={k:'vtx',i:bi};cv.setPointerCapture(e.pointerId);schedule(true);return}
+    S.drag={k:'pan',px,py,v:{...S.view}};cv.setPointerCapture(e.pointerId);return}
+  if(t==='src'){const n=nearLine(L,px,py,isLines()?M.lines:[]),f=nearLine(L,px,py,M.faults);const tpl=GDE.templates[M.template]||{};
+    if(f&&(!n||f.d<n.d)&&f.d<=14){const fl=M.faults[f.i],az=((Math.atan2(-f.ty,-f.tx)*180/Math.PI+(fl.side<0?180:0))%360+360)%360;
+      M.sources.push({kind:'fault',fault:f.i,x:Math.round(f.x),y:Math.round(f.y),az:+az.toFixed(1),L:Math.round(diag()*.08),open:75,asym:0});}
+    else if(n&&n.d<=14){// basin on the right of the line: screen direction (tx, ty) = map (tx, -ty), right normal (-ty, -tx), azimuth atan2(x, y)
+      const az=((Math.atan2(-n.ty,-n.tx)*180/Math.PI)%360+360)%360,kind=tpl.src==='fan'?'fan':'coast';
+      M.sources.push({kind,line:n.i,x:Math.round(n.x),y:Math.round(n.y),az:+az.toFixed(1),L:Math.round(diag()*(kind==='fan'?.4:.1)),open:kind==='fan'?(tpl.fan||45):Math.min(110,tpl.fan||70),asym:0})}
+    else{banner('Click on a key line (or a fault).',true);return}
+    if(!isLines()){M.geom='lines';syncInputs()}S.sel={kind:'src',i:M.sources.length-1};renderConcept();rematch();renderWells();schedule();return}
+  if(t==='body'){const ty=$('tbBody').value,T=GDE.BODY[ty];M.bodies.push({type:ty,shape:'ellipse',x:Math.round(x),y:Math.round(y),a:T.a,e:T.e,rot:0,w:T.belts.slice(1).map(b=>b[2])});
+    S.sel={kind:'body',i:M.bodies.length-1};renderConcept();rematch();renderWells();schedule();return}
+  if(t==='trace'){if(!S.trace)S.trace={kind:$('tbTrace').value,pts:[]};if(e.detail>=2){finishTrace();return}S.trace.pts.push([Math.round(x),Math.round(y)]);draw();return}
+  if(t==='paint'){if(!M.paint)M.paint=GDE.paintGrid(M.ext,96);S.drag={k:'paint'};cv.setPointerCapture(e.pointerId);paintAt(x,y);return}
+  const h=hit(px,py);
+  if(!h){S.sel=null;renderConcept();S.drag={k:'pan',px,py,v:{...S.view}};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';return}
+  if(h.k==='src'||h.k==='srcaz'||h.k==='body'||h.k==='fault'){S.sel={kind:h.k==='srcaz'?'src':h.k,i:h.i};renderConcept()}
+  S.drag=Object.assign(h,{x0:x,y0:y});if(h.k==='body'){const b=M.bodies[h.i];S.drag.bx=b.x;S.drag.by=b.y}cv.setPointerCapture(e.pointerId);e.preventDefault()});
+function paintAt(x,y){const R=+$('pR').value||diag()*.06,A=(+$('pA').value||500)*(+$('tbPaint').value);GDE.paintStroke(S.M.paint,x,y,R,A*.25);schedule(true)}
+function finishTrace(){const T=S.trace;S.trace=null;if(!T||T.pts.length<2){draw();return}const M=S.M,env=$('trEnv').value.trim()||'Channel fill',color=$('trCol').value;
+  if(T.kind==='fault'){M.faults.push({pts:T.pts,side:1,off:0,taper:Math.round(diag()*.1),fw:0});S.sel={kind:'fault',i:M.faults.length-1};banner('Fault traced: set its throw and downthrown side in panel 5.')}
+  else{const cx=Math.round(T.pts.reduce((s,q)=>s+q[0],0)/T.pts.length),cy=Math.round(T.pts.reduce((s,q)=>s+q[1],0)/T.pts.length),rel=T.pts.map(q=>[q[0]-cx,q[1]-cy]);
+    if(T.kind==='poly'&&T.pts.length<3){draw();return}
+    M.bodies.push(T.kind==='ribbon'?{type:'custom',shape:'ribbon',x:cx,y:cy,line:rel,width:+$('trW').value||400,env,color,w:[],irr:0}:{type:'custom',shape:'poly',x:cx,y:cy,pts:rel,env,color,w:[],irr:0});
+    S.sel={kind:'body',i:M.bodies.length-1}}
+  renderConcept();rematch();renderWells();schedule()}
+cv.addEventListener('pointermove',e=>{if(!S.started)return;const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py),M=S.M;
+  if(S.trace){S.trace.hover=[px,py];draw()}
+  const d=S.drag;
+  if(d){if(d.k==='pan'){S.view={...d.v,cx:d.v.cx-(px-d.px)/L.k,cy:d.v.cy+(py-d.py)/L.k};draw();return}
+    if(d.k==='paint'){paintAt(x,y);return}
+    if(d.k==='vtx'){M.lines[S.lineSel].pts[d.i]=[Math.round(x),Math.round(y)]}
+    else if(d.k==='src'){const s=M.sources[d.i],n=s.kind==='fault'?nearLine(L,px,py,[M.faults[s.fault]]):nearLine(L,px,py,[M.lines[s.line]]);if(n){s.x=Math.round(n.x);s.y=Math.round(n.y)}else{s.x=Math.round(x);s.y=Math.round(y)}renderConcept()}
+    else if(d.k==='srcaz'){const s=M.sources[d.i];s.az=+(((Math.atan2(px-L.X(s.x),L.Y(s.y)-py)*180/Math.PI)+360)%360).toFixed(1)}
+    else if(d.k==='body'){const b=M.bodies[d.i];b.x=Math.round(d.bx+x-d.x0);b.y=Math.round(d.by+y-d.y0)}
+    else if(d.k==='fault'){const f=M.faults[d.i],dx=x-d.x0,dy=y-d.y0;d.p0=d.p0||clone(f.pts);f.pts=d.p0.map(q=>[Math.round(q[0]+dx),Math.round(q[1]+dy)])}
+    else if(d.k==='v1src'){M.src=[x,y];syncSrc()}
+    else if(d.k==='head'){const sx=L.X(M.src[0]),sy=L.Y(M.src[1]);M.az=((Math.atan2(px-sx,sy-py)*180/Math.PI)+360)%360;syncAz()}
+    else if(d.k==='well'){const w=S.wells[d.i];w.x=Math.round(x);w.y=Math.round(y)}
     schedule(true);return}
-  const h=hit(px,py);cv.style.cursor=S.tool==='add'?'crosshair':h?(h.k==='head'?'grab':'move'):'';
-  const e2=S.M.ext;if(S.mod&&x>=e2.xmin&&x<=e2.xmax&&y>=e2.ymin&&y<=e2.ymax)$('ro').textContent=`x ${fmtN(x)}, y ${fmtN(y)} — ${AB()[S.mod.beltAt(x,y)].name}`;else $('ro').textContent=RO0});
-cv.addEventListener('pointerup',()=>{if(S.drag){const k=S.drag.k;S.drag=null;if(k==='well')renderWells();schedule()}});
+  if(S.tool==='sel'){const h=hit(px,py);cv.style.cursor=h?(h.k==='head'||h.k==='srcaz'?'grab':'move'):''}
+  const e2=M.ext;if(S.mod&&x>=e2.xmin&&x<=e2.xmax&&y>=e2.ymin&&y<=e2.ymax)$('ro').textContent=`x ${fmtN(x)}, y ${fmtN(y)} — ${AB()[S.mod.beltAt(x,y)].name}`;else $('ro').textContent=RO0});
+cv.addEventListener('pointerup',()=>{const d=S.drag;if(!d)return;S.drag=null;if(S.tool==='sel')cv.style.cursor='';if(d.k==='pan'){compute(false);return}if(d.k==='well')renderWells();if(d.k==='src'||d.k==='srcaz')renderConcept();schedule()});
+cv.addEventListener('dblclick',e=>{if(S.tool==='trace'){e.preventDefault();finishTrace()}});
 function openPop(px,py,x,y){const p=$('pop'),st=$('stage').getBoundingClientRect();p.hidden=false;
   p.style.left=Math.min(px+12,st.width-240)+'px';p.style.top=Math.min(py+12,st.height-130)+'px';
   let n=S.wells.length+1;while(S.wells.some(w=>w.name==='W-'+n))n++;$('pName').value='W-'+n;
   const bi=S.mod?S.mod.beltAt(x,y):0;$('pEnv').innerHTML=AB().map((b,k)=>`<option value="${k}"${k===bi?' selected':''}>${esc(b.name)}</option>`).join('');
   S.pending=[Math.round(x),Math.round(y)];$('pEnv').focus()}
 on('pOk','click',()=>{const b=+$('pEnv').value;S.wells.push({name:$('pName').value.trim()||'W',x:S.pending[0],y:S.pending[1],env:AB()[b].name,b,manual:true});
-  $('pop').hidden=true;setTool(null);renderWells();schedule()});
+  $('pop').hidden=true;setTool('sel');renderWells();schedule()});
 on('pNo','click',()=>{$('pop').hidden=true});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('pop').hidden=true;if(S.tool)setTool(null)}});
+document.addEventListener('keydown',e=>{const tag=(e.target.tagName||'').toLowerCase(),typing=tag==='input'||tag==='textarea'||tag==='select';
+  if(e.key==='Escape'){$('pop').hidden=true;if(S.trace){S.trace=null;draw()}else if(S.tool!=='sel')setTool('sel')}
+  if(e.key==='Enter'&&S.trace&&!typing){finishTrace()}
+  if((e.ctrlKey||e.metaKey)&&!typing&&(e.key==='z'||e.key==='Z')){e.preventDefault();e.shiftKey?redo():undo()}
+  if((e.ctrlKey||e.metaKey)&&!typing&&(e.key==='y'||e.key==='Y')){e.preventDefault();redo()}
+  if(!typing&&!e.ctrlKey&&!e.metaKey){if(e.key==='v'||e.key==='V')setTool('sel');if(e.key==='h'||e.key==='H')setTool('pan')}});
 
 // ---------- verdict, wells check, calibration messages ----------
 const ICON={pass:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 20.5l5.5 5.5L29 14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
  warn:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4L37 34H3z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M20 15v9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="currentColor"/></svg>',
  none:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="20" cy="20" r="3" fill="currentColor"/></svg>'};
-function renderVerdict(){const C=S.mod.check,mt=C.filter(c=>c.b>=0),hon=mt.filter(c=>c.honoured),un=C.length-mt.length,wp=hon.filter(c=>c.warped).length;let v,h,sub;
-  if(!C.length){v='none';h='Conceptual map — no well yet';sub='Paste a wells table or click “+ Add on map” (panel 2): the belts are then calibrated on them.'}
+const envOk=c=>c.b>=0||!!c.pair;
+function renderVerdict(){const C=S.mod.check,mt=C.filter(envOk),hon=mt.filter(c=>c.honoured),un=C.length-mt.length,wp=hon.filter(c=>c.warped).length,B=AB();let v,h,sub;
+  if(!C.length){v='none';h='Conceptual map — no well yet';sub='Paste a wells table or click “Add on map” (panel 2): the belts are then calibrated on them.'}
   else if(hon.length===mt.length&&mt.length){v='pass';h=mt.length===1?'The well is honoured':`All ${mt.length} wells honoured`;
-    sub=(wp?`${mt.length-wp} by the calibrated belts, ${wp} by local warping (dashed circle).`:'Every well falls in its belt.')+' Distances to the nearest boundary are in the table below.'}
+    sub=(wp?`${mt.length-wp} by the calibrated belts, ${wp} by local warping (dashed circle).`:'Every well falls in its class.')}
   else{v='warn';h=mt.length?`${hon.length} of ${mt.length} wells honoured`:'No well matched to a belt';
-    const bad=mt.find(c=>!c.honoured);sub=bad?(S.mod.cal.msgs[S.mod.cal.conflicts.indexOf(bad.i)]||`${bad.name}: ${bad.env}, but the map puts it in ${AB()[bad.belt].name}.`)+(bad.chOut?' The channels only run inside the belts chosen in panel 3: widen them or check the environment.':' Try “Auto-fit direction”, turn on local warping (panel 4), or check the environment.'):''}
-  if(un)sub+=` ${un} well${un>1?'s have':' has'} an environment not matched to a belt: choose it in panel 2.`;
+    const bad=mt.find(c=>!c.honoured);sub=bad?wellNote(bad):''}
+  sub+=' Wells: '+C.map(c=>`${c.name} ${c.honoured?'✓':'✗'}`).join(', ')+'.';
+  if(un)sub+=` ${un} well${un>1?'s have':' has'} an environment not matched to a class: choose it in panel 2.`;
+  const L=(S.M.layers||[]);if(L.length)sub+=' Seismic: '+L.map(l=>{const nb=(S.M.bodies||[]).filter(b=>b.layer===l.id).length,nf=(S.M.faults||[]).filter(f=>f.layer===l.id).length,parts=[];
+    if(!l.on)return`${l.name} off`;if(l.role==='lith'&&l.trend.on&&l.trend.w>0)parts.push(`trend ${Math.round(l.trend.w*100)} % (${l.trend.dir==='proximal'?'high = proximal':'high = distal'})`);if(nb)parts.push(`${nb} bod${nb===1?'y':'ies'}`);if(nf)parts.push(`${nf} fault${nf===1?'':'s'}`);
+    return`${l.name}: ${parts.join(', ')||'backdrop only'}`}).join('; ')+'.';
+  const adj=S.mod.bodies.adj;if(adj.length)sub+=' '+adj.map(a=>`Body ${a.body+1} ${a.scale>1?'enlarged':'shrunk'} ×${a.scale.toFixed(2)} for ${a.well}.`).join(' ');
   const sh=GDE.scaleHint(S.M);if(sh)sub+=' Note: '+sh;
   $('verdict').className='verdict '+v;$('verdict').innerHTML=ICON[v]+`<h2>${esc(h)}</h2><div class="sub">${esc(sub)}</div>`}
-function renderCheck(){const B=AB(),d2=diag();
-  $('tb').innerHTML=S.mod.check.map(c=>{const g=c.b>=0?B[c.b]:null,m=B[c.belt];let note='';
-    if(c.b<0)note='Environment not matched to a belt: choose it in panel 2.';
-    else if(c.warped&&c.honoured)note=`Honoured by local warping (radius ${fmtLen(S.mod.warp.R)}).`;
-    else if(c.chOut)note=`In the channel belt, but the base map puts the well in ${B[c.belt].name}, outside the belts the channels run through (panel 3).`;
-    else if(!c.honoured)note=S.mod.cal.msgs[S.mod.cal.conflicts.indexOf(c.i)]||'Not in its belt.';
-    else if(c.b===S.M.belts.length)note='Honoured: one channel is routed through the well.';
-    else if(c.dist<.02*d2)note='Close to a boundary: the environment could as well be the neighbouring belt.';
-    return`<tr><td class="l">${esc(c.name)}</td><td>${fmtN(c.x)}</td><td>${fmtN(c.y)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td><td>${isFinite(c.dist)?fmtLen(c.dist):'> map size'}</td><td class="l wrap">${esc(note)}</td></tr>`}).join('')||'<tr><td class="l" colspan="8" style="color:var(--mut)">No well.</td></tr>'}
-function renderCal(){const m=S.mod,B=S.M.belts,t=m.t,p=m.prior,cal=m.cal;
-  const st=k=>Math.abs(t[k]-p[k])<1e-6*Math.max(1,Math.abs(p[k]))?'prior':(isFinite(cal.lo[k])&&isFinite(cal.hi[k])?'between wells':'scaled');
-  let h=`<p>Boundaries, distance ${S.M.geom==='radial'?'from the source':'from the reference point along the transport direction'}:</p>`+t.map((v,k)=>`<p><span class="sw" style="background:${B[k].color}"></span>${esc(B[k].name)} | ${esc(B[k+1].name)}: <b>${fmtLen(v)}</b> <span style="color:var(--mut)">(${st(k)}${st(k)==='prior'?'':', prior '+fmtLen(p[k])})</span></p>`).join('');
+function wellNote(c){const B=AB(),mod=S.mod;
+  if(!envOk(c))return'Environment not matched to a class: choose it in panel 2.';
+  if(c.warped&&c.honoured)return`Honoured by local warping (radius ${fmtLen(mod.warp.R)}).`;
+  if(c.chOut)return`In the channel belt, but the base map puts the well in ${B[c.belt].name}, outside the belts the channels run through (panel 4).`;
+  if(c.varOut)return`The well is in ${B[c.belt].name}, away from the sources: move a source (panel 5) towards it or lengthen its lobe.`;
+  if(c.body!=null&&!c.honoured)return'Inside an isolated body that could not be resized to honour it: edit the body (panel 6).';
+  if(!c.honoured){const m=mod.cal.msgs[mod.cal.conflicts.indexOf(c.i)];return(m||`${c.name}: ${c.env}, but the map puts it in ${B[c.belt].name}.`)+' Edit the key lines or sources, use “Auto-fit” / “Propose a sketch”, turn on local warping (panel 7), or check the environment.'}
+  if(c.body!=null){const a=mod.bodies.adj.find(q=>q.well===c.name);return a?`Honoured by the body, ${a.scale>1?'enlarged':'shrunk'} ×${a.scale.toFixed(2)}.`:'Honoured by an isolated body.'}
+  if(c.pair)return`Honoured: “${c.env}” accepts either belt or their mixed zone.`;
+  if(c.b===S.M.belts.length&&B[c.b]&&B[c.b].channel)return'Honoured: one channel is routed through the well.';
+  if(c.dist<.02*diag())return'Close to a boundary: the environment could as well be the neighbouring class.';return''}
+function renderCheck(){const B=AB();
+  $('tb').innerHTML=S.mod.check.map(c=>{const g=c.b>=0?B[c.b]:null,m=B[c.belt];
+    return`<tr><td class="l">${esc(c.name)}</td><td>${fmtN(c.x)}</td><td>${fmtN(c.y)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td><td>${isFinite(c.dist)?fmtLen(c.dist):'> map size'}</td><td class="l wrap">${esc(wellNote(c))}</td></tr>`}).join('')||'<tr><td class="l" colspan="8" style="color:var(--mut)">No well.</td></tr>'}
+function renderCal(){const m=S.mod,B=S.M.belts,t=m.t,p=m.prior,cal=m.cal,lk=isLines()?new Set(S.M.lines.map(l=>+l.k)):new Set();
+  const st=k=>Math.abs(t[k]-p[k])<1e-6*Math.max(1,Math.abs(p[k]))?(lk.has(k)?'on its key line':'prior'):(isFinite(cal.lo[k])&&isFinite(cal.hi[k])?'between wells':'scaled');
+  let h=`<p>Boundaries, ${isLines()?'proximal–distal distance (0 at the first key line when it is on “before…”)':S.M.geom==='radial'?'distance from the source':'distance from the reference point along the transport direction'}:</p>`+t.map((v,k)=>`<p><span class="sw" style="background:${B[k].color}"></span>${esc(B[k].name)} | ${esc(B[k+1].name)}: <b>${fmtLen(v)}</b> <span style="color:var(--mut)">(${st(k)}${/prior|key/.test(st(k))?'':', prior '+fmtLen(p[k])})</span></p>`).join('');
   if(cal.msgs.length)h+=cal.msgs.map(s=>`<p class="c">${esc(s)}${S.M.warp.on?'':' Local warping is off.'}</p>`).join('');
   $('calMsg').innerHTML=h}
 
@@ -1619,42 +1942,55 @@ on('bGeo','click',()=>{if(need())dl(GDE.geojson(fullPolys()),'gde_polygons.geojs
 on('bPcsv','click',()=>{if(need())dl(GDE.polyCsv(fullPolys()),'gde_polygons.csv','text/csv')});
 on('bZmap','click',()=>{if(need())dl(GDE.zmap(grid()),'gde_belts.zmap','text/plain')});
 on('bGcsv','click',()=>{if(need())dl(GDE.gridCsv(grid()),'gde_grid.csv','text/csv')});
+on('bLines','click',()=>{if(!need())return;const L=GDE.lineFeatures(S.M);if(!L.length){banner('No key line or fault to export.',true);return}dl(GDE.irapPolylines(L),'gde_lines_irap.dat','text/plain')});
+on('bLinesG','click',()=>{if(!need())return;const L=GDE.lineFeatures(S.M);if(!L.length){banner('No key line or fault to export.',true);return}dl(GDE.geojsonLines(L),'gde_lines.geojson','application/geo+json')});
 on('bWcsv','click',()=>{if(!S.mod)return need();const q=s=>/[",]/.test(String(s))?'"'+String(s).replace(/"/g,'""')+'"':s;
-  dl(['well,x,y,environment,belt_given,belt_map,honoured,distance_to_boundary,warped'].concat(S.mod.check.map(c=>[q(c.name),c.x,c.y,q(c.env),c.b>=0?q(AB()[c.b].name):'',q(AB()[c.belt].name),c.honoured?'yes':'no',isFinite(c.dist)?+c.dist.toFixed(1):'',c.warped?'yes':'no'].join(','))).join('\n'),'gde_wells.csv','text/csv')});
+  dl(['well,x,y,environment,class_given,class_map,honoured,distance_to_boundary,warped'].concat(S.mod.check.map(c=>[q(c.name),c.x,c.y,q(c.env),c.b>=0?q(AB()[c.b].name):c.pair?q(c.env):'',q(AB()[c.belt].name),c.honoured?'yes':'no',isFinite(c.dist)?+c.dist.toFixed(1):'',c.warped?'yes':'no'].join(','))).join('\n'),'gde_wells.csv','text/csv')});
 on('bPng','click',()=>{if(!need())return;const e=S.M.ext,Wc=1000,leg=210,mw=Wc-66-14-leg,Hc=Math.round(mw*(e.ymax-e.ymin)/(e.xmax-e.xmin)+54),sc=2;
   const P=((e.xmax-e.xmin)*(e.ymax-e.ymin)/S.M.cell**2<=1.5e6)?fullPolys():S.P,o=document.createElement('canvas');o.width=Wc*sc;o.height=Math.max(420,Hc)*sc;
-  const c=o.getContext('2d');c.setTransform(sc,0,0,sc,0,0);render(c,Wc,Math.max(420,Hc),P,{handles:false});o.toBlob(b=>dl(b,'gde_map.png','image/png'),'image/png')});
+  const c=o.getContext('2d');c.setTransform(sc,0,0,sc,0,0);render(c,Wc,Math.max(420,Hc),P,{export:true,noBackdrop:true,view:{z:1,cx:(e.xmin+e.xmax)/2,cy:(e.ymin+e.ymax)/2}});o.toBlob(b=>dl(b,'gde_map.png','image/png'),'image/png')});
 
-// ---------- examples, file drop, start ----------
-function loadModel(M,wells){S.M=clone(M);if(!S.M.channels)S.M.channels=GDE.channelDefaults(S.M);$('ro').textContent=RO0;
-  S.wells=clone(wells).map(w=>typeof w.b==='number'&&w.b>=0&&w.b<AB().length?{...w,manual:true}:{...w,b:GDE.matchBelt(w.env,AB())});
-  syncInputs();renderBelts();renderWells();$('wMsg').textContent='';start();size();compute(false)}
-function loadExample(k){const ex=GDE.examples[k];loadModel(ex.M,ex.wells);banner(ex.title+': drag the source, the arrow head or a well to see the map follow.')}
-on('iDelta','click',()=>loadExample('delta'));on('iFan','click',()=>loadExample('fan'));
-on('iEst','click',()=>loadExample('estuary'));on('iRamp','click',()=>loadExample('ramp'));on('iLake','click',()=>loadExample('lake'));
-on('bMSave','click',()=>{if(!S.started)return need();const W=S.wells.map(w=>({name:w.name,x:w.x,y:w.y,env:w.env,...(w.manual&&w.b>=0?{b:w.b}:{})}));
-  dl(GDE.saveModel(S.M,W),'gde_model.json','application/json')});
+// ---------- examples, files, start ----------
+function loadModel(M,wells){S.M=clone(M);for(const l of S.M.layers||[]){const o=(M.layers||[]).find(q=>q.id===l.id);if(o&&o.img)l.img=o.img}attachImgs(S.M);
+  if(!S.M.channels)S.M.channels=GDE.channelDefaults(S.M);$('ro').textContent=RO0;
+  S.wells=clone(wells).map(w=>typeof w.b==='number'&&w.b>=0?{...w,manual:true}:{...w});rematch();
+  S.bd=((S.M.layers||[]).find(l=>!l.grid)||(S.M.layers||[])[0]||{}).id||null;S.bdOp=+(((S.M.layers||[]).find(l=>l.id===S.bd)||{}).op??.55);S.layerOpen=null;S.sel=null;S.lineSel=0;
+  syncInputs();renderBelts();renderWells();$('wMsg').textContent='';S.undo=[];S.redo=[];
+  if(S.started){size();zoomFit();compute(false)}else start();setTool('sel')}
+function loadExample(k){const ex=GDE.examples[k];loadModel(ex.M,ex.wells);
+  banner(ex.title+(ex.M.geom==='lines'?': drag the sources, the arrow heads, a well; edit the key lines with the Line tool.':': drag the source, the arrow head or a well to see the map follow.'))}
+for(const [id,k] of [['iCoast','coast'],['iRimmed','rimmed'],['iCanyon','canyon'],['iRift','rift'],['iDelta','delta'],['iFan','fan'],['iEst','estuary'],['iRamp','ramp'],['iLake','lake']])on(id,'click',()=>loadExample(k));
+on('bMSave','click',()=>{if(!S.started)return need();dl(GDE.saveModel(S.M,wellsOut()),'gde_model.json','application/json')});
 function openModelText(t,name){const r=GDE.openModel(t);if(!r.M){banner((name?name+': ':'')+r.errors[0],true);return}
   loadModel(r.M,r.wells);banner(`Model opened${name?' from '+name:''}: ${r.wells.length} well${r.wells.length===1?'':'s'}.`+(r.errors.length?' '+r.errors.length+' entr'+(r.errors.length>1?'ies':'y')+' skipped: '+r.errors[0]:''),!!r.errors.length)}
 on('bMOpen','click',()=>$('mfile').click());
 on('mfile','change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>openModelText(String(r.result),f.name);r.readAsText(f);e.target.value=''});
-on('iBlank','click',()=>{loadModel(blankModel(),[]);banner('Choose a template (panel 3), then add wells.')});
+on('iBlank','click',()=>{loadModel(blankModel(),[]);banner('Choose a template (panel 4), then add wells; key lines are proposed and editable (panel 5).')});
 function readFile(f){const r=new FileReader();r.onload=()=>{const t=String(r.result);if(/^\s*\{/.test(t)){openModelText(t,f.name);return}$('wTxt').value=t;applyTable(t)};r.readAsText(f)}
 on('iOpen','click',()=>$('file').click());
 on('file','change',e=>{if(e.target.files[0])readFile(e.target.files[0])});
 document.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('dragging')});
 document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging')});
 document.addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('dragging');const f=e.dataTransfer.files[0];if(f)readFile(f)});
-S.M=blankModel();syncInputs();renderBelts();renderWells();
+S.M=blankModel();syncInputs();renderBelts();renderWells();syncUR();
 function systemsSection(){const tables=[];
   for(const g of GDE.groups)for(const [k,t] of Object.entries(GDE.templates)){if(t.group!==g||k==='custom')continue;
     const belts=t.belts.map((b,i)=>`<span class="rgsw" style="background:${b.color}"></span>${esc(b.name)} <b>${i<t.belts.length-1?b.w:'open'}</b>`).join(' · ');
     const al=t.belts.map(b=>`<i>${esc(b.name)}</i>: ${esc(b.alias.join(', ')||'—')}`).join('; ');
-    tables.push({title:esc(t.name),sub:`${esc(g)} · ${t.geom==='radial'?`radial, fan ${t.fan}°, ${t.outside==='strike'?'belts along strike beside the fan':'most distal belt beside the fan'}`:'linear'} · typical scale ${t.scale[0]}–${t.scale[1]} km`+(t.ch?` · channels: ${esc(t.ch.name)}`:''),
-      rows:[['Belts, proximal → distal, with relative width (the most distal is open-ended)',belts,'on the page'],['Well descriptions recognised besides the belt names',al,'on the page']].concat(t.refs.map(r=>[esc(r[0]),esc(r[1]),r[2]]))})}
-  return{h:'Depositional systems: belts, widths and sources',intro:'<p>One table per system, from the library in the page. “published”: the paper or its reprint was read for this page; “published (abstract)”: only the abstract; “published (second hand)”: a secondary page that was read; “memory”: written from memory, or a reasoned guess for the widths, not checked against a source; “existence confirmed”: the reference exists, its content was not read.</p>',tables}}
-window.GDEUI={S,compute,render,loadExample,loadModel,applyTable,fullPolys,grid,hit,layout:curL,openModelText,systemsSection};
-const hk=location.hash.slice(1);if(GDE.examples[hk])loadExample(hk);else if(hk==='blank')$('iBlank').click();
+    const v2=GDE.V2[k]||{},ln=(v2.ln||[]).map(([n,kk])=>`${esc(n)} (${kk<0?'start of '+esc(t.belts[0].name):esc(t.belts[kk].name)+' | '+esc(t.belts[kk+1].name)})`).join(', ');
+    const rows=[['Belts, proximal → distal, with relative width (the most distal is open-ended)',belts,'on the page'],['Well descriptions recognised besides the belt names',al,'on the page'],
+      ['Key lines, on the belt boundaries',ln+(v2.ctx?`; landward of the first line: ${esc(v2.ctx[0])}`:'')+(v2.inf!=null?'; outside the lobes beyond the toe of slope: the most distal belt':''),'on the page']];
+    if(v2.vars)rows.push(['Along-strike variants away from the sources (interfluves)',v2.vars.map(([kk,n])=>`${esc(t.belts[kk].name)} → ${esc(n)}`).join('; '),'on the page']);
+    tables.push({title:esc(t.name),sub:`${esc(g)} · ${t.geom==='radial'?`radial, fan ${t.fan}°, ${t.outside==='strike'?'belts along strike beside the fan':'most distal belt beside the fan'}`:'linear'} (v1 geometry) · sources: ${t.src==='fan'?'fans at the shelf edge':'deltas / lobes on the first line'} · typical scale ${t.scale[0]}–${t.scale[1]} km`+(t.ch?` · channels: ${esc(t.ch.name)}`:''),
+      rows:rows.concat(t.refs.map(r=>[esc(r[0]),esc(r[1]),r[2]]))})}
+  const bt={title:'Isolated bodies',sub:'core, then halos of editable width; the bodies override the regional belts inside their outermost halo',rows:Object.entries(GDE.BODY).filter(([k])=>k!=='custom').map(([k,b])=>[esc(b.name),b.belts.map((x,j)=>`<span class="rgsw" style="background:${x[1]}"></span>${esc(x[0])}${j?' '+x[2]+' m':' (core, axis '+b.a*2+' m, elongation '+b.e+')'}`).join(' · '),'memory'])};
+  return{h:'Depositional systems: belts, widths, key lines and sources',intro:'<p>One table per system, from the library in the page. “published”: the paper or its reprint was read for this page; “published (abstract)”: only the abstract; “published (second hand)”: a secondary page that was read; “memory”: written from memory, or a reasoned guess for the widths, not checked against a source; “existence confirmed”: the reference exists, its content was not read.</p>',tables:tables.concat([bt])}}
+window.GDEUI={S,compute,render,loadExample,loadModel,applyTable,fullPolys,grid,hit,layout:curL,openModelText,systemsSection,setTool,undo,redo,draw,selItem};
+// hash hooks: #example, &tool=line, &bd=layer id, &op=0.6, &zoom=2, &sel=src:0
+(()=>{const h=location.hash.slice(1).split('&'),k=h[0],o=Object.fromEntries(h.slice(1).map(s=>s.split('=')));
+  if(GDE.examples[k])loadExample(k);else if(k==='blank')$('iBlank').click();else return;
+  if(o.bd!=null)S.bd=o.bd||null;if(o.op)S.bdOp=+o.op;if(o.zoom)S.view.z=+o.zoom;if(o.sel){const [a,b]=o.sel.split(':');S.sel={kind:a,i:+b}}if(o.layer)S.layerOpen=o.layer;
+  if(o.tool)setTool(o.tool);renderLayers();renderConcept();compute(false)})();
 
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
