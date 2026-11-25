@@ -158,7 +158,7 @@ Gridding, spatial correlation, grouping of point data and depositional environme
 
     [**GDE map generator**](gdemap/index.html)
 
-    Gross depositional environment map from wells, seismic attributes and a concept: editable shoreline and shelf edge, polarised deltas and fans, reefs and channels, mixed zones, faults; 17 systems, calibrated on the wells; polygons, lines and grid exports.
+    Gross depositional environment map from wells, seismic attributes and a concept: a whole margin from hinterland to basin floor (rivers feeding deltas, canyon and fan in line), or one of 17 systems, with editable key lines, reefs, faults and gradual transitions; calibrated on the wells; polygons, lines and grid exports.
 
 </div>
 
