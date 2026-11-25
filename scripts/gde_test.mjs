@@ -1035,6 +1035,15 @@ test('fault tips: the throw and the footwall uplift taper gradually along the fa
   assert.ok(all >= 2, 'the throw does decay towards the tips');
   for (const x of [-1500, 1500]) assert.equal(mod.beltAt(x, 21000), ref.beltAt(x, 21000), 'beyond the tip: unfaulted');
 });
+test('faults on the EOD and facies maps: a tapered stroke (zero width at the tips, widest in the middle); inherited escarpments kept in the model file', () => {
+  const pts = [[0, 0], [1000, 4000], [0, 8000], [500, 12000]], R = G.faultRibbon(pts, 300), n = R.length / 2;
+  assert.ok(R.length >= 40 && R.length % 2 === 0);
+  const w = i => Math.hypot(R[i][0] - R[R.length - 1 - i][0], R[i][1] - R[R.length - 1 - i][1]);
+  assert.ok(w(0) < 1 && w(n - 1) < 30, 'pointed tips ' + w(0).toFixed(1) + ' ' + w(n - 1).toFixed(1));
+  const mid = Math.max(...Array.from({ length: n }, (_, i) => w(i))); near(mid, 300, 30, 'widest = max width');
+  const M = JSON.parse(JSON.stringify(G.examples.rift.M)); M.faults[0].inh = true;
+  assert.equal(G.openModel(G.saveModel(M, [])).M.faults[0].inh, true, 'inherited flag saved');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
