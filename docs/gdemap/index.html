@@ -546,6 +546,9 @@ function calibrate(d,b,p,opt={}){const n1=p.length,S=chain(d,b,n1),inS=new Set(S
   for(let k=0;k<n1;){if(!fin(k)){k++;continue}
     let m=k;while(m+1<n1&&fin(m+1)&&lo[m+1]===lo[k]&&hi[m+1]===hi[k])m++;
     const Lo=lo[k],Hi=hi[k],g=.05*(Hi-Lo);let inside=true;
+    // key lines: each boundary stays at its prior (its line) unless a well is in the way, then just past the well
+    if(opt.keep){let good=true;for(let j=k;j<=m;j++){const wb=Math.max(1e-9,j?p[j]-p[j-1]:p[j]),gg=Math.min(.25*wb,.45*(Hi-Lo));t[j]=clamp(p[j],Lo+gg,Hi-gg);if(j>k&&!(t[j]>t[j-1]))good=false}
+      if(good){for(let j=k;j<=m;j++)fx[j]=true;k=m+1;continue}}
     for(let j=k;j<=m;j++)if(!(p[j]>Lo+g&&p[j]<Hi-g))inside=false;
     if(inside)for(let j=k;j<=m;j++)t[j]=p[j];
     else if(k===m)t[k]=(Lo+Hi)/2;
@@ -924,7 +927,7 @@ const smooth01=t=>t<=0?0:t>=1?1:t*t*(3-2*t);
 // Source lobe metric rho: distance from the source inside its opening (bent towards one side and elongated downdrift by the asymmetry), r / (1 - u^2)
 // in the TAPER degrees beyond, infinite further. Lobe field: coast d = v + g (rho - L) (the lobe stands out by L, g = belt-scale of the zone);
 // fan d = v + rho (vend - v) / L (most distal belt from rho = L); fault-bounded or k = -1 lines: d = rho v' / L. The field is smin(regional, lobes).
-const BEND=35;let MEMV=0;
+const BEND=35;let MEMV=0,INLOBE=false;
 function lobeR(s,x,y){const dx=x-s.x+s.b*s.ux,dy=y-s.y+s.b*s.uy,r=Math.hypot(dx,dy);if(r===0)return 0;
   const p=dx*s.ux+dy*s.uy,q=dx*s.uy-dy*s.ux;let a=Math.atan2(q,p)/RAD;
   a-=s.asym*BEND*Math.min(1,r/s.L);
@@ -947,15 +950,15 @@ function lineModel(M){const p=prior(M),n=M.belts.length,L=[];
     else{const j=L.indexOf(li),nx=L[j+1];let g=1;if(nx){const W=Math.abs(sdistF(nx.P,o.x,o.y));if(W>0)g=clamp((nx.v-li.v)/W,.05,20)}o.g=g;o.k=.3*o.L*g;o.off=o.L}
     o.b=(o.kind==='coast'?.6:o.kind==='fault'?.3:.08)*o.L;o.off+=o.b;o.W0=o.b*Math.tan(Math.min(70,o.open/2)*RAD)+.25*o.L;return o});
   const p0=p[0]||1,m0=-2*Math.max(1,...S.map(s=>s.L*s.g));
-  const f=(x,y)=>{const dr=reg(x,y);let d=dr,m=m0;
-    for(const s of S){if(s.kind==='fault')continue;const rho=lobeR(s,x,y),ds=s.v+s.g*(rho-(s.kind==='coast'?s.off*(1-smooth01((rho-s.b-1.5*s.L)/(2.5*s.L))):s.off));d=smin(d,ds,s.k);
+  const f=(x,y)=>{const dr=reg(x,y);let d=dr,m=m0;INLOBE=false;
+    for(const s of S){if(s.kind==='fault')continue;const rho=lobeR(s,x,y),ds=s.v+s.g*(rho-(s.kind==='coast'?s.off*(1-smooth01((rho-s.b-1.5*s.L)/(2.5*s.L))):s.off));if(ds<dr)INLOBE=true;d=smin(d,ds,s.k);
       if(s.kind==='fan'&&s.canyon){const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;if(pp<0){const q=Math.abs(dx*s.uy-dy*s.ux),Lc=.12*s.L,c=.5*p0*(1-Math.max(q/(.035*s.L*(1+.85*pp/Lc)),-pp/Lc));if(c>d)d=c}}
       if(s.kind==='coast'){const lim=2*s.L*s.g;let mm=isFinite(ds)&&isFinite(dr)?clamp(dr-ds+.1*s.L*s.g,-lim,lim):-lim;
-        // upper delta plain: a wedge narrowing upstream to the apex, 2 L inland of the source
-        const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;if(pp<0&&pp>-2*s.L){const q=Math.abs(dx*s.uy-dy*s.ux),wq=s.W0*(1+pp/(2*s.L)),lt=clamp((1-q/wq)*s.L*s.g,-lim,lim);if(lt>mm)mm=lt}
+        // upper delta plain: narrowing upstream to a rounded apex 1.3 L inland of the source
+        const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;if(pp<0&&pp>-1.3*s.L){const q=Math.abs(dx*s.uy-dy*s.ux),wq=s.W0*Math.sqrt(1+pp/(1.3*s.L)),lt=clamp((1-q/wq)*s.L*s.g,-lim,lim);if(lt>mm)mm=lt}
         if(mm>m)m=mm}}
     MEMV=m;return d};
-  return{f,L,S,p}}
+  return{f,L,S,p,inf}}
 function geoField(M){if(!linesOn(M))return(x,y)=>dBase(M,x,y);return lineModel(M).f}
 function noiseFn(M,seedAdd=0){const amp=+(M.noise&&M.noise.amp)||0;if(!(amp>0))return null;
   const wl=Math.max(1e-9,+M.noise.wl||1),wz=Math.max(wl,3*amp),P=perlin((M.noise.seed|0)+seedAdd),f=P.f,o=P.o,k=amp*1.6/1.75;
@@ -984,7 +987,9 @@ function pctl(v,q){const a=v.filter(x=>x===x&&isFinite(x));if(!a.length)return N
 // ---------- the proximal-distal field of the map: regional (lines, sources, noise) on a grid, blended with the lithology trends; paint and
 // faults added exactly. v1 geometry without trend is exact (no grid).
 function layerOn(l){return l&&l.on!==false}
-function fieldD(M,opt={}){const geo=geoField(M),nz=noiseFn(M),lines=linesOn(M),memOn=lines&&allBelts(M).some(c=>c.kind==='variant');
+function fieldD(M,opt={}){const LM=linesOn(M)?lineModel(M):null,geo=LM?LM.f:geoField(M),nz0=noiseFn(M),pinf=LM&&LM.inf!=null?LM.inf:null,
+    // outside the lobes the noise does not cross the jump to the most distal belt (deep water)
+    nz=nz0&&pinf!=null?(x,y,d)=>{const v=nz0(x,y,d);return!INLOBE&&d<pinf&&v>=pinf?pinf*.999:v}:nz0,lines=linesOn(M),memOn=lines&&allBelts(M).some(c=>c.kind==='variant');
   const TL=(M.layers||[]).filter(l=>layerOn(l)&&l.role==='lith'&&l.trend&&l.trend.on&&+l.trend.w>0).map(l=>({l,g:layerGrid(l,M.ext)})).filter(x=>x.g);
   const PG=M.paint&&Array.isArray(M.paint.v)&&M.paint.v.some(v=>v)?Object.assign({},M.paint,{z:M.paint.v}):null,FA=prepFaults(M);
   const nzm=memOn?noiseFn(M,17):null;
@@ -1005,10 +1010,10 @@ function fieldD(M,opt={}){const geo=geoField(M),nz=noiseFn(M),lines=linesOn(M),m
     for(const {l,g} of TL){let T=new Float64Array(nx*ny);for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)T[j*nx+i]=sampleGrid(g,gx0+i*dx,gy0+j*dy);
       const sr=+l.trend.smooth||0;if(sr>0)T=blur(T,nx,ny,sr/Math.max(dx,dy));
       const sg=l.trend.dir==='proximal'?-1:1,dv=[],tv=[];for(const k of inExt)if(isFinite(D0[k])&&T[k]===T[k]){dv.push(D0[k]);tv.push(sg*T[k])}
-      const d2=pctl(dv,2),d98=pctl(dv,98),t2=pctl(tv,2),t98=pctl(tv,98);if(!(t98>t2)||!(d98>d2))continue;
+      const pe=Math.max(1,...prior(M)),d2=Math.max(pctl(dv,2),-.5*pe),d98=Math.min(pctl(dv,98),2*pe),t2=pctl(tv,2),t98=pctl(tv,98);if(!(t98>t2)||!(d98>d2))continue;
       // weight tapered over a few nodes at the edges of the trend (nulls) so the blend leaves no artificial contour
-      const w=clamp(+l.trend.w,0,1),b=(d98-d2)/(t98-t2),V=blur(Float64Array.from(T,v=>v===v?1:0),nx,ny,3),Tf=fillNaN(T,nx,ny);
-      for(let k=0;k<T.length;k++)if(Tf[k]===Tf[k]&&V[k]>0){const ww=w*smooth01(2*V[k]-.5);TW[k]+=ww;TS[k]+=ww*(d2+(sg*Tf[k]-t2)*b)}}
+      const w=clamp(+l.trend.w,0,1),b=(d98-d2)/(t98-t2),V=blur(Float64Array.from(T,(v,k)=>{if(v===v)return 1;const x=gx0+(k%nx)*dx,y=gy0+Math.floor(k/nx)*dy;return x<e.xmin||x>e.xmax||y<e.ymin||y>e.ymax?1:0}),nx,ny,3);
+      for(let k=0;k<T.length;k++)if(T[k]===T[k]){const ww=w*smooth01(2*V[k]-1);TW[k]+=ww;TS[k]+=ww*(d2+(sg*T[k]-t2)*b)}}
     for(let k=0;k<TW.length;k++)if(TW[k]>1){TS[k]/=TW[k];TW[k]=1}}
   const DG=new Float64Array(nx*ny);for(let k=0;k<DG.length;k++){const d=D0[k];DG[k]=TW&&isFinite(d)?(1-TW[k])*d+TS[k]:d}
   const bil=(A,x,y)=>{const fx=(x-gx0)/dx,fy=(y-gy0)/dy;if(!(fx>=0&&fy>=0&&fx<=nx-1&&fy<=ny-1))return NaN;const i=Math.min(nx-2,Math.floor(fx)),j=Math.min(ny-2,Math.floor(fy)),u=fx-i,v=fy-j,k=j*nx+i;
@@ -1260,16 +1265,16 @@ function exCanyon(){const ext={xmin:0,xmax:40000,ymin:0,ymax:36000};
   const S=synthImage(synth),amp={id:'amp',name:'RMS amplitude (synthetic)',role:'lith',on:true,synth,cal:S.cal,bar:S.bar,tol:14,op:.55,trend:{on:false,dir:'proximal',w:.3,smooth:2500}};
   // isopach: thickness along a fan axis bending east downslope
   const nx=81,ny=73,z=[];for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const x=i*500,y=j*500,t=clamp((30800-y)/30000,0,1.2),xc=17000+6500*t*t,w=3800+8000*t;
-    const th=120*Math.exp(-(((x-xc)/w)**2))*(1-.6*t*t);z.push(y>30800||th<6?null:+th.toFixed(2))}
+    const th=120*Math.exp(-(((x-xc)/w)**2))*(1-.6*t*t);z.push(y>27500||th<6?null:+th.toFixed(2))}
   const iso={id:'iso',name:'Isopach (synthetic, m)',role:'lith',on:true,grid:{nx,ny,x0:0,y0:0,dx:500,dy:500,z},trend:{on:true,dir:'proximal',w:.35,smooth:1500}};
   const M=makeModel('fansand',{geom:'lines',az:172,span:20000,noise:{amp:900,wl:6000,seed:8},warp:{on:true,R:3000},ext,cell:100,
     lines:[{name:'Shelf edge',k:-1,pts:[[-3000,30500],[6000,31500],[12000,30000],[17000,30800],[23000,31800],[30000,30200],[43000,31000]]},
       {name:'Toe of slope',k:0,pts:[[-3000,27500],[8000,28000],[17000,27200],[26000,28600],[43000,27800]]}],
-    sources:[{kind:'fan',line:0,x:17000,y:30800,az:174,L:26000,open:48,asym:.25}],layers:[iso,amp]});
+    sources:[{kind:'fan',line:0,x:17000,y:30800,az:174,L:26000,open:40,asym:-.1}],layers:[iso,amp]});
   const ex=extractBodies(layerGrid(amp,ext,160000),{mode:'above',thr:80,smooth:0,minArea:1.5e6,minElong:4,env:'Channel fill',color:'#b5562a',layer:'amp'});
   const tr=wiggle([16800,27000],[9000,19000],450,3000,.9,30);
   M.bodies=ex.bodies.concat([{type:'custom',shape:'ribbon',x:0,y:0,line:tr,width:380,env:'Channel fill',color:'#b5562a',w:[],irr:0,name:'traced'}]);
-  return{title:'Canyon-fed sand-rich fan, isopach trend and amplitude channels, 3 wells',M,wells:[{name:'Fan-A',x:Math.round(tr[9][0]),y:Math.round(tr[9][1]),env:'Channel fill'},{name:'Fan-B',x:19500,y:15000,env:'Suprafan lobes'},{name:'Fan-C',x:29500,y:5000,env:'Lobe fringe'}]}}
+  return{title:'Canyon-fed sand-rich fan, isopach trend and amplitude channels, 3 wells',M,wells:[{name:'Fan-A',x:Math.round(tr[9][0]),y:Math.round(tr[9][1]),env:'Channel fill'},{name:'Fan-B',x:19500,y:15000,env:'Suprafan lobes'},{name:'Fan-C',x:25500,y:6000,env:'Lobe fringe'}]}}
 function exRift(){const ext={xmin:0,xmax:30000,ymin:0,ymax:40000},border=[[26800,-2000],[26200,10000],[26700,22000],[25900,34000],[26400,42000]],intra=[[15200,6000],[14600,16000],[15400,26000],[14900,34000]];
   const synth={kind:'coh',seed:3,ext,px:340,faults:[border,intra],fw:140},S=synthImage(synth);
   const coh={id:'coh',name:'Variance (synthetic)',role:'fault',on:true,synth,cal:S.cal,channel:'lum',op:.5,trend:{on:false,dir:'distal',w:.3,smooth:0}};
