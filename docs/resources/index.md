@@ -251,6 +251,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Nova Scotia Offshore Oil and Gas Geoscience Research](https://novascotia.ca/offshore-oil-and-gas-geoscience-research/) — Nova Scotia, Canada · petroleum systems · play fairway analysis
 - [CNSOER — Geoscience and Data](https://cnsoer.ca/oil-gas-energy/petroleum-related-call-for-bids/geoscience-and-data) — Nova Scotia, Canada · regulator · public reports & well/seismic data
 - [OilCo NL — Exploration Reports](https://oilconl.com/overview/) — Newfoundland and Labrador, Canada · exploration reports
+- [AGS — Geological Atlas of the Western Canada Sedimentary Basin (Mossop & Shetsen, 1994)](https://ags.aer.ca/publications/atlas-western-canada-sedimentary-basin) — Alberta, Western Canada Sedimentary Basin · stratigraphy · paleogeography · petroleum systems
 - [Staatsolie GeoAtlas of Suriname](https://www.staatsolie.com/en/shi/geoatlas/) — Suriname, Guiana Basin · petroleum systems · stratigraphy · [PDF](https://www.staatsolie.com/media/icqjypx0/geoatlas-24nov-compressed.pdf)
 - [ANCAP — Offshore Uruguay: Geology and Prospectivity (2020)](https://exploracionyproduccion.ancap.com.uy/innovaportal/file/8495/1/offshore-geology-rua-2020.pdf) — Uruguay (Punta del Este, Pelotas basins) · petroleum systems · public atlas
 - [ANCAP — Onshore Uruguay: Geology and Prospectivity (2021)](https://www.ancap.com.uy/innovaportal/file/8544/1/_onshore-geology-rua-2021.pdf) — Uruguay · petroleum systems · public atlas
