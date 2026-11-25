@@ -841,6 +841,77 @@ test('EOD labels: one spot inside each large domain, far from its edges and from
   for (const s of spots) { const x = e.xmin + s.x * R.cx, y = e.ymax - s.y * R.cy, p = E.find(q => inPoly(q, x, y)); assert.ok(p && p.code - 1 === s.label, 'spot inside its domain'); assert.ok(s.r >= 3, 'room ' + s.r);
     for (const w of ex.wells) assert.ok(Math.hypot(w.x - x, w.y - y) > 2 * R.cx, 'spot away from well ' + w.name); }
 });
+const segX = (a, b, c, d) => { const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])); return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0; };
+const simpleRing = r => { const n = r.length; for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) { if (i === 0 && j === n - 1) continue; if (segX(r[i], r[(i + 1) % n], r[j], r[(j + 1) % n])) return false; } return true; };
+const ringArea = r => Math.abs(G.sArea(r));
+const axisPt = (o, f) => [o.x + f * o.L * Math.sin(o.az * Math.PI / 180), o.y + f * o.L * Math.cos(o.az * Math.PI / 180)];
+test('facies objects: generated from the concept (lobes, rivers, fairway, fan), deterministic from the seed, another seed another shape', () => {
+  const ex = G.examples.margin, mod = G.build(ex.M, ex.wells), F = mod.facies;
+  assert.ok(Array.isArray(F) && F.length >= 6, 'objects ' + (F && F.length));
+  const n = t => F.filter(o => o.type === t).length;
+  assert.equal(n('lobe'), 2); assert.equal(n('river'), 2); assert.equal(n('fairway'), 1); assert.equal(n('fan'), 1);
+  for (const o of F) { assert.ok(o.id && G.FTYPE[o.type], 'type ' + o.type); assert.ok(o.g && (o.g.ring || o.g.lines.length), o.id); }
+  const again = G.build(ex.M, ex.wells).facies; assert.equal(JSON.stringify(again.map(o => o.g)), JSON.stringify(F.map(o => o.g)), 'same seed, same objects');
+  const M2 = Object.assign({}, ex.M, { facies: Object.assign({}, ex.M.facies, { seed: 77 }) }), F2 = G.build(M2, ex.wells).facies;
+  const l1 = F.find(o => o.type === 'lobe'), l2 = F2.find(o => o.id === l1.id); assert.ok(l2, 'same ids'); assert.notEqual(JSON.stringify(l1.g.ring), JSON.stringify(l2.g.ring), 'another seed, another lobe');
+  // a lobe covers each delta mouth
+  for (const f of ex.M.feeders) assert.ok(F.filter(o => o.type === 'lobe').some(o => inRing(o.g.ring, f.x + 1000 * Math.sin(f.az * Math.PI / 180), f.y + 1000 * Math.cos(f.az * Math.PI / 180))), 'a lobe at the delta ' + f.x);
+});
+test('facies geometry: lobes, fans, platforms, MTCs and ponded areas closed and simple; lobes with distributaries; fairways of n braided channels; river networks with tributaries', () => {
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const shapes = [{ type: 'lobe', x: 0, y: 0, az: 180, L: 30000, open: 70, seed }, { type: 'fan', x: 0, y: 0, az: 20, L: 20000, open: 60, seed }, { type: 'platform', x: 0, y: 0, a: 8000, e: .6, rot: 30, seed },
+      { type: 'mtc', x: 0, y: 0, az: 300, L: 15000, w: 7000, seed }, { type: 'ponded', x: 0, y: 0, a: 5000, e: .7, rot: 0, seed }];
+    for (const o of shapes) { const g = G.faciesShape(o); assert.ok(g.ring && g.ring.length >= 12, o.type); assert.ok(simpleRing(g.ring), o.type + ' self-intersects, seed ' + seed); assert.ok(ringArea(g.ring) > 0);
+      const c = o.L ? axisPt(o, .4) : [o.x, o.y]; assert.ok(inRing(g.ring, c[0], c[1]), o.type + ' contains its axis'); }
+    const lobe = G.faciesShape(shapes[0]); assert.ok(lobe.lines.length >= 3, 'distributaries'); for (const l of lobe.lines) assert.ok(l.pts.every(p => inRing(lobe.ring, p[0], p[1]) || Math.hypot(p[0], p[1]) < 2000), 'distributaries inside the lobe');
+    const path = []; for (let i = 0; i <= 40; i++) path.push([i * 1000, -i * 300 + 2000 * Math.sin(i / 6)]);
+    const fw = G.faciesShape({ type: 'fairway', path, n: 6, w: 500, W: 9000, cl: 6000, seed });
+    assert.ok(simpleRing(fw.ring), 'fairway envelope simple, seed ' + seed); const ch = fw.lines.filter(l => l.kind === 'channel'); assert.equal(ch.length, 6, 'n channels');
+    let crossings = 0; for (let a = 0; a < ch.length; a++) for (let b = a + 1; b < ch.length; b++) for (let i = 0; i + 1 < ch[a].pts.length; i++) for (let j = 0; j + 1 < ch[b].pts.length; j++) if (segX(ch[a].pts[i], ch[a].pts[i + 1], ch[b].pts[j], ch[b].pts[j + 1])) crossings++;
+    assert.ok(crossings >= 3, 'braided: channels cross ' + crossings);
+    for (const l of ch) for (const p of l.pts) assert.ok(inRing(fw.ring, p[0], p[1]) || Math.hypot(p[0] - path[0][0], p[1] - path[0][1]) < 7000, 'channels inside the fairway');
+    const rv = G.faciesShape({ type: 'river', path: path.map(p => [-p[0], p[1]]), w: 800, seed }); assert.ok(!rv.ring); assert.ok(rv.lines.filter(l => l.kind === 'tributary').length >= 3, 'tributaries');
+  }
+});
+test('facies objects editable: move, delete, regenerate one object; extra objects added by hand', () => {
+  const ex = G.examples.margin, F0 = G.build(ex.M, ex.wells).facies, lobe = F0.find(o => o.type === 'lobe'), fan = F0.find(o => o.type === 'fan');
+  const M = JSON.parse(JSON.stringify(ex.M)); M.facies.edits = { [lobe.id]: { dx: 3000, dy: -1000 }, [fan.id]: { del: true } };
+  M.facies.extra = [{ type: 'platform', x: 20000, y: 40000, a: 3000, e: .6, rot: 0, seed: 3 }];
+  const F1 = G.build(M, ex.wells).facies, l1 = F1.find(o => o.id === lobe.id);
+  near(l1.x, lobe.x + 3000, 1e-6); near(l1.y, lobe.y - 1000, 1e-6); near(l1.g.ring[5][0], lobe.g.ring[5][0] + 3000, 1e-6);
+  assert.ok(!F1.some(o => o.id === fan.id), 'deleted'); assert.ok(F1.some(o => o.type === 'platform' && o.extra), 'extra object');
+  M.facies.edits = { [lobe.id]: { seed: 99 } }; const l2 = G.build(M, ex.wells).facies.find(o => o.id === lobe.id);
+  assert.notEqual(JSON.stringify(l2.g.ring), JSON.stringify(lobe.g.ring), 'regenerated'); near(l2.x, lobe.x, 1e-6);
+  const n = G.normModel(M); assert.deepEqual(n.facies.edits, M.facies.edits); assert.equal(n.facies.extra.length, 1);
+  const r = G.openModel(G.saveModel(M, ex.wells)); assert.deepEqual(r.M.facies, n.facies, 'facies in the model file');
+});
+test('facies wells: a well described as a facies object ends inside one (moved, enlarged or created); a regional well inside a foreign object shrinks it', () => {
+  const ex = G.examples.margin, F0 = G.build(ex.M, ex.wells).facies, fan = F0.find(o => o.type === 'fan'), lobe = F0.find(o => o.type === 'lobe');
+  assert.equal(G.ftypeOf('Basin-floor fan'), 'fan'); assert.equal(G.ftypeOf('carbonate platforms'), 'platform'); assert.equal(G.ftypeOf('MTC'), 'mtc'); assert.equal(G.ftypeOf('Turbidite fairway'), 'fairway'); assert.equal(G.ftypeOf('Shelf'), null);
+  // a fan well just beyond the fan, a platform well with no platform yet, a turbidite well off the fairway
+  const fw = F0.find(o => o.type === 'fairway'), mid = fw.path[Math.floor(fw.path.length / 2)], fp = axisPt(fan, 1.15);
+  const W = ex.wells.concat([{ name: 'F-1', x: fp[0], y: fp[1], env: 'Basin-floor fan' }, { name: 'P-1', x: 20000, y: 36000, env: 'Carbonate platform' }, { name: 'T-1', x: mid[0] + 4000, y: mid[1], env: 'Turbidite fairway' }]);
+  const M = JSON.parse(JSON.stringify(ex.M)); M.facies.n = Object.assign({}, M.facies.n, { platform: 0 });
+  const mod = G.build(M, W);
+  for (const nm of ['F-1', 'P-1', 'T-1']) { const c = mod.check.find(q => q.name === nm); assert.ok(c.ft, nm + ' facies well'); assert.ok(c.honoured, nm + ' honoured'); }
+  assert.ok(mod.facies.some(o => o.type === 'platform' && G.inFacies(o, 20000, 36000)));
+  // a regional well (basin plain) inside a lobe: the lobe is shrunk until the well is outside
+  const tip = axisPt(lobe, .75);
+  assert.ok(G.inFacies(lobe, tip[0], tip[1]), 'the test point is inside the lobe');
+  const m2 = G.build(ex.M, ex.wells.concat([{ name: 'S-1', x: tip[0], y: tip[1], env: 'Basin plain' }]));
+  assert.ok(!G.inFacies(m2.facies.find(o => o.id === lobe.id), tip[0], tip[1]), 'the lobe no longer covers the deep-water well');
+});
+test('facies export: GeoJSON with EOD and facies levels (polygons and centrelines), IRAP lines with both', () => {
+  const ex = G.examples.margin, mod = G.build(ex.M, ex.wells), E = G.eodPolygons(mod, ex.M.ext, 800), F = G.faciesFeatures(mod);
+  assert.ok(F.polys.length >= 4 && F.lines.length >= 3);
+  const g = JSON.parse(G.geojsonLevels(E, F)), lv = new Set(g.features.map(f => f.properties.level));
+  assert.deepEqual([...lv].sort(), ['EOD', 'facies']);
+  assert.ok(g.features.some(f => f.properties.level === 'facies' && f.geometry.type === 'Polygon' && f.properties.type === 'lobe'));
+  assert.ok(g.features.some(f => f.properties.level === 'facies' && f.geometry.type === 'LineString' && f.properties.type === 'fairway'));
+  for (const f of g.features) if (f.geometry.type === 'Polygon') { const r = f.geometry.coordinates[0]; assert.deepEqual(r[0], r[r.length - 1]); }
+  const ir = G.irapLevels(E, F).trim().split('\n'); assert.equal(ir.filter(l => l.startsWith('999')).length, E.reduce((s, p) => s + 1 + p.holes.length, 0) + F.polys.length + F.lines.length);
+  assert.ok(ir.some(l => / 1(0[1-9]|1[0-9])\.000000$/.test(l)), 'facies polygon codes 101+');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
