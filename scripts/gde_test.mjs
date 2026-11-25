@@ -569,6 +569,27 @@ test('layer toggling: bodies and faults of a layer switched off leave the map', 
   const a1 = G.build(Mr, []), a0 = G.build(Object.assign({}, Mr, { layers: Mr.layers.map(l => l.id === fl ? Object.assign({}, l, { on: false }) : l) }), []);
   assert.notEqual(G.nodeGrid(a1, Mr.ext, 400).codes.join(), G.nodeGrid(a0, Mr.ext, 400).codes.join());
 });
+test('key line import: CSV x,y, IRAP lines (999 separators) and GeoJSON LineString; export -> import round trip', () => {
+  const a = G.parseLines(`x,y
+0,0
+100,50
+200,40
+`);
+  assert.equal(a.lines.length, 1); assert.deepEqual(arr(a.lines[0]).map(arr), [[0, 0], [100, 50], [200, 40]]);
+  const b = G.parseLines(`0 0 1
+10 0 1
+20 5 1
+999 999 999
+0 9 2
+10 9 2
+999.000000 999.000000 999.000000
+`);
+  assert.equal(b.lines.length, 2); assert.deepEqual(arr(b.lines[1][1]), [10, 9]);
+  const L = G.lineFeatures(G.examples.coast.M), c = G.parseLines(G.geojsonLines(L)), d = G.parseLines(G.irapPolylines(L));
+  assert.equal(c.lines.length, L.length); assert.equal(d.lines.length, L.length);
+  near(c.lines[0][5][0], L[0].pts[5][0], 1e-3); near(d.lines[1][3][1], L[1].pts[3][1], 1e-3);
+  assert.ok(G.parseLines('hello').errors.length);
+});
 test('key lines and faults export: IRAP lines and GeoJSON LineString', () => {
   const ex = G.examples.coast, L = G.lineFeatures(ex.M);
   assert.ok(L.length >= 2 && L.every(l => l.pts.length >= 10));

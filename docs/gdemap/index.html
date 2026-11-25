@@ -188,7 +188,7 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
   </div></section>
  <section class="panel"><h2><span class="n">5</span>Key lines, sources and faults<span class="tt" tabindex="0" data-tip="Key lines (shoreline or depositional limit, shelf edge or platform margin, toe of slope…) are smooth curves through their vertices, with the basin on the right of the drawing direction (“Flip” reverses it). The belts between two lines are stretched to fit, so they widen where the shelf widens. Each line sits on a belt boundary. Sources (deltas on the shoreline, fans at the shelf edge, fan deltas on a fault) push the belts basinward as lobes: length = how far the lobe reaches, opening angle, drift (−1…1: lobe bent and elongated to one side, as by longshore drift). Away from deltas some systems switch to interdeltaic belts. Faults (traced or extracted from a fault layer) shift the belts distal on the downthrown side by the throw, tapering to the tips; the footwall can be raised. Propose a sketch places lines and sources from the wells and the template.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="row"><button class="pri" id="bSketch" title="Rebuild the key lines and sources from the wells, the template and the transport azimuth (undo restores)">Propose a sketch</button><span class="msg" id="skMsg"></span></div>
-  <div class="lst" id="lnList"></div><div class="row"><button id="bLnAdd">+ Add line</button></div>
+  <div class="lst" id="lnList"></div><div class="row"><button id="bLnAdd">+ Add line</button><button id="bLnImp" title="Key lines from a file: x, y text (one line), IRAP Classic lines (999 after each line) or GeoJSON LineString">Import lines…</button></div>
   <div class="lst" id="srcList"></div>
   <div class="lst" id="fltList"></div></div></section>
  <section class="panel"><h2><span class="n">6</span>Isolated bodies<span class="tt" tabindex="0" data-tip="Bodies that override the regional belts: pinnacle or patch reefs, isolated platforms, offshore bars or tidal ridges, islands, salt-related highs — each with its core and concentric halos of editable width — and bodies of one environment traced by hand (channel = polyline with a width, or polygon) or extracted from an attribute layer. Click “Body” or “Trace” in the map toolbar, then click on the map. A well whose environment is a body belt is honoured by enlarging the nearest body; a well of the regional belts inside a halo shrinks it.">?</span><i class="chev"></i></h2>
@@ -233,7 +233,7 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
  </div>
 </main>
 </div>
-<input type="file" id="lfile" accept=".zmap,.dat,.grd,.txt,.csv,.xyz,.asc,.png,.jpg,.jpeg,.webp,.gif,image/*" hidden><input type="file" id="file" accept=".csv,.txt,.tsv,.dat,.json,text/*,application/json" hidden><input type="file" id="mfile" accept=".json,application/json" hidden>
+<input type="file" id="lnfile" accept=".csv,.txt,.dat,.irap,.geojson,.json" hidden><input type="file" id="lfile" accept=".zmap,.dat,.grd,.txt,.csv,.xyz,.asc,.png,.jpg,.jpeg,.webp,.gif,image/*" hidden><input type="file" id="file" accept=".csv,.txt,.tsv,.dat,.json,text/*,application/json" hidden><input type="file" id="mfile" accept=".json,application/json" hidden>
 <script id="gde-core">
 /* GDE map generator core: conceptual belts on a proximal-distal coordinate, calibrated on wells. Pure logic, no DOM; window.GDE.
    Tested by scripts/gde_test.mjs. Polygon tracing, shared-arc simplification and the IRAP / GeoJSON / CSV writers are copied from
@@ -1154,7 +1154,12 @@ const pix=(img,x,y)=>{const i=clamp(Math.round(x),0,img.w-1),j=clamp(Math.round(
 function barLut(img,a,b,v0,v1,N=96){const lab=new Float64Array(3*N),val=new Float64Array(N);
   for(let k=0;k<N;k++){const t=k/(N-1),c=pix(img,a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])),l=rgb2lab(c[0],c[1],c[2]);lab.set(l,3*k);val[k]=v0+t*(v1-v0)}return{lab,val,N}}
 // value of a pixel: nearest colour of the bar (CIE Lab, rejected beyond tol), else luminance (0..1) or one channel; transparent = no value
-function imgValue(img,px,py,o={}){if(px<-.5||py<-.5||px>img.w-.5||py>img.h-.5)return NaN;const c=pix(img,px,py);if(c[3]<8)return NaN;
+function imgValue(img,px,py,o={}){if(px<-.5||py<-.5||px>img.w-.5||py>img.h-.5)return NaN;
+  // luminance or channel: bilinear between the four nearest pixels (smooth thresholds); colour bar: nearest pixel
+  if(!o.lut&&o.bilinear!==false){const x=clamp(px,0,img.w-1),y=clamp(py,0,img.h-1),i=Math.min(img.w-2,Math.floor(x)),j=Math.min(img.h-2,Math.floor(y)),u=x-i,v=y-j;if(i>=0&&j>=0){let s=0,w=0;
+    for(const [a,b,q] of [[i,j,(1-u)*(1-v)],[i+1,j,u*(1-v)],[i,j+1,(1-u)*v],[i+1,j+1,u*v]]){const k=4*(b*img.w+a),d=img.data;if(d[k+3]<8||q<=0)continue;
+      const val=o.channel==='r'?d[k]/255:o.channel==='g'?d[k+1]/255:o.channel==='b'?d[k+2]/255:(.2126*d[k]+.7152*d[k+1]+.0722*d[k+2])/255;s+=q*val;w+=q}return w>0?s/w:NaN}}
+  const c=pix(img,px,py);if(c[3]<8)return NaN;
   if(o.lut){const l=rgb2lab(c[0],c[1],c[2]),L=o.lut;let best=Infinity,bi=-1;for(let k=0;k<L.N;k++){const a=l[0]-L.lab[3*k],b=l[1]-L.lab[3*k+1],d=l[2]-L.lab[3*k+2],q=a*a+b*b+d*d;if(q<best){best=q;bi=k}}
     return best<=(o.tol||12)**2?L.val[bi]:NaN}
   if(o.channel==='r'||o.channel==='g'||o.channel==='b')return c['rgb'.indexOf(o.channel)]/255;
@@ -1233,6 +1238,14 @@ function lineFeatures(M){const o=[];(M.lines||[]).forEach((l,i)=>{if(l&&l.pts&&l
   activeFaults(M).forEach((f,i)=>o.push({name:'Fault '+(i+1),kind:'fault',code:101+i,pts:f.pts.map(q=>[+q[0],+q[1]]),throw:+f.off||0}));return o}
 function irapPolylines(L){const o=[];for(const l of L){for(const q of l.pts)o.push(`${f6(q[0])} ${f6(q[1])} ${f6(l.code)}`);o.push('999.000000 999.000000 999.000000')}return o.join('\n')+'\n'}
 function geojsonLines(L){return'{"type":"FeatureCollection","features":[\n'+L.map(l=>JSON.stringify({type:'Feature',properties:{name:oneLine(l.name),kind:l.kind,code:l.code},geometry:{type:'LineString',coordinates:l.pts.map(q=>[rp(q[0]),rp(q[1])])}})).join(',\n')+'\n]}\n'}
+// key lines from a file: GeoJSON LineString / MultiLineString features, IRAP Classic lines (x y z, 999 after each line) or x, y text (one line)
+function parseLines(text){const t=String(text||'').trim(),lines=[];
+  if(/^\{/.test(t)){let J;try{J=JSON.parse(t)}catch(e){return{lines,errors:['Not a JSON file: '+e.message]}}
+    const add=g=>{if(!g)return;if(g.type==='LineString')lines.push(g.coordinates.map(q=>[+q[0],+q[1]]));else if(g.type==='MultiLineString')g.coordinates.forEach(c=>lines.push(c.map(q=>[+q[0],+q[1]])))};
+    (J.type==='FeatureCollection'?J.features.map(f=>f.geometry):J.type==='Feature'?[J.geometry]:[J]).forEach(add)}
+  else{let cur=[];for(const ln of t.split(/\r?\n/)){const f=ln.trim().split(/[\s,;\t]+/).map(num);if(f.length<2||!isFinite(f[0])||!isFinite(f[1]))continue;
+      if(Math.abs(f[0]-999)<1e-9&&Math.abs(f[1]-999)<1e-9){if(cur.length>=2)lines.push(cur);cur=[];continue}cur.push([f[0],f[1]])}if(cur.length>=2)lines.push(cur)}
+  const ok=lines.filter(l=>l.length>=2&&l.every(q=>isFinite(q[0])&&isFinite(q[1])));return{lines:ok,errors:ok.length?[]:['No line found: GeoJSON LineString, IRAP lines or x, y text expected.']}}
 // ---------- "Propose a sketch": key lines and sources from the wells and the template ----------
 // Transport azimuth fitted on the wells (linear model) when they span two belts, else the current one. Each line is placed between the wells on its
 // two sides (prior widths when only one side has wells), given a seeded natural shape (a large bay or cape, smaller bends), then pushed locally
@@ -1359,7 +1372,7 @@ const examples={
    wells:[{name:'Lake-1',x:26500,y:24000,env:'Fan delta'},{name:'Lake-2',x:20200,y:15000,env:'Lake shoreline'},{name:'Lake-3',x:15000,y:22000,env:'Littoral'},{name:'Lake-4',x:6000,y:17000,env:'Profundal'}]}};
 // v2 examples built on first use (the synthetic attribute images take a moment)
 for(const [k,fn] of [['coast',exCoast],['rimmed',exRimmed],['canyon',exCanyon],['rift',exRift]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
-window.GDE={V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
+window.GDE={parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
   layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
   templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
@@ -1568,10 +1581,16 @@ on('bLnAdd','click',()=>{const M=S.M,e=M.ext,n=M.belts.length,used=new Set((M.li
   for(let i=0;i<=8;i++){const q=-H+2*H*i/8;pts.push([Math.round(cx-uy*q),Math.round(cy+ux*q)])}
   M.lines.push({name:'Line '+(M.lines.length+1),k,pts});if(!isLines()){M.geom='lines';syncInputs()}S.lineSel=M.lines.length-1;renderConcept();setTool('line');schedule()});
 
+on('bLnImp','click',()=>$('lnfile').click());
+on('lnfile','change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();r.onload=()=>{const q=GDE.parseLines(String(r.result));if(!q.lines.length){banner(f.name+': '+q.errors[0],true);return}
+  const M=S.M,n=M.belts.length,used=new Set((M.lines||[]).map(l=>l.k));q.lines.forEach((pts,i)=>{let k=0;while(used.has(k)&&k<n-2)k++;used.add(k);
+    const step=Math.max(1,Math.floor(pts.length/40));M.lines.push({name:f.name.replace(/\.[^.]+$/,'')+(q.lines.length>1?' '+(i+1):''),k,pts:pts.filter((p,j)=>j%step===0||j===pts.length-1).map(p=>[+p[0],+p[1]])})});
+  if(!isLines())M.geom='lines';syncInputs();schedule();banner(`${q.lines.length} line${q.lines.length>1?'s':''} imported: set the belt boundary of each (panel 5) and use Flip if the basin is on the left.`)};r.readAsText(f)});
 // ---------- seismic attribute layers ----------
 let lseq=1;const newId=()=>{let id;do id='L'+(lseq++);while((S.M.layers||[]).some(l=>l.id===id));return id};
 function imgOf(l){if(l.img)return l.img;if(l.synth){const r=GDE.synthImage(l.synth);return r.img}if(l.src&&S.imgs.has(l.src))return S.imgs.get(l.src).img;return null}
-function attachImgs(M){for(const l of M.layers||[]){if(l.src&&!l.src.startsWith('data:')&&S.srcs.has(l.src))l.src=S.srcs.get(l.src);if(l.src&&!S.imgs.has(l.src))decodeImg(l.src).then(()=>{l.img=null;S.full=null;schedule();draw()});l.img=null}}
+function attachImgs(M){for(const l of M.layers||[]){if(l.src&&!l.src.startsWith('data:')&&S.srcs.has(l.src))l.src=S.srcs.get(l.src);if(!l.src)continue;
+  if(S.imgs.has(l.src))l.img=S.imgs.get(l.src).img;else decodeImg(l.src).then(ok=>{if(ok&&S.M.layers.includes(l)){l.img=S.imgs.get(l.src).img;S.full=null;renderLayers();compute(false)}})}}
 function decodeImg(src){return new Promise(res=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const g=c.getContext('2d');g.drawImage(im,0,0);
   const d=g.getImageData(0,0,c.width,c.height);S.imgs.set(src,{img:{w:c.width,h:c.height,data:d.data,uid:'u'+S.imgs.size+'_'+src.length},el:c});res(true)};im.onerror=()=>res(false);im.src=src})}
 const canvOf=l=>{if(l.synth){const key='s:'+JSON.stringify(l.synth);if(!S.imgs.has(key)){const r=GDE.synthImage(l.synth),c=document.createElement('canvas');c.width=r.img.w;c.height=r.img.h;c.getContext('2d').putImageData(new ImageData(r.img.data,r.img.w,r.img.h),0,0);S.imgs.set(key,{img:r.img,el:c})}return S.imgs.get(key)}
@@ -1580,7 +1599,7 @@ on('bLAdd','click',()=>$('lfile').click());
 on('lfile','change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(!S.started)start();
   if(/^image\//.test(f.type)||/\.(png|jpe?g|gif|webp)$/i.test(f.name)){const r=new FileReader();r.onload=async()=>{const src=String(r.result);if(!(await decodeImg(src))){banner(f.name+': could not read the image.',true);return}
       const im=S.imgs.get(src).img,e2=S.M.ext,id=newId();
-      S.M.layers.push({id,name:f.name.replace(/\.[^.]+$/,''),role:'lith',on:true,src,cal:[[0,0,e2.xmin,e2.ymax],[im.w,0,e2.xmax,e2.ymax],[0,im.h,e2.xmin,e2.ymin],[im.w,im.h,e2.xmax,e2.ymin]],channel:'lum',tol:12,op:.6,trend:{on:false,dir:'distal',w:.3,smooth:0}});
+      S.M.layers.push({id,name:f.name.replace(/\.[^.]+$/,''),role:'lith',on:true,src,img:im,cal:[[0,0,e2.xmin,e2.ymax],[im.w,0,e2.xmax,e2.ymax],[0,im.h,e2.xmin,e2.ymin],[im.w,im.h,e2.xmax,e2.ymin]],channel:'lum',tol:12,op:.6,trend:{on:false,dir:'distal',w:.3,smooth:0}});
       S.bd=id;S.layerOpen=id;renderLayers();schedule();banner(`${f.name}: georeferenced to the corners of the map extent; adjust the corners or control points in panel 3, and set a colour bar if the image has one.`)};r.readAsDataURL(f);return}
   const r=new FileReader();r.onload=()=>{const g=GDE.parseGrid(String(r.result));if(g.err){banner(f.name+': '+g.err,true);return}const id=newId();
     S.M.layers.push({id,name:f.name.replace(/\.[^.]+$/,''),role:'lith',on:true,grid:g,op:.6,trend:{on:true,dir:'distal',w:.3,smooth:0}});S.bd=id;S.layerOpen=id;renderLayers();schedule();
