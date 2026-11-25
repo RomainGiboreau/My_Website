@@ -955,6 +955,13 @@ test('atlas example 2: the same margin at a transgressive interval — carbonate
   for (const o of fw) assert.ok(o.path[0][0] < e.xmin + .45 * W, 'fairway fed from the west ' + o.path[0][0]);
   assert.equal(JSON.stringify(G.examples.atlas.M.lines.find(l => /toe/i.test(l.name)).pts), JSON.stringify(M.lines.find(l => /toe/i.test(l.name)).pts), 'same margin (toe of slope)');
 });
+test('facies objects from bodies: reefs and isolated platforms become platforms, an MTC apron an MTC; lakes get no toe-of-slope fans or MTCs', () => {
+  const C = G.examples.carbmargin, fc = G.build(C.M, C.wells).facies, pin = C.M.bodies.filter(b => b.type === 'pinnacle');
+  for (const b of pin) assert.ok(fc.some(o => o.type === 'platform' && G.inFacies(o, b.x, b.y)), 'pinnacle drawn as a platform at ' + b.x);
+  const Mg = G.examples.margin, fm = G.build(Mg.M, Mg.wells).facies, mb = Mg.M.bodies.find(b => b.type === 'mtc');
+  assert.ok(fm.some(o => o.type === 'mtc' && G.inFacies(o, mb.x, mb.y)), 'the MTC apron drawn as an MTC');
+  const R = G.examples.rift, fr = G.build(R.M, R.wells).facies; assert.ok(!fr.some(o => o.type === 'mtc' || /^bff/.test(o.id)), 'no toe-of-slope objects in a lake');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
