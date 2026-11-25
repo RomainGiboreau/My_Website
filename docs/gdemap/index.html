@@ -2921,7 +2921,9 @@ window.GDEUI={S,compute,render,loadExample,loadModel,applyTable,fullPolys,grid,h
 (()=>{const h=location.hash.slice(1).split('&'),k=h[0],o=Object.fromEntries(h.slice(1).map(s=>s.split('=')));
   if(GDE.examples[k]){if(o.view)S.hashView=o.view;loadExample(k);S.hashView=null;if(Object.keys(o).every(q=>q==='view'))return}else if(k==='blank')$('iBlank').click();else return;if(o.view){setLevel(o.view,true)}
   if(o.bd!=null)S.bd=o.bd||null;if(o.op)S.bdOp=+o.op;if(o.zoom)S.view.z=+o.zoom;if(o.sel){const [a,b]=o.sel.split(':');S.sel={kind:a,i:+b}}if(o.layer)S.layerOpen=o.layer;
-  if(o.tool)setTool(o.tool);renderLayers();renderConcept();compute(false)})();
+  if(o.tool)setTool(o.tool);renderLayers();renderConcept();compute(false);
+  // &bench=n: n preview (editing) computations, timings in document.body.dataset.perf
+  for(let i=0;i<(+o.bench||0);i++)compute(true)})();
 
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
