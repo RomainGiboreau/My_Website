@@ -1025,6 +1025,16 @@ test('no deposit / bypass: wells described as eroded, hiatus, non-deposition or 
   // a hole, not a sea of bypass: 3 km away from the wells the map is unchanged
   for (const h of W.slice(-3)) for (const [dx, dy] of [[6000, 0], [-6000, 0], [0, 6000]]) assert.equal(mod.belts[mod.beltAt(h.x + dx, h.y + dy)].name, ref.belts[ref.beltAt(h.x + dx, h.y + dy)].name, `${h.name} + ${dx}, ${dy}`);
 });
+// ---------- rift ----------
+test('fault tips: the throw and the footwall uplift taper gradually along the fault (no band of belts stacked across the strike at the tips)', () => {
+  const M0 = G.makeModel('lake', { geom: 'linear', az: 90, src: [-20000, 0], span: 30000, ext: { xmin: -20000, xmax: 20000, ymin: -25000, ymax: 25000 }, noise: { amp: 0, wl: 3000, seed: 1 }, warp: { on: false, R: 1000 } });
+  const M = Object.assign({}, M0, { faults: [{ pts: [[0, -15000], [0, 15000]], side: 1, off: 6000, taper: 2000, fw: 1 }] }), mod = G.build(M, []), ref = G.build(M0, []);
+  let all = 0;
+  for (const x of [-1500, -4000, 1500, 4000]) { const ch = []; let prev = null; for (let y = 0; y <= 22000; y += 50) { const c = mod.beltAt(x, y); if (prev != null && c !== prev) ch.push(y); prev = c; }
+    all += ch.length; for (let i = 1; i < ch.length; i++) assert.ok(ch[i] - ch[i - 1] >= 3000, `x ${x}: belts change at ${ch.join(', ')} along the fault`); }
+  assert.ok(all >= 2, 'the throw does decay towards the tips');
+  for (const x of [-1500, 1500]) assert.equal(mod.beltAt(x, 21000), ref.beltAt(x, 21000), 'beyond the tip: unfaulted');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }

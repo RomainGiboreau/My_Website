@@ -1394,11 +1394,12 @@ function geoField(M){if(!linesOn(M))return(x,y)=>dBase(M,x,y);return lineModel(M
 function noiseFn(M,seedAdd=0){const amp=+(M.noise&&M.noise.amp)||0;if(!(amp>0))return null;
   const wl=Math.max(1e-9,+M.noise.wl||1),wz=Math.max(wl,3*amp),P=perlin((M.noise.seed|0)+seedAdd),f=P.f,o=P.o,r=clamp(fin(M.noise.rough,ROUGH),0,1),r2=r*r,k=amp*1.6/(1+r+r2);
   return(x,y,d)=>{const X=x/wl,Y=y/wl,Zz=d/wz;return d+k*(f(X+o[0][0],Y+o[0][1],Zz+o[0][2])+r*f(2*X+o[1][0],2*Y+o[1][1],2*Zz+o[1][2])+r2*f(4*X+o[2][0],4*Y+o[2][1],4*Zz+o[2][2]))}}
-// ---------- faults: the downthrown side is shifted distal by `off` (in d units), full in the middle, tapering to zero over `taper` at both tips
+// ---------- faults: the downthrown side is shifted distal by `off` (in d units), full in the middle, tapering to zero over `taper` (at least 45 % of
+// the fault length, so the belts do not stack into a band across the strike at the tips) at both tips
 // and over half the fault length away from it; the footwall can be raised: d scaled by 1 - fw (fw = 1: most proximal belt along the fault). Step functions: added exactly, not gridded.
 function prepFaults(M){return activeFaults(M).filter(f=>+f.off>0).map(f=>{const P=flat(f.pts),nf=nearF(P,P[0],P[1]);let len=0;for(let i=0;i+1<P.length/2;i++)len+=Math.hypot(P[2*i+2]-P[2*i],P[2*i+3]-P[2*i+1]);
   const xs=P.filter((v,i)=>!(i%2)),ys=P.filter((v,i)=>i%2),R=Math.max(1,len/2);
-  return{P,len,off:+f.off,side:+f.side<0?-1:1,taper:Math.max(1e-9,fin(f.taper,len/4)),fw:clamp(fin(f.fw,0),0,1),R,box:[Math.min(...xs)-2*R,Math.max(...xs)+2*R,Math.min(...ys)-2*R,Math.max(...ys)+2*R]}})}
+  return{P,len,off:+f.off,side:+f.side<0?-1:1,taper:Math.max(1e-9,fin(f.taper,len/4),.45*len),fw:clamp(fin(f.fw,0),0,1),R,box:[Math.min(...xs)-2*R,Math.max(...xs)+2*R,Math.min(...ys)-2*R,Math.max(...ys)+2*R]}})}
 function faultShift(FA,x,y,d0=0){let s=0;for(const f of FA){if(x<f.box[0]||x>f.box[1]||y<f.box[2]||y>f.box[3])continue;const q=nearF(f.P,x,y);
     const pr=smooth01(Math.min(q.s,f.len-q.s)/f.taper),dec=Math.exp(-((q.d/f.R)**2));s+=q.side===f.side?f.off*pr*dec:-f.fw*Math.max(0,d0)*pr*Math.min(1,1.5*dec)}
   return s}
