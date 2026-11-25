@@ -884,6 +884,7 @@ test('facies objects editable: move, delete, regenerate one object; extra object
   assert.notEqual(JSON.stringify(l2.g.ring), JSON.stringify(lobe.g.ring), 'regenerated'); near(l2.x, lobe.x, 1e-6);
   const n = G.normModel(M); assert.deepEqual(n.facies.edits, M.facies.edits); assert.equal(n.facies.extra.length, 1);
   const r = G.openModel(G.saveModel(M, ex.wells)); assert.deepEqual(r.M.facies, n.facies, 'facies in the model file');
+  const A = G.examples.atlas.M, ra = G.openModel(G.saveModel(A, G.examples.atlas.wells)); assert.deepEqual(ra.M.eod, G.normModel(A).eod, 'EOD settings in the model file'); assert.equal(ra.M.eod.title, A.eod.title); assert.equal(ra.M.eod.abyss, A.eod.abyss);
 });
 test('facies wells: a well described as a facies object ends inside one (moved, enlarged or created); a regional well inside a foreign object shrinks it', () => {
   const ex = G.examples.margin, F0 = G.build(ex.M, ex.wells).facies, fan = F0.find(o => o.type === 'fan'), lobe = F0.find(o => o.type === 'lobe');
