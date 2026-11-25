@@ -1099,6 +1099,26 @@ test('facies objects: wells described as sand ribbon, contourite drift, carbonat
 test('resample: evenly spaced points along long segments too (a two-point line gives a point every step to its end)', () => {
   const R = G.resample([[0, 0], [12000, 0]], 100); assert.equal(R.P.length, 121); near(R.P[120][0], 12000, 1e-6); near(R.S[60], 6000, 1e-6);
 });
+test('rift stages: three synthetic synrift intervals on one area with the same wells — non-marine, marine incursion, deep marine with inherited escarpments; wells honoured without warping', () => {
+  const ks = ['riftearly', 'riftmid', 'riftlate'], g = G.EXGROUPS.find(q => /rift stages/i.test(q[0])); assert.ok(g); assert.deepEqual(g[1], ks);
+  const pos = k => JSON.stringify(G.examples[k].wells.map(w => [w.name, w.x, w.y]));
+  assert.equal(pos('riftmid'), pos('riftearly')); assert.equal(pos('riftlate'), pos('riftearly'));
+  const area = {}, mods = {};
+  for (const k of ks) { const ex = G.examples[k], M = ex.M, mod = G.build(M, ex.wells); mods[k] = mod; assert.equal(ex.view, 'facies'); assert.equal(M.eod.palette, 'marine');
+    for (const c of mod.check) assert.ok(c.honoured && !c.warped, `${k}: ${c.name} (${c.env})`);
+    const a = new Map(); for (const p of G.eodPolygons(mod, M.ext, 600)) a.set(p.key, (a.get(p.key) || 0) + p.area); area[k] = a; }
+  const A = (k, d) => (area[k].get(d) || 0) / (60000 * 50000);
+  for (const d of ['bypass', 'alluvial', 'lake', 'deeplake']) assert.ok(A('riftearly', d) > .01, 'early: ' + d);
+  for (const d of ['clastshelf', 'slope', 'deep']) assert.ok(A('riftearly', d) === 0, 'early non-marine: no ' + d);
+  assert.ok(A('riftmid', 'lake') > .05 && A('riftmid', 'clastshelf') + A('riftmid', 'slope') + A('riftmid', 'deep') > .15, 'mid: lakes and marine');
+  assert.ok(A('riftlate', 'deep') > .3 && A('riftlate', 'lake') === 0, 'late: deep marine');
+  // en-echelon synrift segments: overlapping along strike, stepping sideways; inherited (grey) in the late stage
+  const F = G.examples.riftearly.M.faults; assert.ok(F.length >= 6 && F.every(f => !f.inh && f.off > 0));
+  let ech = 0; for (let i = 0; i < F.length; i++) for (let j = 0; j < F.length; j++) { const a = F[i].pts, b = F[j].pts; if (i !== j && b[0][1] < a[a.length - 1][1] && b[0][1] > a[0][1] && Math.abs(b[0][0] - a[a.length - 1][0]) < 6000) ech++; }
+  assert.ok(ech >= 3, 'en-echelon relays ' + ech); assert.ok(G.examples.riftlate.M.faults.every(f => f.inh));
+  for (const k of ['riftearly', 'riftmid']) { const fo = mods[k].facies; assert.ok(fo.filter(o => o.type === 'afan').length >= 6 && fo.filter(o => o.type === 'lobe').length >= 6, k + ': fan deltas along the faults'); }
+  const fl = mods.riftlate.facies; assert.ok(fl.filter(o => o.type === 'fairway').length >= 2 && fl.filter(o => o.type === 'fan').length >= 3, 'late: turbidite channels and sandy lobes');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }

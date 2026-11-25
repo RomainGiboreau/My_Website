@@ -2169,6 +2169,53 @@ function exRift(){const ext={xmin:0,xmax:30000,ymin:0,ymax:40000},border=[[26800
   for(const s of M.sources){const F=FX[0];if(F){const P=flat(F.pts),q=nearF(P,s.x,s.y),n=P.length/2;let acc=0;for(let i=0;i<n-1;i++){const L=Math.hypot(P[2*i+2]-P[2*i],P[2*i+3]-P[2*i+1]);if(acc+L>=q.s){const t=(q.s-acc)/L;s.x=Math.round(P[2*i]+t*(P[2*i+2]-P[2*i]));s.y=Math.round(P[2*i+1]+t*(P[2*i+3]-P[2*i+1]));break}acc+=L}}}
   return{title:'Half-graben lake: border-fault fan deltas, belts stepping across an intra-basin fault, 4 wells',M,wells:[{name:'Rift-1',x:24800,y:20600,env:'Fan delta'},{name:'Rift-2',x:6600,y:30000,env:'Lake shoreline'},
     {name:'Rift-3',x:9000,y:12000,env:'Littoral'},{name:'Rift-4',x:20000,y:30500,env:'Profundal'}]}}
+// ---------- rift stages (synthetic): one area, the same wells, three synrift intervals (style after published synrift palaeogeographies; no real geography) ----------
+// En-echelon synrift faults in three zones: a western border zone and an eastern zone dipping east, an intra-basin zone dipping west (a graben between
+// them); the downthrown side is shifted distal (hanging-wall depocentres), the footwall raised. West of an erosional limit: no deposit / bypass.
+const RIFTX={ext:{xmin:0,xmax:60000,ymin:0,ymax:50000},
+  faults:[[[19300,-2000],[20200,8000],[19600,17000]],[[21600,13000],[22800,24000],[22100,33000]],[[24300,28000],[25300,40000],[24500,52000]],
+    [[36400,-2000],[35400,9000],[36200,19000]],[[34300,15000],[33400,26000],[34300,35000]],[[36200,31000],[35300,41000],[36300,52000]],
+    [[47800,-2000],[49000,12000],[48200,22000]],[[46400,18000],[47900,31000],[47200,40000]],[[49600,36000],[50600,46000],[50200,52000]]],
+  side:[1,1,1,-1,-1,-1,1,1,1],
+  limit:[[11500,-3000],[9800,9000],[12600,19000],[10400,30000],[13000,41000],[11200,53000]],
+  wells:[[7000,26000],[23600,20500],[28500,9000],[30500,39000],[41500,24500],[55000,13000]]};
+// a point at fraction t of a fault and the azimuth of its downthrown side
+function onFault(pts,side,t){const C=curve(pts),P=[];for(let q=0;q<C.length;q+=2)P.push([C[q],C[q+1]]);const L=ptsLen(P),R=resample(P,L/100),i=Math.min(R.P.length-2,Math.max(1,Math.round(t*(R.P.length-1)))),tx=R.P[i+1][0]-R.P[i-1][0],ty=R.P[i+1][1]-R.P[i-1][1];
+  return{x:Math.round(R.P[i][0]),y:Math.round(R.P[i][1]),az:+((Math.atan2(side*ty,-side*tx)/RAD+360)%360).toFixed(1)}}
+function riftStage(st){const X=RIFTX,early=st==='early',mid=st==='mid',late=st==='late';
+  const doms=early?{cont:'riftfan',coast:'lakeshore',shelf:'littoral',slope:null,deep:'profundal'}:mid?{cont:'riftfan',coast:'lakeshore',shelf:'littoral',slope:'apron',deep:'basin'}:{cont:'riftfan',coast:'shoreface',shelf:'clastic',slope:'apron',deep:'deepwater'};
+  const off=late?0:early?11000:8000,fw=late?0:.35;
+  const faults=X.faults.map((pts,i)=>Object.assign({pts:pts.map(q=>q.slice()),side:X.side[i],off:late?0:off*(i%3===1?1:.85),taper:0,fw},late?{inh:true}:{}));
+  const lines=early?[{name:'Lake margin',k:0,pts:[[13500,-3000],[14500,12000],[13200,26000],[15200,40000],[14000,53000]]},{name:'Slope break',k:2,pts:[[44000,-3000],[42000,12000],[45000,26000],[43000,40000],[46000,53000]]}]
+    :mid?[{name:'Lake margin',k:0,pts:[[15000,-3000],[16500,12000],[14500,26000],[17000,40000],[15500,53000]]},{name:'Marine incursion (lake / shallow marine)',k:2,pts:[[33000,-3000],[31000,12000],[34000,26000],[32000,40000],[35000,53000]]},
+      {name:'Toe of slope',k:4,pts:[[54000,-3000],[52500,14000],[55500,30000],[53500,53000]]}]
+    :[{name:'Shoreline',k:0,pts:[[19000,-3000],[17000,5000],[12000,12000],[6000,17500],[-3000,21000]]},{name:'Shelf edge',k:4,pts:[[33000,-3000],[30000,6000],[24000,16000],[14000,27000],[-3000,33000]]},
+      {name:'Toe of slope',k:6,pts:[[44000,-3000],[40000,14000],[32000,27000],[18000,39000],[-3000,44000]]}];
+  if(!late)lines.push({name:'Erosional limit',k:-1,nodep:true,pts:X.limit.map(q=>q.slice())});
+  else lines.push({name:'Erosional limit',k:-1,nodep:true,pts:[[6500,-3000],[3000,5500],[-3000,9000]]});
+  // fan deltas shed from the footwalls: two per active fault segment, on the hanging-wall side
+  const sources=late?[]:faults.flatMap((f,i)=>(i%3===1?[.3,.72]:[.5]).map(t=>Object.assign({kind:'fault',fault:i,L:early?2600:2200,open:80,asym:0},onFault(f.pts,f.side,t+.04*((i%2)-.5)))));
+  const map=early?{'Alluvial fan / fan delta':'alluvial','Lake shoreline':'fluvdelta','Littoral':'lake','Littoral + Profundal':'lake','Profundal':'deeplake'}
+    :mid?{'Alluvial fan / fan delta':'alluvial','Lake shoreline':'fluvdelta','Littoral':'lake','Upper slope (bypass, gullies)':'clastshelf','Lower slope':'slope','Basin':'deep'}
+    :{'Alluvial fan / fan delta':'alluvial','Shoreface':'fluvdelta','Offshore transition':'neritic','Inner shelf':'neritic','Outer shelf':'clastshelf','Upper slope (bypass, gullies)':'slope','Lower slope':'slope','Deepwater':'deep'};
+  const title=early?'Early synrift (non-marine)':mid?'Mid synrift (marine incursion)':'Late synrift (deep marine)';
+  const M=makeMargin(doms,{ext:X.ext,cell:100,span:late?42000:30000,noise:{amp:900,wl:7000,seed:early?31:mid?32:33},warp:{on:true,R:2500},mix:[],lines,faults,sources,
+    eod:{palette:'marine',title,map},facies:{seed:early?7:mid?8:9,n:{platform:0,mtc:0,ponded:0,fans:late?3:0,fd:0,ribbon:0,contourite:0,carbmud:0},chan:4}});
+  // narrow alluvial fans along the faults, the footwall highs continental (the fan belt is the lobes of the fault-bounded sources)
+  const wd={'Alluvial fan / fan delta':.22,'Lake shoreline':1.1,'Shoreface':.5};for(const b of M.belts)if(wd[b.name]!=null)b.w=wd[b.name];M.mix=[];
+  if(late){// turbidite channels and sandy lobes from the south-west, between the inherited escarpments
+    M.facies.extra=[{type:'fairway',path:[[16000,9000],[22000,15000],[28500,20000],[34000,25500],[39000,30000]],n:4,w:160,W:5500,cl:3000,cw:700,seed:5},
+      {type:'fan',x:39500,y:30500,az:55,L:9000,open:75,asym:.2,seed:4},{type:'fan',x:33500,y:34000,az:20,L:6000,open:70,asym:-.2,seed:6},
+      {type:'fairway',path:[[22000,30000],[27000,34500],[30500,38000],[33500,42500]],n:3,w:140,W:3500,cl:2500,cw:600,seed:8},{type:'fan',x:33800,y:43000,az:25,L:6500,open:70,asym:0,seed:9}]}
+  return M}
+function exRiftStage(st){const M=riftStage(st),W=RIFTX.wells,env=RSENV[st];
+  return{title:{early:'Early synrift, non-marine (synthetic): en-echelon faults, footwall fans, lakes in the hanging walls, bypass west of the erosional limit, 6 wells',
+    mid:'Mid synrift, marine incursion from the east (synthetic): the same faults and wells, lakes in the western half-grabens, fan deltas along the faults',
+    late:'Late synrift, deep marine (synthetic): inherited escarpments, turbidite channels and sandy lobes, the same wells'}[st],view:'facies',M,wells:W.map((q,i)=>({name:'Rs-'+(i+1),x:q[0],y:q[1],env:env[i]}))}}
+// the environments at the six wells, per stage
+const RSENV={early:['Eroded','Littoral','Littoral','Profundal','Lake shoreline','Profundal'],
+  mid:['Eroded','Littoral','Upper slope','Lower slope','Lake shoreline','Basin'],
+  late:['Outer shelf','Upper slope','Upper slope','Turbidite fairway','Deepwater','Deepwater']};
 // ---------- view: the plot frame has the aspect of the extent (no empty band around the map), the view stays on the extent ----------
 function fitBox(W,H,ext,o={}){const leg=o.leg||0,m={l:66,r:14,t:o.tb?44:14,b:40},ew=ext.xmax-ext.xmin,eh=ext.ymax-ext.ymin,pw=Math.max(10,W-leg-m.l-m.r),ph=Math.max(10,H-m.t-m.b),k0=Math.min(pw/ew,ph/eh);
   return{px0:m.l,px1:m.l+ew*k0,py0:m.t,py1:m.t+eh*k0,k0}}
@@ -2192,12 +2239,12 @@ const examples={
    ext:{xmin:0,xmax:30000,ymin:0,ymax:36000},cell:50}),
    wells:[{name:'Lake-1',x:26500,y:24000,env:'Fan delta'},{name:'Lake-2',x:20200,y:15000,env:'Lake shoreline'},{name:'Lake-3',x:15000,y:22000,env:'Littoral'},{name:'Lake-4',x:6000,y:17000,env:'Profundal'}]}};
 // v2 examples built on first use (the synthetic attribute images take a moment)
-for(const [k,fn] of [['atlas',exAtlas],['atlastr',exAtlasTr],['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
+for(const [k,fn] of [['atlas',exAtlas],['atlastr',exAtlasTr],['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift],['riftearly',()=>exRiftStage('early')],['riftmid',()=>exRiftStage('mid')],['riftlate',()=>exRiftStage('late')]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
 // the v2 links: #coast opens the passive margin (it replaces the two-delta coast), #rimmed the carbonate margin
 for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.defineProperty(examples,a,{enumerable:false,get(){return examples[b]}});
 // the examples select: groups in the UI order, short names
-const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','rift']],['Seismic-driven',['canyon']],['Single systems',['delta','fan','estuary','ramp','lake']]];
-const EXNAMES={atlas:'Margin with a marginal plateau, lowstand (8 wells)',atlastr:'Same margin, transgressive interval (7 wells)',margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',
+const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','rift']],['Rift stages (one area, the same wells)',['riftearly','riftmid','riftlate']],['Seismic-driven',['canyon']],['Single systems',['delta','fan','estuary','ramp','lake']]];
+const EXNAMES={atlas:'Margin with a marginal plateau, lowstand (8 wells)',atlastr:'Same margin, transgressive interval (7 wells)',margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',riftearly:'1 · Early synrift, non-marine (6 wells)',riftmid:'2 · Mid synrift, marine incursion (6 wells)',riftlate:'3 · Late synrift, deep marine (6 wells)',
  delta:'Delta (4 wells)',fan:'Deep-water fan (3 wells)',estuary:'Estuary (5 wells)',ramp:'Carbonate ramp (4 wells)',lake:'Rift lake (4 wells)'};
 window.GDE={PALETTES,faultRibbon,isNodep,usesNodep,NODEP,fitBox,clampView,EXGROUPS,EXNAMES,FTYPE,FKEYS,ftypeOf,faciesDefaults,faciesShape,faciesGen,faciesObjects,inFacies,faciesFeatures,geojsonLevels,irapLevels,normFacies,resample,EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
   layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
