@@ -268,6 +268,7 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
   <section class="verdict none" id="verdict" aria-live="polite"></section>
   <div class="tb" id="tbar" role="toolbar" aria-label="Map tools">
     <span class="seg" role="group" aria-label="Map level"><button data-v="belts" title="The GDE belts calibrated on the wells (all classes, key lines, sources)">GDE belts</button><button data-v="eod" title="Environments of deposition: a few large domains with smooth boundaries and labels inside (atlas style)">EOD map</button><button data-v="facies" title="The EOD map lightened, with the facies objects on top: deltaic lobes, fluvial channels, turbidite fairways, basin-floor fans, carbonate platforms, MTCs">Facies map</button></span><span class="sep"></span>
+    <select id="tbPal" aria-label="Palette of the EOD and facies maps" title="Palette of the EOD and facies maps" hidden></select>
     <button data-t="sel" class="on" title="Select and drag wells, sources, bodies and line vertices; drag the background to pan (V)">Select</button><button data-t="pan" title="Pan by dragging; the mouse wheel zooms anywhere (H)">Pan</button><button id="bZoom0" title="Zoom to the map extent">Fit</button><span class="sep"></span><button id="bUndo" title="Undo (Ctrl+Z)">Undo</button><button id="bRedo" title="Redo (Ctrl+Y)">Redo</button><span class="sep"></span>
     <button id="bEdit" aria-expanded="false" title="Editing tools: key lines, sources, bodies, tracing, paint, facies objects">Edit ▾</button>
     <select id="tbEx" class="exsel" aria-label="Load an example" style="margin-left:auto;max-width:210px"></select>
@@ -561,7 +562,7 @@ function normFacies(F){const d=faciesDefaults(),n=Object.assign({},d.n,F.n||{}),
   return o}
 function normEod(E){const o={};if(E.doms){o.doms={};for(const [k,v] of Object.entries(E.doms))if(EODI[k]!=null&&v){const r={};if(v.name)r.name=String(v.name);if(/^#[0-9a-f]{6}$/i.test(String(v.color)))r.color=String(v.color).toLowerCase();o.doms[k]=r}}
   if(E.map){o.map={};for(const [k,v] of Object.entries(E.map))if(EODI[v]!=null)o.map[String(k)]=v}
-  if(+E.abyss>0)o.abyss=r6(E.abyss);if(E.title)o.title=String(E.title);return o}
+  if(+E.abyss>0)o.abyss=r6(E.abyss);if(E.title)o.title=String(E.title);if(PALETTES[E.palette]&&E.palette!=='atlas')o.palette=E.palette;return o}
 // feeder (source-to-sink): river valley landward, delta on the shoreline, canyon at the shelf edge, fan at the toe of slope, in line
 const lobeN=(q,L,op)=>({L:r6(Math.max(1,fin(q&&q.L,L))),open:r6(clamp(fin(q&&q.open,op),5,300)),asym:r6(clamp(fin(q&&q.asym,0),-1,1))});
 function normFeeder(f){const r=f.river||{},d=f.delta||{},c=f.canyon||{},n=f.fan||{};
@@ -1738,7 +1739,15 @@ const EOD=[
  {key:'slope',name:'Slope',color:'#d4e7cd'},
  {key:'deep',name:'Deepwater',color:'#b0b0ae'},
  {key:'abyssal',name:'Abyssal basin',color:'#8e8e8c'},
- {key:'bypass',name:'No deposit / bypass',color:'#e4e3df',pat:'grid'}];
+ {key:'bypass',name:'No deposit / bypass',color:'#e4e3df',pat:'grid'},
+ {key:'alluvial',name:'Alluvial fans (sand-rich)',color:'#efc995',pat:'stipple'},
+ {key:'deeplake',name:'Deeper lacustrine',color:'#a6cdc6'},
+ {key:'neritic',name:'Marine neritic',color:'#dce9c3'}];
+// palettes of the EOD and facies maps: colours (and default names) per domain; the user's names and colours (M.eod.doms) win
+const PALETTES={atlas:{name:'Atlas (pastel)',doms:{}},
+ marine:{name:'Marine blues',doms:{basement:['#cbbfae','Basement / hinterland'],arid:['#efc98a'],fluvdelta:['#dd7b4d','Continental (fluvial–deltaic)'],lake:['#7fc79c','Lacustrine / syn-rift'],
+  clastshelf:['#93d3f0','Shallow marine'],isslope:['#62acde','Marine, intra-shelf slope'],carbshelf:['#6d70b8','Carbonate mudstone'],slope:['#4392d2','Marine'],deep:['#29307f','Deep marine'],abyssal:['#1c2160','Deep marine, abyssal'],
+  bypass:['#d4d4d0','No deposits / bypass'],alluvial:['#ea9447','Alluvial / continental, sand-rich'],deeplake:['#c9e6c3','Deeper lacustrine / syn-rift'],neritic:['#a9c96c','Marine neritic']}}};
 const EODI=Object.fromEntries(EOD.map((d,i)=>[d.key,i]));
 // rules in order on the class name and its aliases (normalised): the first that matches gives the domain
 const EODRULE=[['isslope',/\bintra shelf slope\b/],['lake',/\b(lake|lacustrine|littoral|profundal|playa)\b/],['arid',/\b(aeolian|eolian|erg|dune|interdune|sand sheet|wadi|sabkha|salt flat|zibar)\b/],
@@ -1758,7 +1767,7 @@ function eodKey(c){if(!c)return'clastshelf';const k=c.kind;if(k==='nodep'||(k===
   for(const [key,re] of EODRULE2)if(re.test(txt))return key;
   return c.dom==='coast'?'fluvdelta':'clastshelf'}
 // EOD domains with the user's names and colours, in the order of EOD
-function eodClasses(M){const D=(M.eod&&M.eod.doms)||{};return EOD.map((d,i)=>{const o=D[d.key]||{};return{key:d.key,name:String(o.name||d.name),color:/^#[0-9a-f]{6}$/i.test(String(o.color))?String(o.color).toLowerCase():d.color,code:i+1,pat:d.pat||null}})}
+function eodClasses(M){const D=(M.eod&&M.eod.doms)||{},PA=(PALETTES[M.eod&&M.eod.palette]||PALETTES.atlas).doms;return EOD.map((d,i)=>{const o=D[d.key]||{},pa=PA[d.key]||[];return{key:d.key,name:String(o.name||pa[1]||d.name),color:/^#[0-9a-f]{6}$/i.test(String(o.color))?String(o.color).toLowerCase():pa[0]||d.color,code:i+1,pat:d.pat||null}})}
 // class index (allBelts) -> EOD index; mixed zones follow their first belt
 function eodMap(M){const AB=allBelts(M),U=(M.eod&&M.eod.map)||{};
   return AB.map(c=>{const u=U[c.name];if(u&&EODI[u]!=null)return EODI[u];const b=c.kind==='mix'?AB[c.a]:c,u2=b&&U[b.name];if(u2&&EODI[u2]!=null)return EODI[u2];return EODI[eodKey(b)]})}
@@ -2122,7 +2131,7 @@ for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.definePro
 const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','rift']],['Seismic-driven',['canyon']],['Single systems',['delta','fan','estuary','ramp','lake']]];
 const EXNAMES={atlas:'Margin with a marginal plateau, lowstand (8 wells)',atlastr:'Same margin, transgressive interval (7 wells)',margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',
  delta:'Delta (4 wells)',fan:'Deep-water fan (3 wells)',estuary:'Estuary (5 wells)',ramp:'Carbonate ramp (4 wells)',lake:'Rift lake (4 wells)'};
-window.GDE={faultRibbon,isNodep,usesNodep,NODEP,fitBox,clampView,EXGROUPS,EXNAMES,FTYPE,FKEYS,ftypeOf,faciesDefaults,faciesShape,faciesGen,faciesObjects,inFacies,faciesFeatures,geojsonLevels,irapLevels,normFacies,resample,EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
+window.GDE={PALETTES,faultRibbon,isNodep,usesNodep,NODEP,fitBox,clampView,EXGROUPS,EXNAMES,FTYPE,FKEYS,ftypeOf,faciesDefaults,faciesShape,faciesGen,faciesObjects,inFacies,faciesFeatures,geojsonLevels,irapLevels,normFacies,resample,EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
   layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
   templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
@@ -2511,6 +2520,9 @@ function hatch(c,a,b){const key=a+b;if(!PAT.has(key)){const p=document.createEle
     g.beginPath();g.moveTo(-2,12);g.lineTo(12,-2);g.moveTo(-7,7);g.lineTo(7,-7);g.moveTo(3,17);g.lineTo(17,3);g.stroke();PAT.set(key,p)}return c.createPattern(PAT.get(key),'repeat')}
 // fine grid hatch: no deposit / bypass (areas without record)
 function gridPat(c,bg){const key='grid'+bg;if(!PAT.has(key)){const p=document.createElement('canvas');p.width=p.height=5;const g=p.getContext('2d');g.fillStyle=bg;g.fillRect(0,0,5,5);g.fillStyle='rgba(70,70,66,.55)';g.fillRect(0,0,5,.7);g.fillRect(0,0,.7,5);PAT.set(key,p)}return c.createPattern(PAT.get(key),'repeat')}
+// EOD domain fill: colour (lightened on the facies map, less with the marine palette), grid hatch (bypass), stipple (sand-rich alluvial fans)
+const domCol=(d,lv)=>lv==='facies'?lighten(d.color||'#cccccc',S.M.eod&&S.M.eod.palette==='marine'?.16:.42):(d.color||'#cccccc');
+function domFill(c,d,lv){const col=domCol(d,lv);return d.pat==='grid'?gridPat(c,col):d.pat==='stipple'?fpat(c,'stipple',col,'#7a3d12'):col}
 const curve=pts=>{const c=GDE.curve(pts),o=[];for(let i=0;i<c.length;i+=2)o.push([c[i],c[i+1]]);return o};
 function backdrop(c,L){const l=(S.M.layers||[]).find(q=>q.id===S.bd);if(!l)return 0;
   if(l.grid){const G=l.grid;let mn=Infinity,mx=-Infinity;for(const v of G.z)if(v!=null&&isFinite(v)){if(v<mn)mn=v;if(v>mx)mx=v}if(!(mx>mn))return 0;
@@ -2532,7 +2544,7 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
   const PP=PE||P,paths=PP.map(p=>{const pa=new Path2D();for(const r of [p.outer,...p.holes]){r.forEach((q,i)=>i?pa.lineTo(L.X(q[0]),L.Y(q[1])):pa.moveTo(L.X(q[0]),L.Y(q[1])));pa.closePath()}return pa});
   c.globalAlpha=hasBd?1-S.bdOp:1;
   if(PE){const cl=GDE.eodClasses(M);
-    PE.forEach((p,i)=>{const d=cl[p.code-1]||{},col=lv==='facies'?lighten(d.color||'#cccccc',.42):(d.color||'#cccccc');c.fillStyle=d.pat==='grid'?gridPat(c,col):col;c.fill(paths[i],'evenodd');c.strokeStyle=col;c.lineWidth=.8;c.stroke(paths[i])});
+    PE.forEach((p,i)=>{const d=cl[p.code-1]||{},col=domCol(d,lv);c.fillStyle=domFill(c,d,lv);c.fill(paths[i],'evenodd');c.strokeStyle=col;c.lineWidth=.8;c.stroke(paths[i])});
     c.globalAlpha=1;c.strokeStyle=lv==='facies'?'rgba(70,68,62,.55)':'rgba(25,25,24,.9)';c.lineWidth=lv==='facies'?.8:1.15;c.lineJoin='round';paths.forEach(pa=>c.stroke(pa));
     if(lv==='facies')drawFacies(c,L,opt);drawEodLabels(c,L,lv,PE,opt.Pext||S.Pext)}
   else{
@@ -2644,7 +2656,7 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
 function atlasLegend(c,lx,ly,lw,lv,PE){const cl=GDE.eodClasses(S.M),used=[...new Set(PE.map(p=>p.code-1))].sort((a,b)=>a-b),T=GDE.FTYPE,O=lv==='facies'?((S.mod&&S.mod.facies)||[]):[];
   const types=GDE.FKEYS.filter(k=>O.some(o=>o.type===k)),n=used.length+types.length+(types.length?1:0),rh=Math.max(13,Math.min(19,(L0H-ly-150)/Math.max(1,n))),fs=rh<17?11:12;
   const row=(draw,txt,col)=>{draw();c.fillStyle=col||'#232220';c.font=fs+'px Inter,system-ui,sans-serif';const ws=wrapText(c,txt,lw-26);ws.forEach((t,i)=>c.fillText(t,lx+24,ly+i*(fs+2)));ly+=rh+(ws.length-1)*(fs+2)};
-  for(const i of used){const d=cl[i];row(()=>{c.fillStyle=d.pat==='grid'?gridPat(c,lv==='facies'?lighten(d.color,.42):d.color):lv==='facies'?lighten(d.color,.42):d.color;c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.6)';c.lineWidth=1;c.strokeRect(lx+.5,ly+.5,17,12)},d.name)}
+  for(const i of used){const d=cl[i];row(()=>{c.fillStyle=domFill(c,d,lv);c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.6)';c.lineWidth=1;c.strokeRect(lx+.5,ly+.5,17,12)},d.name)}
   if(types.length){c.fillStyle='#5c5a52';c.font=`600 ${fs-1}px Inter,system-ui,sans-serif`;c.fillText('FACIES OBJECTS',lx,ly+3);ly+=rh-2}
   for(const k of types){const t=T[k];row(()=>{c.save();if(k==='river'){c.strokeStyle=t.color;c.lineWidth=1.6;c.beginPath();c.moveTo(lx,ly+10);c.bezierCurveTo(lx+6,ly,lx+12,ly+13,lx+18,ly+3);c.stroke()}
       else if(k==='fairway'){c.fillStyle='rgba(240,213,76,.3)';c.fillRect(lx,ly,18,13);for(const o of [3,9]){c.strokeStyle=t.edge;c.lineWidth=3.2;c.beginPath();c.moveTo(lx+1,ly+o);c.quadraticCurveTo(lx+9,ly+o+4,lx+17,ly+o);c.stroke();c.strokeStyle=t.color;c.lineWidth=1.8;c.stroke()}}
@@ -2853,9 +2865,11 @@ on('bPng','click',()=>{if(!need())return;const e=S.M.ext,Wc=1000,leg=210,mw=Wc-6
 // ---------- EOD and facies maps: view level, domain labels, facies objects (drawing, selection, editing) ----------
 const LVL={belts:'GDE belts',eod:'EOD map',facies:'Facies map'};
 function setLevel(v,quiet){if(!LVL[v])v='belts';S.lvl=v;document.querySelectorAll('[data-v]').forEach(b=>{b.classList.toggle('on',b.dataset.v===v);b.setAttribute('aria-pressed',b.dataset.v===v)});
-  $('tbObjB').hidden=v!=='facies';$('tbObj').hidden=v!=='facies'||S.tool!=='obj';if(v!=='facies'&&S.tool==='obj')setTool('sel');
+  $('tbObjB').hidden=v!=='facies';$('tbPal').hidden=v==='belts';$('tbPal').value=(S.M.eod&&S.M.eod.palette)||'atlas';$('tbObj').hidden=v!=='facies'||S.tool!=='obj';if(v!=='facies'&&S.tool==='obj')setTool('sel');
   if(!quiet&&S.started){if(S.P&&S.mod){S.PE=v!=='belts'?eodOfP():null;draw();renderEod();renderVerdict()}else compute(false)}}
 document.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>setLevel(b.dataset.v)));
+$('tbPal').innerHTML=Object.entries(GDE.PALETTES).map(([k,p])=>`<option value="${k}">${esc(p.name)}</option>`).join('');
+on('tbPal','change',()=>{S.M.eod=S.M.eod||{};if($('tbPal').value==='atlas')delete S.M.eod.palette;else S.M.eod.palette=$('tbPal').value;draw();renderEod();pushUndo()});
 $('tbObj').innerHTML=GDE.FKEYS.map(k=>`<option value="${k}">${esc(GDE.FTYPE[k].name)}</option>`).join('');
 const lighten=(c,f)=>'#'+[1,3,5].map(i=>Math.round(parseInt(c.substr(i,2),16)*(1-f)+255*f).toString(16).padStart(2,'0')).join('');
 const FPAT=new Map();
@@ -2912,7 +2926,7 @@ function wellSym(c,x,y){c.strokeStyle='#111';c.lineWidth=1.3;c.beginPath();for(c
 // ---------- panel 6: EOD domains, generation counts, objects ----------
 function fedit(id){const F=S.M.facies;F.edits=F.edits||{};return F.edits[id]||(F.edits[id]={})}
 function fobj(id){return((S.mod&&S.mod.facies)||[]).find(o=>o.id===id)}
-function renderEod(){const M=S.M;if(!M)return;const F=M.facies||(M.facies=GDE.faciesDefaults()),E=M.eod||{};
+function renderEod(){const M=S.M;if(!M)return;$('tbPal').value=(M.eod&&M.eod.palette)||'atlas';const F=M.facies||(M.facies=GDE.faciesDefaults()),E=M.eod||{};
   $('eTitle').value=E.title||'';$('eAbyss').value=E.abyss||0;$('fOn').checked=F.on!==false;
   for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded']])$(id).value=(F.n||{})[k]??0;$('fChan').value=F.chan||5;$('fSeed').value=F.seed||1;
   const AB=GDE.allBelts(M),em=GDE.eodMap(M),cl=GDE.eodClasses(M),used=new Set(em);

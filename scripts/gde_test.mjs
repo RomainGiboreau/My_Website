@@ -1044,6 +1044,21 @@ test('faults on the EOD and facies maps: a tapered stroke (zero width at the tip
   const M = JSON.parse(JSON.stringify(G.examples.rift.M)); M.faults[0].inh = true;
   assert.equal(G.openModel(G.saveModel(M, [])).M.faults[0].inh, true, 'inherited flag saved');
 });
+// ---------- palette ----------
+test('palettes: Atlas (pastel) by default, Marine blues (continental orange, neritic green, marine blues, navy deep marine, lacustrine greens, bypass grid); user colours win; saved', () => {
+  assert.deepEqual(G.EOD.slice(10).map(d => d.key), ['bypass', 'alluvial', 'deeplake', 'neritic'], 'new domains appended');
+  assert.deepEqual(Object.keys(G.PALETTES), ['atlas', 'marine']); assert.ok(G.PALETTES.marine.name && G.PALETTES.atlas.name);
+  const rgb = c => [1, 3, 5].map(i => parseInt(c.substr(i, 2), 16)), lum = c => { const [r, g, b] = rgb(c); return (.3 * r + .59 * g + .11 * b) / 255; };
+  const M = G.makeMargin('passive'), A = G.eodClasses(M), byA = Object.fromEntries(A.map(d => [d.key, d]));
+  assert.equal(byA.deep.color, G.EOD.find(d => d.key === 'deep').color, 'atlas by default');
+  M.eod = { palette: 'marine' }; const B = Object.fromEntries(G.eodClasses(M).map(d => [d.key, d]));
+  assert.ok(lum(B.deep.color) < .25 && lum(B.abyssal.color) < lum(B.deep.color) + .01, 'navy deep marine'); const [r1, g1, b1] = rgb(B.clastshelf.color); assert.ok(b1 > r1 && lum(B.clastshelf.color) > .6, 'light blue shallow marine');
+  const [r2, g2, b2] = rgb(B.slope.color); assert.ok(b2 > r2 + 60 && lum(B.slope.color) < lum(B.clastshelf.color), 'marine blue');
+  const [r3, g3, b3] = rgb(B.fluvdelta.color); assert.ok(r3 > g3 && g3 > b3, 'continental orange'); const [r4, g4, b4] = rgb(B.lake.color); assert.ok(g4 > r4 && g4 > b4, 'lacustrine green');
+  const [r5, g5, b5] = rgb(B.neritic.color); assert.ok(g5 > b5 && g5 >= r5, 'neritic green'); assert.equal(B.bypass.pat, 'grid'); assert.equal(B.alluvial.pat, 'stipple'); assert.equal(B.deep.name, 'Deep marine');
+  M.eod.doms = { deep: { color: '#123456' } }; assert.equal(G.eodClasses(M).find(d => d.key === 'deep').color, '#123456', 'user colour wins');
+  assert.equal(G.normModel(M).eod.palette, 'marine'); M.eod.palette = 'nope'; assert.equal(G.normModel(M).eod.palette, undefined);
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
