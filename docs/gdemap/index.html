@@ -881,15 +881,17 @@ function allBelts(M){const n=M.belts.length,out=M.belts.map((b,i)=>Object.assign
 // ---------- geometry ----------
 const flat=pts=>{const o=[];for(const p of pts)o.push(+p[0],+p[1]);return o};
 // uniform Catmull-Rom through the control points, `sub` points per span (the key lines are drawn and used as smooth curves)
-function curve(pts,sub=8){const n=pts.length,o=[];if(n<3)return flat(pts);
+function curve(pts,sub=8){const n=pts.length,o=[];if(n<3)return Float64Array.from(flat(pts));
   for(let i=0;i<n-1;i++){const a=pts[Math.max(0,i-1)],b=pts[i],c=pts[i+1],d=pts[Math.min(n-1,i+2)];
     for(let s=0;s<sub;s++){const t=s/sub,t2=t*t,t3=t2*t;
       for(let q=0;q<2;q++)o.push(.5*(2*b[q]+(-a[q]+c[q])*t+(2*a[q]-5*b[q]+4*c[q]-d[q])*t2+(-a[q]+3*b[q]-3*c[q]+d[q])*t3))}}
-  o.push(+pts[n-1][0],+pts[n-1][1]);return o}
+  o.push(+pts[n-1][0],+pts[n-1][1]);return Float64Array.from(o)}
 // signed distance to a polyline (flat array), > 0 on the right of the direction of travel. The first and last segments are extended as rays,
 // so the line splits the plane in two; when the nearest point is a vertex the sign follows the sum of the normals of its two segments.
-function sdistF(P,x,y){const n=P.length/2;if(n<2)return NaN;let best=Infinity,sg=1;
-  for(let i=0;i<n-1;i++){const ax=P[2*i],ay=P[2*i+1],ex=P[2*i+2]-ax,ey=P[2*i+3]-ay,L2=ex*ex+ey*ey;if(!(L2>0))continue;
+function sdistF(P,x,y){const n=P.length>>1;if(n<2)return NaN;let best=Infinity,sg=1;
+  for(let i=0;i<n-1;i++){const ax=P[2*i],ay=P[2*i+1],bx=P[2*i+2],by=P[2*i+3];
+    if(i>0&&i<n-2){const mx=x<ax?(x<bx?Math.min(ax,bx)-x:0):(x>bx?x-Math.max(ax,bx):0),my=y<ay?(y<by?Math.min(ay,by)-y:0):(y>by?y-Math.max(ay,by):0);if(mx*mx+my*my>=best)continue}
+    const ex=bx-ax,ey=by-ay,L2=ex*ex+ey*ey;if(!(L2>0))continue;
     const wx=x-ax,wy=y-ay;let t=(wx*ex+wy*ey)/L2,v=-1;
     if(t<0&&i>0){t=0;v=i}else if(t>1&&i<n-2){t=1;v=i+1}
     const px=wx-t*ex,py=wy-t*ey,d2=px*px+py*py;
@@ -943,12 +945,15 @@ function lineModel(M){const p=prior(M),n=M.belts.length,L=[];
     if(o.kind==='fan'){o.g=Math.max(1e-6,pend-li.v)/o.L;o.k=.12*(pend-li.v);o.off=0}
     else if(li.k<0){o.g=(p[0]||1)/o.L;o.k=.15*(p[0]||1);o.off=0}
     else{const j=L.indexOf(li),nx=L[j+1];let g=1;if(nx){const W=Math.abs(sdistF(nx.P,o.x,o.y));if(W>0)g=clamp((nx.v-li.v)/W,.05,20)}o.g=g;o.k=.3*o.L*g;o.off=o.L}
-    o.b=(o.kind==='coast'?.6:o.kind==='fault'?.3:.08)*o.L;o.off+=o.b;return o});
+    o.b=(o.kind==='coast'?.6:o.kind==='fault'?.3:.08)*o.L;o.off+=o.b;o.W0=o.b*Math.tan(Math.min(70,o.open/2)*RAD)+.25*o.L;return o});
   const p0=p[0]||1,m0=-2*Math.max(1,...S.map(s=>s.L*s.g));
   const f=(x,y)=>{const dr=reg(x,y);let d=dr,m=m0;
     for(const s of S){if(s.kind==='fault')continue;const rho=lobeR(s,x,y),ds=s.v+s.g*(rho-(s.kind==='coast'?s.off*(1-smooth01((rho-s.b-1.5*s.L)/(2.5*s.L))):s.off));d=smin(d,ds,s.k);
       if(s.kind==='fan'&&s.canyon){const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;if(pp<0){const q=Math.abs(dx*s.uy-dy*s.ux),Lc=.12*s.L,c=.5*p0*(1-Math.max(q/(.035*s.L*(1+.85*pp/Lc)),-pp/Lc));if(c>d)d=c}}
-      if(s.kind==='coast'){const lim=2*s.L*s.g,mm=isFinite(ds)&&isFinite(dr)?clamp(dr-ds+.1*s.L*s.g,-lim,lim):-lim;if(mm>m)m=mm}}
+      if(s.kind==='coast'){const lim=2*s.L*s.g;let mm=isFinite(ds)&&isFinite(dr)?clamp(dr-ds+.1*s.L*s.g,-lim,lim):-lim;
+        // upper delta plain: a wedge narrowing upstream to the apex, 2 L inland of the source
+        const dx=x-s.x,dy=y-s.y,pp=dx*s.ux+dy*s.uy;if(pp<0&&pp>-2*s.L){const q=Math.abs(dx*s.uy-dy*s.ux),wq=s.W0*(1+pp/(2*s.L)),lt=clamp((1-q/wq)*s.L*s.g,-lim,lim);if(lt>mm)mm=lt}
+        if(mm>m)m=mm}}
     MEMV=m;return d};
   return{f,L,S,p}}
 function geoField(M){if(!linesOn(M))return(x,y)=>dBase(M,x,y);return lineModel(M).f}
@@ -1222,7 +1227,10 @@ function proposeSketch(M,wells,opt={}){const t=templates[M.template]||templates.
     let L=0;for(const w of fw)L=Math.max(L,Math.hypot(w.x-s.x,w.y-s.y));L=L?1.3*L:1.2*Hu;sources.push(Object.assign(s,{kind:'fan',L:+L.toFixed(0),open:t.fan||50,asym:0}))}
   else if((M.variants&&M.variants.length)||t.geom==='radial'){const ksh=ln[0][1],dw=W.filter(w=>w.b>ksh&&w.b<=ksh+2),qw=dw.length?dw.reduce((s,w)=>s+QQ(w),0)/dw.length:0,s=addSrc(0,qw);
     const L=.14*Ht*2,dw2=W.filter(w=>w.b>ksh&&w.b<=ksh+1);let Lm=L;for(const w of dw2){const pr=(w.x-s.x)*Math.sin(s.az*RAD)+(w.y-s.y)*Math.cos(s.az*RAD);if(pr>0)Lm=Math.max(Lm,.8*pr)}
-    sources.push(Object.assign(s,{kind:'coast',L:+Math.min(Lm,.4*Hu).toFixed(0),open:Math.min(110,t.fan||70),asym:0}))}
+    sources.push(Object.assign(s,{kind:'coast',L:+Math.min(Lm,.4*Hu).toFixed(0),open:Math.min(110,t.fan||70),asym:0}));
+    // wells of the deltaic belts that fall in an interdeltaic variant: move the delta towards them and enlarge it
+    let qs0=qw;for(let it=0;it<12;it++){const md=build(Object.assign({},M,{geom:'lines',lines,sources,span:span2}),wells,{dist:false,fast:true}),bad=md.check.filter(c=>c.varOut);if(!bad.length)break;
+      const w=bad[0];qs0+=.5*(QQ(w)-qs0);const s2=addSrc(0,qs0),S0=sources[0];Object.assign(S0,{x:s2.x,y:s2.y,az:s2.az,open:Math.min(110,S0.open+5)})}}
   return{lines,sources,az:+az.toFixed(1),span:+span2.toPrecision(6)}}
 
 // ---------- examples ----------
@@ -1273,7 +1281,7 @@ function exRift(){const ext={xmin:0,xmax:30000,ymin:0,ymax:40000},border=[[26800
   const M=makeModel('lake',{geom:'lines',az:90,span:14000,noise:{amp:500,wl:4000,seed:6},warp:{on:true,R:2500},ext,cell:50,
     lines:[{name:'Lake margin',k:0,pts:[[5200,-3000],[4300,7000],[6000,16000],[4800,25000],[6200,33000],[5400,43000]]},
       {name:'Slope break',k:2,pts:[[8500,-3000],[10500,8000],[12500,18000],[15500,28000],[18000,43000]]}],
-    faults:FX,layers:[coh],
+    faults:FX,layers:[coh],mix:[{k:1,w:1400}],
     sources:[{kind:'fault',fault:0,x:26450,y:21000,az:262,L:3600,open:80,asym:.2},{kind:'fault',fault:0,x:26300,y:8500,az:268,L:2600,open:70,asym:-.2},{kind:'fault',fault:0,x:26100,y:32000,az:272,L:2000,open:70,asym:0}]});
   return{title:'Half-graben lake: border-fault fan deltas, belts stepping across an intra-basin fault, 4 wells',M,wells:[{name:'Rift-1',x:24800,y:20600,env:'Fan delta'},{name:'Rift-2',x:6600,y:30000,env:'Lake shoreline'},
     {name:'Rift-3',x:9000,y:12000,env:'Littoral'},{name:'Rift-4',x:20000,y:30500,env:'Profundal'}]}}

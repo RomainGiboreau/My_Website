@@ -8,8 +8,9 @@ const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const html = read('docs/gdemap/index.html');
 const m = html.match(/<script id="gde-core">([\s\S]*?)<\/script>/);
 assert.ok(m, 'gde-core script block not found');
+// loaded in this context (a vm sandbox makes every global lookup slow: Math, typed arrays...)
 const ctx = { window: {} };
-vm.runInNewContext(m[1], ctx);
+new Function('window', m[1])(ctx.window);
 const G = ctx.window.GDE;
 // the site's ZMAP checker, to validate the ZMAP+ writer independently
 const zm = read('docs/zmap-checker/index.html').match(/<script id="zmap-core">([\s\S]*?)<\/script>/);
