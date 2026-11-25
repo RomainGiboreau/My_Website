@@ -993,6 +993,38 @@ test('view: the plot frame fits the extent (no empty margin around the map), the
   const w = G.clampView({ z: 4, cx: -5000, cy: 255000 }, e); near(w.cx, 40000, 1e-6); near(w.cy, 260000 - 32500, 1e-6); assert.equal(w.z, 4);
   const u = G.clampView({ z: 4, cx: 100000, cy: 90000 }, e); assert.deepEqual(u, { z: 4, cx: 100000, cy: 90000 }, 'inside: unchanged');
 });
+// ---------- no deposit / bypass ----------
+const clone = o => JSON.parse(JSON.stringify(o));
+test('no deposit / bypass: EOD domain drawn with a grid hatch, appended (old EOD codes unchanged); hinterland stays basement', () => {
+  assert.deepEqual(G.EOD.slice(0, 10).map(d => d.key), ['basement', 'arid', 'fluvdelta', 'lake', 'clastshelf', 'isslope', 'carbshelf', 'slope', 'deep', 'abyssal']);
+  const b = G.EOD.find(d => d.key === 'bypass'); assert.ok(b && b.pat === 'grid' && /no deposit/i.test(b.name));
+  assert.equal(G.eodKey({ kind: 'ctx', name: 'Hinterland (erosion, bypass)', alias: ['hinterland'] }), 'basement');
+  assert.equal(G.eodKey({ kind: 'belt', name: 'Upper slope (bypass, gullies)', alias: [], dom: 'slope' }), 'slope');
+  for (const e of ['Eroded', 'no deposit', 'Non-deposition', 'hiatus', 'bypass', 'erosion', 'No deposits / Bypass']) assert.ok(G.isNodep(e), e);
+  for (const e of ['Upper slope (bypass, gullies)', 'Delta front', 'Hinterland']) assert.ok(!G.isNodep(e), e);
+});
+test('no deposit / bypass: landward of a key line flagged “no deposit”, inside a no-deposit body; elsewhere the map is unchanged', () => {
+  const ex = G.examples.margin, M = clone(ex.M), ref = G.build(ex.M, ex.wells);
+  M.lines.push({ name: 'Erosional limit', k: -1, nodep: true, pts: [[-5000, 67000], [30000, 69000], [60000, 66500], [95000, 68000]] });   // a limit, not a key line of the field
+  M.bodies.push({ type: 'nodep', shape: 'poly', x: 75000, y: 45000, pts: [[-4000, -3000], [4000, -3500], [5000, 3000], [-3500, 4000]] });
+  const mod = G.build(M, ex.wells), nd = mod.belts.findIndex(c => c.name === 'No deposit / bypass');
+  assert.ok(nd >= 0, 'class present'); assert.equal(mod.belts[nd].pat, 'grid');
+  for (const [x, y] of [[10000, 74000], [50000, 72000], [85000, 71000]]) assert.equal(mod.beltAt(x, y), nd, `landward of the limit at ${x}, ${y}`);
+  assert.equal(mod.beltAt(75000, 45000), nd, 'inside the body');
+  for (const [x, y] of [[20000, 40000], [40000, 20000], [60000, 55000]]) assert.equal(mod.belts[mod.beltAt(x, y)].name, ref.belts[ref.beltAt(x, y)].name, `unchanged at ${x}, ${y}`);
+  for (const c of mod.check) assert.ok(c.honoured, c.name);
+  const at = G.eodAt(mod); assert.equal(G.EOD[at(50000, 72000)].key, 'bypass'); assert.equal(G.EOD[at(75000, 45000)].key, 'bypass');
+  const R = G.openModel(G.saveModel(M, ex.wells)).M; assert.ok(R.lines.some(l => l.nodep === true), 'flag saved'); assert.ok(R.bodies.some(b => b.type === 'nodep'), 'body saved');
+});
+test('no deposit / bypass: wells described as eroded, hiatus, non-deposition or bypass are honoured (an eroded hole around them), the others unchanged', () => {
+  const ex = G.examples.margin, W = ex.wells.concat([{ name: 'Hole-1', x: 15000, y: 46000, env: 'Eroded' }, { name: 'Hole-2', x: 80000, y: 15000, env: 'non-deposition' }, { name: 'Hole-3', x: 60000, y: 62000, env: 'Hiatus' }]);
+  const mod = G.build(ex.M, W), nd = mod.belts.findIndex(c => c.name === 'No deposit / bypass'), ref = G.build(ex.M, ex.wells);
+  assert.ok(nd >= 0);
+  for (const c of mod.check) assert.ok(c.honoured && !c.warped, `${c.name} (${c.env})`);
+  for (const h of W.slice(-3)) assert.equal(mod.beltAt(h.x, h.y), nd, h.name);
+  // a hole, not a sea of bypass: 3 km away from the wells the map is unchanged
+  for (const h of W.slice(-3)) for (const [dx, dy] of [[6000, 0], [-6000, 0], [0, 6000]]) assert.equal(mod.belts[mod.beltAt(h.x + dx, h.y + dy)].name, ref.belts[ref.beltAt(h.x + dx, h.y + dy)].name, `${h.name} + ${dx}, ${dy}`);
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
