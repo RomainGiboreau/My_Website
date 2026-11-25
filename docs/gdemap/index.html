@@ -27,6 +27,8 @@ main{min-width:0}
 .panel .body{margin-top:6px}
 .panel.collapsed .body{display:none}
 .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.seg{display:inline-flex}.seg button{border-radius:0}.seg button:first-child{border-radius:4px 0 0 4px}.seg button:last-child{border-radius:0 4px 4px 0}.seg button+button{border-left:none}
+select.exsel{max-width:100%}#eodList .br{display:flex;gap:6px;align-items:center;margin:3px 0}#eodList .unused{color:var(--mut)}#foList .it.sel{border-color:#1d3f8a;box-shadow:inset 3px 0 0 #1d3f8a}
 button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
 button{cursor:pointer;background:var(--card)}
 button:hover{border-color:var(--acc)}
@@ -210,13 +212,24 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
   <div class="pg"><span>Paint radius</span><input type="number" id="pR" step="any" min="0" title="Brush radius of the Paint tool, map units"><span>Paint strength</span><input type="number" id="pA" step="any" min="0" title="Shift of the proximal–distal distance per click at the brush centre"></div>
   <div class="row"><button id="bPClear">Clear the painted trend</button></div>
   <div class="cal" id="calMsg"></div></div></section>
+ <div class="grp">Atlas maps</div>
+ <section class="panel"><h2><span class="n">8</span>EOD and facies maps<span class="tt" tabindex="0" data-tip="An atlas page shows two maps of one interval. The EOD map groups the classes into a few environments of deposition (basement, fluvial–deltaic, clastic or carbonate shelf, intra-shelf slope, slope, deepwater, abyssal basin), drawn as smooth curved domains with their names inside. The facies map lightens it and draws facies objects on top, generated from the concept (deltaic lobes at the deltas, fluvial channels upstream, turbidite fairways from the canyons, basin-floor fans at their ends or along the toe of slope, carbonate platforms on the carbonate shelf, MTCs between the fans, ponded areas). Same seed, same objects. Select an object on the facies map to drag it; ↻ gives it another shape, − / + resize it, ✕ deletes it. A well described as an object type (deltaic lobe, basin-floor fan, carbonate platform, turbidite fairway, MTC, fluvial channel, ponded area) is honoured by the nearest object of that type, moved, enlarged or bent to it (or created there).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><span class="seg" role="group" aria-label="Map level"><button data-v="belts">GDE belts</button><button data-v="eod">EOD map</button><button data-v="facies">Facies map</button></span></div>
+  <div class="pg"><span>Map title</span><input type="text" id="eTitle" placeholder="e.g. Interval A" title="Shown above the EOD and facies maps, before “EOD map” / “Facies map”"><span>Abyssal basin</span><input type="number" id="eAbyss" step="any" min="0" title="Deep water farther than this beyond the toe of slope is drawn as abyssal basin (0: none), map units"></div>
+  <details class="dom" id="eodBox"><summary>EOD domains: names, colours, classes</summary><div id="eodList"></div></details>
+  <div class="row"><label class="inl"><input type="checkbox" id="fOn">Generate facies objects</label></div>
+  <div class="pg"><span>Carbonate platforms</span><input type="number" id="fPlat" min="0" max="40" step="1" title="On the carbonate-dominated shelf"><span>MTCs</span><input type="number" id="fMtc" min="0" max="40" step="1" title="Along the toe of slope, between the fans">
+   <span>Fans along the toe</span><input type="number" id="fFans" min="0" max="40" step="1" title="A string of basin-floor fans along the toe of slope (besides the fans at the canyon mouths)"><span>Ponded areas</span><input type="number" id="fPond" min="0" max="40" step="1" title="Closed depressions on the clastic shelf">
+   <span>Channels per fairway</span><input type="number" id="fChan" min="1" max="16" step="1"><span>Seed</span><span class="two"><input type="number" id="fSeed" step="1" style="flex:1"><button id="fSeedN" title="Another seed: other, equally likely, object shapes and positions">New</button></span></div>
+  <div class="lst" id="foList"></div>
+  <div class="row"><button id="fReset" title="Remove the moves, deletions and objects added by hand">Reset object edits</button></div>
+  <div class="msg" id="fMsg"></div></div></section>
 </aside>
 <main>
  <section class="intro" id="intro"><h2>A GDE map from a few wells</h2>
   <p>Give the depositional environment interpreted at one or several wells and the depositional system you expect. The conceptual model draws the belts, the wells calibrate them — the way a GDE map is drawn by hand — and every well is checked: honoured or not, and how far from a boundary.</p>
   <div class="dz"><b>Drop a wells table here</b><br><span style="color:var(--mut);font-size:.84rem">name, x, y, environment — text or CSV, nothing is uploaded</span>
-   <div class="row"><button class="pri" id="iCoast">Passive margin, hinterland to basin floor, 6 wells</button><button id="iRimmed">Carbonate rimmed margin with pinnacles, 4 wells</button><button id="iCanyon">Canyon-fed fan with amplitude, 3 wells</button><button id="iRift">Rift lake, fan-delta bajada and faults, 4 wells</button></div>
-   <div class="row" style="margin-top:4px"><span style="font-size:.8rem;color:var(--mut)">Simpler maps:</span><button id="iDelta">Delta, 4 wells</button><button id="iFan">Deep-water fan, 3 wells</button><button id="iEst">Estuary, 5 wells</button><button id="iRamp">Carbonate ramp, 4 wells</button><button id="iLake">Rift lake, 4 wells</button><button id="iBlank">Start from a template</button><button id="iOpen" title="A wells table (text, CSV) or a model saved with “Download model” (JSON)">Open a file…</button></div></div>
+   <div class="row"><select id="iEx" class="exsel" aria-label="Load an example"></select><button id="iBlank">Start from a template</button><button id="iOpen" title="A wells table (text, CSV) or a model saved with “Download model” (JSON)">Open a file…</button></div></div>
   <dl><div><dt>A margin, source to sink</dt><dd>One system per domain — continental, coastal, shelf, slope, deep marine — chained along the profile with gradual transitions; rivers feed deltas, a canyon in line with a delta feeds a basin-floor fan.</dd></div>
    <div><dt>Wells, seismic, concept</dt><dd>The three inputs of a hand-drawn GDE map: the wells calibrate, seismic attribute layers steer the belts and give channels, reefs and faults, the depositional concept is drawn with editable key lines, polarised sources and isolated bodies.</dd></div>
    <div><dt>Conceptual belts</dt><dd>17 systems: fluvial, aeolian; tide-, wave- and river-dominated deltas; shoreface–shelf, rimmed platform, ramp, mixed shelf, glaciomarine; mixed, sand-rich and mud-rich fans, slope apron; rift lake, playa — or your own belts. Widths and typical scales from the literature, sources listed.</dd></div>
@@ -226,6 +239,7 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
  <div id="work" hidden>
   <section class="verdict none" id="verdict" aria-live="polite"></section>
   <div class="tb" id="tbar" role="toolbar" aria-label="Map tools">
+    <span class="seg" role="group" aria-label="Map level"><button data-v="belts" title="The GDE belts calibrated on the wells (all classes, key lines, sources)">GDE belts</button><button data-v="eod" title="Environments of deposition: a few large domains with smooth boundaries and labels inside (atlas style)">EOD map</button><button data-v="facies" title="The EOD map lightened, with the facies objects on top: deltaic lobes, fluvial channels, turbidite fairways, basin-floor fans, carbonate platforms, MTCs">Facies map</button></span><span class="sep"></span>
     <button data-t="sel" class="on" title="Select and drag wells, sources, bodies and line vertices; drag the background to pan (V)">Select</button>
     <button data-t="pan" title="Pan by dragging; the mouse wheel zooms anywhere (H)">Pan</button><span class="sep"></span>
     <button data-t="line" title="Edit a key line: drag its vertices, click on it to add a vertex, double-click a vertex to remove it">Line</button><select id="tbLine" aria-label="Line to edit"></select>
@@ -233,8 +247,9 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
     <button data-t="body" title="Add an isolated body: click where it is">Body</button><select id="tbBody" aria-label="Body type"></select>
     <button data-t="trace" title="Trace: click points, double-click or Enter to finish, Esc to cancel">Trace</button><select id="tbTrace" aria-label="What to trace"><option value="ribbon">channel</option><option value="poly">polygon</option><option value="fault">fault</option></select>
     <button data-t="paint" title="Paint the trend: drag to push the belts distal (+) or proximal (−)">Paint</button><select id="tbPaint" aria-label="Paint direction"><option value="1">+ distal</option><option value="-1">− proximal</option></select>
+    <button data-t="obj" id="tbObjB" hidden title="Add a facies object: click where it is (facies map); drag an object with Select to move it">Object</button><select id="tbObj" hidden aria-label="Facies object type"></select>
     <button data-t="pick" title="Pick a pixel of the backdrop image (for its control points or colour bar)" hidden id="tbPick">Pick</button><span class="sep"></span>
-    <button id="bUndo" title="Undo (Ctrl+Z)">Undo</button><button id="bRedo" title="Redo (Ctrl+Y)">Redo</button><button id="bZoom0" title="Zoom to the map extent">Fit view</button></div>
+    <button id="bUndo" title="Undo (Ctrl+Z)">Undo</button><button id="bRedo" title="Redo (Ctrl+Y)">Redo</button><button id="bZoom0" title="Zoom to the map extent">Fit view</button><select id="tbEx" class="exsel" aria-label="Load an example" style="margin-left:auto;max-width:210px"></select></div>
   <div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint2" id="hint2" hidden></div><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
    <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pNo">Cancel</button></div></div></div>
   <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th>X</th><th>Y</th><th class="l">Environment (given)</th><th class="l">Belt on the map</th><th>Honoured</th><th>To nearest boundary</th><th class="l">Note</th></tr></thead><tbody id="tb"></tbody></table></div></div>
@@ -1898,7 +1913,7 @@ function exMargin(){const M=makeMargin('passive',{ext:{xmin:0,xmax:90000,ymin:0,
   facies:{n:{mtc:0}},bodies:[{type:'mtc',shape:'poly',x:60500,y:23000,w:[600],irr:350,pts:[[-1800,6500],[400,6800],[2200,5000],[2600,2000],[4200,-1500],[4600,-4500],[2500,-6800],[-500,-7400],[-3400,-6600],[-5000,-4000],[-4200,-800],[-2600,2200]]}]});
   // the river well: on the larger river, a few km upstream of its delta apex
   const V=feederGeom(M).valleys[0].pts;let a=0,i=1;for(;i<V.length&&a<7000;i++)a+=Math.hypot(V[i][0]-V[i-1][0],V[i][1]-V[i-1][1]);
-  return{title:'Passive margin from the hinterland to the basin floor: two rivers and deltas, canyon and basin-floor fan, 6 wells',M,wells:[{name:'Margin-1',x:Math.round(V[i][0]),y:Math.round(V[i][1]),env:'Meandering channel belt'},
+  return{title:'Passive margin from the hinterland to the basin floor: two rivers and deltas, canyon and basin-floor fan, 6 wells',view:'facies',M,wells:[{name:'Margin-1',x:Math.round(V[i][0]),y:Math.round(V[i][1]),env:'Meandering channel belt'},
     {name:'Margin-2',x:35500,y:41500,env:'Delta front'},{name:'Margin-3',x:50500,y:51000,env:'Interdeltaic shoreface'},{name:'Margin-4',x:14000,y:38000,env:'Outer shelf'},
     {name:'Margin-5',x:76000,y:28500,env:'Lower slope'},{name:'Margin-6',x:32000,y:11500,env:'Proximal lobes'}]}}
 // carbonate rimmed margin: coastal plain and supratidal sabkha landward, tidal flat, lagoon, irregular rim, fore-reef slope, basin with three pinnacles
@@ -1908,7 +1923,7 @@ function exCarbMargin(){const M=makeMargin('carbonate',{span:30000,noise:{amp:70
     {name:'Toe of slope',k:6,pts:[[37500,-3000],[39500,6000],[37500,13000],[40500,20000],[39000,28000],[42000,36000],[40500,48000]]}],
   bodies:[{type:'pinnacle',shape:'ellipse',x:48500,y:33500,a:800,e:.75,rot:30,w:[300,900]},{type:'pinnacle',shape:'ellipse',x:52500,y:15500,a:650,e:.8,rot:-20,w:[250,800]},
     {type:'pinnacle',shape:'ellipse',x:56000,y:26500,a:550,e:.7,rot:60,w:[250,700]}]});
-  return{title:'Carbonate rimmed margin: coastal plain and sabkha, lagoon, irregular rim, three pinnacle reefs, 4 wells',M,wells:[{name:'Carb-1',x:22500,y:21000,env:'Platform interior / lagoon'},{name:'Carb-2',x:35600,y:17500,env:'Platform margin'},
+  return{title:'Carbonate rimmed margin: coastal plain and sabkha, lagoon, irregular rim, three pinnacle reefs, 4 wells',view:'eod',M,wells:[{name:'Carb-1',x:22500,y:21000,env:'Platform interior / lagoon'},{name:'Carb-2',x:35600,y:17500,env:'Platform margin'},
     {name:'Carb-3',x:50000,y:6000,env:'Basin'},{name:'Carb-4',x:48700,y:33300,env:'Reef core'}]}}
 function exCanyon(){const ext={xmin:0,xmax:40000,ymin:0,ymax:36000};
   const ch=[{pts:wiggle([17200,30200],[19500,15500],650,3600,.4),w:420},{pts:wiggle([17400,29000],[12500,13500],550,3200,1.9),w:380},{pts:wiggle([18200,29500],[26500,11000],600,3400,3.1),w:360}];
@@ -1964,7 +1979,11 @@ const examples={
 for(const [k,fn] of [['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
 // the v2 links: #coast opens the passive margin (it replaces the two-delta coast), #rimmed the carbonate margin
 for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.defineProperty(examples,a,{enumerable:false,get(){return examples[b]}});
-window.GDE={FTYPE,FKEYS,ftypeOf,faciesDefaults,faciesShape,faciesGen,faciesObjects,inFacies,faciesFeatures,geojsonLevels,irapLevels,normFacies,resample,EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
+// the examples select: groups in the UI order, short names
+const EXGROUPS=[['Margins, source to sink',['margin','carbmargin','rift']],['Seismic-driven',['canyon']],['Single systems',['delta','fan','estuary','ramp','lake']]];
+const EXNAMES={margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',
+ delta:'Delta (4 wells)',fan:'Deep-water fan (3 wells)',estuary:'Estuary (5 wells)',ramp:'Carbonate ramp (4 wells)',lake:'Rift lake (4 wells)'};
+window.GDE={EXGROUPS,EXNAMES,FTYPE,FKEYS,ftypeOf,faciesDefaults,faciesShape,faciesGen,faciesObjects,inFacies,faciesFeatures,geojsonLevels,irapLevels,normFacies,resample,EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
   layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
   templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
@@ -2116,7 +2135,8 @@ on('bMixAdd','click',()=>{const n=S.M.belts.length;if(n<2)return;const used=new 
   const p=GDE.prior(S.M),w=Math.round(.4*((p[k+1]??p[k]*1.3)-(k?p[k-1]:0))/2);S.M.mix.push({k,w:Math.max(1,w)});renderMix();rematch();renderWells();schedule()});
 
 // ---------- wells ----------
-function rematch(keepB){const B=AB(),n=S.M.belts.length;for(const w of S.wells){if(keepB&&w.b===-1&&w.manual)continue;if(w.manual&&w.b>=0&&w.b<B.length&&B[w.b].name===w.env)continue;const r=GDE.matchEnv(w.env,B,n);w.b=r.b;w.pair=r.pair}}
+function rematch(keepB){const B=AB(),n=S.M.belts.length,fon=!!(S.M.facies&&S.M.facies.on!==false);for(const w of S.wells){if(keepB&&w.b===-1&&w.manual)continue;if(w.manual&&w.b>=0&&w.b<B.length&&B[w.b].name===w.env)continue;
+    const ft=fon?GDE.ftypeOf(w.env):null;w.ft=null;if(ft&&(GDE.matchBelt(w.env,B,true)<0||GDE.FKEYS.some(k=>GDE.norm(GDE.FTYPE[k].name)===GDE.norm(w.env)))){w.b=-1;w.pair=null;w.ft=ft;continue}const r=GDE.matchEnv(w.env,B,n);w.b=r.b;w.pair=r.pair}}
 function wellsTable(){return'name\tx\ty\tenvironment\n'+S.wells.map(w=>[w.name,w.x,w.y,w.env].join('\t')).join('\n')}
 function applyTable(text){const r=GDE.parseWells(text);
   if(!r.wells.length){$('wMsg').textContent=r.errors[0]||'No well found: one line per well, name, x, y, environment.';$('wMsg').className='msg err';return false}
@@ -2129,8 +2149,8 @@ on('bWApply','click',()=>applyTable($('wTxt').value));
 on('bWClear','click',()=>{S.wells=[];$('wTxt').value='';$('wMsg').textContent='';renderWells();schedule()});
 on('bWAdd','click',()=>setTool(S.tool==='add'?'sel':'add'));
 function renderWells(syncTxt=true){const B=AB();
-  $('wList').innerHTML=S.wells.map((w,i)=>`<div class="wr${w.b<0&&!w.pair?' bad':''}" data-i="${i}"><input type="text" value="${esc(w.name)}" data-k="name" aria-label="Well name"><input type="number" step="any" value="${w.x}" data-k="x" aria-label="X"><input type="number" step="any" value="${w.y}" data-k="y" aria-label="Y">
-    <select data-k="b" aria-label="Environment">${w.pair&&w.b<0?`<option value="-2" selected>${esc(w.env)} (either belt)</option>`:''}${w.b<0&&!w.pair?`<option value="-1" selected>⚠ “${esc(w.env||'?')}” — choose a belt</option>`:''}${B.map((b,k)=>`<option value="${k}"${k===w.b?' selected':''}>${esc(b.name)}</option>`).join('')}</select><button data-a="del" title="Remove this well">Remove</button></div>`).join('');
+  $('wList').innerHTML=S.wells.map((w,i)=>`<div class="wr${w.b<0&&!w.pair&&!w.ft?' bad':''}" data-i="${i}"><input type="text" value="${esc(w.name)}" data-k="name" aria-label="Well name"><input type="number" step="any" value="${w.x}" data-k="x" aria-label="X"><input type="number" step="any" value="${w.y}" data-k="y" aria-label="Y">
+    <select data-k="b" aria-label="Environment">${w.ft&&w.b<0?`<option value="-3" selected>${esc(w.env)} (facies object)</option>`:''}${w.pair&&w.b<0?`<option value="-2" selected>${esc(w.env)} (either belt)</option>`:''}${w.b<0&&!w.pair&&!w.ft?`<option value="-1" selected>⚠ “${esc(w.env||'?')}” — choose a belt</option>`:''}${B.map((b,k)=>`<option value="${k}"${k===w.b?' selected':''}>${esc(b.name)}</option>`).join('')}</select><button data-a="del" title="Remove this well">Remove</button></div>`).join('');
   $('wList').querySelectorAll('.wr').forEach(r=>{const w=S.wells[+r.dataset.i];
     r.querySelectorAll('input,select').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.k;
       if(k==='name')w.name=inp.value.trim()||w.name;
@@ -2320,9 +2340,10 @@ function previewCell(ext,max){return Math.max(S.M.cell||0,Math.sqrt((ext.xmax-ex
 function compute(fast){if(!(S.M.belts.length>=2))return;
   try{S.mod=GDE.build(S.M,S.wells,{dist:!fast,fast});S.FG=isMargin()?GDE.feederGeom(S.M):null}catch(err){banner('Model error: '+err.message,true);console.error(err);return}
   S.full=null;const ve=viewExt();
-  S.P=GDE.polygons(S.mod,ve,previewCell(ve,fast?60000:250000),{stride:fast?2:3,minArea:fast?2:4,tol:.7});S.Pext=ve;
+  S.P=GDE.polygons(S.mod,ve,previewCell(ve,fast?60000:250000),{stride:fast?2:3,minArea:fast?2:4});S.Pext=ve;
+  S.PE=S.lvl!=='belts'?GDE.eodPolygons(S.mod,ve,0,{raster:S.P.raster}):null;S.fullE=null;
   draw();
-  if(!fast){renderCheck();renderVerdict();renderCal();pushUndo();
+  if(!fast){renderCheck();renderVerdict();renderCal();renderEod();pushUndo();
     const e=S.M.ext,nx=Math.floor((e.xmax-e.xmin)/S.M.cell+1e-9)+1,ny=Math.floor((e.ymax-e.ymin)/S.M.cell+1e-9)+1;
     tplNote();$('extMsg').className='msg';$('extMsg').textContent=`Export grid ${nx} × ${ny} nodes (${(nx*ny).toLocaleString('en-US')}); map preview cell ${fmtN(previewCell(ve,250000))}.`;
     $('bMsg').textContent=S.M.template==='custom'?'custom belts':''}}
@@ -2355,16 +2376,21 @@ function backdrop(c,L){const l=(S.M.layers||[]).find(q=>q.id===S.bd);if(!l)retur
   c.setTransform(...(()=>{const d=devicePixelRatio||1,T=c.getTransform();const A=[L.X(p1[0])-L.X(p0[0]),L.Y(p1[1])-L.Y(p0[1]),L.X(p2[0])-L.X(p0[0]),L.Y(p2[1])-L.Y(p0[1]),L.X(p0[0]),L.Y(p0[1])];
     return[T.a*A[0],T.b*A[0]+T.d*A[1],T.a*A[2],T.d*A[3],T.a*A[4]+T.e,T.d*A[5]+T.f]})());
   c.imageSmoothingEnabled=true;c.drawImage(im.el,0,0);c.restore();return 1}
-function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mod=S.mod,B=AB(),M=S.M;
+function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mod=S.mod,B=AB(),M=S.M,lv=S.lvl||'belts',PE=lv!=='belts'?(opt.PE||S.PE):null;
   c.fillStyle='#fff';c.fillRect(0,0,W,H);
   const x0=Math.max(L.px0,L.X(e.xmin)),y0=Math.max(L.py0,L.Y(e.ymax)),x1=Math.min(L.px1,L.X(e.xmax)),y1=Math.min(L.py1,L.Y(e.ymin)),mw=x1-x0,mh=y1-y0;
   c.save();c.beginPath();c.rect(L.px0,L.py0,L.px1-L.px0,L.py1-L.py0);c.clip();
   const hasBd=!opt.noBackdrop&&backdrop(c,L);
   c.save();c.beginPath();c.rect(x0,y0,mw,mh);c.clip();
-  const paths=P.map(p=>{const pa=new Path2D();for(const r of [p.outer,...p.holes]){r.forEach((q,i)=>i?pa.lineTo(L.X(q[0]),L.Y(q[1])):pa.moveTo(L.X(q[0]),L.Y(q[1])));pa.closePath()}return pa});
+  const PP=PE||P,paths=PP.map(p=>{const pa=new Path2D();for(const r of [p.outer,...p.holes]){r.forEach((q,i)=>i?pa.lineTo(L.X(q[0]),L.Y(q[1])):pa.moveTo(L.X(q[0]),L.Y(q[1])));pa.closePath()}return pa});
   c.globalAlpha=hasBd?1-S.bdOp:1;
+  if(PE){const cl=GDE.eodClasses(M);
+    PE.forEach((p,i)=>{const d=cl[p.code-1]||{},col=lv==='facies'?lighten(d.color||'#cccccc',.42):(d.color||'#cccccc');c.fillStyle=col;c.fill(paths[i],'evenodd');c.strokeStyle=col;c.lineWidth=.8;c.stroke(paths[i])});
+    c.globalAlpha=1;c.strokeStyle=lv==='facies'?'rgba(70,68,62,.55)':'rgba(25,25,24,.9)';c.lineWidth=lv==='facies'?.8:1.15;c.lineJoin='round';paths.forEach(pa=>c.stroke(pa));
+    if(lv==='facies')drawFacies(c,L,opt);drawEodLabels(c,L,lv,PE,opt.Pext||S.Pext)}
+  else{
   P.forEach((p,i)=>{const b=B[p.code-1]||{},col=b.color||'#ccc';c.fillStyle=b.hatch?hatch(c,b.hatch[0],b.hatch[1]):col;c.fill(paths[i],'evenodd');if(!b.hatch){c.strokeStyle=col;c.lineWidth=.8;c.stroke(paths[i])}});
-  c.globalAlpha=1;c.strokeStyle='rgba(35,34,32,.55)';c.lineWidth=1;c.lineJoin='round';paths.forEach(pa=>c.stroke(pa));
+  c.globalAlpha=1;c.strokeStyle='rgba(35,34,32,.55)';c.lineWidth=1;c.lineJoin='round';paths.forEach(pa=>c.stroke(pa))}
   // painted trend: faint contour of the brush grid
   if(M.paint&&!opt.export&&S.tool==='paint'){const G=M.paint;c.fillStyle='rgba(168,98,58,.25)';for(let j=0;j<G.ny;j++)for(let i=0;i<G.nx;i++){const v=G.v[j*G.nx+i];if(Math.abs(v)>1){c.globalAlpha=Math.min(.5,Math.abs(v)/(+$('pA').value||1)*.3);c.fillStyle=v>0?'#3c6aa3':'#a8623a';c.fillRect(L.X(G.x0+(i-.5)*G.dx),L.Y(G.y0+(j+.5)*G.dy),G.dx*L.k+1,G.dy*L.k+1)}}c.globalAlpha=1}
   if(mod&&mod.warp.wells.length){c.setLineDash([6,4]);c.strokeStyle='rgba(168,98,58,.9)';c.lineWidth=1.4;
@@ -2372,7 +2398,7 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
   c.restore();
   // key lines (dashed), faults (ticks on the downthrown side), traced/selected bodies, sources
   const sel=S.sel||{},editing=S.tool==='line'&&!opt.export;
-  if(isLines())(M.lines||[]).forEach((l,i)=>{const pts=curve(l.pts),act=editing&&i===S.lineSel;c.setLineDash(act?[]:[7,5]);c.strokeStyle=act?'#1d3f8a':'rgba(29,63,138,.75)';c.lineWidth=act?2.2:1.5;
+  if(isLines()&&(lv==='belts'||editing))(M.lines||[]).forEach((l,i)=>{const pts=curve(l.pts),act=editing&&i===S.lineSel;c.setLineDash(act?[]:[7,5]);c.strokeStyle=act?'#1d3f8a':'rgba(29,63,138,.75)';c.lineWidth=act?2.2:1.5;
     c.beginPath();pts.forEach((q,j)=>j?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])));c.stroke();c.setLineDash([]);
     if(!opt.export){const m=pts[Math.floor(pts.length*.5)],m2=pts[Math.min(pts.length-1,Math.floor(pts.length*.5)+3)],ang=Math.atan2(-(L.Y(m2[1])-L.Y(m[1])),L.X(m2[0])-L.X(m[0]));
       c.save();c.translate(L.X(m[0]),L.Y(m[1]));c.rotate(-ang);c.font='italic 600 11px Inter,system-ui,sans-serif';c.textAlign='center';c.textBaseline='bottom';halo(c,l.name+' →',0,-4,'#1d3f8a');c.restore()}
@@ -2389,11 +2415,12 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
     c.stroke();c.setLineDash([]);c.fillStyle='#1d3f8a';c.beginPath();c.arc(L.X(b.x),L.Y(b.y),4,0,7);c.fill()});
   if(S.trace&&!opt.export){c.strokeStyle='#1d3f8a';c.lineWidth=S.trace.kind==='ribbon'?Math.max(2,(+$('trW').value||200)*L.k):2;c.globalAlpha=S.trace.kind==='ribbon'?.45:1;c.lineCap='round';c.lineJoin='round';
     c.beginPath();S.trace.pts.forEach((q,j)=>j?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])));if(S.trace.hover)c.lineTo(S.trace.hover[0],S.trace.hover[1]);c.stroke();c.globalAlpha=1}
-  if(isLines())(M.sources||[]).forEach((s,i)=>{const a=s.az*Math.PI/180,sx=L.X(s.x),sy=L.Y(s.y),len=Math.max(26,Math.min(90,s.L*L.k*.45)),hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;
+  const marks=lv==='belts'||(!opt.export&&(S.tool==='src'||S.tool==='line'));
+  if(isLines()&&marks)(M.sources||[]).forEach((s,i)=>{const a=s.az*Math.PI/180,sx=L.X(s.x),sy=L.Y(s.y),len=Math.max(26,Math.min(90,s.L*L.k*.45)),hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;
     c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();c.strokeStyle='#5a3218';c.lineWidth=2.4;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
     const hd=10,ha=.45;c.fillStyle='#5a3218';c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-hd*Math.sin(a-ha),hy+hd*Math.cos(a-ha));c.lineTo(hx-hd*Math.sin(a+ha),hy+hd*Math.cos(a+ha));c.closePath();c.fill();
     c.fillStyle='#a8623a';c.strokeStyle=sel.kind==='src'&&sel.i===i?'#1d3f8a':'#fff';c.lineWidth=2;c.beginPath();c.arc(sx,sy,6.5,0,2*Math.PI);c.fill();c.stroke()});
-  if(isMargin()&&isLines()){const FG=S.FG||{sources:[],canyons:[]},arrow=(sx,sy,a,len,col,w)=>{const hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=w+3.6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
+  if(isMargin()&&isLines()&&marks){const FG=S.FG||{sources:[],canyons:[]},arrow=(sx,sy,a,len,col,w)=>{const hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=w+3.6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
       c.strokeStyle=col;c.lineWidth=w;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();const hd=8+w,ha=.45;c.fillStyle=col;c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-hd*Math.sin(a-ha),hy+hd*Math.cos(a-ha));c.lineTo(hx-hd*Math.sin(a+ha),hy+hd*Math.cos(a+ha));c.closePath();c.fill()};
     (M.feeders||[]).forEach((f,i)=>{const fan=FG.sources.find(q=>q.kind==='fan'&&q.feeder===i),cy=FG.canyons.find(q=>q.feeder===i),pts=[[f.x,f.y]];if(cy)pts.push(cy.pts[0]);if(fan)pts.push([fan.x,fan.y]);
       // the source-to-sink link: delta, canyon head, fan apex
@@ -2401,7 +2428,7 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
       if(fan){const fx=L.X(fan.x),fy=L.Y(fan.y);arrow(fx,fy,fan.az*Math.PI/180,Math.max(18,Math.min(50,fan.L*L.k*.3)),'#5a3218',1.8);c.fillStyle='#fff';c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.arc(fx,fy,5,0,2*Math.PI);c.fill();c.stroke()}
       const a=f.az*Math.PI/180,sx=L.X(f.x),sy=L.Y(f.y);arrow(sx,sy,a,Math.max(26,Math.min(90,f.delta.L*L.k*.45)),'#5a3218',2.4);
       c.fillStyle='#a8623a';c.strokeStyle=sel.kind==='feed'&&sel.i===i?'#1d3f8a':'#5a3218';c.lineWidth=2.4;c.beginPath();c.arc(sx,sy,7,0,2*Math.PI);c.fill();c.stroke();c.strokeStyle='#fff';c.lineWidth=1.2;c.beginPath();c.arc(sx,sy,4,0,2*Math.PI);c.stroke()})}
-  if(M.geom!=='lines'){const a=M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(M.src[0]),sy=L.Y(M.src[1]),hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;
+  if(M.geom!=='lines'&&marks){const a=M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(M.src[0]),sy=L.Y(M.src[1]),hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;
     if(M.geom==='radial'){c.setLineDash([5,5]);c.strokeStyle='rgba(35,34,32,.45)';c.lineWidth=1.2;const rl=2*Math.hypot(W,H);for(const s of [-1,1]){const b=a+s*M.fan/2*Math.PI/180;c.beginPath();c.moveTo(sx,sy);c.lineTo(sx+Math.sin(b)*rl,sy-Math.cos(b)*rl);c.stroke()}c.setLineDash([])}
     c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();c.strokeStyle='#232220';c.lineWidth=2.4;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
     const hd=11,ha=.45;c.fillStyle='#232220';c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-hd*Math.sin(a-ha),hy+hd*Math.cos(a-ha));c.lineTo(hx-hd*Math.sin(a+ha),hy+hd*Math.cos(a+ha));c.closePath();c.fill();
@@ -2410,10 +2437,12 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
     c.font='600 12px Inter,system-ui,sans-serif';c.textBaseline='middle';c.textAlign='left';halo(c,M.geom==='radial'?'Source':'Reference point',sx+11,sy+13,'#7a4527')}
   c.font='600 12px Inter,system-ui,sans-serif';c.textBaseline='middle';c.textAlign='left';
   if(mod)for(const w of mod.check){const x=L.X(w.x),y=L.Y(w.y);
+    if(lv!=='belts')wellSym(c,x,y);else{
     c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(x,y,5.5,0,2*Math.PI);c.fill();c.stroke();
-    c.fillStyle='#232220';c.beginPath();c.arc(x,y,1.6,0,2*Math.PI);c.fill();
+    c.fillStyle='#232220';c.beginPath();c.arc(x,y,1.6,0,2*Math.PI);c.fill()}
     c.font='600 12px Inter,system-ui,sans-serif';halo(c,w.name,x+9,y-9);const tw=c.measureText(w.name).width;
     c.font='700 13px Inter,system-ui,sans-serif';halo(c,w.honoured?'✓':'✗',x+12+tw,y-9,w.honoured?'#2e7d32':'#c62828')}
+  if(lv!=='belts'){const t=((M.eod&&M.eod.title)?M.eod.title+' ':'')+LVL[lv];c.font='700 15px Inter,system-ui,sans-serif';c.textAlign='center';c.textBaseline='top';halo(c,t,(L.px0+L.px1)/2,L.py0+10,'#151515')}
   // north arrow, scale bar
   c.fillStyle='#232220';const nx=L.px1-22,ny=L.py0+14;c.beginPath();c.moveTo(nx,ny);c.lineTo(nx+6,ny+16);c.lineTo(nx,ny+12);c.lineTo(nx-6,ny+16);c.closePath();c.fill();
   c.font='700 11px Inter,system-ui,sans-serif';c.textAlign='center';halo(c,'N',nx,ny+26);
@@ -2432,9 +2461,10 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
   for(let v=Math.ceil(wy0/ty)*ty;v<=wy1+1e-9;v+=ty){const y=L.Y(v);c.beginPath();c.moveTo(L.px0,y);c.lineTo(L.px0-5,y);c.stroke();c.fillText(fmtN(v),L.px0-7,y)}
   c.textAlign='center';c.textBaseline='top';c.fillText('X',(L.px0+L.px1)/2,L.py1+22);c.save();c.translate(12,(L.py0+L.py1)/2);c.rotate(-Math.PI/2);c.textBaseline='middle';c.fillText('Y',0,0);c.restore();
   // legend: classes on the map
-  if(L.leg){let lx=W-L.leg+6,ly=L.py0+4;const lw=L.leg-12;c.textAlign='left';c.textBaseline='top';
-    c.fillStyle='#232220';c.font='600 13px "Space Grotesk",Inter,sans-serif';c.fillText('GDE classes',lx,ly);ly+=18;
-    c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText(isMargin()?'by domain, hinterland → basin':'code, proximal → distal, then others',lx,ly);ly+=17;
+  if(L.leg){let lx=W-L.leg+6,ly=L.py0+4;const lw=L.leg-12;L0H=L.py1;c.textAlign='left';c.textBaseline='top';
+    c.fillStyle='#232220';c.font='600 13px "Space Grotesk",Inter,sans-serif';c.fillText(lv==='belts'?'GDE classes':lv==='eod'?'EOD domains':'Facies map',lx,ly);ly+=18;
+    c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText(lv!=='belts'?'environments of deposition':isMargin()?'by domain, hinterland → basin':'code, proximal → distal, then others',lx,ly);ly+=17;
+    if(lv!=='belts')ly=atlasLegend(c,lx,ly,lw,lv,PE||[]);else{
     const used=new Set(P.map(p=>p.code-1)),GR=GDE.legendGroups(M).map(g=>Object.assign({},g,{items:g.items.filter(i=>used.has(i)||B[i].kind==='belt')})).filter(g=>g.items.length);
     // rows: compact when the classes would not fit above the other keys
     const nRows=GR.reduce((a,g)=>a+g.items.length+(g.name?1:0),0),room=L.py1-ly-150,cp=nRows*19>room,rh=cp?Math.max(12,Math.min(19,room/nRows)):19,fs=cp?11:12;
@@ -2443,21 +2473,33 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
       c.fillStyle=used.has(i)?'#232220':'#8c8a80';c.font=fs+'px Inter,system-ui,sans-serif';
       const words=`${i+1}  ${b.name}${b.channel?' (channels)':''}`.split(' ');let line='',yy=ly;
       for(const wd of words){const tst=line?line+' '+wd:wd;if(c.measureText(tst).width>lw-26&&line){c.fillText(line,lx+24,yy);line=wd;yy+=fs+2}else line=tst}
-      c.fillText(line,lx+24,yy);ly=yy+rh}}
+      c.fillText(line,lx+24,yy);ly=yy+rh}}}
     ly+=6;c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(lx+9,ly+7,5,0,2*Math.PI);c.fill();c.stroke();
     c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';c.fillText('Well',lx+24,ly);c.fillStyle='#2e7d32';c.font='700 12px Inter';c.fillText('✓',lx+60,ly);
     c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('honoured',lx+72,ly+1);ly+=17;
     c.fillStyle='#c62828';c.font='700 12px Inter';c.fillText('✗',lx+60,ly);c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('not honoured',lx+72,ly+1);ly+=20;
     c.font='12px Inter,system-ui,sans-serif';
-    if(isLines()&&(M.lines||[]).length){c.setLineDash([7,5]);c.strokeStyle='#1d3f8a';c.lineWidth=1.5;c.beginPath();c.moveTo(lx,ly+7);c.lineTo(lx+18,ly+7);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Key line (basin →)',lx+24,ly);ly+=18}
-    if(isMargin()&&(M.feeders||[]).length){c.fillStyle='#a8623a';c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.arc(lx+6,ly+7,5.5,0,2*Math.PI);c.fill();c.stroke();c.setLineDash([2,3]);c.beginPath();c.moveTo(lx+12,ly+7);c.lineTo(lx+22,ly+7);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Feeder, delta → canyon → fan',lx+28,ly);ly+=18}
-    if(isLines()&&(M.sources||[]).length){c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(lx+6,ly+7,5.5,0,2*Math.PI);c.fill();c.stroke();c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.moveTo(lx+12,ly+7);c.lineTo(lx+22,ly+7);c.stroke();c.fillStyle='#232220';c.fillText('Source, lobe axis',lx+28,ly);ly+=18}
-    if(!isLines()){c.fillStyle='#a8623a';c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.fill();c.strokeStyle='#232220';c.lineWidth=2;c.beginPath();c.moveTo(lx+16,ly+7);c.lineTo(lx+40,ly+7);c.stroke();c.fillStyle='#232220';c.fillText(M.geom==='radial'?'Source, transport':'Transport direction',lx+46,ly);ly+=18}
+    if(isLines()&&(M.lines||[]).length&&lv==='belts'){c.setLineDash([7,5]);c.strokeStyle='#1d3f8a';c.lineWidth=1.5;c.beginPath();c.moveTo(lx,ly+7);c.lineTo(lx+18,ly+7);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Key line (basin →)',lx+24,ly);ly+=18}
+    if(isMargin()&&(M.feeders||[]).length&&lv==='belts'){c.fillStyle='#a8623a';c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.arc(lx+6,ly+7,5.5,0,2*Math.PI);c.fill();c.stroke();c.setLineDash([2,3]);c.beginPath();c.moveTo(lx+12,ly+7);c.lineTo(lx+22,ly+7);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Feeder, delta → canyon → fan',lx+28,ly);ly+=18}
+    if(isLines()&&(M.sources||[]).length&&lv==='belts'){c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(lx+6,ly+7,5.5,0,2*Math.PI);c.fill();c.stroke();c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.moveTo(lx+12,ly+7);c.lineTo(lx+22,ly+7);c.stroke();c.fillStyle='#232220';c.fillText('Source, lobe axis',lx+28,ly);ly+=18}
+    if(!isLines()&&lv==='belts'){c.fillStyle='#a8623a';c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.fill();c.strokeStyle='#232220';c.lineWidth=2;c.beginPath();c.moveTo(lx+16,ly+7);c.lineTo(lx+40,ly+7);c.stroke();c.fillStyle='#232220';c.fillText(M.geom==='radial'?'Source, transport':'Transport direction',lx+46,ly);ly+=18}
     if((M.faults||[]).length){c.strokeStyle='#b3261e';c.lineWidth=2.2;c.beginPath();c.moveTo(lx,ly+7);c.lineTo(lx+18,ly+7);c.moveTo(lx+9,ly+7);c.lineTo(lx+9,ly+12);c.stroke();c.fillStyle='#232220';c.fillText('Fault (ticks: down)',lx+24,ly);ly+=18}
     if(mod&&mod.warp.wells.length){c.setLineDash([5,3]);c.strokeStyle='#a8623a';c.lineWidth=1.4;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Warping radius',lx+24,ly);ly+=18}
     c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';ly+=4;
     const tpl=isMargin()?(M.margin.preset?GDE.MARGINS[M.margin.preset].name:'Custom margin'):M.template==='custom'?'Custom belts':GDE.templates[M.template].name;
     for(const s of [tpl,(M.geom==='lines'?'key lines':M.geom==='radial'?`radial, fan ${fmtN(M.fan)}°`:'linear')+`, seed ${M.noise.seed}`])if(ly<H-14){c.fillText(s,lx,ly);ly+=14}}}
+// legend of the EOD and facies maps: the domains present, then the facies objects present
+function atlasLegend(c,lx,ly,lw,lv,PE){const cl=GDE.eodClasses(S.M),used=[...new Set(PE.map(p=>p.code-1))].sort((a,b)=>a-b),T=GDE.FTYPE,O=lv==='facies'?((S.mod&&S.mod.facies)||[]):[];
+  const types=GDE.FKEYS.filter(k=>O.some(o=>o.type===k)),n=used.length+types.length+(types.length?1:0),rh=Math.max(13,Math.min(19,(L0H-ly-150)/Math.max(1,n))),fs=rh<17?11:12;
+  const row=(draw,txt,col)=>{draw();c.fillStyle=col||'#232220';c.font=fs+'px Inter,system-ui,sans-serif';const ws=wrapText(c,txt,lw-26);ws.forEach((t,i)=>c.fillText(t,lx+24,ly+i*(fs+2)));ly+=rh+(ws.length-1)*(fs+2)};
+  for(const i of used){const d=cl[i];row(()=>{c.fillStyle=lv==='facies'?lighten(d.color,.42):d.color;c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.6)';c.lineWidth=1;c.strokeRect(lx+.5,ly+.5,17,12)},d.name)}
+  if(types.length){c.fillStyle='#5c5a52';c.font=`600 ${fs-1}px Inter,system-ui,sans-serif`;c.fillText('FACIES OBJECTS',lx,ly+3);ly+=rh-2}
+  for(const k of types){const t=T[k];row(()=>{c.save();if(k==='river'){c.strokeStyle=t.color;c.lineWidth=1.6;c.beginPath();c.moveTo(lx,ly+10);c.bezierCurveTo(lx+6,ly,lx+12,ly+13,lx+18,ly+3);c.stroke()}
+      else if(k==='fairway'){c.fillStyle='rgba(240,213,76,.3)';c.fillRect(lx,ly,18,13);for(const o of [3,9]){c.strokeStyle=t.edge;c.lineWidth=3.2;c.beginPath();c.moveTo(lx+1,ly+o);c.quadraticCurveTo(lx+9,ly+o+4,lx+17,ly+o);c.stroke();c.strokeStyle=t.color;c.lineWidth=1.8;c.stroke()}}
+      else{c.fillStyle=t.pat?fpat(c,t.pat,t.color,t.edge):t.color;c.beginPath();if(k==='lobe'||k==='fan'){c.moveTo(lx+9,ly);c.quadraticCurveTo(lx+20,ly+8,lx+15,ly+13);c.quadraticCurveTo(lx+9,ly+15,lx+3,ly+13);c.quadraticCurveTo(lx-2,ly+8,lx+9,ly)}else c.ellipse(lx+9,ly+6.5,9,6.2,0,0,7);
+        c.fill();c.strokeStyle=t.edge;c.lineWidth=1;c.stroke()}c.restore()},t.name)}
+  return ly+4}
+let L0H=600;
 function fitStage(){const st=$('stage'),w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,h=Math.round((w-80-leg)*(e.ymax-e.ymin)/(e.xmax-e.xmin)+56);st.style.height=Math.max(420,Math.min(h,Math.round(innerHeight*.86)))+'px'}
 function size(){fitStage();const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
 function draw(){if(!S.started||!S.P)return;const d=devicePixelRatio||1,r=cv.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);render(ctx,r.width,r.height,S.P)}
@@ -2470,7 +2512,7 @@ const curL=()=>{const r=cv.getBoundingClientRect();return layout(r.width,r.heigh
 const HINT={sel:'Drag wells, sources (along their line), bodies, the arrow heads; drag the background to pan; wheel to zoom.',pan:'Drag to pan; wheel to zoom.',
   line:'Drag the square vertices; click on the line to add a vertex; double-click a vertex to remove it. Choose the line next to the button.',src:'Click on a key line to put a delta or fan there (on a margin shoreline: a feeder, river → delta → canyon → fan), or on a fault for a fault-bounded fan delta.',
   body:'Click where the body is; set its size and halos in panel 6.',trace:'Click points; double-click or Enter to finish; Esc cancels. Environment and width in panel 6.',paint:'Drag over the map: + pushes the belts distal, − proximal (radius and strength in panel 7).',
-  add:'Click on the map where the well is.',pick:'Click the backdrop image: its pixel goes into the open layer (control point or colour bar end).'};
+  add:'Click on the map where the well is.',obj:'Click where the facies object goes (type next to the button); then drag it with Select, resize or delete it in panel 8.',pick:'Click the backdrop image: its pixel goes into the open layer (control point or colour bar end).'};
 function setTool(t){if(t==='line'&&!(S.M.lines||[]).length){banner('No key line yet: “Propose a sketch” or “Add line” in panel 5.',true);t='sel'}
   S.tool=t;S.trace=null;document.querySelectorAll('#tbar [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$('bWAdd').classList.toggle('on',t==='add');
   cv.style.cursor=t==='pan'?'grab':t==='sel'?'':'crosshair';$('hint2').hidden=!HINT[t]||t==='sel';$('hint2').textContent=HINT[t]||'';if(t==='add')start();draw()}
@@ -2481,6 +2523,7 @@ function nearLine(L,px,py,list){let best=null;(list||[]).forEach((l,i)=>{const c
   if(!best||d<best.d)best={i,d,x:L.ix(ax+t*ex),y:L.iy(ay+t*ey),tx:ex,ty:ey}}});return best}
 function hit(px,py){const L=curL(),M=S.M;
   if(S.mod)for(let i=S.wells.length-1;i>=0;i--){const w=S.wells[i];if(near2(L,px,py,w.x,w.y)<=8)return{k:'well',i}}
+  if(S.lvl==='facies'&&S.mod){const x=L.ix(px),y=L.iy(py),O=S.mod.facies||[];for(const ty of ['lobe','river','fan','fairway','mtc','platform','ponded'])for(let i=O.length-1;i>=0;i--){const o=O[i];if(o.type===ty&&GDE.inFacies(o,x,y))return{k:'fobj',id:o.id}}}
   if(isLines())for(let i=(M.sources||[]).length-1;i>=0;i--){const s=M.sources[i],a=s.az*Math.PI/180,len=Math.max(26,Math.min(90,s.L*L.k*.45)),hx=L.X(s.x)+Math.sin(a)*len,hy=L.Y(s.y)-Math.cos(a)*len;
     if(Math.hypot(px-hx,py-hy)<=9)return{k:'srcaz',i};if(near2(L,px,py,s.x,s.y)<=9)return{k:'src',i}}
   if(isMargin())for(let i=(M.feeders||[]).length-1;i>=0;i--){const s=M.feeders[i],a=s.az*Math.PI/180,len=Math.max(26,Math.min(90,s.delta.L*L.k*.45)),hx=L.X(s.x)+Math.sin(a)*len,hy=L.Y(s.y)-Math.cos(a)*len;
@@ -2494,6 +2537,7 @@ let down=null;
 cv.addEventListener('pointerdown',e=>{if(!S.started)return;const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py),M=S.M,t=S.tool;
   if(e.button===1||t==='pan'){S.drag={k:'pan',px,py,v:{...S.view}};cv.setPointerCapture(e.pointerId);return}
   if(t==='add'){openPop(px,py,x,y);return}
+  if(t==='obj'){addFobj($('tbObj').value,x,y);return}
   if(t==='pick'){const l=(M.layers||[]).find(q=>q.id===S.layerOpen&&!q.grid)||(M.layers||[]).find(q=>q.id===S.bd&&!q.grid);if(!l){banner('Open an image layer in panel 3 first.',true);return}
     const a=GDE.affine(l.cal);if(a.err){banner(a.err,true);return}const q=a.inv(x,y);
     if(l.bar&&e.shiftKey){l.bar.b=[+q[0].toFixed(1),+q[1].toFixed(1)]}else if(l.bar&&e.altKey){l.bar.a=[+q[0].toFixed(1),+q[1].toFixed(1)]}
@@ -2525,6 +2569,8 @@ cv.addEventListener('pointerdown',e=>{if(!S.started)return;const [px,py]=evp(e),
   const h=hit(px,py);
   if(!h){S.sel=null;renderConcept();S.drag={k:'pan',px,py,v:{...S.view}};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';return}
   if(h.k==='src'||h.k==='srcaz'||h.k==='body'||h.k==='fault'||h.k==='feed'||h.k==='feedaz'){S.sel={kind:h.k==='srcaz'?'src':h.k==='feedaz'?'feed':h.k,i:h.i};renderConcept()}
+  if(h.k==='fobj'){S.sel={kind:'fobj',id:h.id};const F=M.facies,ex=/^x\d+$/.test(h.id)?+h.id.slice(1):null;
+    if(ex!=null){const X=F.extra[ex];Object.assign(h,{ex,bx:X.x||0,by:X.y||0,bp:X.path?clone(X.path):null})}else{const E2=(F.edits||{})[h.id]||{};Object.assign(h,{bx:E2.dx||0,by:E2.dy||0})}renderEod()}
   S.drag=Object.assign(h,{x0:x,y0:y});if(h.k==='body'){const b=M.bodies[h.i];S.drag.bx=b.x;S.drag.by=b.y}cv.setPointerCapture(e.pointerId);e.preventDefault()});
 function paintAt(x,y){const R=+$('pR').value||diag()*.06,A=(+$('pA').value||500)*(+$('tbPaint').value);GDE.paintStroke(S.M.paint,x,y,R,A*.25);schedule(true)}
 function finishTrace(){const T=S.trace;S.trace=null;if(!T||T.pts.length<2){draw();return}const M=S.M,env=$('trEnv').value.trim()||'Channel fill',color=$('trCol').value;
@@ -2549,10 +2595,13 @@ cv.addEventListener('pointermove',e=>{if(!S.started)return;const [px,py]=evp(e),
     else if(d.k==='v1src'){M.src=[x,y];syncSrc()}
     else if(d.k==='head'){const sx=L.X(M.src[0]),sy=L.Y(M.src[1]);M.az=((Math.atan2(px-sx,sy-py)*180/Math.PI)+360)%360;syncAz()}
     else if(d.k==='well'){const w=S.wells[d.i];w.x=Math.round(x);w.y=Math.round(y)}
+    else if(d.k==='fobj'){const dx=x-d.x0,dy=y-d.y0;if(d.ex!=null){const X=M.facies.extra[d.ex];if(X.x!=null){X.x=Math.round(d.bx+dx);X.y=Math.round(d.by+dy)}if(d.bp)X.path=d.bp.map(q=>[Math.round(q[0]+dx),Math.round(q[1]+dy)])}
+      else{const E2=fedit(d.id);E2.dx=Math.round(d.bx+dx);E2.dy=Math.round(d.by+dy)}}
     schedule(true);return}
   if(S.tool==='sel'){const h=hit(px,py);cv.style.cursor=h?(h.k==='head'||h.k==='srcaz'?'grab':'move'):''}
-  const e2=M.ext;if(S.mod&&x>=e2.xmin&&x<=e2.xmax&&y>=e2.ymin&&y<=e2.ymax)$('ro').textContent=`x ${fmtN(x)}, y ${fmtN(y)} — ${AB()[S.mod.beltAt(x,y)].name}`;else $('ro').textContent=RO0});
-cv.addEventListener('pointerup',()=>{const d=S.drag;if(!d)return;S.drag=null;if(S.tool==='sel')cv.style.cursor='';if(d.k==='pan'){compute(false);return}if(d.k==='well')renderWells();if(d.k==='src'||d.k==='srcaz'||d.k==='feed'||d.k==='feedaz')renderConcept();schedule()});
+  const e2=M.ext;if(S.mod&&x>=e2.xmin&&x<=e2.xmax&&y>=e2.ymin&&y<=e2.ymax){const c0=S.mod.beltAt(x,y);let t=`x ${fmtN(x)}, y ${fmtN(y)} — ${AB()[c0].name}`;if(S.lvl!=='belts'){const ea=GDE.eodAt(S.mod);t+=' · '+GDE.eodClasses(S.M)[ea.of(c0,x,y)].name;
+      if(S.lvl==='facies'){const o=(S.mod.facies||[]).find(q=>GDE.inFacies(q,x,y));if(o)t+=' · '+GDE.FTYPE[o.type].name}}$('ro').textContent=t}else $('ro').textContent=RO0});
+cv.addEventListener('pointerup',()=>{const d=S.drag;if(!d)return;S.drag=null;if(S.tool==='sel')cv.style.cursor='';if(d.k==='pan'){compute(false);return}if(d.k==='well')renderWells();if(d.k==='src'||d.k==='srcaz'||d.k==='feed'||d.k==='feedaz')renderConcept();if(d.k==='fobj')renderEod();schedule()});
 cv.addEventListener('dblclick',e=>{if(S.tool==='trace'){e.preventDefault();finishTrace()}});
 function openPop(px,py,x,y){const p=$('pop'),st=$('stage').getBoundingClientRect();p.hidden=false;
   p.style.left=Math.min(px+12,st.width-240)+'px';p.style.top=Math.min(py+12,st.height-130)+'px';
@@ -2573,7 +2622,7 @@ document.addEventListener('keydown',e=>{const tag=(e.target.tagName||'').toLower
 const ICON={pass:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 20.5l5.5 5.5L29 14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
  warn:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4L37 34H3z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M20 15v9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="currentColor"/></svg>',
  none:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="20" cy="20" r="3" fill="currentColor"/></svg>'};
-const envOk=c=>c.b>=0||!!c.pair;
+const envOk=c=>c.b>=0||!!c.pair||!!c.ft;
 function renderVerdict(){const C=S.mod.check,mt=C.filter(envOk),hon=mt.filter(c=>c.honoured),un=C.length-mt.length,wp=hon.filter(c=>c.warped).length,B=AB();let v,h,sub;
   if(!C.length){v='none';h='Conceptual map — no well yet';sub='Paste a wells table or click “Add on map” (panel 2): the belts are then calibrated on them.'}
   else if(hon.length===mt.length&&mt.length){v='pass';h=mt.length===1?'The well is honoured':`All ${mt.length} wells honoured`;
@@ -2590,6 +2639,7 @@ function renderVerdict(){const C=S.mod.check,mt=C.filter(envOk),hon=mt.filter(c=
   $('verdict').className='verdict '+v;$('verdict').innerHTML=ICON[v]+`<h2>${esc(h)}</h2><div class="sub">${esc(sub)}</div>`}
 function wellNote(c){const B=AB(),mod=S.mod;
   if(!envOk(c))return'Environment not matched to a class: choose it in panel 2.';
+  if(c.ft){const o=(mod.facies||[]).find(q=>q.id===c.fobj);return c.honoured?`Honoured by a facies object (${GDE.FTYPE[c.ft].name.toLowerCase()}${o&&o.adj?', fitted to the well':''}${o&&o.well?', created at the well':''}).`:`Not inside a ${GDE.FTYPE[c.ft].name.toLowerCase()}: move one onto it or add one (facies map, panel 8).`}
   if(c.warped&&c.honoured)return`Honoured by local warping (radius ${fmtLen(mod.warp.R)}).`;
   if(c.chOut)return`In the channel belt, but the base map puts the well in ${B[c.belt].name}, outside the belts the channels run through (panel 4).`;
   if(c.varOut)return`The well is in ${B[c.belt].name}, away from the sources: move a source (panel 5) towards it or lengthen its lobe.`;
@@ -2600,8 +2650,8 @@ function wellNote(c){const B=AB(),mod=S.mod;
   if(c.b===S.M.belts.length&&B[c.b]&&B[c.b].channel)return'Honoured: one channel is routed through the well.';
   if(c.dist<.02*diag())return'Close to a boundary: the environment could as well be the neighbouring class.';return''}
 function renderCheck(){const B=AB();
-  $('tb').innerHTML=S.mod.check.map(c=>{const g=c.b>=0?B[c.b]:null,m=B[c.belt];
-    return`<tr><td class="l">${esc(c.name)}</td><td>${fmtN(c.x)}</td><td>${fmtN(c.y)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td><td>${isFinite(c.dist)?fmtLen(c.dist):'> map size'}</td><td class="l wrap">${esc(wellNote(c))}</td></tr>`}).join('')||'<tr><td class="l" colspan="8" style="color:var(--mut)">No well.</td></tr>'}
+  $('tb').innerHTML=S.mod.check.map(c=>{const g=c.b>=0?B[c.b]:c.ft?GDE.FTYPE[c.ft]:null,m=c.ft&&c.honoured?GDE.FTYPE[c.ft]:B[c.belt];
+    return`<tr><td class="l">${esc(c.name)}</td><td>${fmtN(c.x)}</td><td>${fmtN(c.y)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}${c.ft&&c.honoured?' (facies object)':''}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td><td>${isFinite(c.dist)?fmtLen(c.dist):'> map size'}</td><td class="l wrap">${esc(wellNote(c))}</td></tr>`}).join('')||'<tr><td class="l" colspan="8" style="color:var(--mut)">No well.</td></tr>'}
 function renderCal(){const m=S.mod,B=S.M.belts,t=m.t,p=m.prior,cal=m.cal,lk=isLines()?new Set(S.M.lines.map(l=>+l.k)):new Set();
   const st=k=>Math.abs(t[k]-p[k])<1e-6*Math.max(1,Math.abs(p[k]))?(lk.has(k)?'on its key line':'prior'):(isFinite(cal.lo[k])&&isFinite(cal.hi[k])?'between wells':'scaled');
   let h=`<p>Boundaries, ${isLines()?'proximal–distal distance (0 at the first key line when it is on “before…”)':S.M.geom==='radial'?'distance from the source':'distance from the reference point along the transport direction'}:</p>`+t.map((v,k)=>`<p><span class="sw" style="background:${B[k].color}"></span>${esc(B[k].name)} | ${esc(B[k+1].name)}: <b>${fmtLen(v)}</b> <span style="color:var(--mut)">(${st(k)}${/prior|key/.test(st(k))?'':', prior '+fmtLen(p[k])})</span></p>`).join('');
@@ -2613,11 +2663,15 @@ function dl(text,name,type){const b=text instanceof Blob?text:new Blob([text],{t
 function need(){if(!S.started||!S.mod){banner('Load an example, paste wells or start from a template first.',true);return false}
   const e=S.M.ext,n=((e.xmax-e.xmin)/S.M.cell)*((e.ymax-e.ymin)/S.M.cell);
   if(n>6e6){banner(`The export cell size gives ${Math.round(n/1e6)} million cells: increase it in panel 1 (6 million at most).`,true);return false}return true}
-function fullPolys(){if(!S.full)S.full=GDE.polygons(S.mod,S.M.ext,S.M.cell,{minArea:4,tol:.7});return S.full}
+function fullPolys(){if(!S.full)S.full=GDE.polygons(S.mod,S.M.ext,S.M.cell,{minArea:4});return S.full}
+function fullEod(){if(!S.fullE)S.fullE=GDE.eodPolygons(S.mod,S.M.ext,S.M.cell,{raster:fullPolys().raster});return S.fullE}
+const atlasLv=()=>S.lvl&&S.lvl!=='belts';
 const grid=()=>GDE.nodeGrid(S.mod,S.M.ext,S.M.cell,'GDE');
-on('bIrap','click',()=>{if(need())dl(GDE.irapLines(fullPolys()),'gde_polygons_irap.dat','text/plain')});
-on('bGeo','click',()=>{if(need())dl(GDE.geojson(fullPolys()),'gde_polygons.geojson','application/geo+json')});
-on('bPcsv','click',()=>{if(need())dl(GDE.polyCsv(fullPolys()),'gde_polygons.csv','text/csv')});
+// on the EOD and facies maps: EOD domains (level EOD) and facies objects (level facies: polygons, then centrelines) in one file
+const facF=()=>S.lvl==='facies'?GDE.faciesFeatures(S.mod):{polys:[],lines:[]};
+on('bIrap','click',()=>{if(!need())return;if(atlasLv())dl(GDE.irapLevels(fullEod(),facF()),S.lvl==='eod'?'gde_eod_irap.dat':'gde_eod_facies_irap.dat','text/plain');else dl(GDE.irapLines(fullPolys()),'gde_polygons_irap.dat','text/plain')});
+on('bGeo','click',()=>{if(!need())return;if(atlasLv())dl(GDE.geojsonLevels(fullEod(),facF()),S.lvl==='eod'?'gde_eod.geojson':'gde_eod_facies.geojson','application/geo+json');else dl(GDE.geojson(fullPolys()),'gde_polygons.geojson','application/geo+json')});
+on('bPcsv','click',()=>{if(!need())return;if(atlasLv())dl(GDE.polyCsv(fullEod().concat(facF().polys)),'gde_eod_polygons.csv','text/csv');else dl(GDE.polyCsv(fullPolys()),'gde_polygons.csv','text/csv')});
 on('bZmap','click',()=>{if(need())dl(GDE.zmap(grid()),'gde_belts.zmap','text/plain')});
 on('bGcsv','click',()=>{if(need())dl(GDE.gridCsv(grid()),'gde_grid.csv','text/csv')});
 on('bLines','click',()=>{if(!need())return;const L=GDE.lineFeatures(S.M);if(!L.length){banner('No key line or fault to export.',true);return}dl(GDE.irapPolylines(L),'gde_lines_irap.dat','text/plain')});
@@ -2625,9 +2679,103 @@ on('bLinesG','click',()=>{if(!need())return;const L=GDE.lineFeatures(S.M);if(!L.
 on('bWcsv','click',()=>{if(!S.mod)return need();const q=s=>/[",]/.test(String(s))?'"'+String(s).replace(/"/g,'""')+'"':s;
   dl(['well,x,y,environment,class_given,class_map,honoured,distance_to_boundary,warped'].concat(S.mod.check.map(c=>[q(c.name),c.x,c.y,q(c.env),c.b>=0?q(AB()[c.b].name):c.pair?q(c.env):'',q(AB()[c.belt].name),c.honoured?'yes':'no',isFinite(c.dist)?+c.dist.toFixed(1):'',c.warped?'yes':'no'].join(','))).join('\n'),'gde_wells.csv','text/csv')});
 on('bPng','click',()=>{if(!need())return;const e=S.M.ext,Wc=1000,leg=210,mw=Wc-66-14-leg,Hc=Math.round(mw*(e.ymax-e.ymin)/(e.xmax-e.xmin)+54),sc=2;
-  const P=((e.xmax-e.xmin)*(e.ymax-e.ymin)/S.M.cell**2<=1.5e6)?fullPolys():S.P,o=document.createElement('canvas');o.width=Wc*sc;o.height=Math.max(420,Hc)*sc;
-  const c=o.getContext('2d');c.setTransform(sc,0,0,sc,0,0);render(c,Wc,Math.max(420,Hc),P,{export:true,noBackdrop:true,view:{z:1,cx:(e.xmin+e.xmax)/2,cy:(e.ymin+e.ymax)/2}});o.toBlob(b=>dl(b,'gde_map.png','image/png'),'image/png')});
+  const small=(e.xmax-e.xmin)*(e.ymax-e.ymin)/S.M.cell**2<=1.5e6,P=small?fullPolys():S.P,PE=atlasLv()?(small?fullEod():S.PE):null,o=document.createElement('canvas');o.width=Wc*sc;o.height=Math.max(420,Hc)*sc;
+  const c=o.getContext('2d');c.setTransform(sc,0,0,sc,0,0);render(c,Wc,Math.max(420,Hc),P,{export:true,noBackdrop:true,PE,Pext:small?e:S.Pext,view:{z:1,cx:(e.xmin+e.xmax)/2,cy:(e.ymin+e.ymax)/2}});o.toBlob(b=>dl(b,S.lvl==='eod'?'gde_eod_map.png':S.lvl==='facies'?'gde_facies_map.png':'gde_map.png','image/png'),'image/png')});
 
+// ---------- EOD and facies maps: view level, domain labels, facies objects (drawing, selection, editing) ----------
+const LVL={belts:'GDE belts',eod:'EOD map',facies:'Facies map'};
+function setLevel(v,quiet){if(!LVL[v])v='belts';S.lvl=v;document.querySelectorAll('[data-v]').forEach(b=>{b.classList.toggle('on',b.dataset.v===v);b.setAttribute('aria-pressed',b.dataset.v===v)});
+  $('tbObjB').hidden=$('tbObj').hidden=v!=='facies';if(v!=='facies'&&S.tool==='obj')setTool('sel');if(!quiet&&S.started)compute(false)}
+document.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>setLevel(b.dataset.v)));
+$('tbObj').innerHTML=GDE.FKEYS.map(k=>`<option value="${k}">${esc(GDE.FTYPE[k].name)}</option>`).join('');
+const lighten=(c,f)=>'#'+[1,3,5].map(i=>Math.round(parseInt(c.substr(i,2),16)*(1-f)+255*f).toString(16).padStart(2,'0')).join('');
+const FPAT=new Map();
+function fpat(c,kind,col,edge){const key=kind+col+edge;if(!FPAT.has(key)){const p=document.createElement('canvas'),g=p.getContext('2d');
+    if(kind==='brick'){p.width=18;p.height=10;g.fillStyle=col;g.fillRect(0,0,18,10);g.strokeStyle=edge;g.lineWidth=.8;g.beginPath();
+      g.moveTo(0,.4);g.lineTo(18,.4);g.moveTo(0,5.4);g.lineTo(18,5.4);g.moveTo(.4,0);g.lineTo(.4,5);g.moveTo(9.4,5);g.lineTo(9.4,10);g.stroke()}
+    else{p.width=p.height=16;g.fillStyle=col;g.fillRect(0,0,16,16);g.fillStyle=edge;
+      for(const [x,y,s] of [[2,3,1.1],[9,1,.9],[13,6,1.2],[6,8,1],[1,12,.9],[11,13,1.1],[15,11,.8],[5,14,.8],[8,4,.7]]){g.beginPath();g.arc(x,y,s,0,7);g.fill()}}
+    FPAT.set(key,p)}return c.createPattern(FPAT.get(key),'repeat')}
+function fobjAnchor(o){const g=o.g;if(o.type==='fairway'||o.type==='river'){const P=o.type==='river'?(g.lines[0]||{pts:o.path}).pts:o.path;return P[Math.floor(P.length*(o.type==='river'?.45:.5))]}
+  if(o.type==='lobe'||o.type==='fan'||o.type==='mtc'){const a=o.az*Math.PI/180;return[o.x+Math.sin(a)*.5*o.L,o.y+Math.cos(a)*.5*o.L]}return[o.x,o.y]}
+// facies objects over the lightened EOD map; labels once per type (and each canyon)
+function drawFacies(c,L,opt){const O=(S.mod&&S.mod.facies)||[],T=GDE.FTYPE,sel=S.sel||{},k=L.k;
+  const ring=r=>{const p=new Path2D();r.forEach((q,i)=>i?p.lineTo(L.X(q[0]),L.Y(q[1])):p.moveTo(L.X(q[0]),L.Y(q[1])));p.closePath();return p};
+  const pl=pts=>{c.beginPath();pts.forEach((q,i)=>i?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])))};
+  c.lineJoin='round';c.lineCap='round';
+  for(const ty of ['ponded','platform','mtc','fairway','fan','river','lobe'])for(const o of O){if(o.type!==ty)continue;const t=T[ty],g=o.g;
+    if(ty==='fairway'){if(g.ring){const p=ring(g.ring);c.fillStyle='rgba(240,213,76,.30)';c.fill(p);c.strokeStyle='rgba(74,64,18,.35)';c.lineWidth=.7;c.stroke(p)}
+      for(const l of g.lines){const w=Math.max(1.3,Math.min(6,l.w*k));
+        if(l.kind==='canyon'){pl(l.pts);c.strokeStyle='#4a3c22';c.lineWidth=w+2.6;c.stroke();pl(l.pts);c.strokeStyle='#efe3c2';c.lineWidth=w;c.stroke();continue}
+        pl(l.pts);c.strokeStyle=t.edge;c.lineWidth=w+1.5;c.stroke();pl(l.pts);c.strokeStyle=t.color;c.lineWidth=w;c.stroke()}}
+    else if(ty==='river'){for(const l of g.lines){pl(l.pts);c.strokeStyle=t.color;c.lineWidth=Math.max(.7,Math.min(2.8,l.w*k*1.2));c.stroke()}}
+    else if(g.ring){const p=ring(g.ring);c.fillStyle=t.pat?fpat(c,t.pat,t.color,t.edge):t.color;c.fill(p);c.strokeStyle=t.edge;c.lineWidth=1.1;c.stroke(p);
+      for(const l of g.lines){pl(l.pts);c.strokeStyle=t.edge;c.lineWidth=ty==='fan'?.6:.85;c.stroke()}}
+    if(!opt.export&&sel.kind==='fobj'&&sel.id===o.id){c.save();c.setLineDash([5,4]);c.strokeStyle='#1d3f8a';c.lineWidth=2;if(g.ring)c.stroke(ring(g.ring));else for(const l of g.lines.slice(0,1)){pl(l.pts);c.stroke()}c.restore();
+      const a=fobjAnchor(o);c.fillStyle='#1d3f8a';c.beginPath();c.arc(L.X(a[0]),L.Y(a[1]),4.5,0,7);c.fill()}}
+  // labels
+  c.font='italic 600 11px Inter,system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';
+  const PL={lobe:'Deltaic lobes',river:'Fluvial channels',fairway:'Turbidite fairways',fan:'Basin-floor fans',platform:'Carbonate platform',mtc:'MTC',ponded:'Ponded area'};
+  const size=o=>o.g.ring?Math.abs(GDE.sArea(o.g.ring)):(o.path?o.path.length:1);
+  for(const ty of GDE.FKEYS){const os=O.filter(o=>o.type===ty);if(!os.length)continue;const big=os.reduce((a,b)=>size(b)>size(a)?b:a),a=fobjAnchor(big),nm=os.length>1||ty==='platform'?PL[ty]:T[ty].name;
+    if(ty==='platform'||ty==='mtc'||ty==='ponded'){for(const o of os){const q=fobjAnchor(o);halo(c,ty==='platform'?'Carbonate platform':PL[ty],L.X(q[0]),L.Y(q[1]),'#1f2f55')}continue}
+    halo(c,nm,L.X(a[0]),L.Y(a[1])+(ty==='river'?0:-2),'#1f2f55')}
+  for(const o of O)if(o.type==='fairway'){const cl=o.g.lines.find(l=>l.kind==='canyon');if(cl){const q=cl.pts[Math.floor(cl.pts.length/2)],r=cl.pts[Math.min(cl.pts.length-1,Math.floor(cl.pts.length/2)+2)];
+    c.save();c.translate(L.X(q[0]),L.Y(q[1]));let ang=Math.atan2(L.Y(r[1])-L.Y(q[1]),L.X(r[0])-L.X(q[0]));if(Math.abs(ang)>Math.PI/2)ang+=Math.PI;c.rotate(ang);halo(c,'Canyon',0,-9,'#1f2f55');c.restore()}}}
+// domain labels inside the EOD polygons (from the label raster), font scaled to the room, kept off the wells
+function eodSpots(P,e){if(!P||!P.raster)return[];if(P.spots)return P.spots;const R=P.raster;
+  const av=S.wells.map(w=>[(w.x-e.xmin)/R.cx,(e.ymax-w.y)/R.cy]);P.spots=GDE.labelSpots(R.L,R.nx,R.ny,{minCells:.01*R.nx*R.ny,avoid:av,avoidR:.025*R.nx});return P.spots}
+function wrapText(c,t,maxW){const words=t.split(' '),L=[];let line='';for(const w of words){const s=line?line+' '+w:w;if(c.measureText(s).width>maxW&&line){L.push(line);line=w}else line=s}if(line)L.push(line);return L}
+function drawEodLabels(c,L,lv,PE,e){const sp=eodSpots(PE,e),cl=GDE.eodClasses(S.M),R=PE&&PE.raster;if(!R)return;const seen=new Map();
+  c.textAlign='center';c.textBaseline='middle';
+  for(const s of sp){const d=cl[s.label];if(!d)continue;const n=(seen.get(s.label)||0)+1;seen.set(s.label,n);if(n>2)continue;
+    const x=L.X(e.xmin+s.x*R.cx),y=L.Y(e.ymax-s.y*R.cy),room=s.r*R.cx*L.k,fs=Math.max(9,Math.min(lv==='eod'?15:13,room/3.2));if(room<14)continue;
+    c.font=`${lv==='eod'?500:400} ${fs}px Inter,system-ui,sans-serif`;const lines=wrapText(c,d.name,Math.max(70,Math.min(2.4*room,190)));
+    lines.forEach((t,i)=>halo(c,t,x,y+(i-(lines.length-1)/2)*(fs+2),lv==='eod'?'#1f2f55':'#4a4844'))}}
+// atlas well symbol: circle with four spikes
+function wellSym(c,x,y){c.strokeStyle='#111';c.lineWidth=1.3;c.beginPath();for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){c.moveTo(x+dx*3.5,y+dy*3.5);c.lineTo(x+dx*8,y+dy*8)}c.stroke();
+  c.fillStyle='#fff';c.beginPath();c.arc(x,y,3.6,0,7);c.fill();c.stroke();c.fillStyle='#111';c.beginPath();c.arc(x,y,1.3,0,7);c.fill()}
+// ---------- panel 8: EOD domains, generation counts, objects ----------
+function fedit(id){const F=S.M.facies;F.edits=F.edits||{};return F.edits[id]||(F.edits[id]={})}
+function fobj(id){return((S.mod&&S.mod.facies)||[]).find(o=>o.id===id)}
+function renderEod(){const M=S.M;if(!M)return;const F=M.facies||(M.facies=GDE.faciesDefaults()),E=M.eod||{};
+  $('eTitle').value=E.title||'';$('eAbyss').value=E.abyss||0;$('fOn').checked=F.on!==false;
+  for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded']])$(id).value=(F.n||{})[k]??0;$('fChan').value=F.chan||5;$('fSeed').value=F.seed||1;
+  const AB=GDE.allBelts(M),em=GDE.eodMap(M),cl=GDE.eodClasses(M),used=new Set(em);
+  $('eodList').innerHTML=cl.map((d,i)=>`<div class="br" data-k="${d.key}"><input type="color" value="${d.color}" aria-label="Colour of ${esc(d.name)}"><input type="text" value="${esc(d.name)}" aria-label="EOD domain name" style="flex:1"${used.has(i)?'':' class="unused"'}></div>`).join('')
+    +'<div class="note">Class → domain</div>'+AB.map((c,i)=>`<div class="pg" style="margin:2px 0"><span title="${esc(c.name)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span><select data-c="${esc(c.name)}">${cl.map((d,j)=>`<option value="${d.key}"${em[i]===j?' selected':''}>${esc(d.name)}</option>`).join('')}</select></div>`).join('');
+  $('eodList').querySelectorAll('.br').forEach(r=>{const k=r.dataset.k,[ci,ti]=r.querySelectorAll('input');const set=(f,v)=>{M.eod=M.eod||{};M.eod.doms=M.eod.doms||{};M.eod.doms[k]=Object.assign(M.eod.doms[k]||{},{[f]:v});schedule()};
+    ci.addEventListener('input',()=>set('color',ci.value));ti.addEventListener('change',()=>set('name',ti.value.trim()||GDE.EOD.find(d=>d.key===k).name))});
+  $('eodList').querySelectorAll('select[data-c]').forEach(s=>s.addEventListener('change',()=>{M.eod=M.eod||{};M.eod.map=M.eod.map||{};M.eod.map[s.dataset.c]=s.value;schedule()}));
+  const O=(S.mod&&S.mod.facies)||[],sel=S.sel||{};
+  $('foList').innerHTML=O.length?O.map(o=>`<div class="it${sel.kind==='fobj'&&sel.id===o.id?' sel':''}" data-id="${esc(o.id)}"><div class="hd"><b style="flex:1;font-weight:500;cursor:pointer" data-a="sel">${esc(GDE.FTYPE[o.type].name)} <span style="color:var(--mut);font-size:.72rem">${esc(o.id)}${o.edited?' · edited':''}${o.adj?' · fitted to a well':''}</span></b>
+    <button data-a="regen" title="Another shape for this object (new seed)">↻</button><button data-a="small" title="Smaller">−</button><button data-a="big" title="Larger">+</button><button data-a="del" title="Delete this object">✕</button></div></div>`).join(''):'<div class="note">No facies object: switch “Generate facies objects” on, or add objects with the Object tool (facies map).</div>';
+  $('foList').querySelectorAll('.it').forEach(r=>{const id=r.dataset.id;r.querySelectorAll('[data-a]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.a,o=fobj(id);if(!o)return;
+    if(a==='sel'){S.sel={kind:'fobj',id};if(S.lvl!=='facies')setLevel('facies');else{renderEod();draw()}return}
+    if(o.extra){const i=+id.slice(1),X=M.facies.extra[i];if(a==='del')M.facies.extra.splice(i,1);else if(a==='regen')X.seed=1+Math.floor(Math.random()*99999);else{const f=a==='big'?1.15:.87;for(const q of ['L','a','W','w'])if(X[q])X[q]*=f}}
+    else{const E2=fedit(id);if(a==='del')E2.del=true;else if(a==='regen')E2.seed=1+Math.floor(Math.random()*99999);else E2.s=+((E2.s||1)*(a==='big'?1.15:.87)).toFixed(4)}
+    if(a==='del'&&S.sel&&S.sel.id===id)S.sel=null;schedule()}))});
+  const notes=(S.mod&&S.mod.fnotes)||[];$('fMsg').textContent=notes.join('; ');$('fMsg').className='msg'+(notes.some(n=>/not inside|inside a/.test(n))?' err':'')}
+on('eTitle','change',()=>{S.M.eod=S.M.eod||{};S.M.eod.title=$('eTitle').value.trim();draw()});
+on('eAbyss','change',()=>{const v=numv('eAbyss');if(v>=0){S.M.eod=S.M.eod||{};S.M.eod.abyss=v;schedule()}});
+on('fOn','change',()=>{S.M.facies.on=$('fOn').checked;rematch();renderWells();schedule()});
+for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded']])on(id,'change',()=>{const v=Math.round(numv(id));if(v>=0&&v<=40){S.M.facies.n=Object.assign({},S.M.facies.n,{[k]:v});schedule()}});
+on('fChan','change',()=>{const v=Math.round(numv('fChan'));if(v>=1&&v<=16){S.M.facies.chan=v;schedule()}});
+on('fSeed','change',()=>{const v=Math.round(numv('fSeed'));if(isFinite(v)){S.M.facies.seed=v;schedule()}});
+on('fSeedN','click',()=>{S.M.facies.seed=1+Math.floor(Math.random()*99999);$('fSeed').value=S.M.facies.seed;schedule()});
+on('fReset','click',()=>{S.M.facies.edits={};S.M.facies.extra=[];S.sel=null;schedule();banner('Facies objects back to the generated ones (undo restores your edits).')});
+// a facies object added by hand where the user clicks (Object tool, facies map)
+function addFobj(type,x,y){const d=diag(),az=+S.M.az||180,a=az*Math.PI/180,o={type,x:Math.round(x),y:Math.round(y),seed:1+Math.floor(Math.random()*99999)};
+  if(type==='lobe'||type==='fan')Object.assign(o,{az,L:Math.round(d*(type==='lobe'?.09:.07)),open:70});
+  else if(type==='platform'||type==='ponded')Object.assign(o,{a:Math.round(d*(type==='platform'?.03:.02)),e:.6,rot:0});
+  else if(type==='mtc')Object.assign(o,{az,L:Math.round(d*.07),w:Math.round(d*.035)});
+  else if(type==='fairway'){const P=[];for(let i=0;i<=8;i++)P.push([Math.round(x+Math.sin(a)*d*.3*i/8),Math.round(y+Math.cos(a)*d*.3*i/8)]);Object.assign(o,{path:P,n:5,w:Math.round(d*.003),W:Math.round(d*.06),cl:Math.round(d*.05)})}
+  else if(type==='river'){const P=[];for(let i=0;i<=8;i++)P.push([Math.round(x-Math.sin(a)*d*.25*i/8),Math.round(y-Math.cos(a)*d*.25*i/8)]);Object.assign(o,{path:P,w:Math.round(d*.006)})}
+  const F=S.M.facies;F.extra=F.extra||[];F.extra.push(o);S.sel={kind:'fobj',id:'x'+(F.extra.length-1)};schedule()}
+// examples select (grouped), in the intro and in the toolbar
+function fillExamples(sel){sel.innerHTML='<option value="">Load an example…</option>'+GDE.EXGROUPS.map(([g,ks])=>`<optgroup label="${esc(g)}">${ks.map(k=>`<option value="${k}">${esc(GDE.EXNAMES[k]||k)}</option>`).join('')}</optgroup>`).join('');
+  sel.addEventListener('change',()=>{const k=sel.value;sel.value='';if(k)loadExample(k)})}
+fillExamples($('iEx'));fillExamples($('tbEx'));setLevel('belts',true);
 // ---------- examples, files, start ----------
 function loadModel(M,wells){S.M=clone(M);for(const l of S.M.layers||[]){const o=(M.layers||[]).find(q=>q.id===l.id);if(o&&o.img)l.img=o.img}attachImgs(S.M);
   if(!S.M.channels)S.M.channels=GDE.channelDefaults(S.M);$('ro').textContent=RO0;
@@ -2635,9 +2783,8 @@ function loadModel(M,wells){S.M=clone(M);for(const l of S.M.layers||[]){const o=
   S.bd=((S.M.layers||[]).find(l=>!l.grid)||(S.M.layers||[])[0]||{}).id||null;S.bdOp=+(((S.M.layers||[]).find(l=>l.id===S.bd)||{}).op??.55);S.layerOpen=null;S.sel=null;S.lineSel=0;
   syncInputs();renderBelts();renderWells();$('wMsg').textContent='';S.undo=[];S.redo=[];
   if(S.started){size();zoomFit();compute(false)}else start();setTool('sel')}
-function loadExample(k){const ex=GDE.examples[k];loadModel(ex.M,ex.wells);
+function loadExample(k){const ex=GDE.examples[k];setLevel(ex.view||'belts',true);loadModel(ex.M,ex.wells);
   banner(ex.title+(ex.M.geom==='lines'?': drag the sources, the arrow heads, a well; edit the key lines with the Line tool.':': drag the source, the arrow head or a well to see the map follow.'))}
-for(const [id,k] of [['iCoast','margin'],['iRimmed','carbmargin'],['iCanyon','canyon'],['iRift','rift'],['iDelta','delta'],['iFan','fan'],['iEst','estuary'],['iRamp','ramp'],['iLake','lake']])on(id,'click',()=>loadExample(k));
 on('bMSave','click',()=>{if(!S.started)return need();dl(GDE.saveModel(S.M,wellsOut()),'gde_model.json','application/json')});
 function openModelText(t,name){const r=GDE.openModel(t);if(!r.M){banner((name?name+': ':'')+r.errors[0],true);return}
   loadModel(r.M,r.wells);banner(`Model opened${name?' from '+name:''}: ${r.wells.length} well${r.wells.length===1?'':'s'}.`+(r.errors.length?' '+r.errors.length+' entr'+(r.errors.length>1?'ies':'y')+' skipped: '+r.errors[0]:''),!!r.errors.length)}
@@ -2672,7 +2819,7 @@ function systemsSection(){const tables=[];
 window.GDEUI={S,compute,render,loadExample,loadModel,applyTable,fullPolys,grid,hit,layout:curL,openModelText,systemsSection,setTool,undo,redo,draw,selItem};
 // hash hooks: #example, &tool=line, &bd=layer id, &op=0.6, &zoom=2, &sel=src:0
 (()=>{const h=location.hash.slice(1).split('&'),k=h[0],o=Object.fromEntries(h.slice(1).map(s=>s.split('=')));
-  if(GDE.examples[k])loadExample(k);else if(k==='blank')$('iBlank').click();else return;
+  if(GDE.examples[k])loadExample(k);else if(k==='blank')$('iBlank').click();else return;if(o.view){setLevel(o.view,true)}
   if(o.bd!=null)S.bd=o.bd||null;if(o.op)S.bdOp=+o.op;if(o.zoom)S.view.z=+o.zoom;if(o.sel){const [a,b]=o.sel.split(':');S.sel={kind:a,i:+b}}if(o.layer)S.layerOpen=o.layer;
   if(o.tool)setTool(o.tool);renderLayers();renderConcept();compute(false)})();
 
