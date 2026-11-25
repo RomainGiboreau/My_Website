@@ -149,7 +149,8 @@ td.l,th.l{text-align:left}
  <section class="panel"><h2><span class="n">4</span>Display<i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Colour by</span><select id="colby"><option value="qc">QC status</option><option value="group">Group</option><option value="depth">Depth</option></select></div>
   <label class="inl"><input type="checkbox" id="showGrey" checked>Show masked / excluded as grey crosses</label>
-  <label class="inl"><input type="checkbox" id="logS" checked>Log axes for S1, S2 vs TOC</label></div></section>
+  <label class="inl"><input type="checkbox" id="logS" checked>Log axes for S1, S2 vs TOC</label>
+  <label class="inl"><input type="checkbox" id="abq" checked>Interpretation charts (kerogen types, maturity zones)</label></div></section>
 </aside>
 <main>
  <div class="tabs"><button class="on" data-t="plots">Crossplots</button><button data-t="prof">Depth profiles</button><button data-t="qc">QC report</button><button data-t="std">Standards</button></div>
@@ -223,6 +224,7 @@ function drawChart(cv,spec){
     for(const l of p.lines||[]){x.strokeStyle=l.c||'#5c5a52';x.lineWidth=l.w||1.2;x.setLineDash(l.dash||[]);x.beginPath();let on=false,last=null,first=null;
       for(let i=0;i<l.x.length;i++){if(!fin(l.x[i])||!fin(l.y[i])){on=false;continue}const a=px(l.x[i]),b=py(l.y[i]);if(on)x.lineTo(a,b);else x.moveTo(a,b);on=true;last=[a,b];if(!first)first=[a,b]}x.stroke();x.setLineDash([]);
       if(l.label&&l.start&&first){x.fillStyle=l.c||'#5c5a52';x.textAlign='left';x.fillText(l.label,Math.max(first[0]+4,ox+4),Math.min(T+ph-8,first[1]-8))}else if(l.label&&last){x.fillStyle=l.c||'#5c5a52';x.textAlign='right';x.fillText(l.label,Math.min(last[0]-3,ox+pw-3),Math.max(T+8,last[1]-8))}}
+    for(const t of p.texts||[]){if(!fin(t.x)||!fin(t.y))continue;x.fillStyle=t.c||'#8a8678';x.textAlign=t.a||'center';x.font=t.f||'italic 11px Inter,sans-serif';x.fillText(t.t,px(t.x),py(t.y))}x.font='11px Inter,sans-serif';
     // points: grey crosses first, then coloured
     for(const q of p.pts){if(!q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y);x.strokeStyle='#9a968a';x.lineWidth=1.3;x.beginPath();x.moveTo(a-3,b-3);x.lineTo(a+3,b+3);x.moveTo(a+3,b-3);x.lineTo(a-3,b+3);x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
     for(const q of p.pts){if(q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y),r=q.r||4;x.beginPath();x.arc(a,b,r,0,7);x.fillStyle=q.c||'#4a5a4e';x.fill();x.lineWidth=q.ring?2:1;x.strokeStyle=q.ring||'#232220';x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
@@ -336,16 +338,42 @@ function lim(pts,k,kind){const v=pts.filter(q=>!q.g&&isFinite(q[k])).map(q=>q[k]
   if(kind==='pi')return[0,Math.min(1,Math.max(0.1,Math.ceil(hi*11)/10))];
   if(kind==='idx')return[0,Math.ceil(hi*1.05/50)*50||50];
   return undefined}
-function renderCharts(){const R=D.rows,log=$('logS').checked,cards=[];
+// ---- interpretation charts (abaques). Kerogen-type curves are SCHEMATIC, drawn from memory after the usual
+// Espitalie et al. (1977, 1985) diagrams: they show the trend of each type, not a calibrated envelope.
+// Ro iso-lines: Jarvie et al. (2001) calculated Ro = 0.0180 Tmax - 7.16 (type II marine shales).
+const ABQ={
+ hiT:[['Type I','#3b6ea5',[[415,910],[435,900],[443,840],[450,650],[456,400],[462,180],[470,70],[490,30],[530,15]]],
+      ['Type II','#2a9d8f',[[410,680],[425,640],[435,580],[445,450],[455,300],[465,170],[475,90],[495,40],[530,20]]],
+      ['Type III','#a8623a',[[405,300],[420,270],[435,230],[450,180],[465,130],[480,90],[500,55],[530,30]]]],
+ hiOI:[['Type I','#3b6ea5',[[2,40],[3,250],[5,500],[8,700],[12,850],[18,930]]],
+       ['Type II','#2a9d8f',[[3,30],[6,150],[12,330],[22,500],[35,620],[50,680]]],
+       ['Type III','#a8623a',[[4,15],[15,50],[40,90],[80,125],[130,155],[200,175]]],
+       ['Type IV','#8a8678',[[5,5],[50,15],[100,25],[200,40]]]],
+ roT:ro=>(ro+7.16)/0.018};
+const curve=([lab,c,xy])=>({x:xy.map(q=>q[0]),y:xy.map(q=>q[1]),c,w:1.6,label:lab,start:true});
+function renderCharts(){const R=D.rows,log=$('logS').checked,ab=$('abq').checked,cards=[];
   const have=k=>R.some(o=>isFinite(o[k])),haveHI=R.some(o=>isFinite(o.HI)),haveOI=R.some(o=>isFinite(o.OI)),havePI=R.some(o=>isFinite(o.PI));
   const add=(id,title,spec)=>cards.push({id,title,spec});
-  if(haveHI&&have('tmax')){const pts=mk(R,o=>TMX(o.tmax)?o.tmax:NaN,o=>o.HI,{t:1,h:1});add('c1','HI vs Tmax',{ylab:'HI (mg HC / g TOC)',ylim:lim(pts.map(q=>({g:q.g,v:q.y})),'v','idx'),panels:[{xlab:'Tmax (°C)',xlim:lim(pts,'x','tmax'),pts,vlines:[{v:435,label:'435'},{v:470,label:'470'}]}]})}
-  if(haveHI&&haveOI){const pts=mk(R,o=>o.OI,o=>o.HI,{h:1});add('c2','HI vs OI',{ylab:'HI (mg HC / g TOC)',ylim:lim(pts.map(q=>({g:q.g,v:q.y})),'v','idx'),panels:[{xlab:'OI (mg CO₂ / g TOC)',xlim:lim(pts,'x','idx'),pts}]})}
-  if(have('s2')&&have('toc')){const mx=Math.max(...R.filter(o=>isFinite(o.toc)).map(o=>o.toc)),ym=Math.max(...R.filter(o=>isFinite(o.s2)).map(o=>o.s2))*1.1,x0=log?0.05:0,ln=[100,200,300,400,600].map(h=>{const xe=Math.min(mx*1.2,ym*100/h);return{x:[x0,xe],y:[h*x0/100,h*xe/100],c:'#b8b2a0',dash:[4,3],label:'HI '+h,start:log}});
-    add('c3','S2 vs TOC (lines: constant HI)',{ylab:'S2 (mg HC / g rock)',ylog:log,panels:[{xlab:'TOC (wt %)',xlog:log,pts:mk(R,o=>o.toc,o=>o.s2,{}),lines:ln}]})}
+  if(haveHI&&have('tmax')){const pts=mk(R,o=>TMX(o.tmax)?o.tmax:NaN,o=>o.HI,{t:1,h:1});let yl=lim(pts.map(q=>({g:q.g,v:q.y})),'v','idx'),xl=lim(pts,'x','tmax');
+    const pn={xlab:'Tmax (°C)',xlim:xl,pts,vlines:[{v:435,label:'435'},{v:470,label:'470'}]};
+    if(ab){yl=[0,Math.max(yl?yl[1]:0,1000)];xl=pn.xlim=[Math.min(xl?xl[0]:400,400),Math.max(xl?xl[1]:520,520)];
+      pn.vlines=[{v:435},{v:470}];pn.lines=ABQ.hiT.map(curve).concat([0.6,1.0,1.3].map(r=>({x:[ABQ.roT(r),ABQ.roT(r)],y:[0,yl[1]],c:'#b8b2a0',dash:[2,3]})));
+      pn.texts=[0.6,1.0,1.3].map(r=>({x:ABQ.roT(r)+1,y:yl[1]*0.97,t:'Ro '+r.toFixed(1),a:'left',c:'#8a8678',f:'10px Inter,sans-serif'})).concat([{x:(xl[0]+435)/2,y:yl[1]*0.04,t:'Immature'},{x:452.5,y:yl[1]*0.04,t:'Oil window'},{x:(470+xl[1])/2,y:yl[1]*0.04,t:'Gas window'}])}
+    add('c1','HI vs Tmax'+(ab?' (kerogen types, schematic)':''),{ylab:'HI (mg HC / g TOC)',ylim:yl,panels:[pn]})}
+  if(haveHI&&haveOI){const pts=mk(R,o=>o.OI,o=>o.HI,{h:1});let yl=lim(pts.map(q=>({g:q.g,v:q.y})),'v','idx'),xl=lim(pts,'x','idx');const pn={xlab:'OI (mg CO₂ / g TOC)',xlim:xl,pts};
+    if(ab){yl=[0,Math.max(yl?yl[1]:0,1000)];pn.xlim=[0,Math.max(xl?xl[1]:0,200)];pn.lines=ABQ.hiOI.map(c=>({...curve(c),start:false}));
+      pn.texts=[{x:pn.xlim[1]*0.97,y:yl[1]*0.95,t:'arrows of maturation point to the origin',a:'right'}]}
+    add('c2','HI vs OI'+(ab?' (pseudo-Van Krevelen, schematic)':''),{ylab:'HI (mg HC / g TOC)',ylim:yl,panels:[pn]})}
+  if(have('s2')&&have('toc')){const mx=Math.max(...R.filter(o=>isFinite(o.toc)).map(o=>o.toc)),ym=Math.max(...R.filter(o=>isFinite(o.s2)).map(o=>o.s2))*1.1,x0=log?0.05:0,ln=(ab?[[600,''],[300,''],[200,''],[50,'']]:[100,200,300,400,600].map(h=>[h,'HI '+h])).map(([h,lb])=>{const xe=Math.min(mx*1.2,ym*100/h);return{x:[x0,xe],y:[h*x0/100,h*xe/100],c:ab?'#8a8678':'#b8b2a0',dash:[4,3],label:lb,start:log&&!ab}});
+    const xz=log?Math.sqrt(Math.max(0.05,Math.min(...R.filter(o=>o.toc>0).map(o=>o.toc)))*mx):mx*0.45,zt=ab?[[1000,'Type I'],[420,'Type II'],[245,'Type II–III'],[110,'Type III'],[25,'Type IV']].map(([h,t])=>({x:xz,y:h*xz/100,t})):[];
+    add('c3',ab?'S2 vs TOC (kerogen types by HI)':'S2 vs TOC (lines: constant HI)',{ylab:'S2 (mg HC / g rock)',ylog:log,panels:[{xlab:'TOC (wt %)',xlog:log,pts:mk(R,o=>o.toc,o=>o.s2,{}),lines:ln,texts:zt}]})}
   if(have('s1')&&have('toc')){const mx=Math.max(...R.filter(o=>isFinite(o.toc)).map(o=>o.toc)),ym=Math.max(...R.filter(o=>isFinite(o.s1)).map(o=>o.s1))*1.1,xe=Math.min(mx*1.2,ym);
     add('c4','S1 vs TOC (line: S1/TOC×100 = 100)',{ylab:'S1 (mg HC / g rock)',ylog:log,panels:[{xlab:'TOC (wt %)',xlog:log,pts:mk(R,o=>o.toc,o=>o.s1,{}),lines:[{x:[log?0.05:0,xe],y:[log?0.05:0,xe],c:'#a8623a',dash:[5,4],label:'OSI 100'}]}]})}
-  if(havePI&&have('tmax')){const pts=mk(R,o=>TMX(o.tmax)?o.tmax:NaN,o=>o.PI,{t:1});add('c5','PI vs Tmax',{ylab:'PI = S1/(S1+S2)',ylim:lim(pts.map(q=>({g:q.g,v:q.y})),'v','pi'),panels:[{xlab:'Tmax (°C)',xlim:lim(pts,'x','tmax'),pts,vlines:[{v:435,label:'435'},{v:470,label:'470'}]}]})}
+  if(havePI&&have('tmax')){const pts=mk(R,o=>TMX(o.tmax)?o.tmax:NaN,o=>o.PI,{t:1});let yl=lim(pts.map(q=>({g:q.g,v:q.y})),'v','pi');const pn={xlab:'Tmax (°C)',xlim:lim(pts,'x','tmax'),pts,vlines:[{v:435,label:'435'},{v:470,label:'470'}]};
+    if(ab){yl=[0,Math.max(yl?yl[1]:0,0.6)];const xl=pn.xlim=[Math.min(pn.xlim?pn.xlim[0]:400,400),Math.max(pn.xlim?pn.xlim[1]:520,520)];
+      pn.hlines=[{v:0.1,c:'#8a8678'},{v:0.4,c:'#8a8678'}];
+      pn.texts=[{x:(xl[0]+435)/2,y:0.05,t:'Immature'},{x:452.5,y:0.25,t:'Oil window'},{x:(470+xl[1])/2,y:0.25,t:'Gas window'},{x:(xl[0]+435)/2,y:Math.min(yl[1]*0.9,0.5),t:'Stained / migrated oil'}]}
+    add('c5','PI vs Tmax'+(ab?' (maturity zones)':''),{ylab:'PI = S1/(S1+S2)',ylim:yl,panels:[pn]})}
   if(have('s2')&&have('s3'))add('c6','S2 vs S3',{ylab:'S2 (mg HC / g rock)',panels:[{xlab:'S3 (mg CO₂ / g rock)',pts:mk(R,o=>o.s3,o=>o.s2,{})}]});
   if(have('minc')&&have('s3'))add('c7','S3 vs MinC',{ylab:'S3 (mg CO₂ / g rock)',panels:[{xlab:'MinC (wt %)',pts:mk(R,o=>o.minc,o=>o.s3,{})}]});
   const box=$('cards');if(!cards.length){box.innerHTML='<div class="empty">Load data with at least S2 and TOC, or Tmax and HI.</div>';return}
@@ -380,7 +408,7 @@ let rq=0;function refresh(){if(!D.table)return;cancelAnimationFrame(rq);rq=reque
   qc();for(const o of D.rows){o._f=o.flags}legend();
   ({plots:renderCharts,prof:renderProf,qc:qcTable,std:renderStd})[D.tab]();$('exportMsg').textContent=''})}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{D.tab=b.dataset.t;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='t_'+D.tab));$('legend').style.display=D.tab==='qc'||D.tab==='std'?'none':'';refresh()});
-['colby','showGrey','logS','qcf'].forEach(i=>$(i).addEventListener('change',refresh));
+['colby','showGrey','logS','abq','qcf'].forEach(i=>$(i).addEventListener('change',refresh));
 window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(refresh,150)});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b){const c=$(b.dataset.png);if(c)pngOf(c,b.dataset.png+'.png')}});
 // ---- export
@@ -483,6 +511,6 @@ buildRulesUI();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what": "Runs entirely in your browser: nothing you load leaves your machine. Quality control of Rock-Eval data (automatic flags), HI–Tmax, HI–OI and S2–TOC plots, depth profiles and control charts of standards.", "method": ["Columns are recognised from their names (S1, S2, S3, Tmax/Tpeak, TOC, HI, OI, PI, PC, RC, MinC, depth, sample, formation…) and can be reassigned. HI, OI and PI are recomputed from S1, S2, S3 and TOC when absent; when present in the file they are compared with the recomputed values.", "Each rule can be switched off, has an editable threshold and an action: flag only (the point stays coloured), mask (greyed in the plots that depend on the suspect value: Tmax, or HI/OI) or exclude (greyed everywhere and removed from the clean export). Defaults, all editable on the page: S2 below 0.2 mg HC/g masks Tmax; Tmax outside 350–600 °C; TOC below 0.5 wt % masks HI and OI; HI above 1000 mg HC/g TOC; OI above 200 mg CO<sub>2<\/sub>/g TOC; S1/TOC × 100 above 100 (oil saturation index); PI differing from S1/(S1 + S2) by more than 0.03; HI or OI differing from 100·S2/TOC or 100·S3/TOC by more than 5 %; TOC differing from PC + RC by more than 10 %; negative values; duplicate sample name or depth.", "Rows whose sample name matches the standards pattern are kept apart and shown as control charts."], "sources": [["Default thresholds", "Common practice, not a standard; adjust to your lab and your basin", "on the page"], ["Guidance on Tmax and S2", "Peters (1986), AAPG Bulletin 70(3), as cited in the page; not re-checked here", "on the page (not re-checked)"], ["HI, OI, PI, oil saturation index definitions", "Standard Rock-Eval definitions", "classical (references to add)"]], "validation": ["No validation against an independent implementation is recorded for this page."], "limits": ["Thresholds are screening aids, not geological limits. A flagged point stays visible as a grey cross unless you turn that off."]});
+({"what": "Runs entirely in your browser: nothing you load leaves your machine. Quality control of Rock-Eval data (automatic flags), HI–Tmax, HI–OI and S2–TOC plots, depth profiles and control charts of standards.", "method": ["Columns are recognised from their names (S1, S2, S3, Tmax/Tpeak, TOC, HI, OI, PI, PC, RC, MinC, depth, sample, formation…) and can be reassigned. HI, OI and PI are recomputed from S1, S2, S3 and TOC when absent; when present in the file they are compared with the recomputed values.", "Each rule can be switched off, has an editable threshold and an action: flag only (the point stays coloured), mask (greyed in the plots that depend on the suspect value: Tmax, or HI/OI) or exclude (greyed everywhere and removed from the clean export). Defaults, all editable on the page: S2 below 0.2 mg HC/g masks Tmax; Tmax outside 350–600 °C; TOC below 0.5 wt % masks HI and OI; HI above 1000 mg HC/g TOC; OI above 200 mg CO<sub>2<\/sub>/g TOC; S1/TOC × 100 above 100 (oil saturation index); PI differing from S1/(S1 + S2) by more than 0.03; HI or OI differing from 100·S2/TOC or 100·S3/TOC by more than 5 %; TOC differing from PC + RC by more than 10 %; negative values; duplicate sample name or depth.", "Rows whose sample name matches the standards pattern are kept apart and shown as control charts.", "Interpretation charts (switch in Display): HI–Tmax with kerogen type I, II and III curves, Ro iso-lines and immature / oil / gas windows; HI–OI pseudo-Van Krevelen with type I–IV curves; S2–TOC with the HI limits 600 / 300 / 200 / 50 separating types I, II, II–III, III and IV; PI–Tmax with PI 0.1 and 0.4 and the maturity windows."], "sources": [["Default thresholds", "Common practice, not a standard; adjust to your lab and your basin", "on the page"], ["Guidance on Tmax and S2", "Peters (1986), AAPG Bulletin 70(3), as cited in the page; not re-checked here", "on the page (not re-checked)"], ["HI, OI, PI, oil saturation index definitions", "Standard Rock-Eval definitions", "classical (references to add)"], ["Kerogen-type curves on HI–Tmax and HI–OI", "Schematic, drawn from memory after Espitalié et al. (1977, 1985) and the usual textbook diagrams; they show trends, they are not calibrated envelopes", "memory (schematic)"], ["Ro iso-lines on HI–Tmax", "Jarvie et al. (2001): calculated Ro = 0.0180 × Tmax − 7.16, established on type II marine shales", "published (memory, not re-checked)"], ["HI limits 50 / 200 / 300 / 600 between kerogen types", "Common practice after Peters (1986) and Peters & Cassa (1994); authors differ", "memory"], ["PI 0.1 and 0.4 with Tmax 435 and 470 °C as maturity zones", "Common practice (Peters 1986; Peters & Cassa 1994)", "memory"]], "validation": ["No validation against an independent implementation is recorded for this page."], "limits": ["Thresholds are screening aids, not geological limits. A flagged point stays visible as a grey cross unless you turn that off."]});
 </script>
 </body></html>
