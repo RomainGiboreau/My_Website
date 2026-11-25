@@ -1059,6 +1059,46 @@ test('palettes: Atlas (pastel) by default, Marine blues (continental orange, ner
   M.eod.doms = { deep: { color: '#123456' } }; assert.equal(G.eodClasses(M).find(d => d.key === 'deep').color, '#123456', 'user colour wins');
   assert.equal(G.normModel(M).eod.palette, 'marine'); M.eod.palette = 'nope'; assert.equal(G.normModel(M).eod.palette, undefined);
 });
+// ---------- new facies objects ----------
+const ang = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
+const cen = r => [r.reduce((s, q) => s + q[0], 0) / r.length, r.reduce((s, q) => s + q[1], 0) / r.length];
+test('facies objects: sand ribbons along the shoreline, contourite drifts beyond the toe of slope, carbonate mudstone patches, hollow transport arrows from the feeders', () => {
+  assert.deepEqual(G.FKEYS.slice(0, 7), ['lobe', 'river', 'fairway', 'fan', 'platform', 'mtc', 'ponded'], 'old object codes unchanged');
+  for (const k of ['afan', 'ribbon', 'contourite', 'carbmud', 'arrow']) assert.ok(G.FTYPE[k], k);
+  const ex = G.examples.margin, M = clone(ex.M); M.facies = Object.assign({}, M.facies, { n: Object.assign({}, M.facies.n, { ribbon: 3, contourite: 2, carbmud: 2 }), arrows: true });
+  const mod = G.build(M, ex.wells), F = mod.facies, of = t => F.filter(o => o.type === t), e = M.ext, dg = Math.hypot(e.xmax - e.xmin, e.ymax - e.ymin);
+  const sh = M.lines.find(l => /shoreline/i.test(l.name)).pts, toe = M.lines.find(l => /toe/i.test(l.name)).pts;
+  assert.equal(of('ribbon').length, 3);
+  for (const o of of('ribbon')) { assert.ok(o.g.rings.length >= 2, 'strips'); for (const r of o.g.rings) { const c = cen(r), d = G.sdist(sh, c[0], c[1]); assert.ok(d > -.01 * dg && d < .07 * dg, 'strip along the shoreline, seaward ' + d); } }
+  assert.equal(of('contourite').length, 2);
+  for (const o of of('contourite')) { assert.ok(o.g.rings.length >= 4, 'crescent streaks'); for (const r of o.g.rings) { const c = cen(r); assert.ok(G.sdist(toe, c[0], c[1]) > 0, 'beyond the toe of slope'); } }
+  const at = G.eodAt(mod); assert.equal(of('carbmud').length, 2); for (const o of of('carbmud')) assert.ok(['slope', 'deep', 'abyssal', 'neritic', 'clastshelf'].includes(G.EOD[at(o.x, o.y)].key));
+  const ar = of('arrow'); assert.ok(ar.length >= M.feeders.length, 'an arrow per feeder');
+  for (const f of M.feeders) assert.ok(ar.some(o => ang(o.az, f.az) < 25 && Math.hypot(o.x - f.x, o.y - f.y) < .25 * dg), 'arrow along feeder ' + f.az);
+  // exports: the strips and streaks are polygons of the facies level
+  const FF = G.faciesFeatures(mod); assert.ok(FF.polys.filter(p => p.type === 'contourite').length >= 8 && FF.polys.some(p => p.type === 'ribbon') && FF.polys.some(p => p.type === 'arrow'));
+  assert.ok(/"type":"contourite"/.test(G.geojsonLevels([], FF)));
+  const N = G.normModel(M).facies; assert.equal(N.arrows, true); assert.equal(N.n.contourite, 2);
+});
+test('facies objects: fan deltas on the faults — a stippled sand-rich alluvial fan and a small deltaic lobe at each fault-bounded source, on the hanging-wall side', () => {
+  const ex = G.examples.rift, mod = G.build(ex.M, ex.wells), F = mod.facies, src = ex.M.sources.filter(s => s.kind === 'fault');
+  for (const s of src) {
+    const a = F.find(o => o.type === 'afan' && Math.hypot(o.x - s.x, o.y - s.y) < 1.2 * s.L), l = F.find(o => o.type === 'lobe' && Math.hypot(o.x - s.x, o.y - s.y) < 1.5 * s.L);
+    assert.ok(a && l, `fan and lobe at the source ${s.x}, ${s.y}`);
+    const c = cen(l.g.ring); assert.ok((c[0] - s.x) * Math.sin(s.az * Math.PI / 180) + (c[1] - s.y) * Math.cos(s.az * Math.PI / 180) > 0, 'lobe on the hanging-wall side');
+  }
+  assert.equal(G.FTYPE.afan.pat, 'stipple');
+});
+test('facies objects: wells described as sand ribbon, contourite drift, carbonate mudstone or alluvial fan are honoured without warping', () => {
+  const ex = G.examples.margin, M = clone(ex.M), W = ex.wells.concat([{ name: 'Rib-1', x: 20000, y: 51500, env: 'Channel bar sandstone' }, { name: 'Ct-1', x: 60000, y: 8000, env: 'Contourite drift' },
+    { name: 'Cm-1', x: 15000, y: 27500, env: 'Carbonate mudstone' }]);
+  const mod = G.build(M, W); for (const c of mod.check) assert.ok(c.honoured && !c.warped, `${c.name} (${c.env})`);
+  const R = G.examples.rift, Wr = R.wells.concat([{ name: 'Af-1', x: 25200, y: 8000, env: 'Alluvial fan (sand-rich)' }]), mr = G.build(R.M, Wr);
+  for (const c of mr.check) assert.ok(c.honoured && !c.warped, `${c.name} (${c.env})`);
+});
+test('resample: evenly spaced points along long segments too (a two-point line gives a point every step to its end)', () => {
+  const R = G.resample([[0, 0], [12000, 0]], 100); assert.equal(R.P.length, 121); near(R.P[120][0], 12000, 1e-6); near(R.S[60], 6000, 1e-6);
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
