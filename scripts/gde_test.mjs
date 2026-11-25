@@ -962,6 +962,37 @@ test('facies objects from bodies: reefs and isolated platforms become platforms,
   assert.ok(fm.some(o => o.type === 'mtc' && G.inFacies(o, mb.x, mb.y)), 'the MTC apron drawn as an MTC');
   const R = G.examples.rift, fr = G.build(R.M, R.wells).facies; assert.ok(!fr.some(o => o.type === 'mtc' || /^bff/.test(o.id)), 'no toe-of-slope objects in a lake');
 });
+// ---------- speed ----------
+test('speed: label spots kept off many avoid points in linear time, same spots as the brute-force distance', () => {
+  const nx = 400, ny = 300, L = new Int16Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) L[j * nx + i] = i < 150 ? 0 : j < 140 ? 1 : 2;
+  const r = rng(7), avoid = []; for (let k = 0; k < 4000; k++) avoid.push([r() * nx, r() * 120]);
+  const t0 = performance.now(), sp = G.labelSpots(L, nx, ny, { minCells: 100, avoid, avoidR: 6 }), dt = performance.now() - t0;
+  assert.ok(dt < 400, 'labelSpots with 4000 avoid points: ' + dt.toFixed(0) + ' ms');
+  assert.equal(sp.length, 3);
+  for (const s of sp) { const dmin = Math.min(...avoid.map(q => Math.hypot(q[0] - s.x, q[1] - s.y))); assert.ok(dmin >= 6 || s.r < 8, `spot ${s.label} off the avoid points (${dmin.toFixed(1)})`); }
+  const few = [[200, 220]], a = G.labelSpots(L, nx, ny, { minCells: 100, avoid: few, avoidR: 10 }).find(s => s.label === 2);
+  assert.ok(Math.hypot(a.x - 200, a.y - 220) > 10, 'spot of region 2 moved off the single avoid point');
+});
+test('speed: signed distance to a long curve is fast (sign resolved once)', () => {
+  const pts = []; for (let i = 0; i <= 60; i++) pts.push([i * 1000, 3000 * Math.sin(i / 4)]);
+  const P = G.curve(pts), t0 = performance.now(); let s = 0;
+  for (let k = 0; k < 40000; k++) s += G.sdistF(P, (k % 200) * 300, ((k / 200) | 0) * 60 - 6000);
+  assert.ok(isFinite(s)); assert.ok(performance.now() - t0 < 600, (performance.now() - t0).toFixed(0) + ' ms');
+  assert.ok(G.sdistF(P, 30000, 3000 * Math.sin(7.5) + 500) < 0 === G.sdistF(P, 30000, 3000 * Math.sin(7.5) + 2500) < 0, 'consistent side');
+});
+test('view: the plot frame fits the extent (no empty margin around the map), the view never zooms out past it nor pans off it', () => {
+  const e = { xmin: 0, xmax: 320000, ymin: 0, ymax: 260000 };
+  for (const [W, H, leg] of [[1180, 700, 210], [1180, 1400, 210], [600, 420, 0], [2400, 500, 210]]) {
+    const b = G.fitBox(W, H, e, { leg });
+    near((b.px1 - b.px0) / (b.py1 - b.py0), 320 / 260, 1e-6, `aspect ${W}x${H}`);
+    assert.ok(b.px0 >= 0 && b.px1 <= W - leg && b.py0 >= 0 && b.py1 <= H, `inside ${W}x${H}`);
+    assert.ok(b.px1 - b.px0 > .97 * Math.min(W - leg - 80, (H - 54) * 320 / 260), `fills the room ${W}x${H}`);
+  }
+  const v = G.clampView({ z: .4, cx: -90000, cy: 500000 }, e); assert.deepEqual(v, { z: 1, cx: 160000, cy: 130000 }, 'zoomed out: back to the extent');
+  const w = G.clampView({ z: 4, cx: -5000, cy: 255000 }, e); near(w.cx, 40000, 1e-6); near(w.cy, 260000 - 32500, 1e-6); assert.equal(w.z, 4);
+  const u = G.clampView({ z: 4, cx: 100000, cy: 90000 }, e); assert.deepEqual(u, { z: 4, cx: 100000, cy: 90000 }, 'inside: unchanged');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }

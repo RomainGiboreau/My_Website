@@ -727,7 +727,7 @@ function build(M,wells,opt={}){const n=M.belts.length,p=prior(M),AB=allBelts(M),
     if(ch&&k>=ch.host[0]&&k<=ch.host[1]&&ch.at(x,y))return n;
     return k};
   const beltAt=(x,y)=>cls(x,y,D(x,y));
-  const mod={M,t,prior:p,cal,warp,D,beltAt,cls,wells:W,ch,belts:AB,bodies:BD,faults:FD.FA,grid:FD.grid,feeders:FE};
+  const mod={M,t,prior:p,cal,warp,D,beltAt,cls,wells:W,ch,belts:AB,bodies:BD,faults:FD.FA,grid:FD.grid,feeders:FE,fast:!!opt.fast};
   const ok=(w,bm)=>{if(w.pair)return bm===w.pair[0]||bm===w.pair[1]||bm===mixAt[w.pair[0]]||bm===mixVarAt[w.pair[0]];if(!(w.b>=0))return false;if(bm===w.b)return true;
     const c=AB[bm],g=AB[w.b],kb=g&&g.kind==='variant'?g.k:w.b;return!!c&&c.kind==='mix'&&(c.a===kb||c.b===kb)};
   mod.check=W.map((w,i)=>{const bm=beltAt(w.x,w.y);
@@ -1179,17 +1179,18 @@ function curve(pts,sub=8){const n=pts.length,o=[];if(n<3)return Float64Array.fro
   o.push(+pts[n-1][0],+pts[n-1][1]);return Float64Array.from(o)}
 // signed distance to a polyline (flat array), > 0 on the right of the direction of travel. The first and last segments are extended as rays,
 // so the line splits the plane in two; when the nearest point is a vertex the sign follows the sum of the normals of its two segments.
-function sdistF(P,x,y){const n=P.length>>1;if(n<2)return NaN;let best=Infinity,sg=1;
+function sdistF(P,x,y){const n=P.length>>1;if(n<2)return NaN;let best=Infinity,sg=1,bv=-1;
   for(let i=0;i<n-1;i++){const ax=P[2*i],ay=P[2*i+1],bx=P[2*i+2],by=P[2*i+3];
     if(i>0&&i<n-2){const mx=x<ax?(x<bx?Math.min(ax,bx)-x:0):(x>bx?x-Math.max(ax,bx):0),my=y<ay?(y<by?Math.min(ay,by)-y:0):(y>by?y-Math.max(ay,by):0);if(mx*mx+my*my>=best)continue}
     const ex=bx-ax,ey=by-ay,L2=ex*ex+ey*ey;if(!(L2>0))continue;
     const wx=x-ax,wy=y-ay;let t=(wx*ex+wy*ey)/L2,v=-1;
     if(t<0&&i>0){t=0;v=i}else if(t>1&&i<n-2){t=1;v=i+1}
     const px=wx-t*ex,py=wy-t*ey,d2=px*px+py*py;
-    if(d2<best){best=d2;sg=v<0?(wx*ey-wy*ex>=0?1:-1):vsign(P,v,x,y)}}
-  return sg*Math.sqrt(best)}
+    if(d2<best){best=d2;bv=v;if(v<0)sg=wx*ey-wy*ex>=0?1:-1}}
+  // the vertex sign is computed once, for the nearest point only
+  if(bv>=0)sg=vsign(P,bv,x,y);return sg*Math.sqrt(best)}
 function vsign(P,v,x,y){const n=P.length/2;let nx=0,ny=0;
-  for(const [a,b] of [[v-1,v],[v,v+1]]){if(a<0||b>=n)continue;const ex=P[2*b]-P[2*a],ey=P[2*b+1]-P[2*a+1],l=Math.hypot(ex,ey);if(l>0){nx+=ey/l;ny-=ex/l}}
+  for(let a=v-1;a<=v;a++){const b=a+1;if(a<0||b>=n)continue;const ex=P[2*b]-P[2*a],ey=P[2*b+1]-P[2*a+1],l=Math.sqrt(ex*ex+ey*ey);if(l>0){nx+=ey/l;ny-=ex/l}}
   return(x-P[2*v])*nx+(y-P[2*v+1])*ny>=0?1:-1}
 const sdist=(pts,x,y)=>sdistF(flat(pts),x,y);
 // unsigned distance to a polyline (segments only) with the arc length of the nearest point and the side (+1 right, -1 left)
@@ -1421,16 +1422,18 @@ function paintGrid(ext,n=96){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.ymin,c=Mat
 function paintStroke(P,x,y,R,amt){for(let j=0;j<P.ny;j++)for(let i=0;i<P.nx;i++){const r=Math.hypot(P.x0+i*P.dx-x,P.y0+j*P.dy-y)/R;if(r<1)P.v[j*P.nx+i]=+(P.v[j*P.nx+i]+amt*(1-r*r)**2).toPrecision(6)}return P}
 // ---------- bodies ----------
 function bodyShape(b,seed){const T=BODY[b.type],sh=b.shape||(T&&T.belts?'ellipse':'poly'),cx=fin(b.x,0),cy=fin(b.y,0),belts=bodyBelts(b),E=[0];
-  for(let j=1;j<belts.length;j++)E.push(E[j-1]+belts[j][2]);const out=E[E.length-1];let sdc,R0,size;
+  for(let j=1;j<belts.length;j++)E.push(E[j-1]+belts[j][2]);const out=E[E.length-1];let sdc,R0,size,bb=null;
   if(sh==='ellipse'){const r=fin(b.rot,0)*RAD,sr=Math.sin(r),cr=Math.cos(r),a=Math.max(1,fin(b.a,T?T.a:500)),e=clamp(fin(b.e,T?T.e:1),.05,1);size=a;R0=a;
     sdc=(x,y,s)=>{const dx=x-cx,dy=y-cy,u=dx*sr+dy*cr,v=dx*cr-dy*sr,A=a*s,B=a*e*s,rho=Math.hypot(u/A,v/B);if(rho<1e-12)return -B;return(rho-1)*rho/Math.hypot(u/(A*A),v/(B*B))}}
   else if(sh==='ribbon'){const Q=(b.line||[]).map(q=>[cx+q[0],cy+q[1]]),P=flat(Q),hw=Math.max(1,fin(b.width,200))/2;size=hw;R0=Math.max(0,...Q.map(q=>Math.hypot(q[0]-cx,q[1]-cy)))+hw;
+    bb=Q.length?[Math.min(...Q.map(q=>q[0])),Math.max(...Q.map(q=>q[0])),Math.min(...Q.map(q=>q[1])),Math.max(...Q.map(q=>q[1])),hw]:null;
     sdc=(x,y,s)=>udistF(P,x,y)-hw*s}
   else{const Q=(b.pts||[]).map(q=>[+q[0],+q[1]]);R0=Math.max(1,...Q.map(q=>Math.hypot(q[0],q[1])));size=Math.sqrt(Math.abs(sArea(Q))/Math.PI)||R0;
+    if(Q.length)bb=[Math.min(...Q.map(q=>q[0])),Math.max(...Q.map(q=>q[0])),Math.min(...Q.map(q=>q[1])),Math.max(...Q.map(q=>q[1])),0,1];
     sdc=(x,y,s)=>Q.length>=3?polySd(Q,(x-cx)/s,(y-cy)/s)*s:Infinity}
   const irr=b.irr!=null?Math.max(0,+b.irr):(T&&T.belts?.12*size:0),P=irr>0?perlin(seed):null,wl=Math.max(20,.9*size);
   const sd=(x,y,s)=>{let v=sdc(x,y,s);if(P){const f=P.f,o=P.o;v+=irr*(f(x/wl+o[0][0],y/wl+o[0][1],.37)+.5*f(2*x/wl+o[1][0],2*y/wl+o[1][1],.61))}return v};
-  return{sd,E,out,R0,irr,size,cx,cy,sh,s:1,belts}}
+  return{sd,E,out,R0,irr,size,cx,cy,sh,s:1,belts,bb}}
 function prepBodies(M,AB,W){const list=activeBodies(M).map((b,i)=>{const B=bodyShape(b,((M.noise&&M.noise.seed)|0)*131+i*7919+3);B.cls=B.belts.map(x=>AB.findIndex(c=>norm(c.name)===norm(x[0])));B.src=b;B.i=i;return B});
   const adj=[],band=(B,j)=>[j?B.E[j-1]:-Infinity,B.E[j]];
   const root=(f,lo=.03,hi=40)=>{if(f(lo)*f(hi)>0)return null;for(let it=0;it<60;it++){const m=Math.sqrt(lo*hi);if(f(m)>0)lo=m;else hi=m}return Math.sqrt(lo*hi)};
@@ -1444,7 +1447,9 @@ function prepBodies(M,AB,W){const list=activeBodies(M).map((b,i)=>{const B=bodyS
     for(const B of list){const v=B.sd(w.x,w.y,B.s);if(v>=B.out)continue;const tg=B.out+.08*Math.max(B.out,B.size),s=root(s=>B.sd(w.x,w.y,s)-tg);
       if(s&&s<B.s){adj.push({body:B.i,well:w.name,scale:s/B.s,from:B.s});B.s=s}}});
   for(const B of list){B.R=B.R0*Math.max(1,B.s)+B.out+3*B.irr+1}
-  const at=(x,y)=>{for(let q=list.length-1;q>=0;q--){const B=list[q];if(Math.abs(x-B.cx)>B.R*B.s+B.R||Math.abs(y-B.cy)>B.R*B.s+B.R)continue;const v=B.sd(x,y,B.s);if(v>=B.out)continue;
+  // ribbons (long channels): bounding box of the centreline, padded by the half width (scaled), the halos and the irregularity
+  for(const B of list)if(B.bb){const b=B.bb,p=b[4]*Math.max(1,B.s)+B.out+3*B.irr+1,f=b[5]?B.s:1,ox=b[5]?B.cx:0,oy=b[5]?B.cy:0;B.box=[ox+b[0]*f-p,ox+b[1]*f+p,oy+b[2]*f-p,oy+b[3]*f+p]}
+  const at=(x,y)=>{for(let q=list.length-1;q>=0;q--){const B=list[q];if(B.box?(x<B.box[0]||x>B.box[1]||y<B.box[2]||y>B.box[3]):(Math.abs(x-B.cx)>B.R*B.s+B.R||Math.abs(y-B.cy)>B.R*B.s+B.R))continue;const v=B.sd(x,y,B.s);if(v>=B.out)continue;
       for(let j=0;j<B.E.length;j++)if(v<B.E[j])return B.cls[j];return B.cls[B.cls.length-1]}return -1};
   return{list,adj,at,any:list.length>0}}
 // ---------- environment matching with pairs: "A / B", "A + B" (adjacent belts) ----------
@@ -1731,9 +1736,13 @@ function labelSpots(L,nx,ny,o={}){const {C,n,size,lab}=comps(L,nx,ny),N=nx*ny,D=
   for(let k=0;k<N;k++){const i=k%nx,j=(k-i)/nx;D[k]=i===0||j===0||i===nx-1||j===ny-1||C[k-1]!==C[k]||C[k+1]!==C[k]||C[k-nx]!==C[k]||C[k+nx]!==C[k]?1:1e9}
   for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const k=j*nx+i;let v=D[k];if(i>0)v=Math.min(v,D[k-1]+a);if(j>0){v=Math.min(v,D[k-nx]+a);if(i>0)v=Math.min(v,D[k-nx-1]+b);if(i<nx-1)v=Math.min(v,D[k-nx+1]+b)}D[k]=v}
   for(let j=ny-1;j>=0;j--)for(let i=nx-1;i>=0;i--){const k=j*nx+i;let v=D[k];if(i<nx-1)v=Math.min(v,D[k+1]+a);if(j<ny-1){v=Math.min(v,D[k+nx]+a);if(i<nx-1)v=Math.min(v,D[k+nx+1]+b);if(i>0)v=Math.min(v,D[k+nx-1]+b)}D[k]=v}
+  // distance to the nearest avoid point: one chamfer transform seeded at the points (linear in the cells, whatever the number of points)
+  let DA=null;if(A.length){DA=new Float32Array(N).fill(1e9);for(const q of A){const i=Math.floor(q[0]),j=Math.floor(q[1]);if(i<0||j<0||i>=nx||j>=ny)continue;const k=j*nx+i;DA[k]=Math.min(DA[k],Math.hypot(q[0]-(i+.5),q[1]-(j+.5)))}
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const k=j*nx+i;let v=DA[k];if(i>0)v=Math.min(v,DA[k-1]+a);if(j>0){v=Math.min(v,DA[k-nx]+a);if(i>0)v=Math.min(v,DA[k-nx-1]+b);if(i<nx-1)v=Math.min(v,DA[k-nx+1]+b)}DA[k]=v}
+    for(let j=ny-1;j>=0;j--)for(let i=nx-1;i>=0;i--){const k=j*nx+i;let v=DA[k];if(i<nx-1)v=Math.min(v,DA[k+1]+a);if(j<ny-1){v=Math.min(v,DA[k+nx]+a);if(i<nx-1)v=Math.min(v,DA[k+nx+1]+b);if(i>0)v=Math.min(v,DA[k+nx-1]+b)}DA[k]=v}}
   const best=new Float64Array(n).fill(-Infinity),at=new Int32Array(n).fill(-1);
-  for(let k=0;k<N;k++){const c=C[k];if(size[c]<min||lab[c]<0)continue;const i=k%nx,j=(k-i)/nx;let s=D[k];
-    for(const q of A){const dw=Math.hypot(q[0]-(i+.5),q[1]-(j+.5));if(dw<aR+s)s=Math.min(s,(dw-aR)*.8)}
+  for(let k=0;k<N;k++){const c=C[k];if(size[c]<min||lab[c]<0)continue;let s=D[k];
+    if(DA){const dw=DA[k];if(dw<aR+s)s=Math.min(s,(dw-aR)*.8)}
     if(s>best[c]){best[c]=s;at[c]=k}}
   const out=[];for(let c=0;c<n;c++)if(at[c]>=0){const k=at[c],i=k%nx,j=(k-i)/nx;out.push({label:lab[c],x:i+.5,y:j+.5,r:D[k],size:size[c]})}
   return out.sort((p,q)=>q.size-p.size)}
@@ -2029,6 +2038,11 @@ function exRift(){const ext={xmin:0,xmax:30000,ymin:0,ymax:40000},border=[[26800
   for(const s of M.sources){const F=FX[0];if(F){const P=flat(F.pts),q=nearF(P,s.x,s.y),n=P.length/2;let acc=0;for(let i=0;i<n-1;i++){const L=Math.hypot(P[2*i+2]-P[2*i],P[2*i+3]-P[2*i+1]);if(acc+L>=q.s){const t=(q.s-acc)/L;s.x=Math.round(P[2*i]+t*(P[2*i+2]-P[2*i]));s.y=Math.round(P[2*i+1]+t*(P[2*i+3]-P[2*i+1]));break}acc+=L}}}
   return{title:'Half-graben lake: border-fault fan deltas, belts stepping across an intra-basin fault, 4 wells',M,wells:[{name:'Rift-1',x:24800,y:20600,env:'Fan delta'},{name:'Rift-2',x:6600,y:30000,env:'Lake shoreline'},
     {name:'Rift-3',x:9000,y:12000,env:'Littoral'},{name:'Rift-4',x:20000,y:30500,env:'Profundal'}]}}
+// ---------- view: the plot frame has the aspect of the extent (no empty band around the map), the view stays on the extent ----------
+function fitBox(W,H,ext,o={}){const leg=o.leg||0,m={l:66,r:14,t:o.tb?44:14,b:40},ew=ext.xmax-ext.xmin,eh=ext.ymax-ext.ymin,pw=Math.max(10,W-leg-m.l-m.r),ph=Math.max(10,H-m.t-m.b),k0=Math.min(pw/ew,ph/eh);
+  return{px0:m.l,px1:m.l+ew*k0,py0:m.t,py1:m.t+eh*k0,k0}}
+function clampView(v,ext){const z=clamp(fin(v.z,1),1,40),hw=(ext.xmax-ext.xmin)/(2*z),hh=(ext.ymax-ext.ymin)/(2*z);
+  return{z,cx:clamp(fin(v.cx,0),ext.xmin+hw,ext.xmax-hw),cy:clamp(fin(v.cy,0),ext.ymin+hh,ext.ymax-hh)}}
 const examples={
  delta:{title:'River-dominated delta, 4 wells',M:makeModel('delta',{az:165,src:[12000,30000],fan:50,span:32000,outside:'strike',protrude:9000,noise:{amp:1500,wl:8000,seed:7},warp:{on:true,R:4000},
    ext:{xmin:0,xmax:40000,ymin:0,ymax:30000},cell:100}),
@@ -2054,7 +2068,7 @@ for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.definePro
 const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','rift']],['Seismic-driven',['canyon']],['Single systems',['delta','fan','estuary','ramp','lake']]];
 const EXNAMES={atlas:'Margin with a marginal plateau, lowstand (8 wells)',atlastr:'Same margin, transgressive interval (7 wells)',margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',
  delta:'Delta (4 wells)',fan:'Deep-water fan (3 wells)',estuary:'Estuary (5 wells)',ramp:'Carbonate ramp (4 wells)',lake:'Rift lake (4 wells)'};
-window.GDE={EXGROUPS,EXNAMES,FTYPE,FKEYS,ftypeOf,faciesDefaults,faciesShape,faciesGen,faciesObjects,inFacies,faciesFeatures,geojsonLevels,irapLevels,normFacies,resample,EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
+window.GDE={fitBox,clampView,EXGROUPS,EXNAMES,FTYPE,FKEYS,ftypeOf,faciesDefaults,faciesShape,faciesGen,faciesObjects,inFacies,faciesFeatures,geojsonLevels,irapLevels,normFacies,resample,EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
   layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
   templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
@@ -2408,27 +2422,33 @@ function schedule(fast){if(!S.started)return;clearTimeout(tmr);if(fast){compute(
 function viewExt(){const L=curL(),e=S.M.ext,x0=Math.max(e.xmin,L.ix(L.px0)),x1=Math.min(e.xmax,L.ix(L.px1)),y0=Math.max(e.ymin,L.iy(L.py1)),y1=Math.min(e.ymax,L.iy(L.py0));
   return x1>x0&&y1>y0?{xmin:x0,xmax:x1,ymin:y0,ymax:y1}:e}
 function previewCell(ext,max){return Math.max(S.M.cell||0,Math.sqrt((ext.xmax-ext.xmin)*(ext.ymax-ext.ymin)/max))}
-function compute(fast){if(!(S.M.belts.length>=2))return;
-  try{S.mod=GDE.build(S.M,S.wells,{dist:!fast,fast});S.FG=isMargin()?GDE.feederGeom(S.M):null}catch(err){banner('Model error: '+err.message,true);console.error(err);return}
+// preview raster size (cells) while editing and once idle; exports always at the full resolution of the grid (panel 1)
+const PREV={fast:40000,idle:160000};
+// EOD polygons of the current preview, computed once per preview (switching views does not recompute the model)
+function eodOfP(){if(!S.P||!S.mod)return null;if(!S.P.PE)S.P.PE=GDE.eodPolygons(S.mod,S.Pext,0,{raster:S.P.raster});return S.P.PE}
+// timings of the last computations (ms), for profiling: window.GDEUI.S.perf
+const now=()=>performance.now();
+function compute(fast){if(!(S.M.belts.length>=2))return;const T={fast:!!fast},t0=now();let t=t0;const lap=k=>{const q=now();T[k]=Math.round(q-t);t=q};
+  try{S.mod=GDE.build(S.M,S.wells,{dist:!fast,fast});lap('build');S.FG=isMargin()?GDE.feederGeom(S.M):null;lap('feeders')}catch(err){banner('Model error: '+err.message,true);console.error(err);return}
   S.full=null;const ve=viewExt();
-  S.P=GDE.polygons(S.mod,ve,previewCell(ve,fast?60000:250000),{stride:fast?2:3,minArea:fast?2:4});S.Pext=ve;
-  S.PE=S.lvl!=='belts'?GDE.eodPolygons(S.mod,ve,0,{raster:S.P.raster}):null;S.fullE=null;
-  draw();
+  S.P=GDE.polygons(S.mod,ve,previewCell(ve,fast?PREV.fast:PREV.idle),{stride:fast?2:3,minArea:fast?2:4});S.Pext=ve;lap('belts');
+  S.PE=S.lvl!=='belts'?eodOfP():null;S.fullE=null;lap('eod');
+  draw();lap('draw');T.total=Math.round(now()-t0);(S.perf=S.perf||[]).push(T);if(S.perf.length>40)S.perf.shift();document.body.dataset.perf=JSON.stringify(S.perf.slice(-6));
   if(!fast){renderCheck();renderVerdict();renderCal();renderEod();pushUndo();
     const e=S.M.ext,nx=Math.floor((e.xmax-e.xmin)/S.M.cell+1e-9)+1,ny=Math.floor((e.ymax-e.ymin)/S.M.cell+1e-9)+1;
-    tplNote();$('extMsg').className='msg';$('extMsg').textContent=`Export grid ${nx} × ${ny} nodes (${(nx*ny).toLocaleString('en-US')}); map preview cell ${fmtN(previewCell(ve,250000))}.`;
+    tplNote();$('extMsg').className='msg';$('extMsg').textContent=`Export grid ${nx} × ${ny} nodes (${(nx*ny).toLocaleString('en-US')}); map preview cell ${fmtN(previewCell(ve,PREV.idle))} (exports at the grid cell).`;
     $('bMsg').textContent=S.M.template==='custom'?'custom belts':''}}
 function start(){if(S.started)return;S.started=true;$('intro').hidden=true;$('work').hidden=false;size();zoomFit();compute(false)}
 
 // ---------- view: fit, pan, zoom ----------
 function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p;return(f<1.5?1:f<3.5?2:f<7.5?5:10)*p}
-function layout(W,H,o={}){const e=S.M.ext,leg=W>=640?210:0,m={l:66,r:14+leg,t:o.tb?44:14,b:40},ew=e.xmax-e.xmin,eh=e.ymax-e.ymin,pw=W-m.l-m.r,ph=H-m.t-m.b;
-  const v=o.view||S.view,k0=Math.min(pw/ew,ph/eh),k=k0*v.z,ox=m.l+pw/2,oy=m.t+ph/2;
-  return{k,ew,eh,leg,W,H,px0:m.l,px1:m.l+pw,py0:m.t,py1:m.t+ph,X:x=>ox+(x-v.cx)*k,Y:y=>oy-(y-v.cy)*k,ix:px=>v.cx+(px-ox)/k,iy:py=>v.cy-(py-oy)/k}}
+function layout(W,H,o={}){const e=S.M.ext,leg=W>=640?210:0,ew=e.xmax-e.xmin,eh=e.ymax-e.ymin,b=GDE.fitBox(W,H,e,{leg,tb:o.tb});
+  const v=GDE.clampView(o.view||S.view,e),k=b.k0*v.z,ox=(b.px0+b.px1)/2,oy=(b.py0+b.py1)/2;
+  return{k,ew,eh,leg,W,H,px0:b.px0,px1:b.px1,py0:b.py0,py1:b.py1,X:x=>ox+(x-v.cx)*k,Y:y=>oy-(y-v.cy)*k,ix:px=>v.cx+(px-ox)/k,iy:py=>v.cy-(py-oy)/k}}
 function zoomFit(){const e=S.M.ext;S.view={z:1,cx:(e.xmin+e.xmax)/2,cy:(e.ymin+e.ymax)/2}}
 on('bZoom0','click',()=>{zoomFit();schedule()});
-cv.addEventListener('wheel',e=>{if(!S.started)return;e.preventDefault();const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py),f=Math.exp(-e.deltaY*.0015),z=Math.min(40,Math.max(.4,S.view.z*f)),r=S.view.z/z;
-  S.view={z,cx:x-(x-S.view.cx)*r,cy:y-(y-S.view.cy)*r};draw();clearTimeout(tmr);tmr=setTimeout(()=>compute(false),220)},{passive:false});
+cv.addEventListener('wheel',e=>{if(!S.started)return;e.preventDefault();const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py),f=Math.exp(-e.deltaY*.0015),z=Math.min(40,Math.max(1,S.view.z*f)),r=S.view.z/z;
+  S.view=GDE.clampView({z,cx:x-(x-S.view.cx)*r,cy:y-(y-S.view.cy)*r},S.M.ext);draw();clearTimeout(tmr);tmr=setTimeout(()=>compute(false),220)},{passive:false});
 
 // ---------- drawing ----------
 function halo(c,t,x,y,col){c.lineWidth=3.2;c.strokeStyle='rgba(255,255,255,.92)';c.lineJoin='round';c.strokeText(t,x,y);c.fillStyle=col||'#232220';c.fillText(t,x,y)}
@@ -2533,7 +2553,7 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
   for(let v=Math.ceil(wy0/ty)*ty;v<=wy1+1e-9;v+=ty){const y=L.Y(v);c.beginPath();c.moveTo(L.px0,y);c.lineTo(L.px0-5,y);c.stroke();c.fillText(fmtN(v),L.px0-7,y)}
   c.textAlign='center';c.textBaseline='top';c.fillText('X',(L.px0+L.px1)/2,L.py1+22);c.save();c.translate(12,(L.py0+L.py1)/2);c.rotate(-Math.PI/2);c.textBaseline='middle';c.fillText('Y',0,0);c.restore();
   // legend: classes on the map
-  if(L.leg){let lx=W-L.leg+6,ly=L.py0+4;const lw=L.leg-12;L0H=L.py1;c.textAlign='left';c.textBaseline='top';
+  if(L.leg){let lx=Math.min(W-L.leg+6,L.px1+22),ly=L.py0+4;const lw=L.leg-12;L0H=L.py1;c.textAlign='left';c.textBaseline='top';
     c.fillStyle='#232220';c.font='600 13px "Space Grotesk",Inter,sans-serif';c.fillText(lv==='belts'?'GDE classes':lv==='eod'?'EOD domains':'Facies map',lx,ly);ly+=18;
     c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText(lv!=='belts'?'environments of deposition':isMargin()?'by domain, hinterland → basin':'code, proximal → distal, then others',lx,ly);ly+=17;
     if(lv!=='belts')ly=atlasLegend(c,lx,ly,lw,lv,PE||[]);else{
@@ -2655,7 +2675,7 @@ function finishTrace(){const T=S.trace;S.trace=null;if(!T||T.pts.length<2){draw(
 cv.addEventListener('pointermove',e=>{if(!S.started)return;const [px,py]=evp(e),L=curL(),x=L.ix(px),y=L.iy(py),M=S.M;
   if(S.trace){S.trace.hover=[px,py];draw()}
   const d=S.drag;
-  if(d){if(d.k==='pan'){S.view={...d.v,cx:d.v.cx-(px-d.px)/L.k,cy:d.v.cy+(py-d.py)/L.k};draw();return}
+  if(d){if(d.k==='pan'){S.view=GDE.clampView({...d.v,cx:d.v.cx-(px-d.px)/L.k,cy:d.v.cy+(py-d.py)/L.k},S.M.ext);draw();return}
     if(d.k==='paint'){paintAt(x,y);return}
     if(d.k==='vtx'){M.lines[S.lineSel].pts[d.i]=[Math.round(x),Math.round(y)]}
     else if(d.k==='src'){const s=M.sources[d.i],n=s.kind==='fault'?nearLine(L,px,py,[M.faults[s.fault]]):nearLine(L,px,py,[M.lines[s.line]]);if(n){s.x=Math.round(n.x);s.y=Math.round(n.y)}else{s.x=Math.round(x);s.y=Math.round(y)}renderConcept()}
@@ -2735,10 +2755,12 @@ function dl(text,name,type){const b=text instanceof Blob?text:new Blob([text],{t
 function need(){if(!S.started||!S.mod){banner('Load an example, paste wells or start from a template first.',true);return false}
   const e=S.M.ext,n=((e.xmax-e.xmin)/S.M.cell)*((e.ymax-e.ymin)/S.M.cell);
   if(n>6e6){banner(`The export cell size gives ${Math.round(n/1e6)} million cells: increase it in panel 1 (6 million at most).`,true);return false}return true}
-function fullPolys(){if(!S.full)S.full=GDE.polygons(S.mod,S.M.ext,S.M.cell,{minArea:4});return S.full}
+// exports: from a full (not fast) build, at the grid cell
+function fullMod(){if(S.mod&&S.mod.fast){S.mod=GDE.build(S.M,S.wells,{dist:true});S.full=null;S.fullE=null}return S.mod}
+function fullPolys(){fullMod();if(!S.full)S.full=GDE.polygons(S.mod,S.M.ext,S.M.cell,{minArea:4});return S.full}
 function fullEod(){if(!S.fullE)S.fullE=GDE.eodPolygons(S.mod,S.M.ext,S.M.cell,{raster:fullPolys().raster});return S.fullE}
 const atlasLv=()=>S.lvl&&S.lvl!=='belts';
-const grid=()=>GDE.nodeGrid(S.mod,S.M.ext,S.M.cell,'GDE');
+const grid=()=>GDE.nodeGrid(fullMod(),S.M.ext,S.M.cell,'GDE');
 // on the EOD and facies maps: EOD domains (level EOD) and facies objects (level facies: polygons, then centrelines) in one file
 const facF=()=>S.lvl==='facies'?GDE.faciesFeatures(S.mod):{polys:[],lines:[]};
 on('bIrap','click',()=>{if(!need())return;if(atlasLv())dl(GDE.irapLevels(fullEod(),facF()),S.lvl==='eod'?'gde_eod_irap.dat':'gde_eod_facies_irap.dat','text/plain');else dl(GDE.irapLines(fullPolys()),'gde_polygons_irap.dat','text/plain')});
@@ -2748,7 +2770,7 @@ on('bZmap','click',()=>{if(need())dl(GDE.zmap(grid()),'gde_belts.zmap','text/pla
 on('bGcsv','click',()=>{if(need())dl(GDE.gridCsv(grid()),'gde_grid.csv','text/csv')});
 on('bLines','click',()=>{if(!need())return;const L=GDE.lineFeatures(S.M);if(!L.length){banner('No key line or fault to export.',true);return}dl(GDE.irapPolylines(L),'gde_lines_irap.dat','text/plain')});
 on('bLinesG','click',()=>{if(!need())return;const L=GDE.lineFeatures(S.M);if(!L.length){banner('No key line or fault to export.',true);return}dl(GDE.geojsonLines(L),'gde_lines.geojson','application/geo+json')});
-on('bWcsv','click',()=>{if(!S.mod)return need();const q=s=>/[",]/.test(String(s))?'"'+String(s).replace(/"/g,'""')+'"':s;
+on('bWcsv','click',()=>{if(!S.mod)return need();fullMod();const q=s=>/[",]/.test(String(s))?'"'+String(s).replace(/"/g,'""')+'"':s;
   dl(['well,x,y,environment,class_given,class_map,honoured,distance_to_boundary,warped'].concat(S.mod.check.map(c=>[q(c.name),c.x,c.y,q(c.env),c.b>=0?q(AB()[c.b].name):c.pair?q(c.env):'',q(AB()[c.belt].name),c.honoured?'yes':'no',isFinite(c.dist)?+c.dist.toFixed(1):'',c.warped?'yes':'no'].join(','))).join('\n'),'gde_wells.csv','text/csv')});
 on('bPng','click',()=>{if(!need())return;const e=S.M.ext,Wc=1000,leg=210,mw=Wc-66-14-leg,Hc=Math.round(mw*(e.ymax-e.ymin)/(e.xmax-e.xmin)+54),sc=2;
   const small=(e.xmax-e.xmin)*(e.ymax-e.ymin)/S.M.cell**2<=1.5e6,P=small?fullPolys():S.P,PE=atlasLv()?(small?fullEod():S.PE):null,o=document.createElement('canvas');o.width=Wc*sc;o.height=Math.max(420,Hc)*sc;
@@ -2757,7 +2779,8 @@ on('bPng','click',()=>{if(!need())return;const e=S.M.ext,Wc=1000,leg=210,mw=Wc-6
 // ---------- EOD and facies maps: view level, domain labels, facies objects (drawing, selection, editing) ----------
 const LVL={belts:'GDE belts',eod:'EOD map',facies:'Facies map'};
 function setLevel(v,quiet){if(!LVL[v])v='belts';S.lvl=v;document.querySelectorAll('[data-v]').forEach(b=>{b.classList.toggle('on',b.dataset.v===v);b.setAttribute('aria-pressed',b.dataset.v===v)});
-  $('tbObjB').hidden=$('tbObj').hidden=v!=='facies';if(v!=='facies'&&S.tool==='obj')setTool('sel');if(!quiet&&S.started)compute(false)}
+  $('tbObjB').hidden=$('tbObj').hidden=v!=='facies';if(v!=='facies'&&S.tool==='obj')setTool('sel');
+  if(!quiet&&S.started){if(S.P&&S.mod){S.PE=v!=='belts'?eodOfP():null;draw();renderEod()}else compute(false)}}
 document.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>setLevel(b.dataset.v)));
 $('tbObj').innerHTML=GDE.FKEYS.map(k=>`<option value="${k}">${esc(GDE.FTYPE[k].name)}</option>`).join('');
 const lighten=(c,f)=>'#'+[1,3,5].map(i=>Math.round(parseInt(c.substr(i,2),16)*(1-f)+255*f).toString(16).padStart(2,'0')).join('');
@@ -2860,7 +2883,7 @@ function loadModel(M,wells){S.M=clone(M);for(const l of S.M.layers||[]){const o=
   S.bd=((S.M.layers||[]).find(l=>!l.grid)||(S.M.layers||[])[0]||{}).id||null;S.bdOp=+(((S.M.layers||[]).find(l=>l.id===S.bd)||{}).op??.55);S.layerOpen=null;S.sel=null;S.lineSel=0;
   syncInputs();renderBelts();renderWells();$('wMsg').textContent='';S.undo=[];S.redo=[];
   if(S.started){size();zoomFit();compute(false)}else start();setTool('sel')}
-function loadExample(k){const ex=GDE.examples[k];setLevel(ex.view||'belts',true);loadModel(ex.M,ex.wells);
+function loadExample(k){const ex=GDE.examples[k];setLevel(S.hashView||ex.view||'belts',true);loadModel(ex.M,ex.wells);
   banner(ex.title+(ex.M.geom==='lines'?': drag the sources, the arrow heads, a well; edit the key lines with the Line tool.':': drag the source, the arrow head or a well to see the map follow.'))}
 on('bMSave','click',()=>{if(!S.started)return need();dl(GDE.saveModel(S.M,wellsOut()),'gde_model.json','application/json')});
 function openModelText(t,name){const r=GDE.openModel(t);if(!r.M){banner((name?name+': ':'')+r.errors[0],true);return}
@@ -2896,7 +2919,7 @@ function systemsSection(){const tables=[];
 window.GDEUI={S,compute,render,loadExample,loadModel,applyTable,fullPolys,grid,hit,layout:curL,openModelText,systemsSection,setTool,undo,redo,draw,selItem};
 // hash hooks: #example, &tool=line, &bd=layer id, &op=0.6, &zoom=2, &sel=src:0
 (()=>{const h=location.hash.slice(1).split('&'),k=h[0],o=Object.fromEntries(h.slice(1).map(s=>s.split('=')));
-  if(GDE.examples[k])loadExample(k);else if(k==='blank')$('iBlank').click();else return;if(o.view){setLevel(o.view,true)}
+  if(GDE.examples[k]){if(o.view)S.hashView=o.view;loadExample(k);S.hashView=null;if(Object.keys(o).every(q=>q==='view'))return}else if(k==='blank')$('iBlank').click();else return;if(o.view){setLevel(o.view,true)}
   if(o.bd!=null)S.bd=o.bd||null;if(o.op)S.bdOp=+o.op;if(o.zoom)S.view.z=+o.zoom;if(o.sel){const [a,b]=o.sel.split(':');S.sel={kind:a,i:+b}}if(o.layer)S.layerOpen=o.layer;
   if(o.tool)setTool(o.tool);renderLayers();renderConcept();compute(false)})();
 
