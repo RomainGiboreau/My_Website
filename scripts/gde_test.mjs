@@ -767,6 +767,32 @@ for (const k of ['margin', 'carbmargin', 'rift']) test(`margin example ${k}: eve
   if (k === 'carbmargin') { assert.equal(M.margin.preset, 'carbonate'); assert.equal(M.bodies.filter(b => b.type === 'pinnacle').length, 3); assert.ok(doms.has('cont')); assert.equal(G.examples.rimmed, ex, 'the old #rimmed link opens the carbonate margin'); }
   if (k === 'rift') { assert.ok(M.sources.filter(s => s.kind === 'fault').length >= 3); }
 });
+
+// ---------- atlas style: smoothing, EOD and facies maps, facies objects, examples ----------
+const inRing = (r, x, y) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[j], b = r[i]; if ((a[1] > y) !== (b[1] > y) && x < a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1])) c = !c; } return c; };
+const inPoly = (p, x, y) => inRing(p.outer, x, y) && !p.holes.some(h => inRing(h, x, y));
+const extA = e => (e.xmax - e.xmin) * (e.ymax - e.ymin);
+// right-angle turns (pixel stair steps; junctions where three classes meet keep theirs)
+const rightTurns = P => { let t = 0; for (const p of P) for (const r of [p.outer, ...p.holes]) for (let i = 0; i < r.length; i++) { const a = r[(i + r.length - 1) % r.length], b = r[i], c = r[(i + 1) % r.length]; const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]]; if (Math.abs(Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1])) > 1.2) t++; } return t; };
+const tilingErrors = (P, e, N = 3000) => { const R = rng(5); let bad = 0; for (let i = 0; i < N; i++) { const x = e.xmin + R() * (e.xmax - e.xmin), y = e.ymin + R() * (e.ymax - e.ymin); if (P.filter(p => inPoly(p, x, y)).length !== 1) bad++; } return bad / N; };
+test('smoothing: rings closed, polygons tile the extent (no gap, no overlap), areas within 2 %, no pixel stair steps', () => {
+  const ex = G.examples.margin, mod = G.build(ex.M, ex.wells), e = ex.M.ext, cell = 600;
+  const raw = G.polygons(mod, e, cell, { smooth: 0 }), sm = G.polygons(mod, e, cell);
+  near(sm.reduce((s, p) => s + p.area, 0), extA(e), extA(e) * 1e-9, 'tiling: areas add up to the extent');
+  const byCode = P => { const m = new Map(); for (const p of P) m.set(p.code, (m.get(p.code) || 0) + p.area); return m; };
+  const a0 = byCode(raw), a1 = byCode(sm);
+  for (const [c, a] of a0) if (a > .01 * extA(e)) assert.ok(Math.abs(a1.get(c) - a) / a < .02, `class ${c}: ${a} -> ${a1.get(c)}`);
+  for (const p of sm) for (const r of [p.outer, ...p.holes]) assert.ok(r.length >= 3 && r.every(q => isFinite(q[0]) && isFinite(q[1])), 'ring with >= 3 vertices');
+  assert.ok(tilingErrors(sm, e) < .002, 'points in 0 or 2 polygons');
+  const px = G.polygons(mod, e, cell, { smooth: 0, tol: 0 });
+  assert.ok(rightTurns(sm) < .1 * rightTurns(px) && rightTurns(sm) < rightTurns(raw), `right-angle turns: pixels ${rightTurns(px)}, simplified ${rightTurns(raw)}, smoothed ${rightTurns(sm)}`);
+});
+test('irregularity defaults: large wavelength, low amplitude, little small-scale roughness', () => {
+  const M = G.makeMargin('passive', { ext: { xmin: 0, xmax: 200000, ymin: 0, ymax: 150000 } }), d = Math.hypot(200000, 150000);
+  assert.ok(M.noise.wl >= d / 12, 'wavelength ' + M.noise.wl); assert.ok(M.noise.amp <= .015 * d, 'amplitude ' + M.noise.amp);
+  assert.ok(M.noise.rough > 0 && M.noise.rough < .5, 'roughness ' + M.noise.rough);
+  assert.ok(G.makeModel('shelf').noise.rough < .5);
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
