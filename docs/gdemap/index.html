@@ -117,6 +117,9 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
 .it .pg{grid-template-columns:96px 1fr;margin:4px 0 0}
 .it button{padding:0 .4rem;font-size:.74rem}
 .it input,.it select{font-size:.76rem;padding:.1rem .3rem}
+.dh{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin:6px 0 2px}
+details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;color:var(--mut)}details.dom .pg{grid-template-columns:118px 1fr;margin:4px 0}
+.fl{display:flex;flex-wrap:wrap;gap:2px 10px;margin:4px 0 2px}.fl label{display:inline-flex;gap:3px;align-items:center;font-size:.76rem}
 .tag{font-size:.68rem;color:var(--mut);border:1px solid var(--line);border-radius:8px;padding:0 6px;white-space:nowrap}
 .tb{display:flex;flex-wrap:wrap;gap:3px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 6px;margin-bottom:6px}
 .tb button,.tb select{font-size:.76rem;padding:.12rem .45rem}
@@ -161,7 +164,10 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
   <div class="lst" id="lList"></div></div></section>
  <div class="grp">Concept</div>
  <section class="panel"><h2><span class="n">4</span>Depositional system<span class="tt" tabindex="0" data-tip="The a-priori depositional system: an ordered list of belts from proximal to distal with relative widths. Linear geometry: belts parallel to the shoreline, perpendicular to the transport azimuth. Radial geometry (delta, fan): belts are arcs around the source point inside the fan opening angle and close back to the source as rounded lobes beyond it; further out, either the most distal belt (deep-water fan) or belts continuing along strike, from which the lobe protrudes (delta). Belt span: distance from the source to the start of the most distal belt before calibration. Irregularity: seeded smooth noise added to the proximal–distal distance, so boundaries look natural; the same seed always gives the same map. Channels: optional sinuous ribbons (distributary, feeder, tidal channels…) drawn from the source along the transport direction inside the chosen belts; one goes through each well whose environment is the channel name. Download model saves everything, wells included, as a JSON file; your last custom belt list is also remembered by this browser.">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="pg"><span>Template</span><select id="mTpl" title="Depositional system: ordered belts with relative widths sourced in Method &amp; sources"></select></div>
+  <div class="body"><div class="pg"><span>Margin profile</span><select id="mMargin" title="Chain one system per domain along the source-to-sink profile: continental, coastal & shallow marine, shelf, slope, deep marine"><option value="">— none: one system (template)</option></select></div>
+  <details class="dom" id="domBox" hidden><summary>Systems per domain</summary><div class="pg" id="domSel"></div>
+   <div class="pg"><span>Alluvial fans</span><input type="number" id="mAf" min="0" max="30" step="1" title="Number of alluvial fans along the mountain front (0: an even apron)"></div></details>
+  <div class="pg"><span>Template</span><select id="mTpl" title="Depositional system: ordered belts with relative widths sourced in Method &amp; sources"></select></div>
   <div class="note" id="tplNote" style="margin-top:0"></div><div class="note hint" id="scaleNote" hidden></div>
   <div class="br hd"><span></span><span>Belt (proximal → distal)</span><span>Width</span><span></span><span></span><span></span></div>
   <div class="bl" id="bList"></div>
@@ -189,6 +195,7 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
  <section class="panel"><h2><span class="n">5</span>Key lines, sources and faults<span class="tt" tabindex="0" data-tip="Key lines (shoreline or depositional limit, shelf edge or platform margin, toe of slope…) are smooth curves through their vertices, with the basin on the right of the drawing direction (“Flip” reverses it). The belts between two lines are stretched to fit, so they widen where the shelf widens. Each line sits on a belt boundary. Sources (deltas on the shoreline, fans at the shelf edge, fan deltas on a fault) push the belts basinward as lobes: length = how far the lobe reaches, opening angle, drift (−1…1: lobe bent and elongated to one side, as by longshore drift). Away from deltas some systems switch to interdeltaic belts. Faults (traced or extracted from a fault layer) shift the belts distal on the downthrown side by the throw, tapering to the tips; the footwall can be raised. Propose a sketch places lines and sources from the wells and the template.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="row"><button class="pri" id="bSketch" title="Rebuild the key lines and sources from the wells, the template and the transport azimuth (undo restores)">Propose a sketch</button><span class="msg" id="skMsg"></span></div>
   <div class="lst" id="lnList"></div><div class="row"><button id="bLnAdd">+ Add line</button><button id="bLnImp" title="Key lines from a file: x, y text (one line), IRAP Classic lines (999 after each line) or GeoJSON LineString">Import lines…</button></div>
+  <div class="lst" id="fdList"></div>
   <div class="lst" id="srcList"></div>
   <div class="lst" id="fltList"></div></div></section>
  <section class="panel"><h2><span class="n">6</span>Isolated bodies<span class="tt" tabindex="0" data-tip="Bodies that override the regional belts: pinnacle or patch reefs, isolated platforms, offshore bars or tidal ridges, islands, salt-related highs — each with its core and concentric halos of editable width — and bodies of one environment traced by hand (channel = polyline with a width, or polygon) or extracted from an attribute layer. Click “Body” or “Trace” in the map toolbar, then click on the map. A well whose environment is a body belt is honoured by enlarging the nearest body; a well of the regional belts inside a halo shrinks it.">?</span><i class="chev"></i></h2>
@@ -208,9 +215,10 @@ td.l,th.l{text-align:left}td.wrap{white-space:normal;min-width:200px;color:var(-
  <section class="intro" id="intro"><h2>A GDE map from a few wells</h2>
   <p>Give the depositional environment interpreted at one or several wells and the depositional system you expect. The conceptual model draws the belts, the wells calibrate them — the way a GDE map is drawn by hand — and every well is checked: honoured or not, and how far from a boundary.</p>
   <div class="dz"><b>Drop a wells table here</b><br><span style="color:var(--mut);font-size:.84rem">name, x, y, environment — text or CSV, nothing is uploaded</span>
-   <div class="row"><button class="pri" id="iCoast">Two deltas on a curved coast, 5 wells</button><button id="iRimmed">Rimmed shelf with pinnacles, 4 wells</button><button id="iCanyon">Canyon-fed fan with amplitude, 3 wells</button><button id="iRift">Half-graben with faults, 4 wells</button></div>
+   <div class="row"><button class="pri" id="iCoast">Passive margin, hinterland to basin floor, 6 wells</button><button id="iRimmed">Carbonate rimmed margin with pinnacles, 4 wells</button><button id="iCanyon">Canyon-fed fan with amplitude, 3 wells</button><button id="iRift">Rift lake, fan-delta bajada and faults, 4 wells</button></div>
    <div class="row" style="margin-top:4px"><span style="font-size:.8rem;color:var(--mut)">Simpler maps:</span><button id="iDelta">Delta, 4 wells</button><button id="iFan">Deep-water fan, 3 wells</button><button id="iEst">Estuary, 5 wells</button><button id="iRamp">Carbonate ramp, 4 wells</button><button id="iLake">Rift lake, 4 wells</button><button id="iBlank">Start from a template</button><button id="iOpen" title="A wells table (text, CSV) or a model saved with “Download model” (JSON)">Open a file…</button></div></div>
-  <dl><div><dt>Wells, seismic, concept</dt><dd>The three inputs of a hand-drawn GDE map: the wells calibrate, seismic attribute layers steer the belts and give channels, reefs and faults, the depositional concept is drawn with editable key lines, polarised sources and isolated bodies.</dd></div>
+  <dl><div><dt>A margin, source to sink</dt><dd>One system per domain — continental, coastal, shelf, slope, deep marine — chained along the profile with gradual transitions; rivers feed deltas, a canyon in line with a delta feeds a basin-floor fan.</dd></div>
+   <div><dt>Wells, seismic, concept</dt><dd>The three inputs of a hand-drawn GDE map: the wells calibrate, seismic attribute layers steer the belts and give channels, reefs and faults, the depositional concept is drawn with editable key lines, polarised sources and isolated bodies.</dd></div>
    <div><dt>Conceptual belts</dt><dd>17 systems: fluvial, aeolian; tide-, wave- and river-dominated deltas; shoreface–shelf, rimmed platform, ramp, mixed shelf, glaciomarine; mixed, sand-rich and mud-rich fans, slope apron; rift lake, playa — or your own belts. Widths and typical scales from the literature, sources listed.</dd></div>
    <div><dt>Calibrated on the wells</dt><dd>Boundaries placed between wells of successive belts; transport direction and source fitted automatically.</dd></div>
    <div><dt>Natural boundaries</dt><dd>Seeded smooth irregularity, reproducible; optional local warping for a well that breaks the order.</dd></div>
@@ -982,7 +990,7 @@ const DOMSYS={
   sabkha:DS('coast','Coastal sabkha and beach',[
    ['Coastal sabkha','#d6c1e0',.8,['sabkha','supratidal sabkha','salt flat','evaporite','anhydrite','intertidal flat']],
    ['Beach / shoreface','#f3d955',.6,['beach','shoreface','foreshore','ooid beach','shoreline']]],{sh:1}),
-  lakeshore:DS('coast','Lake shoreline',[['Lake shoreline','#f3d955',.5,['shoreline','beach','lacustrine shoreface','lake margin sandstone','lacustrine delta front','mouth bar','strandline','lacustrine beach']]],{sh:0,src:'coast',ln:'Lake margin'})},
+  lakeshore:DS('coast','Lake shoreline',[['Lake shoreline','#f3d955',.5,['shoreline','beach','lacustrine shoreface','lake margin sandstone','lacustrine delta front','mouth bar','strandline','lacustrine beach']]],{sh:0,src:'coast',ln:'Lake margin',lab:'Lake shore'})},
  shelf:{
   clastic:DS('shelf','Siliciclastic shelf',[
    ['Inner shelf','#bfe0f0',1.5,['inner shelf','shelf sand','shelf sandstone','storm sand','proximal shelf']],
@@ -1000,7 +1008,7 @@ const DOMSYS={
    ['Mixed inner shelf','#cfe0b6',1.5,['mixed carbonate siliciclastic','mixed shelf','inner shelf','muddy shelf','marly shelf']],
    ['Carbonate shoals / patch reefs','#f0a8c4',.6,['carbonate shoal','ooid shoal','bioherm','patch reef','carbonate bank']],
    ['Outer carbonate shelf','#9edfd3',1.5,['outer shelf','carbonate shelf','open marine carbonate','bioclastic limestone']]]),
-  littoral:DS('shelf','Littoral (lake)',[['Littoral','#bfe0b0',1.3,['sublittoral','littoral zone','nearshore lacustrine','microbialite','stromatolite','coquina','lacustrine carbonate','shallow lacustrine']]],{ln:'Slope break'})},
+  littoral:DS('shelf','Littoral (lake)',[['Littoral','#bfe0b0',1.3,['sublittoral','littoral zone','nearshore lacustrine','microbialite','stromatolite','coquina','lacustrine carbonate','shallow lacustrine']]],{ln:'Slope break',lab:'Littoral (lake)'})},
  slope:{
   apron:DS('slope','Slope with gullies and mass-transport aprons',[
    ['Upper slope (bypass, gullies)','#8fb0cf',1,['upper slope','slope gully','gully','bypass slope','shelf break']],
@@ -1023,7 +1031,7 @@ const DOMSYS={
    ['Lobe fringe','#f6ebb0',.6,['distal lobe','fringe','outer fan','thin bedded turbidite','distal fan']],
    ['Basin plain','#5a80b3',2,['basin floor','basin','abyssal plain','hemipelagite','pelagic']]],{inf:true,src:'fan'}),
   basin:DS('deep','Basin (pelagic, with isolated build-ups)',[['Basin','#3c6aa3',2,['basin floor','deep basin','basinal','pelagic','deep marine']]]),
-  profundal:DS('deep','Profundal (lake)',[['Profundal','#5f7f8c',2,['profundal zone','deep lake','offshore lacustrine','lacustrine shale','oil shale','anoxic lake','lake centre','deep lacustrine','lacustrine turbidite']]])}};
+  profundal:DS('deep','Profundal (lake)',[['Profundal','#5f7f8c',2,['profundal zone','deep lake','offshore lacustrine','lacustrine shale','oil shale','anoxic lake','lake centre','deep lacustrine','lacustrine turbidite']]],{lab:'Profundal (lake basin)'})}};
 const MARGINS={
  passive:{name:'Siliciclastic passive margin',doms:{cont:'fluvial',coast:'deltas',shelf:'clastic',slope:'apron',deep:'fans'}},
  carbonate:{name:'Carbonate rimmed margin',doms:{cont:'coastsabkha',coast:'tidalflat',shelf:'rimmed',slope:'forereef',deep:'basin'}},
@@ -1100,7 +1108,7 @@ function feederSys(M){const D=M.margin&&M.margin.doms||{},S=D.cont&&DOMSYS.cont[
 // classes grouped by domain for the legend (one group without heading for the other models)
 function classDom(M,c){return c.dom!=null?c.dom:null}
 function legendGroups(M){const AB=allBelts(M);if(!M.belts.some(b=>DOMIDX[b.dom]!=null))return[{dom:null,name:'',items:AB.map((c,i)=>i)}];
-  const G=DOMAINS.map(([d,nm])=>({dom:d,name:nm,items:[]})),other={dom:'other',name:'Other',items:[]};
+  const D=M.margin&&M.margin.doms||{},G=DOMAINS.map(([d,nm])=>({dom:d,name:(D[d]&&DOMSYS[d][D[d]]&&DOMSYS[d][D[d]].lab)||nm,items:[]})),other={dom:'other',name:'Other',items:[]};
   AB.forEach((c,i)=>{const g=G.find(q=>q.dom===classDom(M,c));(g||other).items.push(i)});
   return G.filter(g=>g.items.length).concat(other.items.length?[other]:[])}
 // ---------- geometry ----------
@@ -1156,7 +1164,8 @@ function lobeR(s,x,y){const dx=x-s.x+s.b*s.ux,dy=y-s.y+s.b*s.uy,r=Math.hypot(dx,
   const p=dx*s.ux+dy*s.uy,q=dx*s.uy-dy*s.ux;let a=Math.atan2(q,p)/RAD;
   a-=s.asym*BEND*Math.min(1,r/s.L);
   const h=Math.max(3,s.open/2*(1+.5*s.asym*Math.tanh(a/12))),e=Math.abs(a)-h,rr=r/(1+.35*Math.abs(s.asym)*smooth01(.5+a*Math.sign(s.asym)/24));
-  if(e<=0)return rr;if(e>=s.tp)return Infinity;const u=e/s.tp;return rr/(1-u*u)}
+  const lb=s.kind==='fan'?1-.07*Math.sin(2*Math.PI*a/Math.max(8,s.open/1.6)+s.ph):1;
+  if(e<=0)return rr*lb;if(e>=s.tp)return Infinity;const u=e/s.tp;return rr*lb/(1-u*u)}
 // ---------- feeders (source-to-sink): river valley landward, delta on the shoreline, canyon at the shelf edge and fan at the toe of slope, in line ----------
 // largest deflection w of the sine-generated curve theta = w sin(2 pi s / lambda) (Langbein & Leopold 1966) whose sinuosity 1 / J0(w) is `sin`
 function sineGenAmp(sin){if(!(sin>1))return 0;const J0=w=>{let s=0;const N=64;for(let i=0;i<N;i++)s+=Math.cos(w*Math.sin(2*Math.PI*(i+.5)/N));return s/N};
@@ -1244,9 +1253,9 @@ function lineModel(M){const p=prior(M),n=M.belts.length,L=[];
       asym:clamp(fin(s.asym,0),-1,1),kind:s.kind==='fan'?'fan':s.kind==='fault'?'fault':'coast',canyon:s.canyon!==false};o.tp=clamp(.5*o.open,12,TAPER);
     if(o.kind==="fault"){o.v=0;o.g=pend/o.L;o.k=.15*pend;o.b=.12*o.L;o.off=o.b;o.ph=2.1*si+.7;
       // elongation along the fault from the length of fault left on either side of the source (a short segment or a relay ramp gives a rounder fan)
-      o.fi=Math.round(fin(s.fault,0));const F=FL[o.fi];let tip=Infinity;if(F){const q=nearF(F,o.x,o.y);tip=Math.min(q.s,q.len-q.s);o.sf=q.s;o.FP=F}o.E=clamp(.85*tip/o.L,1,2.2);return o}
+      o.fi=Math.round(fin(s.fault,0));const F=FL[o.fi];let tip=Infinity;if(F){const q=nearF(F,o.x,o.y);tip=Math.min(q.s,q.len-q.s);o.sf=q.s;o.FP=F}o.E=clamp(.85*tip/o.L,1,1.9);return o}
     const li=L.find(l=>l.oi===Math.round(fin(s.line,0)))||L[0];o.v=li.v;
-    if(o.kind==='fan'){o.g=Math.max(1e-6,pend-li.v)/o.L;o.k=.12*(pend-li.v);o.off=0}
+    if(o.kind==='fan'){o.g=Math.max(1e-6,pend-li.v)/o.L;o.k=.12*(pend-li.v);o.off=0;o.ph=1.3*si+.4}
     else if(li.k<0){o.g=(p[0]||1)/o.L;o.k=.15*(p[0]||1);o.off=0}
     else{const j=L.indexOf(li),nx=L[j+1];let g=1;if(nx){const W=Math.abs(sdistF(nx.P,o.x,o.y));if(W>0)g=clamp((nx.v-li.v)/W,.05,20)}o.g=g;o.k=.3*o.L*g;o.off=o.L;
       // a delta lowers d down to inside its plain, never into the belts landward of it (no coastal plain or river belts inside the delta)
@@ -1317,7 +1326,7 @@ function fieldD(M,opt={}){const LM=linesOn(M)?lineModel(M):null,geo=LM?LM.f:geoF
   const post=(x,y,d)=>{if(PG&&isFinite(d)){const v=sampleGrid(PG,x,y);if(v===v)d+=v}if(FA.length&&isFinite(d))d+=faultShift(FA,x,y,d);
     for(const s of FS)if((x-s.x)*s.ux+(y-s.y)*s.uy>0){let ds=s.g*(lobeR(s,x,y)-s.off);if(nz&&isFinite(ds))ds=nz(x,y,ds);d=smin(d,ds,s.k)}
     // bajada: between neighbouring fan deltas of a fault, an apron along the fault, narrowest half-way (re-entrants between the fan toes)
-    for(const [a,b] of FP){const q=nearF(a.FP,x,y);if(q.s<=a.sf||q.s>=b.sf||(x-a.x)*a.ux+(y-a.y)*a.uy<=0)continue;const t=(q.s-a.sf)/(b.sf-a.sf),Lt=a.L*(1-t)+b.L*t,w=.4+.6*(2*t-1)**2;
+    for(const [a,b] of FP){const q=nearF(a.FP,x,y);if(q.s<=a.sf||q.s>=b.sf||(x-a.x)*a.ux+(y-a.y)*a.uy<=0)continue;const t=(q.s-a.sf)/(b.sf-a.sf),Lt=a.L*(1-t)+b.L*t,w=.45+.55*(2*t-1)**4;
       let ds=pend0*q.d/(w*Lt);if(nz)ds=nz(x,y,ds);d=smin(d,ds,a.k)}
     return d};
   if(!lines&&!TL.length){const D=(PG||FA.length||FS.length)?(x,y)=>post(x,y,exactGeo(x,y)):exactGeo;return{D,mem:null,FA,FE}}
@@ -1698,6 +1707,26 @@ const on=(id,ev,f)=>$(id).addEventListener(ev,f);
 for(const g of GDE.groups){const og=document.createElement('optgroup');og.label=g;
   for(const [k,t] of Object.entries(GDE.templates))if(t.group===g){const o=document.createElement('option');o.value=k;o.textContent=t.name+(t.geom==='radial'?' (radial)':'');og.appendChild(o)}
   $('mTpl').appendChild(og)}
+for(const [k,m] of Object.entries(GDE.MARGINS)){const o=document.createElement('option');o.value=k;o.textContent=m.name;$('mMargin').appendChild(o)}
+{const o=document.createElement('option');o.value='custom';o.textContent='Custom margin (systems per domain)';$('mMargin').appendChild(o)}
+const isMargin=()=>!!(S.M&&S.M.template==='margin'&&S.M.margin);
+const DLAB={river:'River valley',delta:'Delta',canyon:'Canyon',fan:'Basin-floor fan'};
+function renderMargin(){const mg=isMargin();$('mMargin').value=mg?(S.M.margin.preset||'custom'):'';$('domBox').hidden=!mg;
+  let o=$('mTpl').querySelector('option[value=margin]');if(mg&&!o){o=document.createElement('option');o.value='margin';o.textContent='Margin profile (systems per domain, above)';$('mTpl').prepend(o)}if(!mg&&o)o.remove();
+  if(mg)$('mTpl').value='margin';if(!mg)return;const D=S.M.margin.doms;
+  $('domSel').innerHTML=GDE.DOMAINS.map(([d,nm])=>`<span>${esc(nm)}</span><select data-d="${d}" aria-label="${esc(nm)} system"><option value="">— none</option>${GDE.domSystems(d).map(k=>`<option value="${k}"${D[d]===k?' selected':''}>${esc(GDE.DOMSYS[d][k].name)}</option>`).join('')}</select>`).join('');
+  $('domSel').querySelectorAll('select').forEach(sel=>sel.onchange=()=>setMargin(Object.assign({},S.M.margin.doms,{[sel.dataset.d]:sel.value||null})));
+  $('mAf').value=S.M.margin.af||0}
+// a margin from a preset key or the systems per domain: the belts are rebuilt, the key lines and feeders proposed again from the wells
+function setMargin(p){const old=S.M,pre=typeof p==='string'?p:(Object.entries(GDE.MARGINS).find(([k,m])=>GDE.DOMAINS.every(([d])=>(m.doms[d]||null)===(p[d]||null)))||[null])[0];
+  const M=GDE.makeMargin(pre||{doms:p},{ext:old.ext,cell:old.cell,noise:clone(old.noise),warp:clone(old.warp),span:old.span,layers:old.layers,bodies:old.bodies,faults:old.faults,paint:old.paint,
+    sources:(old.sources||[]).filter(q=>q.kind==='fault'),af:old.margin?old.margin.af:undefined});
+  S.M=M;sketch(true);rematch();renderBelts();syncInputs();renderWells();schedule();
+  banner(`${pre?GDE.MARGINS[pre].name:'Custom margin'}: ${GDE.DOMAINS.filter(([d])=>M.margin.doms[d]).map(([d,nm])=>nm.toLowerCase()+' '+GDE.DOMSYS[d][M.margin.doms[d]].name.toLowerCase()).join('; ')}. Key lines and feeders proposed from the wells (undo restores).`)}
+on('mMargin','change',()=>{const v=$('mMargin').value;
+  if(!v){if(!isMargin())return;S.M.margin=null;S.M.feeders=[];S.M.template='custom';$('mTpl').value='shelf';$('mTpl').dispatchEvent(new Event('change'));return}
+  setMargin(v==='custom'?(isMargin()?S.M.margin.doms:GDE.MARGINS.passive.doms):v)});
+on('mAf','change',()=>{if(!isMargin())return;const v=Math.round(numv('mAf'));if(v>=0&&v<=30){S.M.margin.af=v;schedule()}});
 $('tbBody').innerHTML=Object.entries(GDE.BODY).filter(([k])=>k!=='custom').map(([k,b])=>`<option value="${k}">${esc(b.name)}</option>`).join('');
 const AB=()=>GDE.allBelts(S.M);
 const LSK='gdemap.customBelts.v1';
@@ -1721,12 +1750,13 @@ function syncInputs(){const M=S.M,e=M.ext;
   document.querySelectorAll('.v1').forEach(x=>x.style.display=M.geom==='lines'?'none':'');
   document.querySelectorAll('.strk').forEach(x=>{if(M.geom==='radial')x.style.display=M.outside==='strike'?'':'none'});
   $('bFit').textContent=isLines()?'Auto-fit direction (for the sketch)':'Auto-fit direction';
-  renderMix();renderConcept();renderLayers()}
+  renderMargin();renderMix();renderConcept();renderLayers()}
 function syncChannels(){const C=S.M.channels,n=S.M.belts.length;C.host=[Math.min(C.host[0],n-1),Math.min(C.host[1],n-1)];if(C.host[0]>C.host[1])C.host=[C.host[1],C.host[0]];
   const opts=k=>S.M.belts.map((b,i)=>`<option value="${i}"${i===k?' selected':''}>${esc(b.name)}</option>`).join('');
   $('chFrom').innerHTML=opts(C.host[0]);$('chTo').innerHTML=opts(C.host[1]);
   $('chOn').checked=!!C.on;$('chBox').hidden=!C.on;$('chName').value=C.name;$('chCol').value=C.color;$('chN').value=C.n;$('chW').value=+(+C.w).toPrecision(6);$('chSin').value=C.sin;$('chSinR').value=C.sin}
 function tplNote(){const t=GDE.templates[S.M.template];
+  if(isMargin()){const D=S.M.margin.doms;$('tplNote').textContent=`Margin profile, ${GDE.DOMAINS.filter(([d])=>D[d]).length} domains from hinterland to basin; belts of each domain from its system (Method & sources).`;$('scaleNote').hidden=true;return}
   $('tplNote').textContent=t&&t.scale?`${t.group} · typical scale ${t.scale[0]}–${t.scale[1]} km. Widths and sources: Method & sources.`:'Your own belts: names, order, colours and widths; remembered by this browser.';
   const h=GDE.scaleHint(S.M);$('scaleNote').hidden=!h;$('scaleNote').textContent=h||''}
 function syncAz(){$('mAz').value=+(+S.M.az).toFixed(1);$('mAzR').value=S.M.az}
@@ -1752,7 +1782,8 @@ on('mSeed','input',()=>{const v=numv('mSeed');if(isFinite(v)){S.M.noise.seed=Mat
 on('bSeed','click',()=>{S.M.noise.seed=1+Math.floor(Math.random()*99999);$('mSeed').value=S.M.noise.seed;schedule()});
 on('wOn','change',()=>{S.M.warp.on=$('wOn').checked;schedule()});
 on('wR','input',()=>{const v=numv('wR');if(v>0){S.M.warp.R=v;schedule()}});
-on('mTpl','change',()=>{const k=$('mTpl').value,t=GDE.templates[k],v2=GDE.V2[k]||GDE.V2.custom;
+on('mTpl','change',()=>{const k=$('mTpl').value,t=GDE.templates[k],v2=GDE.V2[k]||GDE.V2.custom;if(k==='margin')return;
+  if(isMargin()){S.M.margin=null;S.M.feeders=[]}
   if(k!=='custom'){S.M.belts=clone(t.belts);if(!isLines())S.M.geom=t.geom;S.M.outside=t.outside;if(t.geom==='radial'&&t.fan)S.M.fan=t.fan;if(t.outside==='strike'&&!(S.M.protrude>0))S.M.protrude=Math.round(.3*S.M.span)}
   else{const B=loadCustom();if(B){S.M.belts=B;banner('Your last custom belt list, remembered by this browser.')}}
   S.M.template=k;Object.assign(S.M,{variants:(v2.vars||[]).map(([k2,name,color,alias])=>({k:k2,name,color,alias:alias.slice()})),ctx:v2.ctx?{name:v2.ctx[0],color:v2.ctx[1],alias:v2.ctx[2].slice()}:null,inf:v2.inf!=null?v2.inf:null,mix:[]});
@@ -1770,9 +1801,10 @@ on('chSinR','input',()=>{S.M.channels.sin=+$('chSinR').value;$('chSin').value=S.
 on('chSin','input',()=>{const v=numv('chSin');if(v>=1&&v<=4){S.M.channels.sin=v;$('chSinR').value=v;schedule()}});
 
 // ---------- belts editor and mixed zones ----------
-function beltsEdited(){if(S.M.template!=='custom'){S.M.template='custom';$('mTpl').value='custom'}saveCustom();syncChannels();tplNote();renderMix()}
+function beltsEdited(){if(isMargin()){S.M.margin.preset=null;$('mMargin').value='custom'}else if(S.M.template!=='custom'){S.M.template='custom';$('mTpl').value='custom'}if(!isMargin())saveCustom();syncChannels();tplNote();renderMix()}
 function renderBelts(){const B=S.M.belts;
-  $('bList').innerHTML=B.map((b,i)=>`<div class="br" data-i="${i}"><input type="color" value="${esc(b.color)}" data-k="color" aria-label="Colour"><input type="text" value="${esc(b.name)}" data-k="name" aria-label="Belt name"><input type="number" value="${b.w}" step="any" min="0" data-k="w" aria-label="Relative width" title="Relative width (the most distal belt is open-ended)"><button data-a="up" title="Move up (more proximal)" ${i?'':'disabled'}>↑</button><button data-a="dn" title="Move down (more distal)" ${i<B.length-1?'':'disabled'}>↓</button><button data-a="del" title="Remove" ${B.length>2?'':'disabled'}>×</button></div>`).join('');
+  const DN=Object.fromEntries(GDE.DOMAINS);
+  $('bList').innerHTML=B.map((b,i)=>`${b.dom&&(!i||B[i-1].dom!==b.dom)?`<div class="dh">${esc(DN[b.dom]||b.dom)}</div>`:''}<div class="br" data-i="${i}"><input type="color" value="${esc(b.color)}" data-k="color" aria-label="Colour"><input type="text" value="${esc(b.name)}" data-k="name" aria-label="Belt name"><input type="number" value="${b.w}" step="any" min="0" data-k="w" aria-label="Relative width" title="Relative width (the most distal belt is open-ended)"><button data-a="up" title="Move up (more proximal)" ${i?'':'disabled'}>↑</button><button data-a="dn" title="Move down (more distal)" ${i<B.length-1?'':'disabled'}>↓</button><button data-a="del" title="Remove" ${B.length>2?'':'disabled'}>×</button></div>`).join('');
   $('bList').querySelectorAll('.br').forEach(r=>{const i=+r.dataset.i;
     r.querySelectorAll('input').forEach(inp=>inp.addEventListener(inp.type==='color'?'input':'change',()=>{const k=inp.dataset.k,b=S.M.belts[i];
       if(k==='w'){const v=parseFloat(inp.value);if(!(v>0)){inp.value=b.w;return}b.w=v}
@@ -1783,7 +1815,7 @@ function renderBelts(){const B=S.M.belts;
       if(a==='del'){S.wells.forEach(w=>{if(w.b===i)w.b=-1});B.splice(i,1)}
       else{const j=a==='up'?i-1:i+1;[B[i],B[j]]=[B[j],B[i]]}
       S.M.mix=[];beltsEdited();rematch(true);renderBelts();schedule()})})}
-on('bBAdd','click',()=>{const B=S.M.belts;B.splice(B.length-1,0,{name:'New belt '+B.length,color:'#d8cfa8',w:1,alias:[]});beltsEdited();rematch(true);renderBelts();schedule()});
+on('bBAdd','click',()=>{const B=S.M.belts;B.splice(B.length-1,0,Object.assign({name:'New belt '+B.length,color:'#d8cfa8',w:1,alias:[]},B[B.length-1].dom?{dom:B[B.length-1].dom}:{}));beltsEdited();rematch(true);renderBelts();schedule()});
 function renderMix(){const B=S.M.belts,X=S.M.mix||(S.M.mix=[]);
   $('mixList').innerHTML=X.map((m,i)=>`<div class="it" data-i="${i}"><div class="hd"><select data-k="k" aria-label="Boundary" style="flex:1;min-width:0">${B.slice(0,-1).map((b,k)=>`<option value="${k}"${k===m.k?' selected':''}>${esc(b.name)} + ${esc(B[k+1].name)}</option>`).join('')}</select><input type="number" data-k="w" value="${m.w}" step="any" min="0" style="width:70px" title="Width of the mixed zone (proximal–distal units, about metres)" aria-label="Width"><button data-a="del" title="Remove">×</button></div></div>`).join('')||'<div class="note" style="margin:0">None: sharp contacts.</div>';
   $('mixList').querySelectorAll('.it').forEach(r=>{const m=X[+r.dataset.i];
@@ -1827,7 +1859,7 @@ on('bFit','click',()=>{const radial=S.M.geom==='radial',lin=isLines(),f=GDE.fitA
   if(f.msg){banner(f.msg,true);return}
   S.M.az=f.az;if(radial&&$('fitSrc').checked)S.M.src=f.src;syncAz();syncSrc();schedule();
   banner(`Transport azimuth ${f.az.toFixed(1)}°${radial&&$('fitSrc').checked?`, source at ${fmtN(f.src[0])}, ${fmtN(f.src[1])}`:''}: ${f.count} of ${f.n} wells in the right order.`+(lin?' Press “Propose a sketch” (panel 5) to redraw the key lines along it.':''),f.count<f.n)});
-function sketch(quiet){const s=GDE.proposeSketch(S.M,wellsOut());Object.assign(S.M,{lines:s.lines,sources:s.sources.concat((S.M.sources||[]).filter(q=>q.kind==='fault')),az:s.az,span:s.span,geom:'lines'});
+function sketch(quiet){const s=GDE.proposeSketch(S.M,wellsOut());Object.assign(S.M,{lines:s.lines,sources:s.sources.concat((S.M.sources||[]).filter(q=>q.kind==='fault')),az:s.az,span:s.span,geom:'lines'});if(s.feeders)S.M.feeders=s.feeders;
   S.lineSel=0;if(!quiet)banner(`Sketch: ${s.lines.length} key line${s.lines.length>1?'s':''} and ${s.sources.length} source${s.sources.length===1?'':'s'} from ${S.wells.length} well${S.wells.length===1?'':'s'}, transport azimuth ${s.az}°. Edit them with the Line and Select tools.`)}
 on('bSketch','click',()=>{if(!S.started)return need();sketch();syncInputs();schedule()});
 on('pR','change',()=>{});on('bPClear','click',()=>{S.M.paint=null;schedule()});
@@ -1859,6 +1891,23 @@ function renderConcept(){const M=S.M,L=M.lines||[],sel=S.sel||{};
     r.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('input',()=>{const v=pnum(inp.value);if(!(v>=0))return;f[inp.dataset.k]=v;r.querySelectorAll(`[data-k=${inp.dataset.k}]`).forEach(o=>{if(o!==inp)o.value=v});schedule(inp.type==='range')}));
     r.querySelector('[data-a=flip]').onclick=()=>{f.side=f.side<0?1:-1;schedule()};
     r.querySelector('[data-a=del]').onclick=()=>{const i=+r.dataset.i;FL.splice(i,1);M.sources=M.sources.filter(s=>s.kind!=='fault'||s.fault!==i);M.sources.forEach(s=>{if(s.kind==='fault'&&s.fault>i)s.fault--});S.sel=null;renderConcept();schedule()}});
+  const FD=M.feeders||[];
+  $('fdList').innerHTML=isMargin()?'<b style="font-size:.8rem">Feeders (river → delta → canyon → fan)</b>'+(FD.map((f,i)=>{const op=sel.kind==='feed'&&sel.i===i,num=(e,k,v,t,st)=>`<input type="number" data-e="${e}" data-k="${k}" value="${v}" step="${st||'any'}" title="${t}">`;
+    let h=`<div class="it${op?' sel':''}" data-i="${i}"><div class="hd"><b title="Select (edit its elements)">Feeder ${i+1}</b><span class="tag">${fmtN(f.x)}, ${fmtN(f.y)}</span><button data-a="del" title="Remove the feeder">×</button></div>
+      <div class="fl">${['river','delta','canyon','fan'].map(e=>`<label><input type="checkbox" data-e="${e}" data-k="on" ${f[e]&&f[e].on?'checked':''}>${DLAB[e]}</label>`).join('')}</div>`;
+    if(op)h+=`<div class="pg"><span>Axis azimuth</span>${num('','az',(+f.az).toFixed(0),'Degrees from north, towards the basin; drag the arrow head on the map')}
+      <span>River width</span>${num('river','w',Math.round(f.river.w),'Width of the channel belt (valley), map units')}<span>River sinuosity</span>${num('river','sin',f.river.sin,'Sinuosity of the channel belt (sine-generated meanders)','0.05')}
+      <span>Delta length</span>${num('delta','L',Math.round(f.delta.L),'How far the delta protrudes beyond the shoreline, map units')}<span>Delta opening</span>${num('delta','open',f.delta.open,'Opening angle of the delta lobe, degrees')}
+      <span>Delta drift</span>${num('delta','asym',f.delta.asym,'−1…1: lobe bent and elongated by longshore drift','0.05')}
+      <span>Canyon width</span>${num('canyon','w',Math.round(f.canyon.w),'Width of the canyon, map units')}
+      <span>Fan length</span>${num('fan','L',Math.round(f.fan.L),'From the toe of slope to the start of the basin plain, map units')}<span>Fan opening</span>${num('fan','open',f.fan.open,'Opening angle of the fan, degrees')}
+      <span>Fan drift</span>${num('fan','asym',f.fan.asym,'−1…1: fan deflected to one side','0.05')}</div>`;
+    return h+'</div>'}).join('')||'<div class="note" style="margin:0">No feeder: click a shoreline with the Source tool (map toolbar).</div>'):'';
+  $('fdList').querySelectorAll('.it').forEach(r=>{const i=+r.dataset.i,f=FD[i];r.querySelector('b').onclick=()=>selItem('feed',S.sel&&S.sel.kind==='feed'&&S.sel.i===i?null:i);
+    r.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('change',()=>{const e=inp.dataset.e,k=inp.dataset.k,o=e?f[e]:f;
+      if(k==='on')o.on=inp.checked;else{const v=pnum(inp.value);if(!isFinite(v))return;o[k]=k==='asym'?Math.max(-1,Math.min(1,v)):k==='az'?((v%360)+360)%360:Math.max(k==='sin'?1:.001,v)}
+      Object.assign(f,GDE.normFeeder(f));rematch();renderWells();renderConcept();schedule()}));
+    r.querySelector('[data-a=del]').onclick=()=>{FD.splice(i,1);S.sel=null;renderConcept();rematch();renderWells();schedule()}});
   const BD=M.bodies||[];
   $('bdList').innerHTML=BD.map((b,i)=>{const T=GDE.BODY[b.type]||GDE.BODY.custom,lay=(M.layers||[]).find(l=>l.id===b.layer),nm=T.belts?T.name:esc(b.env||'Body')+(b.shape==='ribbon'?' (channel)':b.shape==='poly'?' (polygon)':'');
     let h=`<div class="it${sel.kind==='body'&&sel.i===i?' sel':''}" data-i="${i}"><div class="hd"><b title="Select">${T.belts?esc(nm):nm}</b><span class="tag">${lay?esc(lay.name)+(lay.on?'':' (off)'):b.shape==='ellipse'?fmtLen(b.a*2):'traced'}</span><button data-a="del" title="Remove">×</button></div>`;
@@ -1977,7 +2026,7 @@ function viewExt(){const L=curL(),e=S.M.ext,x0=Math.max(e.xmin,L.ix(L.px0)),x1=M
   return x1>x0&&y1>y0?{xmin:x0,xmax:x1,ymin:y0,ymax:y1}:e}
 function previewCell(ext,max){return Math.max(S.M.cell||0,Math.sqrt((ext.xmax-ext.xmin)*(ext.ymax-ext.ymin)/max))}
 function compute(fast){if(!(S.M.belts.length>=2))return;
-  try{S.mod=GDE.build(S.M,S.wells,{dist:!fast,fast});}catch(err){banner('Model error: '+err.message,true);console.error(err);return}
+  try{S.mod=GDE.build(S.M,S.wells,{dist:!fast,fast});S.FG=isMargin()?GDE.feederGeom(S.M):null}catch(err){banner('Model error: '+err.message,true);console.error(err);return}
   S.full=null;const ve=viewExt();
   S.P=GDE.polygons(S.mod,ve,previewCell(ve,fast?60000:250000),{stride:fast?2:3,minArea:fast?2:4,tol:.7});S.Pext=ve;
   draw();
@@ -2052,6 +2101,14 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
     c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();c.strokeStyle='#5a3218';c.lineWidth=2.4;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
     const hd=10,ha=.45;c.fillStyle='#5a3218';c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-hd*Math.sin(a-ha),hy+hd*Math.cos(a-ha));c.lineTo(hx-hd*Math.sin(a+ha),hy+hd*Math.cos(a+ha));c.closePath();c.fill();
     c.fillStyle='#a8623a';c.strokeStyle=sel.kind==='src'&&sel.i===i?'#1d3f8a':'#fff';c.lineWidth=2;c.beginPath();c.arc(sx,sy,6.5,0,2*Math.PI);c.fill();c.stroke()});
+  if(isMargin()&&isLines()){const FG=S.FG||{sources:[],canyons:[]},arrow=(sx,sy,a,len,col,w)=>{const hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=w+3.6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
+      c.strokeStyle=col;c.lineWidth=w;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();const hd=8+w,ha=.45;c.fillStyle=col;c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-hd*Math.sin(a-ha),hy+hd*Math.cos(a-ha));c.lineTo(hx-hd*Math.sin(a+ha),hy+hd*Math.cos(a+ha));c.closePath();c.fill()};
+    (M.feeders||[]).forEach((f,i)=>{const fan=FG.sources.find(q=>q.kind==='fan'&&q.feeder===i),cy=FG.canyons.find(q=>q.feeder===i),pts=[[f.x,f.y]];if(cy)pts.push(cy.pts[0]);if(fan)pts.push([fan.x,fan.y]);
+      // the source-to-sink link: delta, canyon head, fan apex
+      if(pts.length>1){c.setLineDash([2,5]);c.strokeStyle='rgba(90,50,24,.75)';c.lineWidth=1.5;c.beginPath();pts.forEach((q,j)=>j?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])));c.stroke();c.setLineDash([])}
+      if(fan){const fx=L.X(fan.x),fy=L.Y(fan.y);arrow(fx,fy,fan.az*Math.PI/180,Math.max(18,Math.min(50,fan.L*L.k*.3)),'#5a3218',1.8);c.fillStyle='#fff';c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.arc(fx,fy,5,0,2*Math.PI);c.fill();c.stroke()}
+      const a=f.az*Math.PI/180,sx=L.X(f.x),sy=L.Y(f.y);arrow(sx,sy,a,Math.max(26,Math.min(90,f.delta.L*L.k*.45)),'#5a3218',2.4);
+      c.fillStyle='#a8623a';c.strokeStyle=sel.kind==='feed'&&sel.i===i?'#1d3f8a':'#5a3218';c.lineWidth=2.4;c.beginPath();c.arc(sx,sy,7,0,2*Math.PI);c.fill();c.stroke();c.strokeStyle='#fff';c.lineWidth=1.2;c.beginPath();c.arc(sx,sy,4,0,2*Math.PI);c.stroke()})}
   if(M.geom!=='lines'){const a=M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(M.src[0]),sy=L.Y(M.src[1]),hx=sx+Math.sin(a)*len,hy=sy-Math.cos(a)*len;
     if(M.geom==='radial'){c.setLineDash([5,5]);c.strokeStyle='rgba(35,34,32,.45)';c.lineWidth=1.2;const rl=2*Math.hypot(W,H);for(const s of [-1,1]){const b=a+s*M.fan/2*Math.PI/180;c.beginPath();c.moveTo(sx,sy);c.lineTo(sx+Math.sin(b)*rl,sy-Math.cos(b)*rl);c.stroke()}c.setLineDash([])}
     c.lineCap='round';c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=6;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();c.strokeStyle='#232220';c.lineWidth=2.4;c.beginPath();c.moveTo(sx,sy);c.lineTo(hx,hy);c.stroke();
@@ -2085,25 +2142,29 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
   // legend: classes on the map
   if(L.leg){let lx=W-L.leg+6,ly=L.py0+4;const lw=L.leg-12;c.textAlign='left';c.textBaseline='top';
     c.fillStyle='#232220';c.font='600 13px "Space Grotesk",Inter,sans-serif';c.fillText('GDE classes',lx,ly);ly+=18;
-    c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText('code, proximal → distal, then others',lx,ly);ly+=17;
-    const used=new Set(P.map(p=>p.code-1));
-    B.forEach((b,i)=>{if(!used.has(i)&&b.kind!=='belt')return;c.fillStyle=b.hatch?hatch(c,b.hatch[0],b.hatch[1]):b.color;c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.5)';c.strokeRect(lx+.5,ly+.5,17,12);
-      c.fillStyle=used.has(i)?'#232220':'#8c8a80';c.font='12px Inter,system-ui,sans-serif';
+    c.font='11px Inter,system-ui,sans-serif';c.fillStyle='#5c5a52';c.fillText(isMargin()?'by domain, hinterland → basin':'code, proximal → distal, then others',lx,ly);ly+=17;
+    const used=new Set(P.map(p=>p.code-1)),GR=GDE.legendGroups(M).map(g=>Object.assign({},g,{items:g.items.filter(i=>used.has(i)||B[i].kind==='belt')})).filter(g=>g.items.length);
+    // rows: compact when the classes would not fit above the other keys
+    const nRows=GR.reduce((a,g)=>a+g.items.length+(g.name?1:0),0),room=L.py1-ly-150,cp=nRows*19>room,rh=cp?Math.max(12,Math.min(19,room/nRows)):19,fs=cp?11:12;
+    for(const g of GR){if(g.name){c.fillStyle='#5c5a52';c.font=`600 ${fs-1}px Inter,system-ui,sans-serif`;c.fillText(g.name.toUpperCase(),lx,ly+1);ly+=rh-2}
+    for(const i of g.items){const b=B[i];c.fillStyle=b.hatch?hatch(c,b.hatch[0],b.hatch[1]):b.color;c.fillRect(lx,ly,18,Math.min(13,rh-3));c.strokeStyle='rgba(35,34,32,.5)';c.strokeRect(lx+.5,ly+.5,17,Math.min(13,rh-3)-1);
+      c.fillStyle=used.has(i)?'#232220':'#8c8a80';c.font=fs+'px Inter,system-ui,sans-serif';
       const words=`${i+1}  ${b.name}${b.channel?' (channels)':''}`.split(' ');let line='',yy=ly;
-      for(const wd of words){const tst=line?line+' '+wd:wd;if(c.measureText(tst).width>lw-26&&line){c.fillText(line,lx+24,yy);line=wd;yy+=14}else line=tst}
-      c.fillText(line,lx+24,yy);ly=yy+19});
+      for(const wd of words){const tst=line?line+' '+wd:wd;if(c.measureText(tst).width>lw-26&&line){c.fillText(line,lx+24,yy);line=wd;yy+=fs+2}else line=tst}
+      c.fillText(line,lx+24,yy);ly=yy+rh}}
     ly+=6;c.fillStyle='#fff';c.strokeStyle='#232220';c.lineWidth=1.8;c.beginPath();c.arc(lx+9,ly+7,5,0,2*Math.PI);c.fill();c.stroke();
     c.fillStyle='#232220';c.font='12px Inter,system-ui,sans-serif';c.fillText('Well',lx+24,ly);c.fillStyle='#2e7d32';c.font='700 12px Inter';c.fillText('✓',lx+60,ly);
     c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('honoured',lx+72,ly+1);ly+=17;
     c.fillStyle='#c62828';c.font='700 12px Inter';c.fillText('✗',lx+60,ly);c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';c.fillText('not honoured',lx+72,ly+1);ly+=20;
     c.font='12px Inter,system-ui,sans-serif';
     if(isLines()&&(M.lines||[]).length){c.setLineDash([7,5]);c.strokeStyle='#1d3f8a';c.lineWidth=1.5;c.beginPath();c.moveTo(lx,ly+7);c.lineTo(lx+18,ly+7);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Key line (basin →)',lx+24,ly);ly+=18}
+    if(isMargin()&&(M.feeders||[]).length){c.fillStyle='#a8623a';c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.arc(lx+6,ly+7,5.5,0,2*Math.PI);c.fill();c.stroke();c.setLineDash([2,3]);c.beginPath();c.moveTo(lx+12,ly+7);c.lineTo(lx+22,ly+7);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Feeder, delta → canyon → fan',lx+28,ly);ly+=18}
     if(isLines()&&(M.sources||[]).length){c.fillStyle='#a8623a';c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.arc(lx+6,ly+7,5.5,0,2*Math.PI);c.fill();c.stroke();c.strokeStyle='#5a3218';c.lineWidth=2;c.beginPath();c.moveTo(lx+12,ly+7);c.lineTo(lx+22,ly+7);c.stroke();c.fillStyle='#232220';c.fillText('Source, lobe axis',lx+28,ly);ly+=18}
     if(!isLines()){c.fillStyle='#a8623a';c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.fill();c.strokeStyle='#232220';c.lineWidth=2;c.beginPath();c.moveTo(lx+16,ly+7);c.lineTo(lx+40,ly+7);c.stroke();c.fillStyle='#232220';c.fillText(M.geom==='radial'?'Source, transport':'Transport direction',lx+46,ly);ly+=18}
     if((M.faults||[]).length){c.strokeStyle='#b3261e';c.lineWidth=2.2;c.beginPath();c.moveTo(lx,ly+7);c.lineTo(lx+18,ly+7);c.moveTo(lx+9,ly+7);c.lineTo(lx+9,ly+12);c.stroke();c.fillStyle='#232220';c.fillText('Fault (ticks: down)',lx+24,ly);ly+=18}
     if(mod&&mod.warp.wells.length){c.setLineDash([5,3]);c.strokeStyle='#a8623a';c.lineWidth=1.4;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Warping radius',lx+24,ly);ly+=18}
     c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';ly+=4;
-    const tpl=M.template==='custom'?'Custom belts':GDE.templates[M.template].name;
+    const tpl=isMargin()?(M.margin.preset?GDE.MARGINS[M.margin.preset].name:'Custom margin'):M.template==='custom'?'Custom belts':GDE.templates[M.template].name;
     for(const s of [tpl,(M.geom==='lines'?'key lines':M.geom==='radial'?`radial, fan ${fmtN(M.fan)}°`:'linear')+`, seed ${M.noise.seed}`])if(ly<H-14){c.fillText(s,lx,ly);ly+=14}}}
 function fitStage(){const st=$('stage'),w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,h=Math.round((w-80-leg)*(e.ymax-e.ymin)/(e.xmax-e.xmin)+56);st.style.height=Math.max(420,Math.min(h,Math.round(innerHeight*.86)))+'px'}
 function size(){fitStage();const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
@@ -2115,7 +2176,7 @@ const RO0='Hover the map to read the class';
 const evp=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
 const curL=()=>{const r=cv.getBoundingClientRect();return layout(r.width,r.height)};
 const HINT={sel:'Drag wells, sources (along their line), bodies, the arrow heads; drag the background to pan; wheel to zoom.',pan:'Drag to pan; wheel to zoom.',
-  line:'Drag the square vertices; click on the line to add a vertex; double-click a vertex to remove it. Choose the line next to the button.',src:'Click on a key line to put a delta or fan there, or on a fault for a fault-bounded fan delta.',
+  line:'Drag the square vertices; click on the line to add a vertex; double-click a vertex to remove it. Choose the line next to the button.',src:'Click on a key line to put a delta or fan there (on a margin shoreline: a feeder, river → delta → canyon → fan), or on a fault for a fault-bounded fan delta.',
   body:'Click where the body is; set its size and halos in panel 6.',trace:'Click points; double-click or Enter to finish; Esc cancels. Environment and width in panel 6.',paint:'Drag over the map: + pushes the belts distal, − proximal (radius and strength in panel 7).',
   add:'Click on the map where the well is.',pick:'Click the backdrop image: its pixel goes into the open layer (control point or colour bar end).'};
 function setTool(t){if(t==='line'&&!(S.M.lines||[]).length){banner('No key line yet: “Propose a sketch” or “Add line” in panel 5.',true);t='sel'}
@@ -2130,6 +2191,8 @@ function hit(px,py){const L=curL(),M=S.M;
   if(S.mod)for(let i=S.wells.length-1;i>=0;i--){const w=S.wells[i];if(near2(L,px,py,w.x,w.y)<=8)return{k:'well',i}}
   if(isLines())for(let i=(M.sources||[]).length-1;i>=0;i--){const s=M.sources[i],a=s.az*Math.PI/180,len=Math.max(26,Math.min(90,s.L*L.k*.45)),hx=L.X(s.x)+Math.sin(a)*len,hy=L.Y(s.y)-Math.cos(a)*len;
     if(Math.hypot(px-hx,py-hy)<=9)return{k:'srcaz',i};if(near2(L,px,py,s.x,s.y)<=9)return{k:'src',i}}
+  if(isMargin())for(let i=(M.feeders||[]).length-1;i>=0;i--){const s=M.feeders[i],a=s.az*Math.PI/180,len=Math.max(26,Math.min(90,s.delta.L*L.k*.45)),hx=L.X(s.x)+Math.sin(a)*len,hy=L.Y(s.y)-Math.cos(a)*len;
+    if(Math.hypot(px-hx,py-hy)<=9)return{k:'feedaz',i};if(near2(L,px,py,s.x,s.y)<=10)return{k:'feed',i}}
   if(!isLines()){const a=M.az*Math.PI/180,len=Math.min(L.ew,L.eh)*.16*L.k,sx=L.X(M.src[0]),sy=L.Y(M.src[1]);if(Math.hypot(px-sx-Math.sin(a)*len,py-sy+Math.cos(a)*len)<=10)return{k:'head'};if(Math.hypot(px-sx,py-sy)<=10)return{k:'v1src'}}
   for(let i=(M.bodies||[]).length-1;i>=0;i--){const b=M.bodies[i];if(near2(L,px,py,b.x,b.y)<=9)return{k:'body',i};
     if(S.mod){const c=S.mod.bodies.list.find(B=>B.src===b);if(c&&c.sd(L.ix(px),L.iy(py),c.s)<0)return{k:'body',i}}}
@@ -2153,6 +2216,11 @@ cv.addEventListener('pointerdown',e=>{if(!S.started)return;const [px,py]=evp(e),
   if(t==='src'){const n=nearLine(L,px,py,isLines()?M.lines:[]),f=nearLine(L,px,py,M.faults);const tpl=GDE.templates[M.template]||{};
     if(f&&(!n||f.d<n.d)&&f.d<=14){const fl=M.faults[f.i],az=((Math.atan2(-f.ty,-f.tx)*180/Math.PI+(fl.side<0?180:0))%360+360)%360;
       M.sources.push({kind:'fault',fault:f.i,x:Math.round(f.x),y:Math.round(f.y),az:+az.toFixed(1),L:Math.round(diag()*.08),open:75,asym:0});}
+    else if(n&&n.d<=14&&isMargin()&&(GDE.marginLn(M).find(l=>l[2]==='sh')||[])[1]===Math.round(+M.lines[n.i].k)){
+      const az=((Math.atan2(-n.ty,-n.tx)*180/Math.PI)%360+360)%360,sy=GDE.marginSpec(M.margin.doms).sys,R=GDE.marginRoles(M),hasL=k=>k!=null&&M.lines.some(l=>l.k===k),fan=!!(sy.deep&&sy.deep.src==='fan')&&hasL(R.toe);
+      M.feeders=M.feeders||[];M.feeders.push(GDE.normFeeder({line:n.i,x:Math.round(n.x),y:Math.round(n.y),az:+az.toFixed(1),river:{on:!!(sy.cont&&sy.cont.valley),w:Math.round(diag()*.02)},delta:{on:!!(sy.coast&&sy.coast.src==='coast'),L:Math.round(diag()*.07),open:60,asym:0},
+        canyon:{on:fan&&!!sy.slope&&hasL(R.se),w:Math.round(diag()*.018)},fan:{on:fan,L:Math.round(diag()*.18),open:50,asym:0}}));
+      S.sel={kind:'feed',i:M.feeders.length-1};renderConcept();rematch();renderWells();schedule();return}
     else if(n&&n.d<=14){// basin on the right of the line: screen direction (tx, ty) = map (tx, -ty), right normal (-ty, -tx), azimuth atan2(x, y)
       const az=((Math.atan2(-n.ty,-n.tx)*180/Math.PI)%360+360)%360,kind=tpl.src==='fan'?'fan':'coast';
       M.sources.push({kind,line:n.i,x:Math.round(n.x),y:Math.round(n.y),az:+az.toFixed(1),L:Math.round(diag()*(kind==='fan'?.4:.1)),open:kind==='fan'?(tpl.fan||45):Math.min(110,tpl.fan||70),asym:0})}
@@ -2164,7 +2232,7 @@ cv.addEventListener('pointerdown',e=>{if(!S.started)return;const [px,py]=evp(e),
   if(t==='paint'){if(!M.paint)M.paint=GDE.paintGrid(M.ext,96);S.drag={k:'paint'};cv.setPointerCapture(e.pointerId);paintAt(x,y);return}
   const h=hit(px,py);
   if(!h){S.sel=null;renderConcept();S.drag={k:'pan',px,py,v:{...S.view}};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';return}
-  if(h.k==='src'||h.k==='srcaz'||h.k==='body'||h.k==='fault'){S.sel={kind:h.k==='srcaz'?'src':h.k,i:h.i};renderConcept()}
+  if(h.k==='src'||h.k==='srcaz'||h.k==='body'||h.k==='fault'||h.k==='feed'||h.k==='feedaz'){S.sel={kind:h.k==='srcaz'?'src':h.k==='feedaz'?'feed':h.k,i:h.i};renderConcept()}
   S.drag=Object.assign(h,{x0:x,y0:y});if(h.k==='body'){const b=M.bodies[h.i];S.drag.bx=b.x;S.drag.by=b.y}cv.setPointerCapture(e.pointerId);e.preventDefault()});
 function paintAt(x,y){const R=+$('pR').value||diag()*.06,A=(+$('pA').value||500)*(+$('tbPaint').value);GDE.paintStroke(S.M.paint,x,y,R,A*.25);schedule(true)}
 function finishTrace(){const T=S.trace;S.trace=null;if(!T||T.pts.length<2){draw();return}const M=S.M,env=$('trEnv').value.trim()||'Channel fill',color=$('trCol').value;
@@ -2181,6 +2249,8 @@ cv.addEventListener('pointermove',e=>{if(!S.started)return;const [px,py]=evp(e),
     if(d.k==='paint'){paintAt(x,y);return}
     if(d.k==='vtx'){M.lines[S.lineSel].pts[d.i]=[Math.round(x),Math.round(y)]}
     else if(d.k==='src'){const s=M.sources[d.i],n=s.kind==='fault'?nearLine(L,px,py,[M.faults[s.fault]]):nearLine(L,px,py,[M.lines[s.line]]);if(n){s.x=Math.round(n.x);s.y=Math.round(n.y)}else{s.x=Math.round(x);s.y=Math.round(y)}renderConcept()}
+    else if(d.k==='feed'){const f=M.feeders[d.i],n=nearLine(L,px,py,[M.lines[f.line]]);if(n){f.x=Math.round(n.x);f.y=Math.round(n.y)}else{f.x=Math.round(x);f.y=Math.round(y)}}
+    else if(d.k==='feedaz'){const f=M.feeders[d.i];f.az=+(((Math.atan2(px-L.X(f.x),L.Y(f.y)-py)*180/Math.PI)+360)%360).toFixed(1)}
     else if(d.k==='srcaz'){const s=M.sources[d.i];s.az=+(((Math.atan2(px-L.X(s.x),L.Y(s.y)-py)*180/Math.PI)+360)%360).toFixed(1)}
     else if(d.k==='body'){const b=M.bodies[d.i];b.x=Math.round(d.bx+x-d.x0);b.y=Math.round(d.by+y-d.y0)}
     else if(d.k==='fault'){const f=M.faults[d.i],dx=x-d.x0,dy=y-d.y0;d.p0=d.p0||clone(f.pts);f.pts=d.p0.map(q=>[Math.round(q[0]+dx),Math.round(q[1]+dy)])}
@@ -2190,7 +2260,7 @@ cv.addEventListener('pointermove',e=>{if(!S.started)return;const [px,py]=evp(e),
     schedule(true);return}
   if(S.tool==='sel'){const h=hit(px,py);cv.style.cursor=h?(h.k==='head'||h.k==='srcaz'?'grab':'move'):''}
   const e2=M.ext;if(S.mod&&x>=e2.xmin&&x<=e2.xmax&&y>=e2.ymin&&y<=e2.ymax)$('ro').textContent=`x ${fmtN(x)}, y ${fmtN(y)} — ${AB()[S.mod.beltAt(x,y)].name}`;else $('ro').textContent=RO0});
-cv.addEventListener('pointerup',()=>{const d=S.drag;if(!d)return;S.drag=null;if(S.tool==='sel')cv.style.cursor='';if(d.k==='pan'){compute(false);return}if(d.k==='well')renderWells();if(d.k==='src'||d.k==='srcaz')renderConcept();schedule()});
+cv.addEventListener('pointerup',()=>{const d=S.drag;if(!d)return;S.drag=null;if(S.tool==='sel')cv.style.cursor='';if(d.k==='pan'){compute(false);return}if(d.k==='well')renderWells();if(d.k==='src'||d.k==='srcaz'||d.k==='feed'||d.k==='feedaz')renderConcept();schedule()});
 cv.addEventListener('dblclick',e=>{if(S.tool==='trace'){e.preventDefault();finishTrace()}});
 function openPop(px,py,x,y){const p=$('pop'),st=$('stage').getBoundingClientRect();p.hidden=false;
   p.style.left=Math.min(px+12,st.width-240)+'px';p.style.top=Math.min(py+12,st.height-130)+'px';
@@ -2275,7 +2345,7 @@ function loadModel(M,wells){S.M=clone(M);for(const l of S.M.layers||[]){const o=
   if(S.started){size();zoomFit();compute(false)}else start();setTool('sel')}
 function loadExample(k){const ex=GDE.examples[k];loadModel(ex.M,ex.wells);
   banner(ex.title+(ex.M.geom==='lines'?': drag the sources, the arrow heads, a well; edit the key lines with the Line tool.':': drag the source, the arrow head or a well to see the map follow.'))}
-for(const [id,k] of [['iCoast','coast'],['iRimmed','rimmed'],['iCanyon','canyon'],['iRift','rift'],['iDelta','delta'],['iFan','fan'],['iEst','estuary'],['iRamp','ramp'],['iLake','lake']])on(id,'click',()=>loadExample(k));
+for(const [id,k] of [['iCoast','margin'],['iRimmed','carbmargin'],['iCanyon','canyon'],['iRift','rift'],['iDelta','delta'],['iFan','fan'],['iEst','estuary'],['iRamp','ramp'],['iLake','lake']])on(id,'click',()=>loadExample(k));
 on('bMSave','click',()=>{if(!S.started)return need();dl(GDE.saveModel(S.M,wellsOut()),'gde_model.json','application/json')});
 function openModelText(t,name){const r=GDE.openModel(t);if(!r.M){banner((name?name+': ':'')+r.errors[0],true);return}
   loadModel(r.M,r.wells);banner(`Model opened${name?' from '+name:''}: ${r.wells.length} well${r.wells.length===1?'':'s'}.`+(r.errors.length?' '+r.errors.length+' entr'+(r.errors.length>1?'ies':'y')+' skipped: '+r.errors[0]:''),!!r.errors.length)}
