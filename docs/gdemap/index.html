@@ -1827,7 +1827,7 @@ function riverShape(o){const rnd=mulberry32(((o.seed|0)*1103515245+12345)>>>0),P
     for(let k=0;k<=16;k++){const f=k/16*1.3,bow=.12*bd*Math.sin(Math.PI*Math.min(1,f));const dx=q[0]-p[0],dy=q[1]-p[1],l=Math.hypot(dx,dy)||1;B.push([p[0]+dx*f-dy/l*bow,p[1]+dy*f+dx/l*bow])}
     lines.push({pts:B,w:.5*w,kind:'tributary'})}
   return{ring:null,lines}}
-function faciesShape(o){switch(o.type){case'lobe':return lobeShape(o,false);case'fan':return lobeShape(o,true);case'platform':return blobShape(o,1);case'ponded':return blobShape(o,2);
+function faciesShape(o){if(Array.isArray(o.ring)&&o.ring.length>=3)return{ring:smoothRing(o.ring.map(q=>[+q[0],+q[1]]),2),lines:[]};switch(o.type){case'lobe':return lobeShape(o,false);case'fan':return lobeShape(o,true);case'platform':return blobShape(o,1);case'ponded':return blobShape(o,2);
   case'mtc':return tongueShape(o);case'fairway':return fairwayShape(o);case'river':return riverShape(o);default:return{ring:null,lines:[]}}}
 // inside an object: polygon (point in ring), network (within a channel width of a line)
 const ringIn=(r,x,y)=>{let c=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const a=r[j],b=r[i];if((a[1]>y)!==(b[1]>y)&&x<a[0]+(y-a[1])*(b[0]-a[0])/(b[1]-a[1]))c=!c}return c};
@@ -1848,8 +1848,12 @@ function faciesGen(M,mod){const F=Object.assign(faciesDefaults(),M.facies||{}),n
   else if(linesOn(M))(M.sources||[]).forEach((s,i)=>{if(s.kind==='coast')push({id:'lobeS'+i,type:'lobe',x:s.x-Math.sin(s.az*RAD)*.5*s.L,y:s.y-Math.cos(s.az*RAD)*.5*s.L,az:s.az,L:1.8*s.L,open:clamp(s.open,35,130),asym:s.asym||0});
     else if(s.kind==='fan')push({id:'fanS'+i,type:'fan',x:s.x,y:s.y,az:s.az,L:.55*s.L,open:clamp(1.2*s.open,40,110),asym:s.asym||0})});
   else if(M.geom==='radial'){const t=templates[M.template]||{},deep=t.group==='Deep water';push({id:'src',type:deep?'fan':'lobe',x:M.src[0],y:M.src[1],az:M.az,L:(deep?.6:.45)*(+M.span||10000),open:clamp(+M.fan||60,35,130),asym:0})}
-  // along the toe of slope: a string of basin-floor fans, MTCs between the fans
-  const TL=toeLine(M);if(TL&&(n.fans>0||n.mtc>0)){const T=resample(curve(TL.pts).reduce((a,v,i,A)=>(i%2?a:a.concat([[A[i],A[i+1]]])),[]),diag/400),P=T.P,S=T.S,inE=p=>p[0]>=e.xmin&&p[0]<=e.xmax&&p[1]>=e.ymin&&p[1]<=e.ymax;
+  // reefs, isolated platforms and MTC aprons drawn as bodies become facies objects (brick, stipple)
+  activeBodies(M).forEach((b,i)=>{const t=b.type==='pinnacle'||b.type==='platform'?'platform':b.type==='mtc'?'mtc':null;if(!t)return;
+    if(b.shape==='ellipse'){const T=BODY[b.type],a=fin(b.a,T.a)+(b.type==='pinnacle'?fin(b.w&&b.w[0],0):0);push({id:'body'+i,type:'platform',x:fin(b.x,0),y:fin(b.y,0),a,e:clamp(fin(b.e,T.e),.2,1),rot:90-fin(b.rot,0),body:true})}
+    else if(b.shape==='poly'&&okPts(b.pts,3))push({id:'body'+i,type:t,x:fin(b.x,0),y:fin(b.y,0),ring:b.pts.map(q=>[fin(b.x,0)+ +q[0],fin(b.y,0)+ +q[1]]),body:true})});
+  // along the toe of slope (margins with a slope): a string of basin-floor fans, MTCs between the fans
+  const TL=M.template!=='margin'||(M.belts||[]).some(b=>b.dom==='slope')?toeLine(M):null;if(TL&&(n.fans>0||n.mtc>0)){const T=resample(curve(TL.pts).reduce((a,v,i,A)=>(i%2?a:a.concat([[A[i],A[i+1]]])),[]),diag/400),P=T.P,S=T.S,inE=p=>p[0]>=e.xmin&&p[0]<=e.xmax&&p[1]>=e.ymin&&p[1]<=e.ymax;
     const idx=P.map((p,i)=>i).filter(i=>inE(P[i])),nrm=i=>{const a=P[Math.max(0,i-2)],b=P[Math.min(P.length-1,i+2)],tx=b[0]-a[0],ty=b[1]-a[1],l=Math.hypot(tx,ty)||1;return[ty/l,-tx/l]};
     const fans=()=>out.filter(o=>o.type==='fan');
     if(idx.length>10){const i0=idx[0],i1=idx[idx.length-1];
@@ -1877,8 +1881,8 @@ function faciesGen(M,mod){const F=Object.assign(faciesDefaults(),M.facies||{}),n
 // objects of the map: generated + edits + extra, then the wells honoured; each with its shape g
 function faciesObjects(M,mod,W){const F=Object.assign(faciesDefaults(),M.facies||{});if(!F.on)return{objs:[],notes:[]};const E=F.edits||{},notes=[];
   let objs=faciesGen(M,mod).map(o=>{const q=E[o.id];if(!q)return o;if(q.del)return null;const dx=fin(q.dx,0),dy=fin(q.dy,0),r=Object.assign({},o);
-    if(dx||dy){r.x=fin(o.x,0)+dx;r.y=fin(o.y,0)+dy;if(o.path)r.path=o.path.map(p=>[p[0]+dx,p[1]+dy])}if(q.seed!=null)r.seed=q.seed|0;
-    if(+q.s>0){const s=+q.s;if(r.L)r.L*=s;if(r.a)r.a*=s;if(r.W)r.W*=s;if(r.w&&r.type==='mtc')r.w*=s}r.edited=true;return r}).filter(Boolean);
+    if(dx||dy){r.x=fin(o.x,0)+dx;r.y=fin(o.y,0)+dy;if(o.path)r.path=o.path.map(p=>[p[0]+dx,p[1]+dy]);if(o.ring)r.ring=o.ring.map(p=>[p[0]+dx,p[1]+dy])}if(q.seed!=null)r.seed=q.seed|0;
+    if(+q.s>0){const s=+q.s;if(r.L)r.L*=s;if(r.a)r.a*=s;if(r.W)r.W*=s;if(r.w&&r.type==='mtc')r.w*=s;if(r.ring)r.ring=r.ring.map(p=>[r.x+(p[0]-r.x)*s,r.y+(p[1]-r.y)*s])}r.edited=true;return r}).filter(Boolean);
   (F.extra||[]).forEach((o,i)=>{if(o&&FTYPE[o.type])objs.push(Object.assign({},o,{id:'x'+i,extra:true,seed:o.seed??i+1}))});
   for(const o of objs)o.g=faciesShape(o);
   // wells
@@ -1902,7 +1906,7 @@ function faciesObjects(M,mod,W){const F=Object.assign(faciesDefaults(),M.facies|
     if(!inFacies(o,w.x,w.y))notes.push(`${w.name}: not inside a ${FTYPE[T].name.toLowerCase()}`);else o.adj=true}
   // regional wells inside a foreign object: the object shrinks (polygons) until the well is outside
   for(const w of W||[]){if(w.ft||!(w.b>=0))continue;const k=EOD[em[w.b]]&&EOD[em[w.b]].key;if(!k)continue;
-    for(const o of objs){if(!o.g.ring||FTYPE[o.type].home.includes(k))continue;for(let it=0;it<10&&inFacies(o,w.x,w.y);it++){if(o.L)o.L*=.88;if(o.a)o.a*=.88;if(o.W)o.W*=.85;if(o.type==='mtc')o.w*=.88;o.g=faciesShape(o)}
+    for(const o of objs){if(!o.g.ring||FTYPE[o.type].home.includes(k))continue;for(let it=0;it<10&&inFacies(o,w.x,w.y);it++){if(o.ring)o.ring=o.ring.map(p=>[o.x+(p[0]-o.x)*.88,o.y+(p[1]-o.y)*.88]);else{if(o.L)o.L*=.88;if(o.a)o.a*=.88;if(o.W)o.W*=.85;if(o.type==='mtc')o.w*=.88}o.g=faciesShape(o)}
       if(inFacies(o,w.x,w.y))notes.push(`${w.name}: inside a ${FTYPE[o.type].name.toLowerCase()}`);else o.adj=true}}
   return{objs,notes}}
 // exports: polygons (level facies, code 101 + type index) and centrelines / internal lines (code 201 + type index)
@@ -2764,7 +2768,7 @@ function fpat(c,kind,col,edge){const key=kind+col+edge;if(!FPAT.has(key)){const 
     else{p.width=p.height=16;g.fillStyle=col;g.fillRect(0,0,16,16);g.fillStyle=edge;
       for(const [x,y,s] of [[2,3,1.1],[9,1,.9],[13,6,1.2],[6,8,1],[1,12,.9],[11,13,1.1],[15,11,.8],[5,14,.8],[8,4,.7]]){g.beginPath();g.arc(x,y,s,0,7);g.fill()}}
     FPAT.set(key,p)}return c.createPattern(FPAT.get(key),'repeat')}
-function fobjAnchor(o){const g=o.g;if(o.type==='fairway'||o.type==='river'){const P=o.type==='river'?(g.lines[0]||{pts:o.path}).pts:o.path;return P[Math.floor(P.length*(o.type==='river'?.45:.5))]}
+function fobjAnchor(o){const g=o.g;if(o.ring&&g.ring){let x=0,y=0;for(const q of g.ring){x+=q[0];y+=q[1]}return[x/g.ring.length,y/g.ring.length]}if(o.type==='fairway'||o.type==='river'){const P=o.type==='river'?(g.lines[0]||{pts:o.path}).pts:o.path;return P[Math.floor(P.length*(o.type==='river'?.45:.5))]}
   if(o.type==='lobe'||o.type==='fan'||o.type==='mtc'){const a=o.az*Math.PI/180;return[o.x+Math.sin(a)*.5*o.L,o.y+Math.cos(a)*.5*o.L]}return[o.x,o.y]}
 // facies objects over the lightened EOD map; labels once per type (and each canyon)
 function drawFacies(c,L,opt){const O=(S.mod&&S.mod.facies)||[],T=GDE.FTYPE,sel=S.sel||{},k=L.k;
