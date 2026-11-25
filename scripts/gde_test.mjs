@@ -793,6 +793,54 @@ test('irregularity defaults: large wavelength, low amplitude, little small-scale
   assert.ok(M.noise.rough > 0 && M.noise.rough < .5, 'roughness ' + M.noise.rough);
   assert.ok(G.makeModel('shelf').noise.rough < .5);
 });
+test('EOD domains: the belts of every system map to EOD domains; rename, recolour and remap by the user', () => {
+  const keys = new Set(G.EOD.map(d => d.key));
+  for (const k of ['basement', 'fluvdelta', 'clastshelf', 'carbshelf', 'isslope', 'slope', 'deep', 'abyssal']) assert.ok(keys.has(k), 'EOD domain ' + k);
+  for (const d of G.EOD) assert.ok(d.name && /^#[0-9a-f]{6}$/i.test(d.color), d.key);
+  const lined = M => Object.assign({}, M, { geom: 'lines', lines: [{ k: -1, pts: [[0, 0], [1, 1]] }, { k: 0, pts: [[0, 1], [1, 2]] }] });
+  const eodOf = (M, nm) => { const AB = G.allBelts(lined(M)), i = AB.findIndex(c => c.name === nm); assert.ok(i >= 0, 'class ' + nm); return G.EOD[G.eodMap(lined(M))[i]].key; };
+  const P = G.makeMargin('passive');
+  const exp = { 'Alluvial fan': 'fluvdelta', 'Floodplain–coastal plain': 'fluvdelta', 'Delta plain': 'fluvdelta', 'Delta front': 'fluvdelta', 'Interdeltaic shoreface': 'fluvdelta',
+    'Prodelta': 'clastshelf', 'Inner shelf': 'clastshelf', 'Outer shelf': 'clastshelf', 'Upper slope (bypass, gullies)': 'slope', 'Lower slope': 'slope', 'Proximal lobes': 'deep', 'Basin plain': 'deep',
+    'Hinterland (erosion, bypass)': 'basement' };
+  for (const [nm, k] of Object.entries(exp)) assert.equal(eodOf(P, nm), k, nm);
+  const C = G.makeMargin('carbonate');
+  for (const [nm, k] of Object.entries({ 'Platform interior / lagoon': 'carbshelf', 'Platform margin (reef / shoal)': 'carbshelf', 'Fore-reef slope': 'slope', 'Basin': 'deep', 'Intertidal flat': 'carbshelf' })) assert.equal(eodOf(C, nm), k, nm);
+  assert.equal(eodOf(G.makeMargin('rift'), 'Profundal'), 'lake');
+  assert.equal(eodOf(G.makeMargin('arid'), 'Dune field (erg)'), 'arid');
+  // every class of every template and margin system has a domain
+  for (const [k, t] of Object.entries(G.templates)) { const M = G.makeModel(k); const m = G.eodMap(M); assert.equal(m.length, G.allBelts(M).length); assert.ok(m.every(i => i >= 0 && i < G.EOD.length), k); }
+  // the user renames / recolours a domain and remaps a belt
+  const U = G.makeMargin('passive'); U.eod = { doms: { slope: { name: 'Continental slope', color: '#aabbcc' } }, map: { 'Prodelta': 'fluvdelta' } };
+  const cl = G.eodClasses(U); assert.equal(cl.find(c => c.key === 'slope').name, 'Continental slope'); assert.equal(cl.find(c => c.key === 'slope').color, '#aabbcc');
+  assert.equal(eodOf(U, 'Prodelta'), 'fluvdelta');
+});
+test('EOD map: few large smoothed domains tiling the extent, consistent with the belts; abyssal basin beyond the toe of slope', () => {
+  const ex = G.examples.margin, M = Object.assign({}, ex.M, { eod: { abyss: 6000 } }), mod = G.build(M, ex.wells), e = M.ext;
+  const E = G.eodPolygons(mod, e, 500);
+  near(E.reduce((s, p) => s + p.area, 0), extA(e), extA(e) * 1e-9, 'EOD polygons tile the extent');
+  assert.ok(E.every(p => p.level === 'EOD'));
+  const doms = new Set(E.map(p => p.key)); assert.ok(doms.size >= 5 && doms.size <= 8, [...doms].join());
+  for (const k of ['basement', 'fluvdelta', 'clastshelf', 'slope', 'deep', 'abyssal']) assert.ok(doms.has(k), 'domain ' + k);
+  // few polygons: large domains, specks merged
+  assert.ok(E.length <= 3 * doms.size, E.length + ' polygons');
+  assert.ok(tilingErrors(E, e) < .002);
+  const at = G.eodAt(mod), R = rng(9); let agree = 0, n = 0;
+  for (let i = 0; i < 1500; i++) { const x = e.xmin + R() * (e.xmax - e.xmin), y = e.ymin + R() * (e.ymax - e.ymin), p = E.find(q => inPoly(q, x, y)); if (!p) continue; n++; if (G.EOD[at(x, y)].key === p.key) agree++; }
+  assert.ok(agree / n > .97, `EOD polygons agree with the classes at ${agree} of ${n} points`);
+  // abyssal only well beyond the toe of slope
+  const toe = M.lines.find(l => /toe/i.test(l.name)).pts;
+  for (let i = 0; i < 400; i++) { const x = e.xmin + R() * (e.xmax - e.xmin), y = e.ymin + R() * (e.ymax - e.ymin), s = G.sdist(toe, x, y), k = G.EOD[at(x, y)].key;
+    if (k === 'abyssal') assert.ok(s > 3000, 'abyssal near the toe ' + s); if (s > 0 && s < 2000 && k !== 'slope') assert.notEqual(k, 'abyssal'); }
+});
+test('EOD labels: one spot inside each large domain, far from its edges and from the wells', () => {
+  const ex = G.examples.margin, mod = G.build(ex.M, ex.wells), e = ex.M.ext, E = G.eodPolygons(mod, e, 500), R = E.raster;
+  const spots = G.labelSpots(R.L, R.nx, R.ny, { minCells: .03 * R.nx * R.ny, avoid: ex.wells.map(w => [(w.x - e.xmin) / R.cx, (e.ymax - w.y) / R.cy]), avoidR: 6 });
+  const big = new Set(E.filter(p => p.area > .03 * extA(e)).map(p => p.code - 1));
+  for (const l of big) assert.ok(spots.some(s => s.label === l), 'label for domain ' + l);
+  for (const s of spots) { const x = e.xmin + s.x * R.cx, y = e.ymax - s.y * R.cy, p = E.find(q => inPoly(q, x, y)); assert.ok(p && p.code - 1 === s.label, 'spot inside its domain'); assert.ok(s.r >= 3, 'room ' + s.r);
+    for (const w of ex.wells) assert.ok(Math.hypot(w.x - x, w.y - y) > 2 * R.cx, 'spot away from well ' + w.name); }
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }

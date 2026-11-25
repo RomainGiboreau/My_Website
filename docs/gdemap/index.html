@@ -742,7 +742,12 @@ function nodeGrid(mod,ext,cell,name){const nx=Math.max(2,Math.floor((ext.xmax-ex
   for(let j=0;j<ny;j++){const y=ext.ymin+j*cell;for(let i=0;i<nx;i++)codes[j*nx+i]=mod.beltAt(ext.xmin+i*cell,y)+1}
   return{name:name||'GDE',nx,ny,x0:ext.xmin,y0:ext.ymin,dx:cell,dy:cell,codes,legend:allBelts(mod.M).map((b,i)=>[i+1,b.name])}}
 // polygons: cell raster exactly covering the extent (row 0 at ymax), traced and simplified with shared arcs, in map coordinates
-function polygons(mod,ext,cell,opt={}){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.ymin,nx=Math.max(1,Math.round(W/cell)),ny=Math.max(1,Math.round(H/cell)),cx=W/nx,cy=H/ny;
+function polygons(mod,ext,cell,opt={}){const {L,nx,ny,cx,cy}=classRaster(mod,ext,cell,opt);
+  const r=polygonize(L,nx,ny,{minArea:opt.minArea??4,tol:opt.tol??1,smooth:opt.smooth??3});
+  const groups=allBelts(mod.M).map((b,i)=>({code:i+1,name:b.name}));
+  const P=toMap(r.polys,q=>[ext.xmin+q[0]*cx,ext.ymax-q[1]*cy],groups);P.raster={L:r.L,nx,ny,cx,cy};return P}
+// class raster exactly covering the extent (row 0 at ymax): class index per cell centre
+function classRaster(mod,ext,cell,opt={}){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.ymin,nx=Math.max(1,Math.round(W/cell)),ny=Math.max(1,Math.round(H/cell)),cx=W/nx,cy=H/ny;
   const L=new Int16Array(nx*ny),s=Math.max(1,opt.stride|0);
   if(s===1)for(let j=0;j<ny;j++){const y=ext.ymax-(j+.5)*cy;for(let i=0;i<nx;i++)L[j*nx+i]=mod.beltAt(ext.xmin+(i+.5)*cx,y)}
   else{// preview: d evaluated every s cells and interpolated bilinearly (d is smooth); exact where a corner is infinite (outside the fan)
@@ -753,9 +758,7 @@ function polygons(mod,ext,cell,opt={}){const W=ext.xmax-ext.xmin,H=ext.ymax-ext.
       const nf=(mod.faults||[]).some(f=>{for(let q=0;q+3<f.P.length;q+=2){const x0=Math.min(f.P[q],f.P[q+2])-2*cx,x1=Math.max(f.P[q],f.P[q+2])+2*cx,y0=Math.min(f.P[q+1],f.P[q+3])-2*cy,y1=Math.max(f.P[q+1],f.P[q+3])+2*cy;if(bx1>=x0&&bx0<=x1&&by1>=y0&&by0<=y1)return true}return false});
       for(let j=j0;j<=j1;j++){const v=j1>j0?(j-j0)/(j1-j0):0;for(let i=i0;i<=i1;i++){const u=i1>i0?(i-i0)/(i1-i0):0;
         const x=ext.xmin+(i+.5)*cx,y=ext.ymax-(j+.5)*cy;L[j*nx+i]=ok&&!nf?mod.cls(x,y,(d00*(1-u)+d10*u)*(1-v)+(d01*(1-u)+d11*u)*v):mod.beltAt(x,y)}}}}
-  const r=polygonize(L,nx,ny,{minArea:opt.minArea??4,tol:opt.tol??1,smooth:opt.smooth??3});
-  const groups=allBelts(mod.M).map((b,i)=>({code:i+1,name:b.name}));
-  const P=toMap(r.polys,q=>[ext.xmin+q[0]*cx,ext.ymax-q[1]*cy],groups);P.raster={L:r.L,nx,ny,cx,cy};return P}
+  return{L,nx,ny,cx,cy}}
 
 // ---- copied from the Discrete map digitizer (md-discrete-core): number formatting, components, tracing, shared-arc simplification, writers
 const crd=v=>String(+(+v).toPrecision(10));
@@ -1617,6 +1620,69 @@ function proposeSketch(M,wells,opt={}){const mg=M.template==='margin'&&M.margin,
     return{lines,sources:[],feeders,az:+az.toFixed(1),span:+span2.toPrecision(6)}}
   return{lines,sources,az:+az.toFixed(1),span:+span2.toPrecision(6)}}
 
+// ---------- EOD map: environments of deposition at the domain level (atlas style) ----------
+// A published palaeogeographic atlas pairs, for each interval, an EOD map (a few large domains: basement, fluvial-deltaic, clastic or carbonate
+// shelf, intra-shelf slope, slope, deepwater, abyssal basin) and a facies map (the EOD map lightened, with facies objects on top). Every class of
+// the GDE map is assigned to one EOD domain (rules on its domain and names, user overrides M.eod.map {class name: key}); names and colours can
+// be changed (M.eod.doms {key: {name, color}}). Abyssal basin: deep-water classes more than M.eod.abyss beyond the toe of slope.
+const EOD=[
+ {key:'basement',name:'Basement / hinterland',color:'#e2d9cd'},
+ {key:'arid',name:'Continental, arid (aeolian, sabkha)',color:'#f0dcb0'},
+ {key:'fluvdelta',name:'Fluvial–deltaic',color:'#f6e7a1'},
+ {key:'lake',name:'Lacustrine',color:'#c6dfda'},
+ {key:'clastshelf',name:'Shallow marine, clastic-dominated shelf',color:'#fbf3cf'},
+ {key:'isslope',name:'Intra-shelf slope',color:'#f4d39b'},
+ {key:'carbshelf',name:'Shallow marine, carbonate-dominated shelf',color:'#bcd3ec'},
+ {key:'slope',name:'Slope',color:'#d4e7cd'},
+ {key:'deep',name:'Deepwater',color:'#b0b0ae'},
+ {key:'abyssal',name:'Abyssal basin',color:'#8e8e8c'}];
+const EODI=Object.fromEntries(EOD.map((d,i)=>[d.key,i]));
+// rules in order on the class name and its aliases (normalised): the first that matches gives the domain
+const EODRULE=[['isslope',/\bintra shelf slope\b/],['lake',/\b(lake|lacustrine|littoral|profundal|playa)\b/],['arid',/\b(aeolian|eolian|erg|dune|interdune|sand sheet|wadi|sabkha|salt flat|zibar)\b/],
+ ['basement',/\b(hinterland|basement)\b/]];
+const EODRULE2=[['carbshelf',/\b(carbonate|reef|platform|lagoon|ramp|shoal|ooid|oolite|oolitic|bioherm|backreef|peritidal|marl|grainstone|pinnacle|bank|stromatolite|algal mat)\b/],
+ ['clastshelf',/\b(prodelta|pro delta|offshore|shelf|transition|tidal ridge|sand ridge|ridge|sand bank|storm|tempestite|hcs)\b/],
+ ['fluvdelta',/\b(fluvial|alluvial|braided|braidplain|floodplain|flood plain|coastal plain|meander|meandering|channel belt|valley|delta plain|delta front|mouth bar|distributary|estuar|estuary|estuarine|bayhead|tidal flat|marsh|strandplain|strand plain|shoreface|beach|foreshore|interdeltaic|barrier|coastal|glacial|glacio|till|outwash|moraine|fan delta)\b/],
+ ['slope',/\b(slope|fore reef|foreslope|mass transport|mtc|canyon|gully|apron)\b/],
+ ['deep',/\b(basin|fan|lobe|lobes|turbidite|levee|pelagic|abyssal|deep|deepwater|suprafan|fringe|splay)\b/]];
+function eodKey(c){if(!c)return'clastshelf';const k=c.kind;
+  if(k==='ctx')return'basement';if(k==='valley'||k==='distrib')return'fluvdelta';if(k==='canyon')return'slope';
+  const txt=' '+[c.name,...(c.alias||[])].map(norm).join(' | ')+' ',nm=norm(c.name);
+  if(k==='body'){const t=c.btype;if(/\b(halo|fringe|nearshore)\b/.test(nm))return c.dom==='deep'?'deep':c.dom==='slope'?'slope':'clastshelf';
+    if(t==='pinnacle'||t==='platform')return/\bslope\b/.test(nm)?'slope':'carbshelf';if(t==='mtc')return'slope';if(t==='bar'||t==='salt')return'clastshelf';if(t==='island')return'fluvdelta'}
+  for(const [key,re] of EODRULE)if(re.test(txt))return key;
+  if(c.dom==='slope')return'slope';if(c.dom==='deep')return'deep';if(c.dom==='cont')return'fluvdelta';
+  for(const [key,re] of EODRULE2)if(re.test(txt))return key;
+  return c.dom==='coast'?'fluvdelta':'clastshelf'}
+// EOD domains with the user's names and colours, in the order of EOD
+function eodClasses(M){const D=(M.eod&&M.eod.doms)||{};return EOD.map((d,i)=>{const o=D[d.key]||{};return{key:d.key,name:String(o.name||d.name),color:/^#[0-9a-f]{6}$/i.test(String(o.color))?String(o.color).toLowerCase():d.color,code:i+1}})}
+// class index (allBelts) -> EOD index; mixed zones follow their first belt
+function eodMap(M){const AB=allBelts(M),U=(M.eod&&M.eod.map)||{};
+  return AB.map(c=>{const u=U[c.name];if(u&&EODI[u]!=null)return EODI[u];const b=c.kind==='mix'?AB[c.a]:c,u2=b&&U[b.name];if(u2&&EODI[u2]!=null)return EODI[u2];return EODI[eodKey(b)]})}
+// the toe-of-slope line of a model (margin role, else a line named “toe”)
+function toeLine(M){if(!linesOn(M))return null;const R=M.template==='margin'?marginRoles(M):{};let l=R.toe!=null?(M.lines||[]).find(q=>q&&Math.round(+q.k)===R.toe):null;
+  if(!l)l=(M.lines||[]).find(q=>q&&/toe/i.test(q.name||''));return l&&Array.isArray(l.pts)&&l.pts.length>=2?l:null}
+// EOD index at (x, y); at.of(c, x, y) for a class index c: abyssal where a deep-water class lies beyond abyss (+-25 %, long-wavelength noise) from the toe
+function eodAt(mod){const M=mod.M,m=eodMap(M),ab=+(M.eod&&M.eod.abyss)||0,tl=ab>0?toeLine(M):null,TP=tl?curve(tl.pts):null,P=perlin(((M.noise&&M.noise.seed)|0)+71),wl=3*ab+1;
+  const f=(c,x,y)=>{const k=m[c];if(k==null)return EODI.clastshelf;if(TP&&k===EODI.deep){const s=sdistF(TP,x,y);if(s>ab*(1+.25*P.f(x/wl+P.o[0][0],y/wl+P.o[0][1],.5)/.75))return EODI.abyssal}return k};
+  const at=(x,y)=>f(mod.beltAt(x,y),x,y);at.of=f;return at}
+// EOD polygons from the class raster (given or computed): domains, specks (< 0.2 % of the map) merged, generalised (DP 1.5 cells) and smoothed
+function eodPolygons(mod,ext,cell,opt={}){const R=opt.raster||classRaster(mod,ext,cell,opt),{nx,ny,cx,cy}=R,f=eodAt(mod).of,L=new Int16Array(nx*ny);
+  for(let j=0;j<ny;j++){const y=ext.ymax-(j+.5)*cy;for(let i=0;i<nx;i++){const c=R.L[j*nx+i];L[j*nx+i]=c<0?-1:f(c,ext.xmin+(i+.5)*cx,y)}}
+  const r=polygonize(L,nx,ny,{minArea:opt.minArea??Math.max(4,Math.round(.002*nx*ny)),tol:opt.tol??1.5,smooth:opt.smooth??3}),G=eodClasses(mod.M);
+  const P=toMap(r.polys,q=>[ext.xmin+q[0]*cx,ext.ymax-q[1]*cy],G);for(const p of P){p.level='EOD';p.key=EOD[p.label]?EOD[p.label].key:''}P.raster={L:r.L,nx,ny,cx,cy};return P}
+// label spots: for each connected region of at least minCells cells, the cell farthest from its edges (chamfer distance), kept away from the
+// `avoid` points (raster coordinates, e.g. the wells) by about avoidR cells. Returns [{label, x, y (raster coordinates of the cell centre), r (cells)}]
+function labelSpots(L,nx,ny,o={}){const {C,n,size,lab}=comps(L,nx,ny),N=nx*ny,D=new Float32Array(N),A=o.avoid||[],aR=o.avoidR||0,min=o.minCells||0,a=1,b=Math.SQRT2;
+  for(let k=0;k<N;k++){const i=k%nx,j=(k-i)/nx;D[k]=i===0||j===0||i===nx-1||j===ny-1||C[k-1]!==C[k]||C[k+1]!==C[k]||C[k-nx]!==C[k]||C[k+nx]!==C[k]?1:1e9}
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const k=j*nx+i;let v=D[k];if(i>0)v=Math.min(v,D[k-1]+a);if(j>0){v=Math.min(v,D[k-nx]+a);if(i>0)v=Math.min(v,D[k-nx-1]+b);if(i<nx-1)v=Math.min(v,D[k-nx+1]+b)}D[k]=v}
+  for(let j=ny-1;j>=0;j--)for(let i=nx-1;i>=0;i--){const k=j*nx+i;let v=D[k];if(i<nx-1)v=Math.min(v,D[k+1]+a);if(j<ny-1){v=Math.min(v,D[k+nx]+a);if(i<nx-1)v=Math.min(v,D[k+nx+1]+b);if(i>0)v=Math.min(v,D[k+nx-1]+b)}D[k]=v}
+  const best=new Float64Array(n).fill(-Infinity),at=new Int32Array(n).fill(-1);
+  for(let k=0;k<N;k++){const c=C[k];if(size[c]<min||lab[c]<0)continue;const i=k%nx,j=(k-i)/nx;let s=D[k];
+    for(const q of A){const dw=Math.hypot(q[0]-(i+.5),q[1]-(j+.5));if(dw<aR+s)s=Math.min(s,(dw-aR)*.8)}
+    if(s>best[c]){best[c]=s;at[c]=k}}
+  const out=[];for(let c=0;c<n;c++)if(at[c]>=0){const k=at[c],i=k%nx,j=(k-i)/nx;out.push({label:lab[c],x:i+.5,y:j+.5,r:D[k],size:size[c]})}
+  return out.sort((p,q)=>q.size-p.size)}
 // ---------- examples ----------
 // ---------- v2 examples: curved coast with two deltas, rimmed shelf with pinnacles, canyon-fed fan with attribute layers, half-graben with faults ----------
 // sinuous centreline from a to b (amplitude A, wavelength L), for the synthetic amplitude channels
@@ -1700,7 +1766,7 @@ const examples={
 for(const [k,fn] of [['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
 // the v2 links: #coast opens the passive margin (it replaces the two-delta coast), #rimmed the carbonate margin
 for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.defineProperty(examples,a,{enumerable:false,get(){return examples[b]}});
-window.GDE={feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
+window.GDE={EOD,eodKey,eodClasses,eodMap,eodAt,eodPolygons,labelSpots,classRaster,toeLine,chaikinArc,feederCaps,marginLn,mountainFans,DISTRIB,DOMAINS,DOMSYS,MARGINS,domSystems,marginSpec,makeMargin,marginMix,marginRoles,domainAt,feederGeom,feederSys,legendGroups,normFeeder,CANYON,parseLines,V2,BODY,curve,sdist,sdistF,shelfCoord,polySd,linesOn,geoField,lineModel,fieldD,prepBodies,matchEnv,calIdx,paintGrid,paintStroke,sampleGrid,parseGrid,rgb2lab,affine,barLut,imgValue,imageGrid,
   layerGrid,maskOf,extractBodies,extractFaults,synthImage,ampColor,lineFeatures,irapPolylines,geojsonLines,proposeSketch,bodyBelts,activeBodies,activeFaults,faultShift,prepFaults,mixColor,
   templates,groups,keysOf,allBelts,channelDefaults,normModel,saveModel,openModel,scaleHint,sineAmp,makeChannels,norm,matchBelt,parseWells,makeModel,prior,dBase,field,perlin,classify,chain,calibrate,build,distToBoundary,fitAzimuth,nodeGrid,polygons,
   zmap,gridCsv,irapLines,geojson,polyCsv,sArea,toMap,polygonize,examples,TAPER};
