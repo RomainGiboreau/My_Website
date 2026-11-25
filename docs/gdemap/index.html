@@ -1721,8 +1721,13 @@ function renderMargin(){const mg=isMargin();$('mMargin').value=mg?(S.M.margin.pr
 function setMargin(p){const old=S.M,pre=typeof p==='string'?p:(Object.entries(GDE.MARGINS).find(([k,m])=>GDE.DOMAINS.every(([d])=>(m.doms[d]||null)===(p[d]||null)))||[null])[0];
   const M=GDE.makeMargin(pre||{doms:p},{ext:old.ext,cell:old.cell,noise:clone(old.noise),warp:clone(old.warp),span:old.span,layers:old.layers,bodies:old.bodies,faults:old.faults,paint:old.paint,
     sources:(old.sources||[]).filter(q=>q.kind==='fault'),af:old.margin?old.margin.af:undefined});
-  S.M=M;sketch(true);rematch();renderBelts();syncInputs();renderWells();schedule();
-  banner(`${pre?GDE.MARGINS[pre].name:'Custom margin'} — ${GDE.DOMAINS.filter(([d])=>M.margin.doms[d]).map(([d,nm])=>nm+': '+GDE.DOMSYS[d][M.margin.doms[d]].name.toLowerCase()).join('; ')}. Key lines and feeders proposed from the wells (undo restores).`)}
+  // from a margin: the key lines are kept by their role (mountain front, shoreline, shelf edge, toe of slope) and moved to the new boundaries;
+  // the feeders are kept; a sketch is proposed only when a line the new margin needs is missing
+  let kept=false;if(old.template==='margin'&&old.margin&&(old.lines||[]).length){const oR=new Map(GDE.marginLn(old).map(l=>[l[1],l[2]])),nL=GDE.marginLn(M),idx=[];
+    const lines=[];old.lines.forEach((l,i)=>{const r=oR.get(Math.round(+l.k)),n=nL.find(q=>q[2]&&q[2]===r);if(n){idx[i]=lines.length;lines.push(Object.assign({},l,{k:n[1],name:n[0]}))}else idx[i]=-1});
+    if(nL.every(q=>!q[2]||lines.some(l=>l.k===q[1]))){M.lines=lines;M.feeders=(old.feeders||[]).filter(f=>idx[f.line]>=0).map(f=>Object.assign(clone(f),{line:idx[f.line]}));M.az=old.az;kept=true}}
+  S.M=M;if(!kept)sketch(true);rematch();renderBelts();syncInputs();renderWells();schedule();
+  banner(`${pre?GDE.MARGINS[pre].name:'Custom margin'} — ${GDE.DOMAINS.filter(([d])=>M.margin.doms[d]).map(([d,nm])=>nm+': '+GDE.DOMSYS[d][M.margin.doms[d]].name.toLowerCase()).join('; ')}. ${kept?'Key lines and feeders kept':'Key lines and feeders proposed from the wells'} (undo restores).`)}
 on('mMargin','change',()=>{const v=$('mMargin').value;
   if(!v){if(!isMargin())return;S.M.margin=null;S.M.feeders=[];S.M.template='custom';$('mTpl').value='shelf';$('mTpl').dispatchEvent(new Event('change'));return}
   setMargin(v==='custom'?(isMargin()?S.M.margin.doms:GDE.MARGINS.passive.doms):v)});
