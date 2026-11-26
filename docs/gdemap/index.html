@@ -114,7 +114,7 @@ canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
 .banner.err{background:var(--acc2)}
 .pop{position:absolute;z-index:5;background:var(--card);border:1px solid var(--acc);border-radius:8px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:.8rem;width:230px}
 .pop .row{margin:4px 0}.pop input,.pop select{width:100%}
-.dpanel{margin-top:12px}.srow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}.srow .stage{flex:none;width:100%}.srow .dpanel{margin-top:0;flex:1 1 300px;min-width:300px}.srow .tw td:first-child{white-space:nowrap}.srow .tw th,.srow .tw td{white-space:normal;padding:4px 6px;font-size:.8rem}
+.dpanel{margin-top:12px}.srow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}.srow .stage{flex:none;width:100%}.srow .dpanel{margin-top:0;flex:1 1 260px;min-width:260px;max-width:440px}.srow .tw td:first-child{white-space:nowrap}.srow .tw th,.srow .tw td{white-space:normal;padding:4px 6px;font-size:.8rem}
 .tw{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
 table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
 .tw th,.tw td{padding:4px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -143,7 +143,7 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
 .tb{display:flex;flex-wrap:wrap;gap:3px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 6px;margin-bottom:6px}
 .tb button,.tb select{font-size:.76rem;padding:.12rem .45rem}
 .side #tbWrap{position:sticky;top:0;z-index:6}.side .tb{margin-bottom:0;box-shadow:0 2px 8px rgba(0,0,0,.08)}.side .tb select{max-width:100%}.side .tb select.exsel{margin-left:0!important;max-width:100%;flex:1 1 100%}
-.layout.side-min{grid-template-columns:250px minmax(0,1fr)}.layout.side-min .side>:not(#tbWrap){display:none}
+.layout.side-min{grid-template-columns:300px minmax(0,1fr)}.tb .seg button{white-space:nowrap}.layout.side-min .side>:not(#tbWrap){display:none}
 .tb .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
 .hint2{position:absolute;left:8px;bottom:8px;z-index:3;font-size:.76rem;color:var(--mut);background:rgba(245,243,237,.92);border:1px solid var(--line);border-radius:4px;padding:2px 8px;max-width:60%;pointer-events:none}
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none;order:2}.top .bar{flex-wrap:wrap}}
@@ -175,7 +175,7 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
 <aside class="side">
 <div id="tbWrap" hidden>
   <div class="tb" id="tbar" role="toolbar" aria-label="Map tools"><button id="bSide" aria-expanded="true" title="Hide the panels of this column (keeps the tools)">◀ Panels</button><span class="sep"></span>
-    <span class="seg" role="group" aria-label="Map level"><button data-v="belts" title="The GDE belts calibrated on the wells (all classes, key lines, sources)">GDE belts</button><button data-v="eod" title="Environments of deposition: a few large domains with smooth boundaries and labels inside (atlas style)">EOD map</button><button data-v="facies" title="The EOD map lightened, with the facies objects on top: deltaic lobes, fluvial channels, turbidite fairways, basin-floor fans, carbonate platforms, MTCs">Facies map</button></span><span class="sep"></span>
+    <span class="seg" role="group" aria-label="Map level"><button data-v="belts" title="The GDE belts calibrated on the wells (all classes, key lines, sources)">GDE belts</button><button data-v="eod" title="EOD = Environments Of Deposition: a few large domains with smooth boundaries and labels inside (atlas style)">Environments</button><button data-v="facies" title="The EOD map lightened, with the facies objects on top: deltaic lobes, fluvial channels, turbidite fairways, basin-floor fans, carbonate platforms, MTCs">Facies map</button></span><span class="sep"></span>
     <select id="tbPal" aria-label="Palette of the EOD and facies maps" title="Palette of the EOD and facies maps" hidden></select>
     <button data-t="sel" class="on" title="Select and drag wells, sources, bodies and line vertices; drag the background to pan (V)">Select</button><button data-t="pan" title="Pan by dragging; the mouse wheel zooms anywhere (H)">Pan</button><button id="bZoom0" title="Zoom to the map extent">Fit</button><span class="sep"></span><button id="bUndo" title="Undo (Ctrl+Z)">Undo</button><button id="bRedo" title="Redo (Ctrl+Y)">Redo</button><span class="sep"></span>
     <button id="bEdit" aria-expanded="false" title="Editing tools: key lines, sources, bodies, tracing, paint, facies objects">Edit ▾</button>
@@ -240,8 +240,8 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
   <div class="body"><div class="pg"><span>Traced bodies</span><span class="two"><input type="color" id="trCol" value="#b5562a" style="width:30px;height:24px;padding:1px;flex:none" aria-label="Colour"><input type="text" id="trEnv" value="Channel fill" style="flex:1" aria-label="Environment of traced bodies"></span>
    <span>Channel width</span><input type="number" id="trW" value="400" step="any" min="1" title="Width of a channel traced as a polyline, map units"></div>
   <div class="lst" id="bdList"></div></div></section>
- <section class="panel"><h2><span class="n">6</span>EOD and facies maps<span class="tt" tabindex="0" data-tip="An atlas page shows two maps of one interval. The EOD map groups the classes into a few environments of deposition (basement, fluvial–deltaic, clastic or carbonate shelf, intra-shelf slope, slope, deepwater, abyssal basin), drawn as smooth curved domains with their names inside. The facies map lightens it and draws facies objects on top, generated from the concept (deltaic lobes at the deltas, fluvial channels upstream, turbidite fairways from the canyons, basin-floor fans at their ends or along the toe of slope, carbonate platforms on the carbonate shelf, MTCs between the fans, ponded areas). Same seed, same objects. Select an object on the facies map to drag it; ↻ gives it another shape, − / + resize it, ✕ deletes it. A well described as an object type (deltaic lobe, basin-floor fan, carbonate platform, turbidite fairway, MTC, fluvial channel, ponded area) is honoured by the nearest object of that type, moved, enlarged or bent to it (or created there).">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="row"><span class="seg" role="group" aria-label="Map level"><button data-v="belts">GDE belts</button><button data-v="eod">EOD map</button><button data-v="facies">Facies map</button></span></div>
+ <section class="panel"><h2><span class="n">6</span>Environments (EOD) and facies maps<span class="tt" tabindex="0" data-tip="An atlas page shows two maps of one interval. The EOD map groups the classes into a few environments of deposition (basement, fluvial–deltaic, clastic or carbonate shelf, intra-shelf slope, slope, deepwater, abyssal basin), drawn as smooth curved domains with their names inside. The facies map lightens it and draws facies objects on top, generated from the concept (deltaic lobes at the deltas, fluvial channels upstream, turbidite fairways from the canyons, basin-floor fans at their ends or along the toe of slope, carbonate platforms on the carbonate shelf, MTCs between the fans, ponded areas). Same seed, same objects. Select an object on the facies map to drag it; ↻ gives it another shape, − / + resize it, ✕ deletes it. A well described as an object type (deltaic lobe, basin-floor fan, carbonate platform, turbidite fairway, MTC, fluvial channel, ponded area) is honoured by the nearest object of that type, moved, enlarged or bent to it (or created there).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><span class="seg" role="group" aria-label="Map level"><button data-v="belts">GDE belts</button><button data-v="eod">Environments</button><button data-v="facies">Facies map</button></span></div>
   <div class="pg"><span>Map title</span><input type="text" id="eTitle" placeholder="e.g. Interval A" title="Shown above the EOD and facies maps, before “EOD map” / “Facies map”"><span>Abyssal basin</span><input type="number" id="eAbyss" step="any" min="0" title="Deep water farther than this beyond the toe of slope is drawn as abyssal basin (0: none), map units"></div>
   <details class="dom" id="eodBox"><summary>EOD domains: names, colours, classes</summary><div id="eodList"></div></details>
   <div class="row"><label class="inl"><input type="checkbox" id="fOn">Generate facies objects</label></div>
@@ -290,7 +290,7 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
   <section class="verdict none" id="verdict" aria-live="polite"></section>
   <div class="srow"><div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint2" id="hint2" hidden></div><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
    <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pNo">Cancel</button></div></div></div>
-  <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th class="l">Environment (given)</th><th class="l">Belt on the map</th><th>Honoured</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>
+  <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th class="l">Environment given → on the map</th><th title="Honoured">✓</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>
  </div>
 </main>
 </div>
@@ -2790,9 +2790,11 @@ function atlasLegend(c,lx,ly,lw,lv,PE){const cl=GDE.eodClasses(S.M),used=[...new
         c.fill();c.strokeStyle=t.edge;c.lineWidth=1;c.stroke()}c.restore()},t.name)}
   return ly+4}
 let L0H=600;
-function fitStage(){const st=$('stage');st.style.width='';const w=st.parentNode.clientWidth,e=S.M.ext,leg=w>=640?210:0,ar=(e.xmax-e.xmin)/(e.ymax-e.ymin),h=Math.round((w-80-leg)/ar+56),H=Math.max(w<600?240:420,Math.min(h,Math.round(innerHeight*.86)));st.style.height=H+'px';
-  // map limited by the height: the stage hugs map + legend instead of leaving a blank column to the right of the legend
-  const need=Math.ceil(66+(H-54)*ar+14+leg);if(need>=640&&need<w)st.style.width=need+'px'}
+function fitStage(){const st=$('stage');st.style.width='';const W=st.parentNode.clientWidth,TW=260,e=S.M.ext,ar=(e.xmax-e.xmin)/(e.ymax-e.ymin);
+  // the wells table sits to the right of the map when the row is wide enough (the map is then fitted to what is left), else under it
+  const w=W-TW-12>=760?W-TW-12:W,leg=w>=640?210:0,h=Math.round((w-80-leg)/ar+56),H=Math.max(w<600?240:420,Math.min(h,Math.round(innerHeight*.86)));st.style.height=H+'px';
+  // map limited by the height: the stage hugs map + legend (no blank column right of the legend)
+  const need=Math.ceil(66+(H-54)*ar+14+leg);st.style.width=(need>=640&&need<w?need:w)+'px'}
 function size(){fitStage();const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
 function draw(){if(!S.started||!S.P)return;const d=devicePixelRatio||1,r=cv.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);render(ctx,r.width,r.height,S.P)}
 window.addEventListener('resize',()=>{if(S.started){size();draw()}});
@@ -2959,7 +2961,7 @@ function wellNote(c){const B=AB(),mod=S.mod;
   if(c.dist<.02*diag())return'Close to a boundary: the environment could as well be the neighbouring class.';return''}
 function renderCheck(){const B=AB();
   $('tb').innerHTML=S.mod.check.map(c=>{const g=c.b>=0?B[c.b]:c.ft?GDE.FTYPE[c.ft]:null,m=c.ft&&c.honoured?GDE.FTYPE[c.ft]:B[c.belt];
-    return`<tr title="${esc(fmtN(c.x)+', '+fmtN(c.y)+' · nearest boundary '+(isFinite(c.dist)?fmtLen(c.dist):'> map size')+' · '+wellNote(c))}"><td class="l">${esc(c.name)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}${c.ft&&c.honoured?' (facies object)':''}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td></tr>`}).join('')||'<tr><td class="l" colspan="4" style="color:var(--mut)">No well.</td></tr>'}
+    return`<tr title="${esc(fmtN(c.x)+', '+fmtN(c.y)+' · nearest boundary '+(isFinite(c.dist)?fmtLen(c.dist):'> map size')+' · '+wellNote(c))}"><td class="l">${esc(c.name)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}${(m.name+(c.ft&&c.honoured?' (facies object)':''))!==c.env?`<br><span class="sw" style="background:${m.color}"></span><span style="color:var(--mut)">→ ${esc(m.name)}${c.ft&&c.honoured?' (facies object)':''}</span>`:''}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓':'✗'}</td></tr>`}).join('')||'<tr><td class="l" colspan="3" style="color:var(--mut)">No well.</td></tr>'}
 function renderCal(){const m=S.mod,B=S.M.belts,t=m.t,p=m.prior,cal=m.cal,lk=isLines()?new Set(S.M.lines.map(l=>+l.k)):new Set();
   const st=k=>Math.abs(t[k]-p[k])<1e-6*Math.max(1,Math.abs(p[k]))?(lk.has(k)?'on its key line':'prior'):(isFinite(cal.lo[k])&&isFinite(cal.hi[k])?'between wells':'scaled');
   let h=`<p>Boundaries, ${isLines()?'proximal–distal distance (0 at the first key line when it is on “before…”)':S.M.geom==='radial'?'distance from the source':'distance from the reference point along the transport direction'}:</p>`+t.map((v,k)=>`<p><span class="sw" style="background:${B[k].color}"></span>${esc(B[k].name)} | ${esc(B[k+1].name)}: <b>${fmtLen(v)}</b> <span style="color:var(--mut)">(${st(k)}${/prior|key/.test(st(k))?'':', prior '+fmtLen(p[k])})</span></p>`).join('');
