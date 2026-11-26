@@ -234,7 +234,7 @@ Inputs for burial and thermal history models.
 
 ### :material-scale-balance: Decision support
 
-Ranking options against several criteria. [Background note](notes/mcda_promethee_ahp.md).
+Ranking options against several criteria, and risking prospects. [Background note](notes/mcda_promethee_ahp.md).
 
 <div class="grid cards tool-cards" markdown>
 
@@ -243,6 +243,12 @@ Ranking options against several criteria. [Background note](notes/mcda_promethee
     [**MCDA — AHP & PROMETHEE**](mcda/index.html)
 
     AHP weights with consistency ratio, PROMETHEE I and II, weight sensitivity.
+
+-   [![Prospect risking](assets/tools/risking.webp){ loading=lazy }](risking/index.html)
+
+    [**Prospect risking — gCOS & eCOS**](risking/index.html)
+
+    Chance of success from play and prospect elements, volume distribution, economic chance against the minimum economic volume, EMV.
 
 </div>
 

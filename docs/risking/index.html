@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prospect risking — gCOS &amp; eCOS</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/risking/">
+<meta name="description" content="Prospect risking: geological chance of success (gCOS) from play and prospect elements, volume distribution (P90/P50/P10 lognormal or volumetric Monte Carlo), economic chance of success (eCOS) against the minimum economic field volume, EMV and exceedance curves. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+/* tooltip near the left edge (two-column layout): open to the right instead */
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
+main{min-width:0}
+table.el td,table.el th{padding:2px 2px;text-align:left;white-space:nowrap}
+table.el input[type=number]{width:54px;padding:.1rem .3rem}
+table.el input[type=text]{width:104px;padding:.1rem .3rem}
+table.el select{padding:.1rem .2rem;font-size:.76rem}
+table.tri td,table.tri th{padding:2px 4px;text-align:center}table.tri th:first-child,table.tri td:first-child{text-align:left}
+table.tri input{width:62px;padding:.1rem .3rem}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tile small{display:block;color:var(--mut);font-size:.74rem}
+.tile b{font:700 1.5rem "Space Grotesk",Inter,sans-serif;font-variant-numeric:tabular-nums}
+.tile.key{border-left:6px solid var(--acc)}
+.tile.key2{border-left:6px solid var(--acc2)}
+.bars{display:grid;grid-template-columns:minmax(120px,190px) 1fr 52px;gap:4px 10px;align-items:center;font-size:.82rem;padding:6px 8px}
+.bars .t{background:var(--alt);border-radius:3px;height:14px;position:relative;overflow:hidden}
+.bars .t i{position:absolute;left:0;top:0;bottom:0;background:#8a9a8c}
+.bars .t.cum i{background:var(--acc)}
+.bars .t.eco i{background:var(--acc2)}
+.bars .v{text-align:right;font-variant-numeric:tabular-nums}
+.bars .sep{grid-column:1/-1;border-top:1px dashed var(--line);margin:2px 0}
+.bars .grp{grid-column:1/-1;font:600 .7rem Inter,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.card canvas{height:380px}
+.two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:12px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+.warn{color:var(--acc2)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Prospect risking — gCOS &amp; eCOS</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">File</span>
+  <button class="pri" id="bSave" title="The whole prospect (chances, volumes, economics) in one JSON file: reload it here later, or in the portfolio tool">Save prospect</button>
+  <button id="bLoad">Open</button><input type="file" id="jfile" accept=".json,application/json" hidden>
+  <button id="bCsv" title="Results and the exceedance curve as CSV">Results CSV</button>
+  <select id="exSel" aria-label="Example"><option value="">Example…</option><option value="direct">Oil prospect, volumes P90/P50/P10</option><option value="vol">Oil prospect, volumetric Monte Carlo</option><option value="marginal">Marginal prospect (high gCOS, low eCOS)</option></select>
+  <span class="msg" id="msg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. gCOS = product of the chances of the play and prospect elements. The success-case volume is a lognormal (P90/P50/P10) or a Monte Carlo of the volumetric product. eCOS = gCOS × chance that the success volume exceeds the minimum economic field volume (MEFV). EMV = gCOS × E[max(value − fixed cost, 0)] − dry-hole cost.">?</span>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Chances<span class="tt tt-r" tabindex="0" data-tip="One probability per geological element, 0 to 1. Play elements are regional (is there a working petroleum system?), prospect elements are local (is there a trap that holds?). Independence is assumed: gCOS = product of all. A common qualitative guide: 0.9 proven / very likely, 0.7 likely, 0.5 uncertain, 0.3 unlikely, 0.1 very unlikely. Hold a chance at 1 for an element that is proven, not just likely.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><span style="font-size:.82rem">Prospect name</span><input type="text" id="name" style="flex:1"></div>
+  <table class="el"><thead><tr><th>Element</th><th>Level</th><th>Chance</th><th></th></tr></thead><tbody id="elT"></tbody></table>
+  <div class="row"><button id="bAdd">+ Add element</button><button id="bGuide" title="Fill every chance with the value of a qualitative class">Set all…</button><select id="guide" aria-label="Qualitative class" style="display:none"><option value="0.9">0.9 proven / very likely</option><option value="0.7">0.7 likely</option><option value="0.5">0.5 uncertain</option><option value="0.3">0.3 unlikely</option><option value="0.1">0.1 very unlikely</option></select></div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Success-case volume<span class="tt tt-r" tabindex="0" data-tip="Recoverable volume if the prospect works (MMboe). Either the three percentiles of your estimate (P90 = 90 % chance to exceed, the low case; P10 = the high case) fitted by a lognormal, or a volumetric product with a triangular distribution on each parameter (min, mode, max) sampled by Monte Carlo: oil in place = GRV × NTG × φ × (1 − Sw) / Bo, recoverable = × RF. Parameters are independent.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Method</span><select id="vmode"><option value="direct">P90 / P50 / P10 (lognormal)</option><option value="vol">Volumetrics (Monte Carlo)</option></select></div>
+  <div id="vDirect"><div class="pg"><span>P90 (low), MMboe</span><input type="number" id="p90" step="any" min="0"><span>P50, MMboe</span><input type="number" id="p50" step="any" min="0"><span>P10 (high), MMboe</span><input type="number" id="p10" step="any" min="0"></div><div class="msg" id="vMsg"></div></div>
+  <div id="vVol" hidden><table class="tri"><thead><tr><th>Parameter</th><th>min</th><th>mode</th><th>max</th></tr></thead><tbody id="triT"></tbody></table>
+   <div class="pg"><span>Samples</span><input type="number" id="nsam" step="1000" min="1000" max="200000"><span>Seed</span><input type="number" id="seed" step="1"></div>
+   <div class="hint">GRV in 10<sup>6</sup> m³ (1 m³ = 6.2898 bbl). Oil only; use the P90/P50/P10 method for gas.</div></div></div></section>
+ <section class="panel"><h2><span class="n">3</span>Economics<span class="tt tt-r" tabindex="0" data-tip="Value if developed = u × V − F, with V the success volume, u the net value per boe (price minus operating and variable costs, discounted) and F the development cost that does not scale with volume. The minimum economic field volume is MEFV = F / u: below it the field is not developed. You can also type the MEFV directly (F is then MEFV × u). The dry-hole cost is spent in every case. All amounts in your currency unit, volumes in MMboe: u in currency/boe, F and the well cost in millions.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Net value u, $/boe</span><input type="number" id="u" step="any"><span>Fixed development F, $MM</span><input type="number" id="F" step="any" min="0"><span>MEFV override, MMboe</span><input type="number" id="mefv" step="any" min="0" placeholder="F / u"><span>Dry-hole cost, $MM</span><input type="number" id="D" step="any" min="0"></div>
+  <div class="msg" id="eMsg"></div></div></section>
+</aside>
+<main>
+ <div class="tiles" id="tiles"></div>
+ <div class="two">
+  <div class="card"><h3>Exceedance curves<span class="tt" tabindex="0" data-tip="Probability that the recoverable volume exceeds x. Green: if the prospect works (success case). Orange: risked by the gCOS. The dashed line is the MEFV: the success curve at the MEFV is the chance of an economic field given success, the risked curve there is the eCOS.">?</span></h3><canvas id="cvr"></canvas></div>
+  <div class="card"><h3>From gCOS to eCOS<span class="tt" tabindex="0" data-tip="Running product of the chances, then the chance that the success volume exceeds the MEFV.">?</span></h3><div class="bars" id="bars"></div></div>
+ </div>
+ <div class="card" style="margin-top:12px"><h3>Volumes</h3><div class="tw"><table class="cvt" id="volT"></table></div></div>
+</main></div>
+<script id="risk-core">
+/* Prospect risking core: chances, volume distributions, economic chance of success. Pure logic, no DOM; window.RISK. Tested by scripts/risking_test.mjs. */
+(function(){
+const clamp=(v,a,b)=>v<a?a:v>b?b:v,Z90=1.2815515655446004;
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+.3275911*x);return s*(1-((((1.061405429*t-1.453152027)*t+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x))}
+const Phi=z=>.5*(1+erf(z/Math.SQRT2));
+function PhiInv(p){const a=[-39.69683028665376,220.9460984245205,-275.9285104469687,138.357751867269,-30.66479806614716,2.506628277459239],b=[-54.47609879822406,161.5858368580409,-155.6989798598866,66.80131188771972,-13.28068155288572],
+  c=[-.007784894002430293,-.3223964580411365,-2.400758277161838,-2.549732539343734,4.374664141464968,2.938163982698783],d=[.007784695709041462,.3224671290700398,2.445134137142996,3.754408661907416];let q,r;
+  if(p<=0)return-Infinity;if(p>=1)return Infinity;
+  if(p<.02425){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+  if(p>.97575){q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+  q=p-.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)}
+// geological chance of success: product of the play and the prospect elements (independent)
+function gcos(els){let play=1,prospect=1;for(const e of els||[]){const p=clamp(+e.p||0,0,1);if(e.level==='play')play*=p;else prospect*=p}return{play,prospect,gcos:play*prospect}}
+// lognormal through P50 (median) and the P90 / P10 spread; exceedance probabilities: P90 is the low case
+function lognormalDist(p90,p50,p10){if(!(p90>0&&p50>0&&p10>0&&p90<=p50&&p50<=p10))return null;const mu=Math.log(p50),sg=Math.max(1e-9,(Math.log(p10)-Math.log(p90))/(2*Z90)),mean=Math.exp(mu+sg*sg/2);
+  const pct=e=>Math.exp(mu+sg*PhiInv(1-e));
+  return{kind:'lognormal',mu,sg,mean,sf:x=>x<=0?1:1-Phi((Math.log(x)-mu)/sg),pct,lo:pct(.9995),hi:pct(.0005),
+   call:K=>{if(K<=0)return mean-K;const d1=(mu+sg*sg-Math.log(K))/sg;return mean*Phi(d1)-K*Phi(d1-sg)}}}
+function rng(s){s>>>=0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+const tri=(u,a,m,b)=>{if(!(b>a))return a;const f=(m-a)/(b-a);return u<f?a+Math.sqrt(u*(b-a)*(m-a)):b-Math.sqrt((1-u)*(b-a)*(b-m))};
+const TRI=[['grv','GRV, 10⁶ m³'],['ntg','Net / gross'],['phi','Porosity'],['sw','Water saturation'],['bo','Bo, rb/stb'],['rf','Recovery factor']];
+// Monte Carlo of the volumetric product: V = GRV · 6.2898 · NTG · φ · (1 − Sw) / Bo · RF  (MMstb for GRV in 10⁶ m³)
+function sampleDist(t,n,seed){const R=rng(seed|0),v=new Float64Array(n);for(let i=0;i<n;i++){const g=k=>tri(R(),t[k][0],t[k][1],t[k][2]);v[i]=g('grv')*6.2898*g('ntg')*g('phi')*(1-g('sw'))/Math.max(1e-9,g('bo'))*g('rf')}
+  v.sort();const S=new Float64Array(n+1);for(let i=n-1;i>=0;i--)S[i]=S[i+1]+v[i];
+  const up=x=>{let lo=0,hi=n;while(lo<hi){const m=(lo+hi)>>1;if(v[m]<=x)lo=m+1;else hi=m}return lo};
+  return{kind:'mc',n,mean:S[0]/n,v,sf:x=>(n-up(x))/n,pct:e=>v[clamp(Math.floor((1-e)*n),0,n-1)],lo:v[0],hi:v[n-1],call:K=>{const i=up(K);return(S[i]-K*(n-i))/n}}}
+// economics: value = u·V − F if developed (V > MEFV = F/u), dry-hole cost D spent in every case
+function economics(dist,g,e){const u=+e.u,mef=+e.mefv>0?+e.mefv:(u>0?(+e.F||0)/u:Infinity),F=+e.mefv>0?mef*u:+e.F||0,D=+e.D||0,pEcon=isFinite(mef)?dist.sf(mef):0,ecos=g*pEcon,
+  cond=isFinite(mef)&&u>0?u*dist.call(mef):0;
+  return{gcos:g,mefv:mef,F,pEcon,ecos,meanSuccess:dist.mean,riskedMean:g*dist.mean,emv:g*cond-D,p90:dist.pct(.9),p50:dist.pct(.5),p10:dist.pct(.1)}}
+const defaults=()=>({format:'prospect-risk',version:1,name:'Prospect A',
+ elements:[{name:'Source / charge',level:'play',p:.85},{name:'Reservoir presence',level:'play',p:.8},{name:'Migration & timing',level:'play',p:.75},{name:'Trap / closure',level:'prospect',p:.7},{name:'Seal',level:'prospect',p:.75},{name:'Reservoir effectiveness',level:'prospect',p:.8}],
+ vol:{mode:'direct',p90:20,p50:60,p10:180,tri:{grv:[150,300,600],ntg:[.5,.7,.85],phi:[.15,.2,.25],sw:[.25,.35,.5],bo:[1.15,1.25,1.4],rf:[.2,.3,.4]},n:20000,seed:1},
+ econ:{u:9,F:220,D:45,mefv:null}});
+function distOf(m){const v=m.vol;if(v.mode==='vol'){const t={};for(const [k] of TRI){const a=(v.tri[k]||[]).map(Number);if(a.length!==3||a.some(x=>!isFinite(x))||!(a[0]<=a[1]&&a[1]<=a[2]))return{err:'Volumetric parameter '+k+': min ≤ mode ≤ max expected.'};t[k]=a}return{dist:sampleDist(t,clamp(Math.round(v.n)||20000,1000,200000),v.seed)}}
+  const d=lognormalDist(+v.p90,+v.p50,+v.p10);return d?{dist:d}:{err:'Volumes: 0 < P90 ≤ P50 ≤ P10 expected.'}}
+function run(m){const r=distOf(m);if(r.err)return{err:r.err};const gc=gcos(m.elements);return Object.assign({dist:r.dist,chances:gc},economics(r.dist,gc.gcos,m.econ))}
+// exceedance curve sampled on a log grid
+function curve(dist,gc,n=120){const a=Math.log(Math.max(1e-6,dist.lo*.8)),b=Math.log(dist.hi*1.25),out=[];for(let i=0;i<n;i++){const x=Math.exp(a+(b-a)*i/(n-1)),s=dist.sf(x);out.push([x,s,gc*s])}return out}
+window.RISK={Phi,PhiInv,gcos,lognormalDist,sampleDist,economics,defaults,run,curve,TRI,rng};
+})();
+</script><script>
+const $=id=>document.getElementById(id),R=window.RISK;
+let M=R.defaults(),res=null;
+const f1=x=>!isFinite(x)?'—':Math.abs(x)>=100?x.toFixed(0):Math.abs(x)>=10?x.toFixed(1):x.toFixed(2),pc=x=>(100*x).toFixed(x<.1?1:0)+' %',esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function say(t,err){const m=$('msg');m.textContent=t;m.style.opacity=err?1:.9;setTimeout(()=>{if(m.textContent===t)m.textContent=''},3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+// ---- inputs
+function renderEl(){$('elT').innerHTML=M.elements.map((e,i)=>`<tr><td><input type="text" data-i="${i}" data-k="name" value="${esc(e.name)}"></td><td><select data-i="${i}" data-k="level"><option value="play"${e.level==='play'?' selected':''}>play</option><option value="prospect"${e.level!=='play'?' selected':''}>prospect</option></select></td><td><input type="number" data-i="${i}" data-k="p" min="0" max="1" step="0.05" value="${e.p}"></td><td><button data-del="${i}" title="Remove">✕</button></td></tr>`).join('')}
+$('elT').addEventListener('input',e=>{const t=e.target,i=+t.dataset.i;if(t.dataset.k==null)return;M.elements[i][t.dataset.k]=t.dataset.k==='p'?+t.value:t.value;update()});
+$('elT').addEventListener('click',e=>{const d=e.target.dataset.del;if(d==null)return;M.elements.splice(+d,1);renderEl();update()});
+$('bAdd').onclick=()=>{M.elements.push({name:'New element',level:'prospect',p:.8});renderEl();update()};
+$('bGuide').onclick=()=>{$('guide').style.display='';$('guide').focus()};
+$('guide').onchange=()=>{const v=+$('guide').value;M.elements.forEach(e=>e.p=v);$('guide').style.display='none';renderEl();update()};
+function renderTri(){$('triT').innerHTML=R.TRI.map(([k,l])=>`<tr><td>${l}</td>${[0,1,2].map(j=>`<td><input type="number" step="any" data-k="${k}" data-j="${j}" value="${M.vol.tri[k][j]}"></td>`).join('')}</tr>`).join('')}
+$('triT').addEventListener('input',e=>{const t=e.target;if(t.dataset.k==null)return;M.vol.tri[t.dataset.k][+t.dataset.j]=+t.value;update()});
+function syncInputs(){$('name').value=M.name;$('vmode').value=M.vol.mode;$('vDirect').hidden=M.vol.mode!=='direct';$('vVol').hidden=M.vol.mode!=='vol';
+  for(const k of['p90','p50','p10'])$(k).value=M.vol[k];$('nsam').value=M.vol.n;$('seed').value=M.vol.seed;for(const k of['u','F','D'])$(k).value=M.econ[k];$('mefv').value=M.econ.mefv==null?'':M.econ.mefv;renderEl();renderTri()}
+$('name').oninput=()=>{M.name=$('name').value};
+$('vmode').onchange=()=>{M.vol.mode=$('vmode').value;syncInputs();update()};
+for(const k of['p90','p50','p10'])$(k).oninput=()=>{M.vol[k]=+$(k).value;update()};
+$('nsam').oninput=()=>{M.vol.n=+$('nsam').value;update()};$('seed').oninput=()=>{M.vol.seed=+$('seed').value;update()};
+for(const k of['u','F','D'])$(k).oninput=()=>{M.econ[k]=+$(k).value;update()};
+$('mefv').oninput=()=>{M.econ.mefv=$('mefv').value===''?null:+$('mefv').value;update()};
+// ---- outputs
+function update(){res=R.run(M);const T=$('tiles');
+  if(res.err){T.innerHTML=`<div class="tile"><small>Input</small><b class="warn" style="font-size:1rem">${esc(res.err)}</b></div>`;$('vMsg').textContent=res.err;draw();return}
+  $('vMsg').textContent='';const c=res.chances;
+  T.innerHTML=[['gCOS',pc(res.gcos),'key',`play ${pc(c.play)} × prospect ${pc(c.prospect)}`],['P(economic | success)',pc(res.pEcon),'',`P(V > MEFV ${f1(res.mefv)} MMboe)`],['eCOS',pc(res.ecos),'key2','gCOS × P(economic | success)'],
+   ['EMV, $MM',f1(res.emv),res.emv<0?'key2':'key','gCOS × E[max(u·V − F, 0)] − dry hole'],['Success mean, MMboe',f1(res.meanSuccess),'',`P90 ${f1(res.p90)} · P50 ${f1(res.p50)} · P10 ${f1(res.p10)}`],['Risked mean, MMboe',f1(res.riskedMean),'','gCOS × success mean']]
+   .map(([a,b,k,s])=>`<div class="tile ${k}"><small>${a}</small><b>${b}</b><small>${s}</small></div>`).join('');
+  $('eMsg').textContent=`MEFV = ${f1(res.mefv)} MMboe (F ${f1(res.F)} $MM ÷ u ${f1(+M.econ.u)} $/boe)${M.econ.mefv>0?', typed':''}.`;
+  let h='',cum=1;for(const lv of['play','prospect']){const E=M.elements.filter(e=>(lv==='play')===(e.level==='play'));if(!E.length)continue;h+=`<div class="grp">${lv==='play'?'Play':'Prospect'}</div>`;
+    for(const e of E){const p=Math.min(1,Math.max(0,+e.p||0));cum*=p;h+=`<div>${esc(e.name)}</div><div class="t"><i style="width:${p*100}%"></i></div><div class="v">${p.toFixed(2)}</div>`}}
+  h+=`<div class="sep"></div><div><b>gCOS</b></div><div class="t cum"><i style="width:${res.gcos*100}%"></i></div><div class="v"><b>${pc(res.gcos)}</b></div>`+
+     `<div>× P(economic | success)</div><div class="t"><i style="width:${res.pEcon*100}%"></i></div><div class="v">${res.pEcon.toFixed(2)}</div>`+
+     `<div><b>eCOS</b></div><div class="t eco"><i style="width:${res.ecos*100}%"></i></div><div class="v"><b>${pc(res.ecos)}</b></div>`;
+  $('bars').innerHTML=h;
+  $('volT').innerHTML='<thead><tr><th></th><th>P90</th><th>P50</th><th>P10</th><th>Mean</th></tr></thead><tbody>'+
+   `<tr><td>Success case, MMboe</td><td>${f1(res.p90)}</td><td>${f1(res.p50)}</td><td>${f1(res.p10)}</td><td>${f1(res.meanSuccess)}</td></tr>`+
+   `<tr><td>Risked by gCOS (probability to exceed × gCOS)</td><td colspan="3" style="text-align:center">P(V &gt; MEFV) risked = eCOS ${pc(res.ecos)}</td><td>${f1(res.riskedMean)}</td></tr></tbody>`;
+  draw()}
+function draw(){const cv=$("cvr"),r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);const W=r.width,H=r.height;c.clearRect(0,0,W,H);
+  if(!res||res.err)return;const m={l:46,r:14,t:14,b:38},pw=W-m.l-m.r,ph=H-m.t-m.b,pts=R.curve(res.dist,res.gcos),x0=Math.log(pts[0][0]),x1=Math.log(pts[pts.length-1][0]);
+  const X=x=>m.l+(Math.log(x)-x0)/(x1-x0)*pw,Y=p=>m.t+(1-p)*ph;c.font='11px Inter,sans-serif';c.fillStyle='#5c5a52';c.strokeStyle='#e2ded3';c.lineWidth=1;c.textAlign='right';c.textBaseline='middle';
+  for(let p=0;p<=1.0001;p+=.25){c.beginPath();c.moveTo(m.l,Y(p));c.lineTo(W-m.r,Y(p));c.stroke();c.fillText(p.toFixed(2),m.l-6,Y(p))}
+  c.textAlign='center';c.textBaseline='top';const dec=[];for(let e=Math.ceil(x0/Math.LN10);e<=Math.floor(x1/Math.LN10);e++)for(const k of[1,2,5]){const v=k*Math.pow(10,e);if(Math.log(v)>=x0&&Math.log(v)<=x1)dec.push(v)}
+  for(const v of dec){c.strokeStyle='#eee';c.beginPath();c.moveTo(X(v),m.t);c.lineTo(X(v),m.t+ph);c.stroke();c.fillStyle='#5c5a52';c.fillText(v>=1?String(v):v.toFixed(2),X(v),m.t+ph+5)}
+  c.fillText('Recoverable volume, MMboe (log scale)',m.l+pw/2,m.t+ph+20);
+  const line=(i,col,w)=>{c.beginPath();pts.forEach((p,j)=>{j?c.lineTo(X(p[0]),Y(p[i])):c.moveTo(X(p[0]),Y(p[i]))});c.strokeStyle=col;c.lineWidth=w;c.stroke()};
+  // economic part of the risked curve
+  if(isFinite(res.mefv)&&res.mefv>0){const mx=Math.min(Math.max(res.mefv,pts[0][0]),pts[pts.length-1][0]);c.beginPath();c.moveTo(X(mx),Y(0));pts.filter(p=>p[0]>=mx).forEach(p=>c.lineTo(X(p[0]),Y(p[2])));c.lineTo(X(pts[pts.length-1][0]),Y(0));c.closePath();c.fillStyle='rgba(168,98,58,.16)';c.fill()}
+  line(1,'#4a5a4e',2.2);line(2,'#a8623a',2.2);
+  if(isFinite(res.mefv)&&res.mefv>0&&res.mefv>=pts[0][0]&&res.mefv<=pts[pts.length-1][0]){const x=X(res.mefv);c.setLineDash([5,4]);c.strokeStyle='#232220';c.lineWidth=1.2;c.beginPath();c.moveTo(x,m.t);c.lineTo(x,m.t+ph);c.stroke();c.setLineDash([]);
+    for(const [p,col] of[[res.pEcon,'#4a5a4e'],[res.ecos,'#a8623a']]){c.beginPath();c.arc(x,Y(p),4,0,7);c.fillStyle=col;c.fill()}
+    c.fillStyle='#232220';c.textAlign=x>W*.7?'right':'left';c.textBaseline='bottom';c.fillText('MEFV '+f1(res.mefv),x+(x>W*.7?-5:5),m.t+12)}
+  c.textAlign='left';c.textBaseline='middle';let ly=m.t+8;for(const [t,col] of[['Success case',"#4a5a4e"],['Risked by gCOS',"#a8623a"]]){c.fillStyle=col;c.fillRect(m.l+10,ly-4,16,3);c.fillStyle='#232220';c.fillText(t,m.l+32,ly);ly+=16}}
+window.addEventListener('resize',draw);
+// ---- files
+function snapshot(){return JSON.stringify(M,null,1)}
+$('bSave').onclick=()=>{download((M.name||'prospect').replace(/[^\w.-]+/g,'_')+'.json',snapshot(),'application/json');say('Prospect saved.')};
+$('bLoad').onclick=()=>$('jfile').click();
+$('jfile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(o.format!=='prospect-risk')throw new Error('not a prospect file');M=Object.assign(R.defaults(),o);M.vol=Object.assign(R.defaults().vol,o.vol);M.econ=Object.assign(R.defaults().econ,o.econ);syncInputs();update();say('Prospect opened.')}catch(err){say('Cannot open: '+err.message,true)}});e.target.value=''};
+$('bCsv').onclick=()=>{if(!res||res.err)return say('Fix the inputs first.',true);const rows=['prospect,'+JSON.stringify(M.name),'gCOS,'+res.gcos,'P(economic|success),'+res.pEcon,'eCOS,'+res.ecos,'MEFV_MMboe,'+res.mefv,'EMV_MMUSD,'+res.emv,'success_mean_MMboe,'+res.meanSuccess,'risked_mean_MMboe,'+res.riskedMean,'','volume_MMboe,P_exceed_success,P_exceed_risked'];
+  for(const p of R.curve(res.dist,res.gcos,200))rows.push(p[0].toPrecision(6)+','+p[1].toFixed(6)+','+p[2].toFixed(6));download('prospect_risking.csv',rows.join('\n')+'\n');say('CSV saved.')};
+const EX={direct:()=>R.defaults(),
+ vol:()=>{const m=R.defaults();m.name='Prospect B (volumetrics)';m.vol.mode='vol';return m},
+ marginal:()=>{const m=R.defaults();m.name='Prospect C (marginal)';m.elements.forEach(e=>e.p=.9);m.vol.p90=8;m.vol.p50=22;m.vol.p10=60;m.econ.F=300;return m}};
+$('exSel').onchange=()=>{const k=$('exSel').value;if(k){M=EX[k]();syncInputs();update()}$('exSel').value=''};
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+syncInputs();update();
+</script>
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you enter leaves your machine. Prospect risking: the geological chance of success (gCOS) from play and prospect elements, a success-case volume distribution (lognormal from P90/P50/P10, or a volumetric Monte Carlo), the economic chance of success (eCOS) against the minimum economic field volume (MEFV), the expected monetary value (EMV) and exceedance curves, risked and unrisked.","method":["<b>gCOS.</b> Product of the chances of the elements, split into play (regional: source / charge, reservoir presence, migration and timing) and prospect (local: trap, seal, reservoir effectiveness). The elements are taken as independent; you can rename, add or remove them.","<b>Success-case volume.</b> Either a lognormal with median P50 and σ = (ln P10 − ln P90) / (2 × 1.2816), P90 being the low case (90 % chance to exceed); or a Monte Carlo (triangular min / mode / max on each parameter, independent, seeded) of V = GRV × 6.2898 × NTG × φ × (1 − S<sub>w</sub>) / B<sub>o</sub> × RF, in MMstb for GRV in 10<sup>6</sup> m³.","<b>eCOS.</b> MEFV = F / u, with u the net value per boe and F the development cost that does not scale with volume (or typed directly). eCOS = gCOS × P(V &gt; MEFV): the chance that the prospect works <i>and</i> is large enough to be developed. Some companies define the economic chance differently (for example with a minimum NPV or a profitability index): this is the simplest, volume-threshold definition.","<b>EMV.</b> gCOS × E[max(u·V − F, 0)] − D, with D the dry-hole cost spent in every case. The expectation is analytic for the lognormal (Black–Scholes form) and a sum over the samples for the Monte Carlo. No discounting beyond what is in u; no tax, no timing."],"sources":[["Chance-of-success factors and the product rule","Rose, P.R. (2001), Risk Analysis and Management of Petroleum Exploration Ventures, AAPG Methods in Exploration Series 12; White, D.A. (1993), Geologic risking guide for prospects and plays, AAPG Bulletin 77(12), 2048–2061; Otis &amp; Schneidermann (1997), AAPG Bulletin 81(7), 1087–1109 (as commonly cited; not re-read for this page)","classical (not re-read)"],["Qualitative guide 0.9 / 0.7 / 0.5 / 0.3 / 0.1","A common rule of thumb, not a table from one of the papers above; the default chances of the examples are fictitious","on the page"],["Lognormal from P90 / P10, z<sub>90</sub> = 1.2816","Standard normal quantile; formulas checked against the Monte Carlo in the test of the page","derived"],["Example values (chances, volumes, costs)","Fictitious, for illustration only","on the page"]],"validation":["The analytic lognormal (P90, P50, P10, mean, E[max(V − K, 0)]) agrees with a one-million-sample simulation to within 1 %; the volumetric Monte Carlo reproduces the analytic mean of the product of independent triangular variables; eCOS = gCOS × P(V &gt; MEFV) with the limits 1 (MEFV → 0) and 0 (MEFV → ∞). Run <code>node scripts/risking_test.mjs</code>."],"limits":["Not implemented: dependence between elements or between volumetric parameters, correlated prospects (see the portfolio tool when available), gas / condensate volumetrics, discounting and fiscal terms (see a field development screening tool when available), chance adjustment from well results (Bayesian updating)."],"date":"26 November 2026"});
+</script>
+</body></html>
