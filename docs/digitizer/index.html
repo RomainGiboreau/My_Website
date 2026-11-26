@@ -408,21 +408,21 @@ setTool('edit');recal();renderDs();draw();
 #rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
 #rgm li{margin:4px 0}
 #rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
-#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;white-space:normal;border-bottom:1px solid var(--line,#c9c4b6)}
 #rgm th{background:var(--alt,#e2ded3);position:static}
-#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm td.rgst{white-space:normal;width:12em;min-width:9em}
 #rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
 #rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
 #rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
 #rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
 @media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
   const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
-  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete|to verify/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
   let h='<div class="rgdoc">';
   h+=`<h2>What it does</h2><p>${D.what}</p>`;
   if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
   if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
-    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+    h+='<p class="rgleg">Status tags: <b>published (read)</b> the content for the number or method concerned was read in the publication or standard; <b>published (metadata verified)</b> the reference exists and its citation (authors, year, title, journal, volume, pages) was checked in Crossref or another scholarly metadata service, but its content was not re-read; <b>to verify</b> a citation that could not be verified, with what is missing; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
   if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
   if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
   h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
