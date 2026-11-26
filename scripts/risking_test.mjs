@@ -67,4 +67,46 @@ test('curve: risked curve is gCOS times the success curve and both decrease', ()
   for (let i = 1; i < c.length; i++) { assert.ok(c[i][1] <= c[i - 1][1] + 1e-12); near(c[i][2], r.gcos * c[i][1], 1e-12) }
   assert.ok(c[0][1] > .99 && c[c.length - 1][1] < .01);
 });
+
+test('summary: matches the run, in MMboe with P90 as the low case, and is null on bad input', () => {
+  const m = R.defaults(), r = R.run(m), s = R.summary(r);
+  assert.deepEqual(Object.keys(s).sort(), ['gcos', 'mean', 'mefv', 'p10', 'p50', 'p90', 'pPlay', 'pPros']);
+  near(s.p90, r.p90, 0); near(s.mean, r.meanSuccess, 0); near(s.gcos, s.pPlay * s.pPros, 1e-12); near(s.mefv, 220 / 9, 1e-12);
+  assert.ok(s.p90 < s.p50 && s.p50 < s.p10);
+  const bad = R.defaults(); bad.vol.p90 = 999; assert.equal(R.summary(R.run(bad)), null);
+  m.econ.F = 0; m.econ.mefv = null; assert.equal(R.summary(R.run(m)).mefv, 0);
+});
+test('fdp-link import: sets a usable MEFV and rejects other files', () => {
+  const l = R.fdpLink({ format: 'fdp-link', version: 1, name: 'Case 1', mefv: 42.5, breakeven: 31 });
+  near(l.mefv, 42.5, 0); assert.equal(l.name, 'Case 1'); near(l.breakeven, 31, 0);
+  assert.throws(() => R.fdpLink({ format: 'prospect-risk' })); assert.throws(() => R.fdpLink({ format: 'fdp-link', mefv: 0 })); assert.throws(() => R.fdpLink(null));
+  const m = R.defaults(); m.econ.mefv = l.mefv; near(R.run(m).mefv, 42.5, 0);
+});
+test('gas volumetrics: a deterministic case matches the formula (Bcf / 6 = MMboe) and oil is unchanged', () => {
+  const d = k => [k, k, k], t = { grv: d(300), ntg: d(.7), phi: d(.2), sw: d(.35), bo: d(1.25), bg: d(.005), rf: d(.7) };
+  const g = R.sampleDist(t, 1000, 1, 'gas'), sm3 = 300e6 * .7 * .2 * .65 / .005 * .7, mmboe = sm3 * 35.3147 / 6e9;
+  near(g.mean, mmboe, 1e-9); near(g.pct(.5), mmboe, 1e-9); near(mmboe, 22.5, .1, 'sanity: about 22 MMboe');
+  const o = R.sampleDist(t, 1000, 1), o2 = R.sampleDist(t, 1000, 1, 'oil'); near(o.mean, 300 * 6.2898 * .7 * .2 * .65 / 1.25 * .7, 1e-9); assert.equal(o.mean, o2.mean);
+  const m = R.defaults(); m.vol.mode = 'vol'; const a = R.run(m).meanSuccess; m.vol.fluid = 'gas'; const b = R.run(m).meanSuccess; assert.ok(b > 0 && b !== a);
+  delete m.vol.tri.bg; assert.ok(R.run(m).meanSuccess > 0, 'old file without Bg falls back to the default');
+  m.vol.tri.bg = [.006, .005, .004]; assert.ok(R.run(m).err);
+});
+test('conditional chances: product rule, marginal, conditioning on 1 = independent, bad links ignored, old files unchanged', () => {
+  const ind = [{ level: 'play', p: .8 }, { level: 'prospect', p: .6 }, { level: 'prospect', p: .5 }];
+  const base = R.gcos(ind); near(base.gcos, .24, 1e-12);
+  const c = ind.map(e => Object.assign({}, e)); c[2].on = 1; // P(C | B) = .5 given P(B) = .6
+  const g = R.gcos(c); near(g.gcos, .8 * .6 * .5, 1e-12); near(g.marg[2], .3, 1e-12); near(g.marg[1], .6, 1e-12);
+  const one = [{ level: 'play', p: 1 }, { level: 'prospect', p: .7, on: 0 }]; near(R.gcos(one).gcos, R.gcos([{ level: 'play', p: 1 }, { level: 'prospect', p: .7 }]).gcos, 1e-15); near(R.gcos(one).marg[1], .7, 1e-15);
+  const ch = [{ level: 'prospect', p: .5 }, { level: 'prospect', p: .5, on: 0 }, { level: 'prospect', p: .5, on: 1 }]; near(R.gcos(ch).marg[2], .125, 1e-12);
+  const cyc = [{ level: 'play', p: .5, on: 1 }, { level: 'play', p: .5, on: 0 }, { level: 'prospect', p: .5, on: 2 }, { level: 'prospect', p: .5, on: 9 }];
+  near(R.gcos(cyc).gcos, .0625, 1e-12); near(R.gcos(cyc).marg[3], .5, 1e-12); // cycle and self / out-of-range links do not break anything
+  const m = R.defaults(); const r0 = R.run(m).gcos; m.elements[4].on = 3; near(R.run(m).gcos, r0, 1e-12); near(R.run(m).chances.marg[4], .75 * .7, 1e-12);
+});
+test('Bayes on the odds: odds posterior = odds prior x LR, sequential updates multiply, feeds gCOS', () => {
+  near(R.bayes(.5, 3), .75, 1e-12); near(R.bayes(.2, 1), .2, 1e-15); near(R.bayes(.3, 0), 0, 0); near(R.bayes(1, 5), 1, 0); near(R.bayes(0, 5), 0, 0);
+  for (const [p, lr] of [[.1, 4], [.7, .25], [.35, 2.5]]) { const q = R.bayes(p, lr); near(q / (1 - q), p / (1 - p) * lr, 1e-12) }
+  near(R.bayes(R.bayes(.3, 2), 3), R.bayes(.3, 6), 1e-12); near(R.bayes(R.bayes(.4, 2), .5), .4, 1e-12, 'LR 2 then 1/2 cancels');
+  near(R.gcos([{ level: 'prospect', p: .5, lr: 3 }, { level: 'prospect', p: .8 }]).gcos, .75 * .8, 1e-12);
+  near(R.gcos([{ level: 'prospect', p: .5, lr: null }, { level: 'prospect', p: .8, lr: '' }]).gcos, .4, 1e-12, 'no LR = unchanged');
+});
 console.log(`${n}/${n} passed`);
