@@ -150,31 +150,46 @@ const DPM=365.25/12,clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const defaults=()=>({format:'fdp-case',version:1,name:'Offshore oil field',
  reserves:120,plateau:40,wellIP:8,wells:6,plateauFrac:.3,b:.3,qmin:3,ramp:1,
  facilities:900,wellCost:70,phasing:[30,40,30],opexFixed:90,opexVar:6,abex:250,
- price:70,royalty:10,tax:35,dep:8,disc:10});
-const clean=p=>{const q=Object.assign(defaults(),p);for(const k of Object.keys(defaults())){if(k!=='name'&&k!=='format'&&k!=='phasing'&&!isFinite(+q[k]))q[k]=defaults()[k]}return q};
+ price:70,royalty:10,tax:35,dep:8,disc:10,
+ wellMode:'fixed',drill:[4,2],
+ regime:'rt',pscCeiling:60,pscShare:40,pscShare2:30,pscR:1.5,pscTax:0});
+const NONNUM={name:1,format:1,phasing:1,drill:1,wellMode:1,regime:1};
+const clean=p=>{const q=Object.assign(defaults(),p);for(const k of Object.keys(defaults())){if(!NONNUM[k]&&!isFinite(+q[k]))q[k]=defaults()[k]}
+  if(q.regime!=='psc')q.regime='rt';if(q.wellMode!=='sched')q.wellMode='fixed';
+  if(!Array.isArray(q.drill)||!q.drill.length||q.drill.some(x=>!isFinite(+x)||+x<0))q.drill=defaults().drill;q.drill=q.drill.map(Number);return q};
+// wells online in production year y (0 = first year): the fixed number, or the cumulative of the drilling schedule (wells added at the start of each production year)
+const wellsOn=(p,y)=>{if(p.wellMode!=='sched')return+p.wells||0;let s=0;const d=p.drill||[];for(let i=0;i<=y&&i<d.length;i++)s+=Math.max(0,+d[i]||0);return s};
+const wellsTot=p=>p.wellMode==='sched'?(p.drill||[]).reduce((a,x)=>a+Math.max(0,+x||0),0):(+p.wells||0);
 // production profile, monthly, in kboe/d. Plateau (with a linear ramp-up) until plateauFrac × reserves is produced, then Arps decline from the plateau rate;
 // the nominal decline rate Di is solved so that the cumulative production (down to the economic limit) equals the reserves.
 function arps(q0,Di,b,t){return b<1e-6?q0*Math.exp(-Di*t):q0/Math.pow(1+b*Di*t,1/b)}
-function profile(p){const EUR=+p.reserves,qpl=Math.max(0,Math.min(+p.plateau,(+p.wells||0)*(+p.wellIP||0))),rm=Math.max(0,Math.round(+p.ramp*12)),pf=clamp(+p.plateauFrac,0,1),b=clamp(+p.b,0,1),qmin=Math.max(0,+p.qmin||0),N=12*60;
+function profile(p){const EUR=+p.reserves,capAt=y=>Math.max(0,Math.min(+p.plateau,wellsOn(p,y)*(+p.wellIP||0))),qpl=capAt(p.wellMode==='sched'?(p.drill||[]).length:0),rm=Math.max(0,Math.round(+p.ramp*12)),pf=clamp(+p.plateauFrac,0,1),b=clamp(+p.b,0,1),qmin=Math.max(0,+p.qmin||0),N=12*60;
   const run=Di=>{const q=[];let cum=0,k=0,capped=false;
     // plateau phase
-    while(k<N&&cum<pf*EUR-1e-12&&qpl>0){const r=qpl*(rm>0?Math.min(1,(k+1)/rm):1);q.push(r);cum+=r*DPM/1000;k++}
+    while(k<N&&cum<pf*EUR-1e-12&&qpl>0){const r=capAt(Math.floor(k/12))*(rm>0?Math.min(1,(k+1)/rm):1);q.push(r);cum+=r*DPM/1000;k++}
     const q0=q.length?q[q.length-1]:qpl;let t=0;
     if(cum<EUR-1e-9&&q0>0)while(k<N){t+=1/12;const r=arps(q0,Di,b,t);if(r<qmin||r<1e-6)break;const dc=r*DPM/1000;if(cum+dc>EUR){q.push(r*(EUR-cum)/dc);cum=EUR;capped=true;k++;break}q.push(r);cum+=dc;k++}
     return{q,cum,capped}};
   let lo=1e-4,hi=20;{const r=run(lo);if(!r.capped)return{q:r.q,Di:lo,cum:r.cum,qpl,short:r.cum<EUR*.999}}
   for(let i=0;i<60;i++){const mid=Math.sqrt(lo*hi);if(run(mid).capped)lo=mid;else hi=mid}
   const r=run(Math.sqrt(lo*hi));return{q:r.q,Di:Math.sqrt(lo*hi),cum:r.cum,qpl,short:r.cum<EUR*.995}}
-// monthly economics from FID (month 0)
-function economics(p,prof){prof=prof||profile(p);const ph=(p.phasing||[100]).map(Number).filter(x=>isFinite(x)&&x>=0),sum=ph.reduce((a,b)=>a+b,0)||1,ny=ph.length,m0=12*ny,q=prof.q,np=q.length,M=m0+np+1,r=Math.pow(1+(+p.disc||0)/100,1/12)-1;
-  const capTot=(+p.facilities||0)+(+p.wells||0)*(+p.wellCost||0),dep=Math.max(1,Math.round((+p.dep||1)*12)),roy=(+p.royalty||0)/100,tax=(+p.tax||0)/100;
-  const rows=[];let cum=0,carry=0,pvC=0,pvO=0,pvA=0,pvP=0,npv=0,minCum=0,pay=NaN;const cfs=[];
-  for(let m=0;m<M;m++){const prod=m>=m0&&m<m0+np?q[m-m0]*DPM/1000:0,rev=prod*(+p.price||0),royal=rev*roy,opex=prod>0?(+p.opexFixed||0)/12+prod*(+p.opexVar||0):0,
-    capex=m<m0?capTot*ph[Math.floor(m/12)]/sum/12:0,abex=m===m0+np-1?(+p.abex||0):0,d=m>=m0&&m<m0+dep?capTot/dep:0,ti=rev-royal-opex-d;
+// monthly economics from FID (month 0). Two regimes: 'rt' royalty / tax, or 'psc' generic production sharing (cost-recovery ceiling, profit-oil split, contractor tax).
+// npv, cf and tax are the contractor's (or the operator's, in royalty / tax); gov is the government take (royalty + tax, or government profit oil + contractor tax).
+function economics(p,prof){prof=prof||profile(p);const ph=(p.phasing||[100]).map(Number).filter(x=>isFinite(x)&&x>=0),sum=ph.reduce((a,b)=>a+b,0)||1,ny=ph.length,m0=12*ny,q=prof.q,np=q.length,r=Math.pow(1+(+p.disc||0)/100,1/12)-1,
+  sched=p.wellMode==='sched',dr=sched?(p.drill||[]).map(x=>Math.max(0,+x||0)):[],M=Math.max(m0+np+1,m0+12*Math.max(0,dr.length-1)+1),wc=+p.wellCost||0;
+  const capTot=(+p.facilities||0)+wellsTot(p)*wc,capInit=(+p.facilities||0)+(sched?(dr[0]||0):(+p.wells||0))*wc,dep=Math.max(1,Math.round((+p.dep||1)*12)),
+    psc=p.regime==='psc',roy=psc?0:(+p.royalty||0)/100,tax=(psc?+p.pscTax||0:+p.tax||0)/100,ceil=clamp((+p.pscCeiling||0)/100,0,1),s1=clamp((+p.pscShare||0)/100,0,1),s2=clamp((+p.pscShare2||0)/100,0,1),rthr=+p.pscR||0;
+  const rows=[];let cum=0,carry=0,pvC=0,pvO=0,pvA=0,pvP=0,npv=0,minCum=0,pay=NaN,pool=0,cumEnt=0,cumCost=0,govTot=0,pvG=0;const cfs=[];
+  for(let m=0;m<M;m++){const prod=m>=m0&&m<m0+np?q[m-m0]*DPM/1000:0,rev=prod*(+p.price||0),opex=prod>0?(+p.opexFixed||0)/12+prod*(+p.opexVar||0):0,
+    capex=m<m0?capInit*ph[Math.floor(m/12)]/sum/12:(m<m0+12*(dr.length-1)?dr[Math.floor((m-m0)/12)+1]*wc/12:0),abex=m===m0+np-1?(+p.abex||0):0,d=m>=m0&&m<m0+dep?capTot/dep:0;
+    let royal=0,co=0,pog=0,ent=rev,Rf=0,ti;
+    if(psc){const costs=capex+opex+abex;pool+=costs;Rf=cumCost>0?cumEnt/cumCost:0;co=Math.min(ceil*rev,pool);pool-=co;const po=rev-co,sh=rthr>0&&Rf>=rthr?s2:s1;pog=po*(1-sh);ent=co+po*sh;cumEnt+=ent;cumCost+=costs;ti=ent-opex-d}
+    else{royal=rev*roy;ent=rev-royal;ti=ent-opex-d}
     let tx=0;if(ti<0)carry-=ti;else{const use=Math.min(carry,ti);carry-=use;tx=tax*(ti-use)}
-    const cf=rev-royal-opex-capex-abex-tx,df=Math.pow(1+r,-(m+.5)),pre=cum<0;cum+=cf;if(cum<minCum)minCum=cum;if(isNaN(pay)&&pre&&cum>=0)pay=(m+1)/12;
-    npv+=cf*df;pvC+=(capex)*df;pvO+=(opex+abex)*df;pvP+=prod*df;cfs.push(cf);rows.push({m,prod,q:prod>0?q[m-m0]:0,rev,royal,opex,capex,abex,tax:tx,cf,cum})}
-  return{rows,npv,irr:irr(cfs),payback:pay,peak:-minCum,pvCapex:pvC,pvOpex:pvO,utc:pvP>0?(pvC+pvO)/pvP:NaN,pi:pvC>0?npv/pvC:NaN,total:q.reduce((a,x)=>a+x*DPM/1000,0),capTot,firstOil:ny,end:(m0+np)/12}}
+    const gov=royal+pog+tx,cf=ent-opex-capex-abex-tx,df=Math.pow(1+r,-(m+.5)),pre=cum<0;cum+=cf;if(cum<minCum)minCum=cum;if(isNaN(pay)&&pre&&cum>=0)pay=(m+1)/12;
+    npv+=cf*df;pvC+=(capex)*df;pvO+=(opex+abex)*df;pvP+=prod*df;pvG+=gov*df;govTot+=gov;cfs.push(cf);rows.push({m,prod,q:prod>0?q[m-m0]:0,rev,royal,opex,capex,abex,tax:tx,cf,cum,co,pog,ent,gov,Rf})}
+  return{rows,npv,irr:irr(cfs),payback:pay,peak:-minCum,pvCapex:pvC,pvOpex:pvO,utc:pvP>0?(pvC+pvO)/pvP:NaN,pi:pvC>0?npv/pvC:NaN,total:q.reduce((a,x)=>a+x*DPM/1000,0),capTot,firstOil:ny,end:(m0+np)/12,
+    gov:govTot,govPV:pvG,govTake:(pvG+npv)>0?pvG/(pvG+npv):NaN,unrecovered:pool}}
 function irr(cf){const f=x=>{let s=0;for(let m=0;m<cf.length;m++)s+=cf[m]*Math.pow(1+x,-(m+.5)/12);return s};// bracket from 0 upwards (a late abandonment cost makes f(x) negative for very negative x); below 0 only if the project does not pay back
   let lo=0,hi=20;if(!(f(0)>0)){lo=-.5;hi=0}const a=f(lo),b=f(hi);if(!(a*b<0))return NaN;for(let i=0;i<80;i++){const mid=(lo+hi)/2;(f(mid)*a>0)?lo=mid:hi=mid}return(lo+hi)/2}
 const npvOf=p=>economics(p).npv;
@@ -188,10 +203,32 @@ function sensitivities(p){const base=npvOf(p),sc=(k,f)=>Object.assign({},p,{[k]:
   L=[['Oil price ±20 %',npvOf(sc('price',.8)),npvOf(sc('price',1.2))],['Reserves ±20 %',npvOf(sc('reserves',.8)),npvOf(sc('reserves',1.2))],['Capex ±20 %',npvOf(C(1.2)),npvOf(C(.8))],['Opex ±20 %',npvOf(O(1.2)),npvOf(O(.8))],
    ['Plateau target ±20 %',npvOf(sc('plateau',.8)),npvOf(sc('plateau',1.2))],['Discount rate ±2 pts',npvOf(Object.assign({},p,{disc:p.disc+2})),npvOf(Object.assign({},p,{disc:Math.max(0,p.disc-2)}))],['First oil 1 yr later / earlier',npvOf(X(1)),npvOf(X(-1))]];
   return{base,items:L.map(([n,lo,hi])=>({name:n,lo,hi,swing:Math.abs(hi-lo)})).sort((a,b)=>b.swing-a.swing)}}
-function annual(res){const A=[];for(const r of res.rows){const y=Math.floor(r.m/12);if(!A[y])A[y]={y,prod:0,rev:0,royal:0,opex:0,capex:0,abex:0,tax:0,cf:0,qm:0,n:0};const a=A[y];a.prod+=r.prod;a.rev+=r.rev;a.royal+=r.royal;a.opex+=r.opex;a.capex+=r.capex;a.abex+=r.abex;a.tax+=r.tax;a.cf+=r.cf;if(r.q>0){a.qm+=r.q;a.n++}}
+function annual(res){const A=[];for(const r of res.rows){const y=Math.floor(r.m/12);if(!A[y])A[y]={y,prod:0,rev:0,royal:0,opex:0,capex:0,abex:0,tax:0,gov:0,cf:0,qm:0,n:0};const a=A[y];a.prod+=r.prod;a.rev+=r.rev;a.royal+=r.royal;a.opex+=r.opex;a.capex+=r.capex;a.abex+=r.abex;a.tax+=r.tax;a.gov+=r.gov;a.cf+=r.cf;if(r.q>0){a.qm+=r.q;a.n++}}
   let c=0;for(const a of A){c+=a.cf;a.cum=c;a.q=a.n?a.qm/a.n:0}return A}
 function run(p){p=clean(p);const prof=profile(p),res=economics(p,prof);return{p,prof,res,ann:annual(res)}}
-window.FDP={defaults,clean,profile,economics,irr,breakeven,mefv,sensitivities,annual,run,arps,DPM};
+// interchange file for the Prospect risking and Portfolio tools: mefv in MMboe (reserves at NPV = 0), breakeven price, utc = unit technical cost ($/boe), capex total ($MM), npv ($MM)
+function link(p){p=clean(p);const r=economics(p),o={format:'fdp-link',version:1,name:p.name,mefv:mefv(p),breakeven:breakeven(p),utc:r.utc,capex:r.capTot,npv:r.npv,reserves:+p.reserves,price:+p.price};
+  for(const k of ['mefv','breakeven','utc'])if(!isFinite(o[k]))o[k]=null;return o}
+// ---- uncertainty: Monte Carlo on reserves, price, capex scale and opex scale ----
+function rng(seed){let a=(seed>>>0)||1;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function tri(u,a,m,b){if(!(b>a))return m;const c=(m-a)/(b-a);return u<c?a+Math.sqrt(u*(b-a)*(m-a)):b-Math.sqrt((1-u)*(b-a)*(b-m))}
+function gauss(rnd){let u=rnd();if(u<1e-12)u=1e-12;return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*rnd())}
+const Z90=1.2815515655;
+const mcDefaults=()=>({n:2000,seed:12345,reserves:{min:70,mode:100,max:140},price:{min:70,mode:100,max:130},capex:{min:90,mode:100,max:130},opex:{min:90,mode:100,max:120},ln:{on:false,p90:80,p50:120,p10:170}});
+function quantile(s,pr){if(!s.length)return NaN;const x=pr*(s.length-1),i=Math.floor(x),f=x-i;return i+1<s.length?s[i]*(1-f)+s[i+1]*f:s[i]}
+// triangular min / mode / max are percentages of the base value; the reserves may instead be lognormal from P90 / P50 / P10 (MMboe, P90 = low, as in the risking tool).
+// Each trial is a full profile + economics. Draw order is fixed (reserves, price, capex, opex) so a seed reproduces the run.
+function mc(p,o){p=clean(p);o=Object.assign(mcDefaults(),o||{});const n=Math.max(1,Math.round(+o.n)||1),R=rng(+o.seed||1),vals=new Array(n),ln=o.ln||{},
+  lnOk=ln.on&&+ln.p90>0&&+ln.p10>+ln.p90&&+ln.p50>=+ln.p90&&+ln.p50<=+ln.p10,sg=lnOk?Math.log(+ln.p10/+ln.p90)/(2*Z90):0,
+  fixedRes=!lnOk&&!(o.reserves.max>o.reserves.min),prof0=fixedRes?profile(Object.assign({},p,{reserves:p.reserves*o.reserves.mode/100})):null;
+  const tr=(d,u)=>Math.max(0,tri(u,+d.min,+d.mode,+d.max)/100);let sum=0,sum2=0;
+  for(let i=0;i<n;i++){const u1=R(),u2=R(),u3=R(),u4=R(),z=lnOk?gauss(R):0,res=lnOk?+ln.p50*Math.exp(sg*z):p.reserves*tr(o.reserves,u1),fp=tr(o.price,u2),fc=tr(o.capex,u3),fo=tr(o.opex,u4),
+    q=Object.assign({},p,{reserves:res,price:p.price*fp,facilities:p.facilities*fc,wellCost:p.wellCost*fc,opexFixed:p.opexFixed*fo,opexVar:p.opexVar*fo}),v=economics(q,prof0||profile(q)).npv;
+    vals[i]=v;sum+=v;sum2+=v*v}
+  const s=vals.slice().sort((a,b)=>a-b),mean=sum/n,sd=Math.sqrt(Math.max(0,sum2/n-mean*mean)),lo=s[0],hi=s[n-1],nb=24,w=(hi-lo)/nb||1,counts=new Array(nb).fill(0);
+  for(const v of vals)counts[Math.min(nb-1,Math.floor((v-lo)/w))]++;
+  return{n,vals,mean,sd,p90:quantile(s,.1),p50:quantile(s,.5),p10:quantile(s,.9),pNeg:vals.filter(v=>v<0).length/n,min:lo,max:hi,hist:{lo,w,counts},base:economics(p).npv,lnUsed:lnOk}}
+window.FDP={defaults,clean,profile,economics,irr,breakeven,mefv,sensitivities,annual,run,arps,DPM,link,mc,mcDefaults,rng,tri,wellsOn,wellsTot};
 })();
 </script><script>
 const $=id=>document.getElementById(id),F=window.FDP;

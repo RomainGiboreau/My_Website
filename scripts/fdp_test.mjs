@@ -54,4 +54,90 @@ test('annual aggregation conserves volume and cash flow; run() is complete on th
   const r = F.run(F.defaults()), A = r.ann; near(A.reduce((a, x) => a + x.prod, 0), r.res.total, 1e-9); near(A.reduce((a, x) => a + x.cf, 0), r.res.rows.reduce((a, x) => a + x.cf, 0), 1e-6);
   assert.ok(r.res.npv > 0 && isFinite(r.res.irr) && isFinite(r.res.payback) && r.res.peak > 0);
 });
+// ---- 1. interchange file ----
+test('fdp-link: exact format, values consistent with the computed tiles', () => {
+  const p = base({ name: 'Test field' }), L = F.link(p), r = F.economics(p);
+  assert.deepEqual(Object.keys(L), ['format', 'version', 'name', 'mefv', 'breakeven', 'utc', 'capex', 'npv', 'reserves', 'price']);
+  assert.equal(L.format, 'fdp-link'); assert.equal(L.version, 1); assert.equal(L.name, 'Test field');
+  near(L.mefv, F.mefv(p), 1e-9); near(L.breakeven, F.breakeven(p), 1e-9); near(L.utc, r.utc, 1e-12); near(L.capex, p.facilities + p.wells * p.wellCost, 1e-9);
+  near(L.npv, r.npv, 1e-9); assert.equal(L.reserves, p.reserves); assert.equal(L.price, p.price);
+  const back = JSON.parse(JSON.stringify(L)); assert.deepEqual(back, L);
+  near(F.economics(Object.assign({}, p, { reserves: L.mefv })).npv, 0, 1e-2);
+});
+// ---- 2. Monte Carlo ----
+const deg = m => ({ min: m, mode: m, max: m });
+test('Monte Carlo: degenerate distributions return the base NPV in every trial', () => {
+  const p = base(), r = F.mc(p, { n: 20, reserves: deg(100), price: deg(100), capex: deg(100), opex: deg(100) }), b = F.economics(p).npv;
+  assert.ok(r.vals.every(v => Math.abs(v - b) < 1e-6)); near(r.mean, b, 1e-6); near(r.p50, b, 1e-6); near(r.sd, 0, 1e-4); assert.equal(r.pNeg, 0); near(r.base, b, 1e-9);
+});
+test('Monte Carlo: price only, no tax, no royalty: the mean NPV equals the NPV at the mean price (NPV linear in price)', () => {
+  const p = base({ royalty: 0, tax: 0 }), d = { min: 60, mode: 90, max: 150 }, r = F.mc(p, { n: 4000, seed: 7, reserves: deg(100), price: d, capex: deg(100), opex: deg(100) });
+  const pm = p.price * (d.min + d.mode + d.max) / 300, ana = F.economics(Object.assign({}, p, { price: pm })).npv;
+  near(r.mean, ana, 4 * r.sd / Math.sqrt(r.n), 'mean vs analytic');
+  assert.ok(r.p90 < r.p50 && r.p50 < r.p10, 'P90 < P50 < P10'); assert.ok(r.sd > 0);
+});
+test('Monte Carlo: seeded and reproducible; P(NPV<0) is the fraction of negative trials; histogram holds every trial', () => {
+  const p = base({ price: 40 }), a = F.mc(p, { n: 300, seed: 3 }), b = F.mc(p, { n: 300, seed: 3 }), c = F.mc(p, { n: 300, seed: 4 });
+  assert.deepEqual(a.vals, b.vals); assert.notDeepEqual(a.vals, c.vals);
+  near(a.pNeg, a.vals.filter(v => v < 0).length / 300, 1e-12); assert.ok(a.pNeg > 0 && a.pNeg < 1, 'price 40 straddles zero: ' + a.pNeg);
+  assert.equal(a.hist.counts.reduce((s, x) => s + x, 0), 300);
+});
+test('Monte Carlo: lognormal reserves from P90 / P50 / P10 reproduce the quantiles; triangular sampler has the right mean', () => {
+  const p = base(), ln = { on: true, p90: 80, p50: 120, p10: 190 }, d = deg(100), r = F.mc(p, { n: 3000, seed: 5, ln, price: d, capex: d, opex: d });
+  assert.ok(r.lnUsed); const q = F.mc(Object.assign({}, p), { n: 1, ln }); assert.ok(q.lnUsed);
+  // NPV is monotonic in reserves here, so the NPV quantiles are the NPVs at the reserves quantiles
+  for (const [k, res] of [['p90', 80], ['p50', 120], ['p10', 190]]) near(r[k], F.economics(Object.assign({}, p, { reserves: res })).npv, 0.06 * Math.abs(r.p10 - r.p90), k);
+  const R = F.rng(9); let s = 0; const N = 20000; for (let i = 0; i < N; i++) s += F.tri(R(), 70, 100, 140); near(s / N, 310 / 3, .6);
+});
+test('Monte Carlo: 2000 trials of the default case finish in a few seconds', () => {
+  const t = Date.now(), r = F.mc(base(), { n: 2000 }); assert.equal(r.vals.length, 2000); assert.ok(Date.now() - t < 20000, 'took ' + (Date.now() - t) + ' ms');
+});
+// ---- 3. production-sharing contract ----
+const psc = (o = {}) => base(Object.assign({ regime: 'psc', pscTax: 0 }, o));
+test('PSC: ceiling 100 % and contractor share 100 % without tax equals the pre-tax, royalty-free NPV of the royalty / tax regime', () => {
+  const a = F.economics(psc({ pscCeiling: 100, pscShare: 100, pscShare2: 100 })), b = F.economics(base({ royalty: 0, tax: 0 }));
+  near(a.npv, b.npv, 1e-6); near(a.gov, 0, 1e-6);
+});
+test('PSC: conservation, contractor cash flow + government take = revenue - costs paid, month by month and in total', () => {
+  for (const o of [{}, { pscTax: 30 }, { pscCeiling: 30, pscShare: 20, pscTax: 25 }, { pscR: 0, pscCeiling: 100 }]) {
+    const r = F.economics(psc(o)); let ok = 0;
+    for (const x of r.rows) { near(x.cf + x.gov, x.rev - x.opex - x.capex - x.abex, 1e-6, JSON.stringify(o) + ' m' + x.m); ok++ }
+    const tot = k => r.rows.reduce((s, x) => s + x[k], 0); near(tot('cf') + r.gov, tot('rev') - tot('opex') - tot('capex') - tot('abex'), 1e-6);
+    const ce = (o.pscCeiling ?? 60) / 100; assert.ok(r.rows.every(x => x.co <= ce * x.rev + 1e-9), 'cost oil within the ceiling'); near(tot('ent') + tot('pog'), tot('rev'), 1e-6, 'contractor entitlement + government profit oil = revenue');
+    const costs = tot('opex') + tot('capex') + tot('abex'); assert.ok(tot('co') <= costs + 1e-6, 'cost oil never exceeds the costs'); near(tot('co') + r.unrecovered, costs, 1e-6, 'cost oil + unrecovered pool = costs');
+    assert.ok(ok > 100);
+  }
+});
+test('PSC: the contractor NPV decreases when the government profit-oil share increases; the government take increases', () => {
+  let prevN = Infinity, prevG = -Infinity;
+  for (const sh of [100, 80, 60, 40, 20]) { const r = F.economics(psc({ pscShare: sh, pscShare2: sh, pscTax: 20 })); assert.ok(r.npv < prevN, 'npv at ' + sh); assert.ok(r.govPV > prevG); prevN = r.npv; prevG = r.govPV }
+  const lowCeil = F.economics(psc({ pscCeiling: 20 })).npv, hiCeil = F.economics(psc({ pscCeiling: 80 })).npv; assert.ok(lowCeil < hiCeil, 'a lower ceiling delays cost recovery');
+});
+test('PSC: the R-factor tier applies the second contractor share only once R reaches the threshold', () => {
+  const lo = F.economics(psc({ pscR: 1e6, pscShare: 50, pscShare2: 10 })), hi = F.economics(psc({ pscR: 1e-3, pscShare: 50, pscShare2: 10 })), off = F.economics(psc({ pscR: 0, pscShare: 50, pscShare2: 10 }));
+  near(lo.npv, off.npv, 1e-9, 'threshold never reached = single tier'); assert.ok(hi.npv < lo.npv, 'tier reached early lowers the contractor NPV');
+  const r = F.economics(psc({ pscR: 1.5, pscShare: 50, pscShare2: 10 })); assert.ok(r.rows.some(x => x.Rf >= 1.5) && r.rows.some(x => x.Rf > 0 && x.Rf < 1.5));
+  assert.ok(F.economics(psc({ pscR: 1.5, pscShare: 50, pscShare2: 10 })).npv < lo.npv && F.economics(psc({ pscR: 1.5, pscShare: 50, pscShare2: 10 })).npv > hi.npv - 1e-9);
+});
+test('PSC: break-even price, MEFV and sensitivities work under the production-sharing regime; royalty / tax results are unchanged by the PSC fields', () => {
+  const p = psc({ pscShare: 40, pscShare2: 40, pscTax: 10 }), be = F.breakeven(p); near(F.economics(Object.assign({}, p, { price: be })).npv, 0, 1e-3);
+  assert.ok(isFinite(F.sensitivities(p).base)); const a = F.economics(base()).npv, b = F.economics(base({ pscCeiling: 5, pscShare: 1, pscTax: 90 })).npv; near(a, b, 1e-12);
+  assert.equal(F.clean({ regime: 'zzz' }).regime, 'rt');
+});
+// ---- 4. drilling schedule ----
+test('drilling schedule: plateau capacity = wells online x rate, rising each year; one lump of wells equals the fixed number', () => {
+  const p = base({ wellMode: 'sched', drill: [2, 2, 2], wellIP: 8, plateau: 100, ramp: 0, plateauFrac: .6, wells: 99 }), pr = F.profile(p);
+  assert.equal(F.wellsOn(p, 0), 2); assert.equal(F.wellsOn(p, 1), 4); assert.equal(F.wellsOn(p, 5), 6); assert.equal(F.wellsTot(p), 6); assert.equal(pr.qpl, 48);
+  assert.ok(pr.q[0] === 16 && pr.q[11] === 16 && pr.q[12] === 32 && pr.q[24] === 48, 'steps 16, 32, 48');
+  near(pr.cum, p.reserves, .005 * p.reserves);
+  const a = F.economics(base({ wellMode: 'sched', drill: [6], wells: 1 })), b = F.economics(base({ wells: 6 })); near(a.npv, b.npv, 1e-9); near(a.capTot, b.capTot, 1e-9);
+});
+test('drilling schedule: later wells are paid when drilled (not before first oil); a slower ramp-up lowers NPV; total capex counts every well', () => {
+  const s = base({ wellMode: 'sched', drill: [2, 2, 2] }), f = base({ wells: 6 }), rs = F.economics(s), rf = F.economics(f), m0 = 36;
+  near(rs.capTot, s.facilities + 6 * s.wellCost, 1e-9); near(rs.rows.reduce((a, x) => a + x.capex, 0), rs.capTot, 1e-6);
+  near(rs.rows.filter(x => x.m < m0).reduce((a, x) => a + x.capex, 0), s.facilities + 2 * s.wellCost, 1e-6);
+  near(rs.rows.filter(x => x.m >= m0 && x.m < m0 + 12).reduce((a, x) => a + x.capex, 0), 2 * s.wellCost, 1e-6);
+  assert.ok(rs.npv < rf.npv, 'late wells reduce NPV when plateau is capacity-limited: ' + rs.npv + ' vs ' + rf.npv);
+  assert.deepEqual(F.clean({ wellMode: 'sched', drill: ['x'] }).drill, F.defaults().drill);
+});
 console.log(`${n}/${n} passed`);
