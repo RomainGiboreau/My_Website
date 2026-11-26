@@ -142,6 +142,8 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
 .tag{font-size:.68rem;color:var(--mut);border:1px solid var(--line);border-radius:8px;padding:0 6px;white-space:nowrap}
 .tb{display:flex;flex-wrap:wrap;gap:3px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 6px;margin-bottom:6px}
 .tb button,.tb select{font-size:.76rem;padding:.12rem .45rem}
+.side #tbWrap{position:sticky;top:0;z-index:6}.side .tb{margin-bottom:0;box-shadow:0 2px 8px rgba(0,0,0,.08)}.side .tb select{max-width:100%}.side .tb select.exsel{margin-left:0!important;max-width:100%;flex:1 1 100%}
+.layout.side-min{grid-template-columns:250px minmax(0,1fr)}.layout.side-min .side>:not(#tbWrap){display:none}
 .tb .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
 .hint2{position:absolute;left:8px;bottom:8px;z-index:3;font-size:.76rem;color:var(--mut);background:rgba(245,243,237,.92);border:1px solid var(--line);border-radius:4px;padding:2px 8px;max-width:60%;pointer-events:none}
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none;order:2}.top .bar{flex-wrap:wrap}}
@@ -171,6 +173,21 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout intro-on" id="layout">
 <aside class="side">
+<div id="tbWrap" hidden>
+  <div class="tb" id="tbar" role="toolbar" aria-label="Map tools"><button id="bSide" aria-expanded="true" title="Hide the panels of this column (keeps the tools)">◀ Panels</button><span class="sep"></span>
+    <span class="seg" role="group" aria-label="Map level"><button data-v="belts" title="The GDE belts calibrated on the wells (all classes, key lines, sources)">GDE belts</button><button data-v="eod" title="Environments of deposition: a few large domains with smooth boundaries and labels inside (atlas style)">EOD map</button><button data-v="facies" title="The EOD map lightened, with the facies objects on top: deltaic lobes, fluvial channels, turbidite fairways, basin-floor fans, carbonate platforms, MTCs">Facies map</button></span><span class="sep"></span>
+    <select id="tbPal" aria-label="Palette of the EOD and facies maps" title="Palette of the EOD and facies maps" hidden></select>
+    <button data-t="sel" class="on" title="Select and drag wells, sources, bodies and line vertices; drag the background to pan (V)">Select</button><button data-t="pan" title="Pan by dragging; the mouse wheel zooms anywhere (H)">Pan</button><button id="bZoom0" title="Zoom to the map extent">Fit</button><span class="sep"></span><button id="bUndo" title="Undo (Ctrl+Z)">Undo</button><button id="bRedo" title="Redo (Ctrl+Y)">Redo</button><span class="sep"></span>
+    <button id="bEdit" aria-expanded="false" title="Editing tools: key lines, sources, bodies, tracing, paint, facies objects">Edit ▾</button>
+    <select id="tbEx" class="exsel" aria-label="Load an example" style="margin-left:auto;max-width:210px"></select>
+   <div class="tb2" id="tbEdit" hidden><button data-t="line" title="Edit a key line: drag its vertices, click on it to add a vertex, double-click a vertex to remove it">Line</button><select id="tbLine" aria-label="Line to edit"></select>
+    <button data-t="src" title="Add a source: click on a key line (delta, fan) or on a fault (fan delta)">Source</button>
+    <button data-t="body" title="Add an isolated body: click where it is">Body</button><select id="tbBody" aria-label="Body type"></select>
+    <button data-t="trace" title="Trace: click points, double-click or Enter to finish, Esc to cancel">Trace</button><select id="tbTrace" aria-label="What to trace"><option value="ribbon">channel</option><option value="poly">polygon</option><option value="nodep">no-deposit area</option><option value="fault">fault</option></select>
+    <button data-t="paint" title="Paint the trend: drag to push the belts distal (+) or proximal (−)">Paint</button><select id="tbPaint" aria-label="Paint direction"><option value="1">+ distal</option><option value="-1">− proximal</option></select>
+    <button data-t="obj" id="tbObjB" hidden title="Add a facies object: click where it is (facies map); drag an object with Select to move it">Object</button><select id="tbObj" hidden aria-label="Facies object type"></select>
+    <button data-t="pick" title="Pick a pixel of the backdrop image (for its control points or colour bar)" hidden id="tbPick">Pick</button></div></div>
+</div>
  <div class="grp">Start <span>your wells</span></div>
  <section class="panel"><h2><span class="n">1</span>Wells<span class="tt" tabindex="0" data-tip="Paste a table with one well per line: name, x, y, environment (tab, semicolon, comma or space separated; a header line is skipped). The environment is matched to the belts of the model regardless of case, punctuation and plurals; a name that does not match is flagged and can be fixed with its drop-down. You can also click “Add on map” and click where the well is. Drag a well on the map to move it. A well described “A / B” or “A + B” (two neighbouring belts, e.g. “shoreface / offshore transition”) is honoured in A, in B or in their mixed zone; a well whose environment is an isolated body (e.g. “reef core”) is honoured by the nearest such body, enlarged if needed.">?</span><i class="chev"></i></h2>
   <div class="body"><textarea id="wTxt" rows="4" placeholder="name, x, y, environment&#10;W-1, 12500, 8400, delta front"></textarea>
@@ -271,19 +288,6 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
    <div><dt>Ready for the project</dt><dd>PNG, IRAP lines for Petrel, GeoJSON (EOD and facies levels), polygons CSV, ZMAP+ grid of belt codes, wells check table.</dd></div></dl></section>
  <div id="work" hidden>
   <section class="verdict none" id="verdict" aria-live="polite"></section>
-  <div class="tb" id="tbar" role="toolbar" aria-label="Map tools">
-    <span class="seg" role="group" aria-label="Map level"><button data-v="belts" title="The GDE belts calibrated on the wells (all classes, key lines, sources)">GDE belts</button><button data-v="eod" title="Environments of deposition: a few large domains with smooth boundaries and labels inside (atlas style)">EOD map</button><button data-v="facies" title="The EOD map lightened, with the facies objects on top: deltaic lobes, fluvial channels, turbidite fairways, basin-floor fans, carbonate platforms, MTCs">Facies map</button></span><span class="sep"></span>
-    <select id="tbPal" aria-label="Palette of the EOD and facies maps" title="Palette of the EOD and facies maps" hidden></select>
-    <button data-t="sel" class="on" title="Select and drag wells, sources, bodies and line vertices; drag the background to pan (V)">Select</button><button data-t="pan" title="Pan by dragging; the mouse wheel zooms anywhere (H)">Pan</button><button id="bZoom0" title="Zoom to the map extent">Fit</button><span class="sep"></span><button id="bUndo" title="Undo (Ctrl+Z)">Undo</button><button id="bRedo" title="Redo (Ctrl+Y)">Redo</button><span class="sep"></span>
-    <button id="bEdit" aria-expanded="false" title="Editing tools: key lines, sources, bodies, tracing, paint, facies objects">Edit ▾</button>
-    <select id="tbEx" class="exsel" aria-label="Load an example" style="margin-left:auto;max-width:210px"></select>
-   <div class="tb2" id="tbEdit" hidden><button data-t="line" title="Edit a key line: drag its vertices, click on it to add a vertex, double-click a vertex to remove it">Line</button><select id="tbLine" aria-label="Line to edit"></select>
-    <button data-t="src" title="Add a source: click on a key line (delta, fan) or on a fault (fan delta)">Source</button>
-    <button data-t="body" title="Add an isolated body: click where it is">Body</button><select id="tbBody" aria-label="Body type"></select>
-    <button data-t="trace" title="Trace: click points, double-click or Enter to finish, Esc to cancel">Trace</button><select id="tbTrace" aria-label="What to trace"><option value="ribbon">channel</option><option value="poly">polygon</option><option value="nodep">no-deposit area</option><option value="fault">fault</option></select>
-    <button data-t="paint" title="Paint the trend: drag to push the belts distal (+) or proximal (−)">Paint</button><select id="tbPaint" aria-label="Paint direction"><option value="1">+ distal</option><option value="-1">− proximal</option></select>
-    <button data-t="obj" id="tbObjB" hidden title="Add a facies object: click where it is (facies map); drag an object with Select to move it">Object</button><select id="tbObj" hidden aria-label="Facies object type"></select>
-    <button data-t="pick" title="Pick a pixel of the backdrop image (for its control points or colour bar)" hidden id="tbPick">Pick</button></div></div>
   <div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint2" id="hint2" hidden></div><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
    <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pNo">Cancel</button></div></div></div>
   <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th>X</th><th>Y</th><th class="l">Environment (given)</th><th class="l">Belt on the map</th><th>Honoured</th><th>To nearest boundary</th><th class="l">Note</th></tr></thead><tbody id="tb"></tbody></table></div></div>
@@ -2619,7 +2623,7 @@ function compute(fast,viewOnly){if(!(S.M.belts.length>=2))return;const T={fast:!
     const e=S.M.ext,nx=Math.floor((e.xmax-e.xmin)/S.M.cell+1e-9)+1,ny=Math.floor((e.ymax-e.ymin)/S.M.cell+1e-9)+1;
     tplNote();$('extMsg').className='msg';$('extMsg').textContent=`Export grid ${nx} × ${ny} nodes (${(nx*ny).toLocaleString('en-US')}); map preview cell ${fmtN(previewCell(ve,PREV.idle))} (exports at the grid cell).`;
     $('bMsg').textContent=S.M.template==='custom'?'custom belts':''}}
-function start(){if(S.started)return;S.started=true;$('intro').hidden=true;$('layout').classList.remove('intro-on');$('xm').hidden=false;$('work').hidden=false;size();zoomFit();compute(false)}
+function start(){if(S.started)return;S.started=true;$('intro').hidden=true;$('layout').classList.remove('intro-on');$('xm').hidden=false;$('work').hidden=false;$('tbWrap').hidden=false;size();zoomFit();compute(false)}
 
 // ---------- view: fit, pan, zoom ----------
 function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p;return(f<1.5?1:f<3.5?2:f<7.5?5:10)*p}
@@ -2771,7 +2775,7 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
     if(mod&&mod.warp.wells.length){c.setLineDash([5,3]);c.strokeStyle='#a8623a';c.lineWidth=1.4;c.beginPath();c.arc(lx+9,ly+7,6,0,2*Math.PI);c.stroke();c.setLineDash([]);c.fillStyle='#232220';c.fillText('Warping radius',lx+24,ly);ly+=18}
     c.fillStyle='#5c5a52';c.font='11px Inter,system-ui,sans-serif';ly+=4;
     const tpl=isMargin()?(M.margin.preset?GDE.MARGINS[M.margin.preset].name:'Custom margin'):M.template==='custom'?'Custom belts':GDE.templates[M.template].name;
-    for(const s of [tpl,(M.geom==='lines'?'key lines':M.geom==='radial'?`radial, fan ${fmtN(M.fan)}°`:'linear')+`, seed ${M.noise.seed}`])if(ly<H-14){c.fillText(s,lx,ly);ly+=14}}}
+    for(const s of [tpl,(M.geom==='lines'?'key lines':M.geom==='radial'?`radial, fan ${fmtN(M.fan)}°`:'linear')+`, seed ${M.noise.seed}`])for(const t of wrapText(c,s,lw))if(ly<H-14){c.fillText(t,lx,ly);ly+=14}}}
 // legend of the EOD and facies maps: the domains present, then the facies objects present
 function atlasLegend(c,lx,ly,lw,lv,PE){const cl=GDE.eodClasses(S.M),used=[...new Set(PE.map(p=>p.code-1))].sort((a,b)=>a-b),mar=S.M.eod&&S.M.eod.palette==='marine',T=new Proxy(GDE.FTYPE,{get:(o,ty)=>mar&&FMAR[ty]?Object.assign({},o[ty],{color:FMAR[ty][0],edge:FMAR[ty][1]}):o[ty]}),O=((S.mod&&S.mod.facies)||[]).filter(o=>lv==='facies'||o.type==='arrow');
   const types=GDE.FKEYS.filter(k=>O.some(o=>o.type===k)),n=used.length+types.length+(types.length?1:0),rh=Math.max(13,Math.min(19,(L0H-ly-150)/Math.max(1,n))),fs=rh<17?11:12;
@@ -2808,6 +2812,7 @@ function setTool(t){if(t==='line'&&!(S.M.lines||[]).length){banner('No key line 
 const EDITT=['line','src','body','trace','paint','obj','pick'];
 function showEdit(on){$('tbEdit').hidden=!on;$('bEdit').classList.toggle('on',on);$('bEdit').setAttribute('aria-expanded',on);if(!on&&EDITT.includes(S.tool))setTool('sel')}
 on('bEdit','click',()=>showEdit($('tbEdit').hidden));
+on('bSide','click',()=>{const m=$('layout').classList.toggle('side-min');$('bSide').textContent=m?'▶ Panels':'◀ Panels';$('bSide').setAttribute('aria-expanded',!m);if(S.started){size();draw()}});
 // export menu
 on('bExp','click',e=>{e.stopPropagation();const m=$('xmenu');m.hidden=!m.hidden;$('bExp').setAttribute('aria-expanded',!m.hidden)});
 $('xmenu').addEventListener('click',()=>{$('xmenu').hidden=true;$('bExp').setAttribute('aria-expanded',false)});
