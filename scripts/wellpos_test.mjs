@@ -1,8 +1,8 @@
-// Self-check for the contact distribution and well POS core (docs/contact/index.html, <script id="ct-core">).
-// Run: node scripts/contact_test.mjs
+// Self-check for the contact distribution and well POS core (docs/wellpos/index.html, <script id="ct-core">).
+// Run: node scripts/wellpos_test.mjs
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-const html = readFileSync(new URL('../docs/contact/index.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../docs/wellpos/index.html', import.meta.url), 'utf8');
 const m = html.match(/<script id="ct-core">([\s\S]*?)<\/script>/); assert.ok(m, 'ct-core block not found');
 const w = {}; new Function('window', m[1])(w); const C = w.CT;
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg || ''} ${a} vs ${b} (tol ${tol})`);

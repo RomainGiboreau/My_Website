@@ -298,9 +298,9 @@ Ranking options against several criteria, and risking prospects. [Background not
 
     Plateau and decline profile matched to the reserves, capex, opex, royalty and tax: NPV, IRR, break-even price, minimum economic volume, sensitivities.
 
--   [![Contact and well POS](assets/tools/contact.webp){ loading=lazy }](contact/index.html)
+-   [![Contact and well POS](assets/tools/wellpos.webp){ loading=lazy }](wellpos/index.html)
 
-    [**Contact and well POS**](contact/index.html)
+    [**Contact and well POS**](wellpos/index.html)
 
     Hydrocarbon–water contact from competing limits and the chance of success of a well at a given depth.
 
