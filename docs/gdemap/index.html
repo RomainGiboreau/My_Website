@@ -114,7 +114,7 @@ canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
 .banner.err{background:var(--acc2)}
 .pop{position:absolute;z-index:5;background:var(--card);border:1px solid var(--acc);border-radius:8px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:.8rem;width:230px}
 .pop .row{margin:4px 0}.pop input,.pop select{width:100%}
-.dpanel{margin-top:12px}
+.dpanel{margin-top:12px}.srow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}.srow .stage{flex:none;width:100%}.srow .dpanel{margin-top:0;flex:1 1 300px;min-width:300px}.srow .tw td:first-child{white-space:nowrap}.srow .tw th,.srow .tw td{white-space:normal;padding:4px 6px;font-size:.8rem}
 .tw{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
 table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
 .tw th,.tw td{padding:4px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -288,9 +288,9 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
    <div><dt>Ready for the project</dt><dd>PNG, IRAP lines for Petrel, GeoJSON (EOD and facies levels), polygons CSV, ZMAP+ grid of belt codes, wells check table.</dd></div></dl></section>
  <div id="work" hidden>
   <section class="verdict none" id="verdict" aria-live="polite"></section>
-  <div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint2" id="hint2" hidden></div><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
+  <div class="srow"><div class="stage" id="stage"><canvas id="cv"></canvas><div class="hint2" id="hint2" hidden></div><div class="ro" id="ro">—</div><div class="banner" id="banner" hidden></div>
    <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pNo">Cancel</button></div></div></div>
-  <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th>X</th><th>Y</th><th class="l">Environment (given)</th><th class="l">Belt on the map</th><th>Honoured</th><th>To nearest boundary</th><th class="l">Note</th></tr></thead><tbody id="tb"></tbody></table></div></div>
+  <div class="dpanel"><div class="tw"><table><thead><tr><th class="l">Well</th><th class="l">Environment (given)</th><th class="l">Belt on the map</th><th>Honoured</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>
  </div>
 </main>
 </div>
@@ -2790,9 +2790,9 @@ function atlasLegend(c,lx,ly,lw,lv,PE){const cl=GDE.eodClasses(S.M),used=[...new
         c.fill();c.strokeStyle=t.edge;c.lineWidth=1;c.stroke()}c.restore()},t.name)}
   return ly+4}
 let L0H=600;
-function fitStage(){const st=$('stage');st.style.maxWidth='';const w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,ar=(e.xmax-e.xmin)/(e.ymax-e.ymin),h=Math.round((w-80-leg)/ar+56),H=Math.max(w<600?240:420,Math.min(h,Math.round(innerHeight*.86)));st.style.height=H+'px';
+function fitStage(){const st=$('stage');st.style.width='';const w=st.parentNode.clientWidth,e=S.M.ext,leg=w>=640?210:0,ar=(e.xmax-e.xmin)/(e.ymax-e.ymin),h=Math.round((w-80-leg)/ar+56),H=Math.max(w<600?240:420,Math.min(h,Math.round(innerHeight*.86)));st.style.height=H+'px';
   // map limited by the height: the stage hugs map + legend instead of leaving a blank column to the right of the legend
-  const need=Math.ceil(66+(H-54)*ar+14+leg);if(need>=640&&need<w)st.style.maxWidth=need+'px'}
+  const need=Math.ceil(66+(H-54)*ar+14+leg);if(need>=640&&need<w)st.style.width=need+'px'}
 function size(){fitStage();const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
 function draw(){if(!S.started||!S.P)return;const d=devicePixelRatio||1,r=cv.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);render(ctx,r.width,r.height,S.P)}
 window.addEventListener('resize',()=>{if(S.started){size();draw()}});
@@ -2959,7 +2959,7 @@ function wellNote(c){const B=AB(),mod=S.mod;
   if(c.dist<.02*diag())return'Close to a boundary: the environment could as well be the neighbouring class.';return''}
 function renderCheck(){const B=AB();
   $('tb').innerHTML=S.mod.check.map(c=>{const g=c.b>=0?B[c.b]:c.ft?GDE.FTYPE[c.ft]:null,m=c.ft&&c.honoured?GDE.FTYPE[c.ft]:B[c.belt];
-    return`<tr><td class="l">${esc(c.name)}</td><td>${fmtN(c.x)}</td><td>${fmtN(c.y)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}${c.ft&&c.honoured?' (facies object)':''}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td><td>${isFinite(c.dist)?fmtLen(c.dist):'> map size'}</td><td class="l wrap">${esc(wellNote(c))}</td></tr>`}).join('')||'<tr><td class="l" colspan="8" style="color:var(--mut)">No well.</td></tr>'}
+    return`<tr title="${esc(fmtN(c.x)+', '+fmtN(c.y)+' · nearest boundary '+(isFinite(c.dist)?fmtLen(c.dist):'> map size')+' · '+wellNote(c))}"><td class="l">${esc(c.name)}</td><td class="l">${g?`<span class="sw" style="background:${g.color}"></span>`:''}${esc(c.env)}</td><td class="l"><span class="sw" style="background:${m.color}"></span>${esc(m.name)}${c.ft&&c.honoured?' (facies object)':''}</td><td class="${c.honoured?'yes':'no'}">${c.honoured?'✓ yes':'✗ no'}</td></tr>`}).join('')||'<tr><td class="l" colspan="4" style="color:var(--mut)">No well.</td></tr>'}
 function renderCal(){const m=S.mod,B=S.M.belts,t=m.t,p=m.prior,cal=m.cal,lk=isLines()?new Set(S.M.lines.map(l=>+l.k)):new Set();
   const st=k=>Math.abs(t[k]-p[k])<1e-6*Math.max(1,Math.abs(p[k]))?(lk.has(k)?'on its key line':'prior'):(isFinite(cal.lo[k])&&isFinite(cal.hi[k])?'between wells':'scaled');
   let h=`<p>Boundaries, ${isLines()?'proximal–distal distance (0 at the first key line when it is on “before…”)':S.M.geom==='radial'?'distance from the source':'distance from the reference point along the transport direction'}:</p>`+t.map((v,k)=>`<p><span class="sw" style="background:${B[k].color}"></span>${esc(B[k].name)} | ${esc(B[k+1].name)}: <b>${fmtLen(v)}</b> <span style="color:var(--mut)">(${st(k)}${/prior|key/.test(st(k))?'':', prior '+fmtLen(p[k])})</span></p>`).join('');
