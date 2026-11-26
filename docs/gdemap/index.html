@@ -2790,7 +2790,9 @@ function atlasLegend(c,lx,ly,lw,lv,PE){const cl=GDE.eodClasses(S.M),used=[...new
         c.fill();c.strokeStyle=t.edge;c.lineWidth=1;c.stroke()}c.restore()},t.name)}
   return ly+4}
 let L0H=600;
-function fitStage(){const st=$('stage'),w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,h=Math.round((w-80-leg)*(e.ymax-e.ymin)/(e.xmax-e.xmin)+56);st.style.height=Math.max(w<600?240:420,Math.min(h,Math.round(innerHeight*.86)))+'px'}
+function fitStage(){const st=$('stage');st.style.maxWidth='';const w=st.clientWidth,e=S.M.ext,leg=w>=640?210:0,ar=(e.xmax-e.xmin)/(e.ymax-e.ymin),h=Math.round((w-80-leg)/ar+56),H=Math.max(w<600?240:420,Math.min(h,Math.round(innerHeight*.86)));st.style.height=H+'px';
+  // map limited by the height: the stage hugs map + legend instead of leaving a blank column to the right of the legend
+  const need=Math.ceil(66+(H-54)*ar+14+leg);if(need>=640&&need<w)st.style.maxWidth=need+'px'}
 function size(){fitStage();const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
 function draw(){if(!S.started||!S.P)return;const d=devicePixelRatio||1,r=cv.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);render(ctx,r.width,r.height,S.P)}
 window.addEventListener('resize',()=>{if(S.started){size();draw()}});
