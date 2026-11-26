@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Field development screening — basic FDP</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/fdp/">
+<meta name="description" content="Basic field development plan screening: plateau and Arps decline production profile matched to the reserves, capex and opex, royalty and tax with loss carry-forward, NPV, IRR, payback, break-even price, minimum economic volume and sensitivities. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+/* tooltip near the left edge (two-column layout): open to the right instead */
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+
+
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
+main{min-width:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0 0 12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tile small{display:block;color:var(--mut);font-size:.74rem}
+.tile b{font:700 1.45rem "Space Grotesk",Inter,sans-serif;font-variant-numeric:tabular-nums}
+.tile.key{border-left:6px solid var(--acc)}.tile.key2{border-left:6px solid var(--acc2)}
+.card canvas{height:300px;width:100%;max-width:100%}.card{overflow:hidden}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:12px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+.rowf{display:flex;gap:6px;align-items:center;margin:4px 0;font-size:.82rem}.rowf span{width:138px;flex:none}.rowf input,.rowf select{flex:1;min-width:0}
+.tor{display:grid;grid-template-columns:130px 1fr;gap:4px 8px;align-items:center;font-size:.8rem;padding:8px}
+.tor .t{position:relative;height:16px;background:var(--alt);border-radius:3px}
+.tor .t i{position:absolute;top:0;bottom:0}.tor .t b{position:absolute;top:0;bottom:0;width:2px;background:#232220}
+.tor .lo{background:#c98f6e}.tor .hi{background:#8a9a8c}
+.warn{color:var(--acc2)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Field development screening</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">File</span>
+  <button class="pri" id="bSave" title="The whole case in one JSON file">Save case</button>
+  <button id="bLoad">Open</button><input type="file" id="jfile" accept=".json,application/json" hidden>
+  <button id="bCsv" title="Annual profile and cash flow as CSV">Annual CSV</button>
+  <select id="exSel" aria-label="Example"><option value="">Example…</option><option value="oil">Offshore oil field</option><option value="small">Small field (marginal)</option></select>
+  <span class="msg" id="msg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. A screening model, not a reservoir or facilities study: the field profile is a plateau followed by an Arps decline whose rate is solved so that the field produces exactly the reserves; costs are phased before first oil; royalty and tax with loss carry-forward; monthly discounting in real terms.">?</span>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Reserves and production<span class="tt tt-r" tabindex="0" data-tip="Recoverable reserves (EUR) in MMboe. Plateau rate target in kboe/d; the wells set the capacity: plateau = min(target, wells × initial rate per well). The plateau lasts until the chosen fraction of the reserves is produced, then the rate declines (Arps, exponent b: 0 exponential, 1 harmonic) down to the economic limit; the decline rate is solved so that the total equals the reserves. Ramp-up: linear rise to the plateau after first oil.">?</span><i class="chev"></i></h2>
+  <div class="body" id="pRes"></div></section>
+ <section class="panel"><h2><span class="n">2</span>Costs<span class="tt tt-r" tabindex="0" data-tip="Capex = facilities (fixed) + wells × cost per well, phased over the years before first oil: the phasing list gives the % per year (its length is the number of years from FID to first oil). Opex = fixed $MM/yr while producing + variable $/boe. Abandonment (ABEX) is spent in the last producing month. Real terms (no inflation).">?</span><i class="chev"></i></h2>
+  <div class="body" id="pCost"></div></section>
+ <section class="panel"><h2><span class="n">3</span>Price and fiscal<span class="tt tt-r" tabindex="0" data-tip="Flat real price. Royalty on revenue. Tax on revenue − royalty − opex − depreciation, depreciation straight-line over the given years from first oil, losses carried forward without limit; ABEX is not deducted. Discount rate real, applied monthly at mid-month from FID. A generic regime, not a country model: production sharing, windfall or ring-fencing rules are not represented.">?</span><i class="chev"></i></h2>
+  <div class="body" id="pFis"></div></section>
+</aside>
+<main>
+ <div class="tiles" id="tiles"></div>
+ <div class="two" style="margin-top:0">
+  <div class="card"><h3>Production profile<span class="tt" tabindex="0" data-tip="Annual production in MMboe (bars) and the rate in kboe/d (line). Plateau and decline are visible; the dashed line is the economic limit.">?</span></h3><canvas id="cvp"></canvas></div>
+  <div class="card"><h3>Cash flow<span class="tt" tabindex="0" data-tip="Annual net cash flow after tax (bars) and its cumulative sum (line), undiscounted. The lowest point of the cumulative curve is the peak funding.">?</span></h3><canvas id="cvc"></canvas></div>
+ </div>
+ <div class="two">
+  <div class="card"><h3>Sensitivities on NPV<span class="tt" tabindex="0" data-tip="NPV when each input is lowered (orange) or raised (green) alone: price ±20 %, reserves ±20 %, capex ±20 %, opex ±20 %, plateau target ±20 %, discount rate ±2 points, first oil one year later / earlier. The black line is the base case.">?</span></h3><div class="tor" id="tor"></div></div>
+  <div class="card"><h3>Annual table</h3><div class="tw tall"><table class="cvt" id="annT"></table></div></div>
+ </div>
+</main></div>
+<script id="fdp-core">
+/* Field development screening core: production profile, costs, fiscal terms, NPV / IRR / payback, break-even price and minimum economic volume. Pure logic, no DOM; window.FDP. Tested by scripts/fdp_test.mjs. */
+(function(){
+const DPM=365.25/12,clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const defaults=()=>({format:'fdp-case',version:1,name:'Offshore oil field',
+ reserves:120,plateau:40,wellIP:8,wells:6,plateauFrac:.3,b:.3,qmin:3,ramp:1,
+ facilities:900,wellCost:70,phasing:[30,40,30],opexFixed:90,opexVar:6,abex:250,
+ price:70,royalty:10,tax:35,dep:8,disc:10});
+const clean=p=>{const q=Object.assign(defaults(),p);for(const k of Object.keys(defaults())){if(k!=='name'&&k!=='format'&&k!=='phasing'&&!isFinite(+q[k]))q[k]=defaults()[k]}return q};
+// production profile, monthly, in kboe/d. Plateau (with a linear ramp-up) until plateauFrac × reserves is produced, then Arps decline from the plateau rate;
+// the nominal decline rate Di is solved so that the cumulative production (down to the economic limit) equals the reserves.
+function arps(q0,Di,b,t){return b<1e-6?q0*Math.exp(-Di*t):q0/Math.pow(1+b*Di*t,1/b)}
+function profile(p){const EUR=+p.reserves,qpl=Math.max(0,Math.min(+p.plateau,(+p.wells||0)*(+p.wellIP||0))),rm=Math.max(0,Math.round(+p.ramp*12)),pf=clamp(+p.plateauFrac,0,1),b=clamp(+p.b,0,1),qmin=Math.max(0,+p.qmin||0),N=12*60;
+  const run=Di=>{const q=[];let cum=0,k=0,capped=false;
+    // plateau phase
+    while(k<N&&cum<pf*EUR-1e-12&&qpl>0){const r=qpl*(rm>0?Math.min(1,(k+1)/rm):1);q.push(r);cum+=r*DPM/1000;k++}
+    const q0=q.length?q[q.length-1]:qpl;let t=0;
+    if(cum<EUR-1e-9&&q0>0)while(k<N){t+=1/12;const r=arps(q0,Di,b,t);if(r<qmin||r<1e-6)break;const dc=r*DPM/1000;if(cum+dc>EUR){q.push(r*(EUR-cum)/dc);cum=EUR;capped=true;k++;break}q.push(r);cum+=dc;k++}
+    return{q,cum,capped}};
+  let lo=1e-4,hi=20;{const r=run(lo);if(!r.capped)return{q:r.q,Di:lo,cum:r.cum,qpl,short:r.cum<EUR*.999}}
+  for(let i=0;i<60;i++){const mid=Math.sqrt(lo*hi);if(run(mid).capped)lo=mid;else hi=mid}
+  const r=run(Math.sqrt(lo*hi));return{q:r.q,Di:Math.sqrt(lo*hi),cum:r.cum,qpl,short:r.cum<EUR*.995}}
+// monthly economics from FID (month 0)
+function economics(p,prof){prof=prof||profile(p);const ph=(p.phasing||[100]).map(Number).filter(x=>isFinite(x)&&x>=0),sum=ph.reduce((a,b)=>a+b,0)||1,ny=ph.length,m0=12*ny,q=prof.q,np=q.length,M=m0+np+1,r=Math.pow(1+(+p.disc||0)/100,1/12)-1;
+  const capTot=(+p.facilities||0)+(+p.wells||0)*(+p.wellCost||0),dep=Math.max(1,Math.round((+p.dep||1)*12)),roy=(+p.royalty||0)/100,tax=(+p.tax||0)/100;
+  const rows=[];let cum=0,carry=0,pvC=0,pvO=0,pvA=0,pvP=0,npv=0,minCum=0,pay=NaN;const cfs=[];
+  for(let m=0;m<M;m++){const prod=m>=m0&&m<m0+np?q[m-m0]*DPM/1000:0,rev=prod*(+p.price||0),royal=rev*roy,opex=prod>0?(+p.opexFixed||0)/12+prod*(+p.opexVar||0):0,
+    capex=m<m0?capTot*ph[Math.floor(m/12)]/sum/12:0,abex=m===m0+np-1?(+p.abex||0):0,d=m>=m0&&m<m0+dep?capTot/dep:0,ti=rev-royal-opex-d;
+    let tx=0;if(ti<0)carry-=ti;else{const use=Math.min(carry,ti);carry-=use;tx=tax*(ti-use)}
+    const cf=rev-royal-opex-capex-abex-tx,df=Math.pow(1+r,-(m+.5)),pre=cum<0;cum+=cf;if(cum<minCum)minCum=cum;if(isNaN(pay)&&pre&&cum>=0)pay=(m+1)/12;
+    npv+=cf*df;pvC+=(capex)*df;pvO+=(opex+abex)*df;pvP+=prod*df;cfs.push(cf);rows.push({m,prod,q:prod>0?q[m-m0]:0,rev,royal,opex,capex,abex,tax:tx,cf,cum})}
+  return{rows,npv,irr:irr(cfs),payback:pay,peak:-minCum,pvCapex:pvC,pvOpex:pvO,utc:pvP>0?(pvC+pvO)/pvP:NaN,pi:pvC>0?npv/pvC:NaN,total:q.reduce((a,x)=>a+x*DPM/1000,0),capTot,firstOil:ny,end:(m0+np)/12}}
+function irr(cf){const f=x=>{let s=0;for(let m=0;m<cf.length;m++)s+=cf[m]*Math.pow(1+x,-(m+.5)/12);return s};// bracket from 0 upwards (a late abandonment cost makes f(x) negative for very negative x); below 0 only if the project does not pay back
+  let lo=0,hi=20;if(!(f(0)>0)){lo=-.5;hi=0}const a=f(lo),b=f(hi);if(!(a*b<0))return NaN;for(let i=0;i<80;i++){const mid=(lo+hi)/2;(f(mid)*a>0)?lo=mid:hi=mid}return(lo+hi)/2}
+const npvOf=p=>economics(p).npv;
+function solve(f,lo,hi,n=60){const a=f(lo),b=f(hi);if(!(a*b<0))return NaN;for(let i=0;i<n;i++){const m=(lo+hi)/2;(f(m)*a>0)?lo=m:hi=m}return(lo+hi)/2}
+// break-even price (NPV = 0) and minimum economic reserves (NPV = 0 with wells, facilities and all costs unchanged)
+const breakeven=p=>solve(x=>npvOf(Object.assign({},p,{price:x})),0,2000);
+const mefv=p=>solve(x=>npvOf(Object.assign({},p,{reserves:x})),.05,Math.max(10*p.reserves,50));
+function sensitivities(p){const base=npvOf(p),sc=(k,f)=>Object.assign({},p,{[k]:p[k]*f}),
+  C=f=>Object.assign({},p,{facilities:p.facilities*f,wellCost:p.wellCost*f}),O=f=>Object.assign({},p,{opexFixed:p.opexFixed*f,opexVar:p.opexVar*f}),
+  X=d=>{const ph=p.phasing.slice();d>0?ph.unshift(0):ph.shift();return ph.length?Object.assign({},p,{phasing:ph}):p},
+  L=[['Oil price ±20 %',npvOf(sc('price',.8)),npvOf(sc('price',1.2))],['Reserves ±20 %',npvOf(sc('reserves',.8)),npvOf(sc('reserves',1.2))],['Capex ±20 %',npvOf(C(1.2)),npvOf(C(.8))],['Opex ±20 %',npvOf(O(1.2)),npvOf(O(.8))],
+   ['Plateau target ±20 %',npvOf(sc('plateau',.8)),npvOf(sc('plateau',1.2))],['Discount rate ±2 pts',npvOf(Object.assign({},p,{disc:p.disc+2})),npvOf(Object.assign({},p,{disc:Math.max(0,p.disc-2)}))],['First oil 1 yr later / earlier',npvOf(X(1)),npvOf(X(-1))]];
+  return{base,items:L.map(([n,lo,hi])=>({name:n,lo,hi,swing:Math.abs(hi-lo)})).sort((a,b)=>b.swing-a.swing)}}
+function annual(res){const A=[];for(const r of res.rows){const y=Math.floor(r.m/12);if(!A[y])A[y]={y,prod:0,rev:0,royal:0,opex:0,capex:0,abex:0,tax:0,cf:0,qm:0,n:0};const a=A[y];a.prod+=r.prod;a.rev+=r.rev;a.royal+=r.royal;a.opex+=r.opex;a.capex+=r.capex;a.abex+=r.abex;a.tax+=r.tax;a.cf+=r.cf;if(r.q>0){a.qm+=r.q;a.n++}}
+  let c=0;for(const a of A){c+=a.cf;a.cum=c;a.q=a.n?a.qm/a.n:0}return A}
+function run(p){p=clean(p);const prof=profile(p),res=economics(p,prof);return{p,prof,res,ann:annual(res)}}
+window.FDP={defaults,clean,profile,economics,irr,breakeven,mefv,sensitivities,annual,run,arps,DPM};
+})();
+</script><script>
+const $=id=>document.getElementById(id),F=window.FDP;
+let M=F.defaults(),out=null;
+const f1=x=>!isFinite(x)?'—':Math.abs(x)>=1000?x.toFixed(0):Math.abs(x)>=100?x.toFixed(0):Math.abs(x)>=10?x.toFixed(1):x.toFixed(2),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function say(t){const m=$('msg');m.textContent=t;setTimeout(()=>{if(m.textContent===t)m.textContent=''},3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+const FIELDS={pRes:[['reserves','Reserves (EUR), MMboe'],['plateau','Plateau target, kboe/d'],['wellIP','Initial rate per well, kboe/d'],['wells','Producing wells'],['plateauFrac','Plateau until fraction produced'],['b','Decline exponent b (0 to 1)'],['qmin','Economic limit, kboe/d'],['ramp','Ramp-up after first oil, yr']],
+ pCost:[['facilities','Facilities capex, $MM'],['wellCost','Cost per well, $MM'],['phasing','Capex phasing, % per year'],['opexFixed','Fixed opex, $MM/yr'],['opexVar','Variable opex, $/boe'],['abex','Abandonment, $MM']],
+ pFis:[['price','Price, $/boe (real)'],['royalty','Royalty, % of revenue'],['tax','Tax rate, %'],['dep','Depreciation, years'],['disc','Discount rate, % (real)']]};
+function renderInputs(){for(const [box,l] of Object.entries(FIELDS))$(box).innerHTML=l.map(([k,t])=>`<div class="rowf"><span>${t}</span><input ${k==='phasing'?'type="text"':'type="number" step="any"'} data-k="${k}" value="${k==='phasing'?M.phasing.join(', '):M[k]}"></div>`).join('')+(box==='pRes'?'<div class="msg" id="rMsg"></div>':'')}
+document.querySelector('aside').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;M[k]=k==='phasing'?e.target.value.split(/[\s,;]+/).filter(Boolean).map(Number):+e.target.value;update()});
+let timer=0;function update(){clearTimeout(timer);timer=setTimeout(compute,120)}
+function compute(){const p=F.clean(M);out=F.run(p);const r=out.res,pr=out.prof;
+  const be=F.breakeven(p),mv=F.mefv(p),sens=F.sensitivities(p);out.be=be;out.mv=mv;out.sens=sens;
+  $('rMsg').innerHTML=`Plateau capacity ${f1(pr.qpl)} kboe/d (min of target and wells × rate)${pr.qpl<p.plateau?' — <span class="warn">wells-limited</span>':''}; ${(+p.wells>0&&+p.wellIP>0)?`${Math.ceil(p.plateau/p.wellIP)} wells needed for the target`:''}. Nominal decline Di = ${(pr.Di*100).toFixed(1)} %/yr${pr.short?' — <span class="warn">reserves not reachable with these settings</span>':''}.`;
+  const T=[['NPV, $MM',f1(r.npv),r.npv<0?'key2':'key',`at ${p.disc} % real, from FID`],['IRR',isFinite(r.irr)?(100*r.irr).toFixed(1)+' %':'—','',`discount rate ${p.disc} %`],['Payback, yr',isFinite(r.payback)?r.payback.toFixed(1):'—','','from FID, undiscounted'],['NPV / PV capex',isFinite(r.pi)?r.pi.toFixed(2):'—','','profitability index'],
+   ['Break-even price, $/boe',isFinite(be)?f1(be):'—','',`base ${f1(p.price)}`],['MEFV, MMboe',isFinite(mv)?f1(mv):'—','key','reserves at NPV = 0, costs unchanged'],['Unit technical cost, $/boe',isFinite(r.utc)?f1(r.utc):'—','','PV(capex + opex + ABEX) / PV(volume)'],['Peak funding, $MM',f1(r.peak),'',`capex ${f1(r.capTot)} · first oil year ${r.firstOil}`]];
+  $('tiles').innerHTML=T.map(([a,b,k,s])=>`<div class="tile ${k}"><small>${a}</small><b>${b}</b><small>${s}</small></div>`).join('');
+  const tr=sens.items,mx=Math.max(...tr.map(i=>Math.max(Math.abs(i.lo-sens.base),Math.abs(i.hi-sens.base))))||1;
+  $('tor').innerHTML=tr.map(i=>{const w=v=>Math.abs(v-sens.base)/mx*48,L=i.lo<sens.base?`<i class="lo" style="right:50%;width:${w(i.lo)}%"></i>`:`<i class="hi" style="left:50%;width:${w(i.lo)}%"></i>`,H=i.hi>=sens.base?`<i class="hi" style="left:50%;width:${w(i.hi)}%"></i>`:`<i class="lo" style="right:50%;width:${w(i.hi)}%"></i>`;
+    return`<div title="${esc(i.name)}: ${f1(i.lo)} / ${f1(i.hi)}">${esc(i.name)}</div><div class="t">${L}${H}<b style="left:calc(50% - 1px)"></b></div>`}).join('')+`<div></div><div style="text-align:center;color:var(--mut)">base NPV ${f1(sens.base)} $MM — bars show the change; hover a row for the two values</div>`;
+  $('annT').innerHTML='<thead><tr><th>Year</th><th>Prod. MMboe</th><th>Rate kboe/d</th><th>Revenue</th><th>Capex</th><th>Opex</th><th>Tax</th><th>Net CF</th><th>Cum. CF</th></tr></thead><tbody>'+out.ann.map(a=>`<tr><td>${a.y}</td><td>${f1(a.prod)}</td><td>${f1(a.q)}</td><td>${f1(a.rev)}</td><td>${f1(a.capex)}</td><td>${f1(a.opex+a.royal+a.abex)}</td><td>${f1(a.tax)}</td><td>${f1(a.cf)}</td><td>${f1(a.cum)}</td></tr>`).join('')+'</tbody>';
+  draw()}
+function prep(id){const cv=$(id),r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,r.width,r.height);c.font='11px Inter,sans-serif';return{c,W:r.width,H:r.height}}
+function axes(c,W,H,m,xmax,ymin,ymax,xl,fmt){const pw=W-m.l-m.r,ph=H-m.t-m.b,X=x=>m.l+x/xmax*pw,Y=y=>m.t+(1-(y-ymin)/(ymax-ymin))*ph;c.fillStyle='#5c5a52';c.strokeStyle='#e2ded3';c.lineWidth=1;c.textAlign='right';c.textBaseline='middle';
+  for(let k=0;k<=4;k++){const v=ymin+(ymax-ymin)*k/4;c.beginPath();c.moveTo(m.l,Y(v));c.lineTo(W-m.r,Y(v));c.stroke();c.fillText((fmt||f1)(v),m.l-5,Y(v))}
+  c.textAlign='center';c.textBaseline='top';const st=xmax>30?5:xmax>15?2:1;for(let x=0;x<=xmax;x+=st)c.fillText(x,X(x+.5),m.t+ph+4);c.fillText(xl,m.l+pw/2,m.t+ph+19);return{X,Y,pw,ph}}
+function draw(){if(!out)return;const A=out.ann,n=A.length;
+  {const{c,W,H}=prep('cvp'),m={l:44,r:44,t:24,b:36},ymax=Math.max(...A.map(a=>a.prod))*1.15||1,qmax=Math.max(...A.map(a=>a.q))*1.15||1,{X,Y,pw}=axes(c,W,H,m,n,0,ymax,'Years from FID'),bw=pw/n-2;
+   A.forEach(a=>{c.fillStyle='#8a9a8c';c.fillRect(X(a.y)+1,Y(a.prod),bw,Y(0)-Y(a.prod))});
+   const Yq=q=>m.t+(1-q/qmax)*(H-m.t-m.b);c.strokeStyle='#a8623a';c.lineWidth=2;c.beginPath();let f=true;A.forEach(a=>{if(a.q>0){const x=X(a.y+.5),y=Yq(a.q);f?c.moveTo(x,y):c.lineTo(x,y);f=false}});c.stroke();
+   c.fillStyle='#a8623a';c.textAlign='left';c.textBaseline='middle';for(let k=0;k<=4;k++)c.fillText(f1(qmax*k/4),W-m.r+5,Yq(qmax*k/4));c.fillText('kboe/d',W-m.r+5,m.t-12);c.fillStyle='#5c5a52';c.textAlign='left';c.fillText('MMboe / yr',m.l-40,m.t-12);
+   const ql=+out.p.qmin;if(ql>0){c.setLineDash([5,4]);c.strokeStyle='#232220';c.beginPath();c.moveTo(m.l,Yq(ql));c.lineTo(W-m.r,Yq(ql));c.stroke();c.setLineDash([])}}
+  {const{c,W,H}=prep('cvc'),m={l:50,r:12,t:12,b:36},all=A.flatMap(a=>[a.cf,a.cum]),ymin=Math.min(0,...all)*1.1,ymax=Math.max(0,...all)*1.1||1,{X,Y,pw}=axes(c,W,H,m,n,ymin,ymax,'Years from FID'),bw=pw/n-2;
+   c.strokeStyle='#232220';c.lineWidth=1;c.beginPath();c.moveTo(m.l,Y(0));c.lineTo(W-m.r,Y(0));c.stroke();
+   A.forEach(a=>{c.fillStyle=a.cf<0?'#c98f6e':'#8a9a8c';const y0=Y(Math.max(a.cf,0)),y1=Y(Math.min(a.cf,0));c.fillRect(X(a.y)+1,y0,bw,y1-y0)});
+   c.strokeStyle='#4a5a4e';c.lineWidth=2;c.beginPath();A.forEach((a,i)=>{const x=X(a.y+.5),y=Y(a.cum);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}}
+window.addEventListener('resize',draw);
+$('bSave').onclick=()=>{download((M.name||'fdp').replace(/[^\w.-]+/g,'_')+'.json',JSON.stringify(M,null,1),'application/json');say('Case saved.')};
+$('bLoad').onclick=()=>$('jfile').click();
+$('jfile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(o.format!=='fdp-case')throw new Error('not a field development case');M=F.clean(o);renderInputs();compute();say('Case opened.')}catch(err){say('Cannot open: '+err.message)}})};
+$('bCsv').onclick=()=>{if(!out)return;const rows=['year,production_MMboe,rate_kboed,revenue,royalty,opex,capex,abex,tax,net_cash_flow,cumulative'];for(const a of out.ann)rows.push([a.y,a.prod,a.q,a.rev,a.royal,a.opex,a.capex,a.abex,a.tax,a.cf,a.cum].map(x=>+(+x).toFixed(4)).join(','));
+  rows.push('',`NPV_MMUSD,${out.res.npv}`,`IRR,${out.res.irr}`,`payback_yr,${out.res.payback}`,`breakeven_price,${out.be}`,`MEFV_MMboe,${out.mv}`);download('fdp_annual.csv',rows.join('\n')+'\n');say('CSV saved.')};
+const EX={oil:()=>F.defaults(),small:()=>Object.assign(F.defaults(),{name:'Small field',reserves:25,plateau:8,wellIP:4,wells:3,facilities:250,wellCost:30,phasing:[40,60],opexFixed:30,abex:60,qmin:1})};
+$('exSel').onchange=()=>{const k=$('exSel').value;if(k){M=EX[k]();renderInputs();compute()}$('exSel').value=''};
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+renderInputs();compute();
+</script>
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you enter leaves your machine. A basic field development plan screening: a plateau and Arps decline production profile matched to the reserves, capex phased before first oil, opex, abandonment, royalty and tax with loss carry-forward, then NPV, IRR, payback, break-even price, unit technical cost, the minimum economic volume (MEFV) and one-at-a-time sensitivities.","method":["<b>Profile.</b> Plateau rate = min(target, wells × initial rate per well), reached by a linear ramp-up after first oil, kept until the chosen fraction of the reserves is produced; then Arps decline q = q<sub>0</sub> / (1 + b·D<sub>i</sub>·t)<sup>1/b</sup> (exponential for b = 0) down to the economic limit. The nominal decline rate D<sub>i</sub> is solved by bisection so that the cumulative production equals the reserves. Monthly steps.","<b>Costs.</b> Capex = facilities + wells × cost per well, phased by the yearly percentages (their number is the delay from FID to first oil). Opex = fixed $MM/yr while producing + variable $/boe. Abandonment in the last producing month. Real terms.","<b>Fiscal.</b> Royalty on revenue; tax on revenue − royalty − opex − depreciation (straight-line over the given years from first oil), losses carried forward without limit; abandonment not deducted. A generic regime: no production sharing, windfall tax, ring-fence or tax holiday.","<b>Results.</b> Monthly net cash flow discounted at mid-month from FID; IRR by bisection on the same monthly flows; payback = first month the undiscounted cumulative flow returns to zero; PI = NPV / PV capex; unit technical cost = PV(capex + opex + abandonment) / PV(volume). Break-even price: price giving NPV = 0. MEFV: reserves giving NPV = 0 with wells, facilities and plateau unchanged (a smaller field keeps the same fixed costs). Use it as the MEFV override of the Prospect risking tool."],"sources":[["Arps decline curves","Arps, J.J. (1945), Analysis of decline curves, Transactions AIME 160, 228–247 (as commonly cited; not re-read for this page)","classical (not re-read)"],["Plateau then decline for a field profile; unit technical cost","Standard screening practice; no single source","on the page"],["Example inputs","Fictitious, for illustration only; the costs and fiscal terms are not those of any country or field","on the page"]],"validation":["The solved profile produces the reserves to 0.5 %; with no plateau, b = 0 and no economic limit the decline rate equals q<sub>0</sub> / EUR (closed form); with no fiscal terms, no discounting and one capex lump NPV = price × reserves − costs; the break-even price and MEFV return NPV = 0; the IRR of a one-year 10 % case returns 10 %. Run <code>node scripts/fdp_test.mjs</code>."],"limits":["Not implemented: well-by-well drilling schedule and rig constraints, gas and condensate, price decks and cost inflation, production sharing and other country regimes, uncertainty on the inputs (Monte Carlo), facilities capacity and constraints beyond the plateau rate, the effect of the reserves on the number of wells."],"date":"26 November 2026"});
+</script>
+</body></html>

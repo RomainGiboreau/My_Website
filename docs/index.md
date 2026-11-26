@@ -256,6 +256,12 @@ Ranking options against several criteria, and risking prospects. [Background not
 
     Prospects with shared play risk and correlated volumes: portfolio value distribution, downside, capital efficiency, budget-constrained selection.
 
+-   [![Field development screening](assets/tools/fdp.webp){ loading=lazy }](fdp/index.html)
+
+    [**Field development screening**](fdp/index.html)
+
+    Plateau and decline profile matched to the reserves, capex, opex, royalty and tax: NPV, IRR, break-even price, minimum economic volume, sensitivities.
+
 </div>
 
 ### :material-chess-knight: Chess
