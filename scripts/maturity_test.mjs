@@ -51,7 +51,7 @@ test('EASY%Ro at 1, 2, 10 °C/Myr matches the independent brute-force integratio
     for (const T of [60, 80, 100, 120, 140, 160, 180, 200, 220, 240]) close(pg[T], ref[T], 0.005, `${r} °C/Myr, ${T} °C`);
   }
 });
-test('EASY%Ro at 1 °C/Myr: 0.5 %Ro at 80-100 °C, 1.0 at 135-150 °C, 2.0 at 180-200 °C (Sweeney & Burnham 1990 Fig.)', () => {
+test('EASY%Ro at 1 °C/Myr: plausibility ranges 0.5 %Ro at 80-100 °C, 1.0 at 135-150 °C, 2.0 at 180-200 °C (not numbers stated in the paper)', () => {
   const c = pageCurve(DG.EASY, 1, 260);
   const t05 = tAt(c, 0.5), t1 = tAt(c, 1.0), t2 = tAt(c, 2.0);
   assert.ok(t05 >= 80 && t05 <= 100, `0.5 %Ro at ${t05}`); assert.ok(t1 >= 135 && t1 <= 150, `1.0 %Ro at ${t1}`); assert.ok(t2 >= 180 && t2 <= 200, `2.0 %Ro at ${t2}`);
@@ -80,8 +80,49 @@ test('age and elapsed-time conventions give the same result', () => {
   close(a.Ro.easy, f.Ro.easy, 1e-12, 'Ro'); close(a.tti, f.tti, 1e-9, 'TTI');
 });
 
+// ---- published reference values read in Sweeney & Burnham (1990, AAPG Bull. 74, 1559-1570)
+test('Table 1 and eq. 1 as printed: factors sum 0.85, maximum %Ro 4.7 (F = 0.85), 3.145 = 0.85 x 3.7, stated range 0.3-4.5 %Ro', () => {
+  close(DG.EASY.FR.reduce((a, b) => a + b, 0), 0.85, 1e-9, 'sum of factors');
+  close(DG.RoOf(0.85, DG.EASY), 4.7, 0.02, 'maximum %Ro ("4.7%")');
+  close(0.85 * 3.7, 3.145, 1e-12, 'rescaled exponent');
+  close(DG.RoOf(0, DG.EASY), 0.2, 0.005, 'initial %Ro');
+});
+test('Fig. 8 spreadsheet of the paper (printed F and %Ro): 2 °C/Myr to 60 °C, 1 °C/Myr to 140 °C, cooling, 0.1 °C step, 1.5 °C/Myr to 180 °C', () => {
+  const H = [[0, 20], [20, 60], [40, 80], [60, 100], [80, 120], [100, 140], [120, 100], [140, 59.9], [160, 60], [180, 90], [200, 120], [220, 150], [240, 180]];
+  const s = DG.integrate(H.map(([t, T]) => ({ t, T })), false, false, [DG.EASY]), at = t => s.find(q => q.t === t && q.node >= 0);
+  // F as printed (3 digits) and %Ro as printed (2 digits). The sheet uses 3.16e13 s per Myr, the page 3.15576e13 (0.1 %): negligible.
+  const P = [[0, 0, 0.20], [20, 0.150, 0.35], [40, 0.225, 0.46], [60, 0.298, 0.61], [100, 0.415, 0.94], [120, 0.427, 0.98], [220, 0.461, 1.11], [240, 0.565, 1.64]];
+  for (const [t, F, Ro] of P) { close(at(t).F.easy, F, 0.0015, 'F at ' + t + ' Myr'); close(at(t).Ro.easy, Ro, 0.006, '%Ro at ' + t + ' Myr'); }
+  close(at(80).Ro.easy, 0.74, 0.006, '%Ro at 80 Myr');
+});
+test('isothermal nomogram (Fig. 5 and text): 10 Myr at 110 °C gives 0.7 %Ro, at 162 °C 1.3 %Ro, at 189 °C 2.0 %Ro (text); 1 and 100 Myr lines read on the figure', () => {
+  const Tfor = (ro, t) => { let lo = 20, hi = 400; for (let i = 0; i < 50; i++) { const T = (lo + hi) / 2; (final([{ t, T }, { t: 0, T }]).Ro.easy < ro ? (lo = T) : (hi = T)); } return lo; };
+  for (const [ro, T] of [[0.7, 110], [1.3, 162], [2.0, 189]]) close(Tfor(ro, 10), T, 5, `10 Myr, ${ro} %Ro`);   // text: "about 100 °C ... 110 °C", "162 and 189 °C"
+  for (const [ro, T] of [[0.7, 124], [1.3, 174], [2.0, 206], [3.0, 241]]) close(Tfor(ro, 1), T, 5, `1 Myr, ${ro} %Ro`);   // read on the figure
+  for (const [ro, T] of [[0.7, 98], [1.3, 145], [2.0, 174], [3.0, 205]]) close(Tfor(ro, 100), T, 6, `100 Myr, ${ro} %Ro`);  // read on the figure
+});
+test('Fig. 4 text: oil window (0.65-1.30 %Ro) lies at TTI 20-1000 at 1 °C/Myr and 1.5-100 at 100 °C/Myr (within a factor 1.6; values read in a log chart)', () => {
+  for (const [r, lo, hi] of [[1, 20, 1000], [100, 1.5, 100]]) {
+    const s = DG.integrate([{ t: 0, T: 20 }, { t: 400 / r, T: 420 }], false, true, [DG.EASY]);
+    const a = s.find(q => q.Ro.easy >= 0.65).tti, b = s.find(q => q.Ro.easy >= 1.3).tti;
+    assert.ok(a / lo < 1.6 && lo / a < 1.6, `TTI at 0.65 %Ro, ${r} °C/Myr: ${a} vs ${lo}`); assert.ok(b / hi < 1.6 && hi / b < 1.6, `TTI at 1.30 %Ro, ${r} °C/Myr: ${b} vs ${hi}`);
+  }
+});
+// ---- Kaneki & Noda (2020, J. Geol. Soc. Japan 126, 655-661): their eq. 14 (Tmax from Ro, Table 2 coefficients, rows t_d = 1 and 10 Myr, constant T)
+// was fitted on an independent Python EASY%Ro (T0 = 0 °C); they report errors below 3 °C. Boxcar history = t_d at Tmax.
+test('Kaneki & Noda (2020) eq. 14 recovers Tmax from the page %Ro within 3 °C (boxcar of 1 and 10 Myr, 60-300 °C, 0.3-4.6 %Ro)', () => {
+  const C = { 1: [89.6217, 157.8367, 73.5687, 155.3964, 43.2171, 5.1890, 228.4330], 10: [86.4091, 142.3313, 70.9247, 139.9326, 41.6867, 5.1936, 210.4055] };
+  const tm = (R, c) => R < 0.95 ? c[0] * Math.log(R) + c[1] : R < 2.23 ? c[2] * Math.log(R) + c[3] : c[4] * Math.log(R / (c[5] - R)) + c[6];
+  let n = 0;
+  for (const td of [1, 10]) for (let T = 60; T <= 300; T += 5) {
+    const Ro = final([{ t: td, T }, { t: 0, T }]).Ro.easy; if (Ro < 0.3 || Ro > 4.6) continue; n++;
+    assert.ok(Math.abs(tm(Ro, C[td]) - T) < 3, `td ${td} Myr, ${T} °C: Ro ${Ro.toFixed(3)} -> ${tm(Ro, C[td]).toFixed(1)}`);
+  }
+  assert.ok(n > 80, 'enough points compared');
+});
+
 // ---- Easy%RoDL and Basin%Ro: compared with published figures (no table found), see Method & sources
-test('Easy%RoDL: A = 2e14 /s, 20 reactions 38-76 kcal/mol, factors sum 0.95, Ro(F=0) = 0.223', () => {
+test('Easy%RoDL (Burnham 2017 preprint, Fig. 4: bar chart, sum 0.95, %Ro = 0.223 exp(3.7 F)): A = 2e14 /s, 20 reactions 38-76 kcal/mol, factors sum 0.95, Ro(F=0) = 0.223', () => {
   assert.equal(DG.DL.A, 2e14); assert.equal(DG.DL.EA[0], 38); assert.equal(DG.DL.EA.at(-1), 76);
   close(DG.DL.FR.reduce((a, b) => a + b, 0), 0.95, 1e-9, 'sum'); close(DG.RoOf(0, DG.DL), 0.223, 0.0005, 'Ro0');
 });
