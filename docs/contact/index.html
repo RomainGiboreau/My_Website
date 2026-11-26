@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contact distribution and well POS</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/contact/">
+<meta name="description" content="Hydrocarbon-water contact as competing geological limits: Monte Carlo contact distribution, controlling mechanisms, column height, prospect chance versus well chance (POS) as a function of well depth, what a well proves, two-well case, DHI likelihood ratio and gross rock volume at the contact percentiles. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2,h3{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:380px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0;position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.row>span.lb{width:120px;font-size:.82rem}
+.row>input,.row>select{flex:1;min-width:0}
+button,select,input[type=text],input[type=number],textarea{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+textarea{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:.78rem;resize:vertical}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button:disabled{opacity:.5;cursor:default}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.tw{overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+td:first-child,th:first-child{text-align:left}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
+main{min-width:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tile small{display:block;color:var(--mut);font-size:.74rem}
+.tile b{font:700 1.5rem "Space Grotesk",Inter,sans-serif;font-variant-numeric:tabular-nums}
+.tile.key{border-left:6px solid var(--acc)}.tile.key2{border-left:6px solid var(--acc2)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow:hidden;min-width:0}
+.card h3{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+.card h3 .tt{margin-left:auto}
+.card canvas{height:380px;width:100%;max-width:100%;display:block;background:#fff;border:1px solid var(--line);border-radius:6px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:12px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+.bars{display:grid;grid-template-columns:140px 1fr 54px;gap:4px 10px;align-items:center;font-size:.8rem;padding:6px 8px}
+.bars .t{background:var(--alt);border-radius:3px;height:12px;position:relative;overflow:hidden}.bars .t i{position:absolute;left:0;top:0;bottom:0}
+.bars .v{text-align:right;font-variant-numeric:tabular-nums}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
+.lim{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:6px 0;background:var(--bg)}
+.lim .r{display:flex;gap:6px;align-items:center;margin:3px 0;flex-wrap:wrap}
+.lim .r label{font-size:.74rem;color:var(--mut);display:flex;gap:4px;align-items:center}
+.lim input[type=number]{width:72px;padding:.15rem .3rem}
+.lim input[type=text]{flex:1;min-width:0;padding:.15rem .3rem}
+.lim select{padding:.15rem .3rem}
+.warn{color:var(--acc2)}
+.note{color:var(--mut);font-size:.76rem;line-height:1.4;margin:8px 0 0}
+.well{padding:6px 10px;font-size:.84rem}
+.well p{margin:4px 0}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Contact distribution and well POS</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">File</span>
+  <button class="pri" id="bSave" title="Inputs (accumulation, limits, wells, evidence, volume table) as a JSON file">Save</button>
+  <button id="bLoad" title="A saved contact file, or a prospect file saved by the Prospect risking tool (takes P(G) and the success-case volumes)">Open</button><input type="file" id="jfile" accept=".json,application/json" hidden>
+  <button id="bCsv" title="Contact distribution, controlling shares and the POS curve as CSV">Results CSV</button>
+  <select id="exSel" aria-label="Example"><option value="">Example…</option><option value="a">Fictitious structure, four limits</option><option value="b">Single certain limit (spill)</option></select>
+  <span class="msg" id="msg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. A prospect has a chance P(G) of holding hydrocarbons; a well has a different chance, because it only tests the realisations whose contact lies below its depth. The contact is the shallowest of several competing geological limits.">?</span>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Accumulation<span class="tt tt-r" tabindex="0" data-tip="P(G): geological chance that the prospect holds a hydrocarbon accumulation (typed, or read from a Prospect risking file: its summary gcos, else the product of its element chances). Crest: top of the structure, m TVDSS. Base case contact: used in the trials where no limit is active (for example the structural spill or the reservoir base). Depth axis: maximum depth of the charts and upper truncation of a normal limit.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><span class="lb">Prospect name</span><input type="text" id="pname"></div>
+  <div class="row"><span class="lb">P(G), 0 to 1</span><input type="number" id="pG" min="0" max="1" step="0.01"></div>
+  <div class="row"><span class="lb">Crest, m TVDSS</span><input type="number" id="crest" step="any"></div>
+  <div class="row"><span class="lb">Base case contact, m</span><input type="number" id="base" step="any"></div>
+  <div class="row"><span class="lb">Depth axis max, m</span><input type="number" id="zmax" step="any"></div>
+  <div class="row"><button id="bRisk">P(G) from a risking file…</button></div><div class="msg" id="rMsg"></div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Contact limits<span class="tt tt-r" tabindex="0" data-tip="Each limit is present with its presence probability; when present it draws a depth from its distribution. The contact is the shallowest active limit (it is the controlling mechanism); a depth above the crest is read as an empty trap (contact at the crest). Normal: truncated between the crest and the depth axis maximum. Triangular: min / mode / max. Kind is a label only.">?</span><i class="chev"></i></h2>
+  <div class="body"><div id="limits"></div><div class="row"><button id="bAdd">+ Add a limit</button></div></div></section>
+ <section class="panel"><h2><span class="n">3</span>Wells<span class="tt tt-r" tabindex="0" data-tip="A well entering the reservoir at depth z finds hydrocarbons if the prospect works and the contact is deeper than z. Well 2 (optional) is a second depth, for example a down-dip well to prove volume or an up-dip step-out; both wells are evaluated on the same trials.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><span class="lb">Well 1, depth m</span><input type="number" id="z1" step="any"></div>
+  <div class="row"><span class="lb">Well 2, depth m</span><input type="number" id="z2" step="any" placeholder="none"></div></div></section>
+ <section class="panel collapsed"><h2><span class="n">4</span>DHI evidence<span class="tt tt-r" tabindex="0" data-tip="Optional likelihood ratio LR = P(DHI observed | accumulation) / P(DHI observed | no accumulation). It multiplies the odds of P(G): posterior odds = LR × prior odds. The ratios of the table are placeholders you must set yourself; the page makes no calibration claim. The evidence is assumed to inform P(G) only, not the contact distribution.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><span class="lb">Evidence</span><select id="dMode"><option value="none">None</option><option value="class">Class (table)</option><option value="number">Likelihood ratio (number)</option></select></div>
+  <div class="row" id="dClsRow"><span class="lb">Class</span><select id="dCls"></select></div>
+  <div class="row" id="dNumRow"><span class="lb">LR</span><input type="number" id="dNum" min="0" step="any"></div>
+  <table id="dTab" style="margin-top:6px"></table><div class="msg" id="dMsg"></div></div></section>
+ <section class="panel collapsed"><h2><span class="n">5</span>Volume link<span class="tt tt-r" tabindex="0" data-tip="Paste an area-depth table (one pair per line: depth m, area km²; area enclosed by the closing contour at that depth, from the crest down). The gross rock volume above a contact is the trapezoidal integral of area over depth, in 10^6 m³ (km² × m), and is read at each contact percentile. Success-case volumes come from a Prospect risking file when loaded.">?</span><i class="chev"></i></h2>
+  <div class="body"><textarea id="area" rows="6" placeholder="depth, area&#10;2000, 0&#10;2050, 1.2&#10;2100, 4.5"></textarea><div class="msg" id="aMsg"></div></div></section>
+ <section class="panel collapsed"><h2><span class="n">6</span>Simulation<span class="tt tt-r" tabindex="0" data-tip="Number of Monte Carlo trials given an accumulation and the seed (same seed, same result).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><span class="lb">Trials</span><input type="number" id="nsim" min="2000" max="500000" step="1000"></div><div class="row"><span class="lb">Seed</span><input type="number" id="seed" step="1"></div></div></section>
+</aside>
+<main>
+ <div class="tiles" id="tiles"></div>
+ <div class="two" style="margin-top:0">
+  <div class="card"><h3>Chance versus depth<span class="tt" tabindex="0" data-tip="Depth increases downward. Thin line: F(h) = P(contact ≥ h | accumulation). Solid: well POS(z) = P(G) × P(contact &gt; z | G). Dashed: the same with the DHI-updated P(G). Vertical dashed line: P(G), the ceiling of any well chance. Horizontal lines: the wells.">?</span></h3><canvas id="cvp"></canvas></div>
+  <div class="card"><h3>Contact depth and controlling limit<span class="tt" tabindex="0" data-tip="Histogram of the contact depth given an accumulation, stacked by the limit that sets it. Vertical lines: P90 (shallow, low case), P50, P10 (deep) and the wells. In this exceedance convention P90 is the depth the contact exceeds with 90 % probability, i.e. the shallow case.">?</span></h3><canvas id="cvh"></canvas></div>
+ </div>
+ <div class="two">
+  <div class="card"><h3>Controlling mechanisms<span class="tt" tabindex="0" data-tip="Share of the trials in which each limit sets the contact (it is the shallowest active limit). The base case row counts the trials where no limit is active. The shares sum to 100 %.">?</span></h3><div class="bars" id="bars"></div>
+   <h3 style="margin-top:8px">Contact, column and volume<span class="tt" tabindex="0" data-tip="Exceedance convention of this site: P90 is the low case, here the shallow contact (small column, small volume); P10 the high case, deep. The rows marked ‘given well 1 succeeds’ restrict the trials to contact &gt; z1.">?</span></h3><div class="tw"><table id="pct"></table></div></div>
+  <div class="card"><h3>What the wells prove</h3><div class="well" id="wells"></div></div>
+ </div>
+</main></div>
+<script id="ct-core">
+/* Contact distribution and well POS core: competing contact limits, seeded Monte Carlo, well chance, two wells, DHI odds update, gross rock volume. Pure logic, no DOM; window.CT. Tested by scripts/contact_test.mjs. */
+(function(){
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+.3275911*x);return s*(1-((((1.061405429*t-1.453152027)*t+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x))}
+const Phi=z=>.5*(1+erf(z/Math.SQRT2));
+function rng(s){s>>>=0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function PhiInv(p){const a=[-39.69683028665376,220.9460984245205,-275.9285104469687,138.357751867269,-30.66479806614716,2.506628277459239],b=[-54.47609879822406,161.5858368580409,-155.6989798598866,66.80131188771972,-13.28068155288572],
+  c=[-.007784894002430293,-.3223964580411365,-2.400758277161838,-2.549732539343734,4.374664141464968,2.938163982698783],d=[.007784695709041462,.3224671290700398,2.445134137142996,3.754408661907416];let q,r;
+  if(p<=0)return-Infinity;if(p>=1)return Infinity;
+  if(p<.02425){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+  if(p>.97575){q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+  q=p-.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)}
+const KINDS=['Charge / fill-to-spill','Spill point','Fault seal','Seal capacity','Mechanical failure','Reservoir base','Other'];
+// depth of a limit from one uniform u; fixed a | uniform a..b | triangular a (min), b (mode), c (max) | normal mean a, sd b truncated to [lo, hi]
+function drawDepth(l,u,lo,hi){const a=+l.a,b=+l.b,c=+l.c;
+  switch(l.dist){
+    case'uniform':return a+u*(b-a);
+    case'triangular':{if(!(c>a))return a;const f=(b-a)/(c-a);return u<f?a+Math.sqrt(u*(c-a)*(b-a)):c-Math.sqrt((1-u)*(c-a)*(c-b))}
+    case'normal':{const sd=Math.max(1e-9,b),Fa=Phi((lo-a)/sd),Fb=Phi((hi-a)/sd);if(!(Fb-Fa>1e-12))return clamp(a,lo,hi);return clamp(a+sd*PhiInv(Fa+u*(Fb-Fa)),lo,hi)}
+    default:return a}}
+const num=x=>x!=null&&x!==''&&isFinite(+x);
+function validate(m){if(!(m.pG>=0&&m.pG<=1))return'P(G) must be between 0 and 1';if(!num(m.crest)||!num(m.base)||!num(m.zmax))return'Crest, base case contact and depth axis are required';
+  if(!(+m.base>+m.crest))return'The base case contact must be deeper than the crest';if(!(+m.zmax>+m.crest))return'The depth axis maximum must be deeper than the crest';
+  for(const l of m.limits||[]){const n=l.name||'limit';if(!(l.p>=0&&l.p<=1))return n+': presence probability must be between 0 and 1';
+    if(l.dist==='uniform'){if(!(num(l.a)&&num(l.b)&&+l.a<=+l.b))return n+': uniform needs min ≤ max'}
+    else if(l.dist==='triangular'){if(!(num(l.a)&&num(l.b)&&num(l.c)&&+l.a<=+l.b&&+l.b<=+l.c))return n+': triangular needs min ≤ mode ≤ max'}
+    else if(l.dist==='normal'){if(!(num(l.a)&&num(l.b)&&+l.b>0))return n+': normal needs a mean and SD > 0'}
+    else if(!num(l.a))return n+': depth required'}return null}
+// Monte Carlo of the contact given an accumulation. Per trial and limit: one uniform for presence, one for the depth (always consumed, so the draws stay aligned).
+// contact = shallowest active limit, never above the crest (a limit above the crest gives an empty trap, contact = crest); no active limit: the base case. ctrl = index of the controlling limit, -1 = base case.
+function sample(m,opt={}){const n=clamp(Math.round(opt.n||m.n||20000),1000,500000),R=rng(opt.seed??m.seed??1),L=m.limits||[],crest=+m.crest,hi=Math.max(+m.zmax,crest+1),
+  raw=new Float64Array(n),ctrl=new Int16Array(n);
+  for(let t=0;t<n;t++){let best=Infinity,bi=-1;for(let i=0;i<L.length;i++){const up=R(),ud=R();if(up<L[i].p){const d=Math.max(crest,drawDepth(L[i],ud,crest,hi));if(d<best){best=d;bi=i}}}
+    if(bi<0){best=Math.max(crest,+m.base)}raw[t]=best;ctrl[t]=bi}
+  return{n,raw,ctrl,sorted:Float64Array.from(raw).sort(),crest,nl:L.length}}
+// exceedance convention of the site: pct(0.9) is the value exceeded with 90 % probability (P90, low case = shallow contact)
+const pctOf=(a,e)=>a.length?a[clamp(Math.floor((1-e)*a.length),0,a.length-1)]:NaN;
+function upper(a,z){let lo=0,hi=a.length;while(lo<hi){const k=lo+hi>>1;if(a[k]>z)hi=k;else lo=k+1}return lo}
+function lower(a,z){let lo=0,hi=a.length;while(lo<hi){const k=lo+hi>>1;if(a[k]>=z)hi=k;else lo=k+1}return lo}
+const exceed=(S,z)=>(S.n-upper(S.sorted,z))/S.n,exceedGE=(S,h)=>(S.n-lower(S.sorted,h))/S.n;   // P(contact > z), P(contact >= h), given an accumulation
+function summarize(S){const n=S.n,sh=new Array(S.nl+1).fill(0);for(let t=0;t<n;t++)sh[S.ctrl[t]<0?S.nl:S.ctrl[t]]++;let s=0;for(const v of S.raw)s+=v;const mean=s/n,q=e=>pctOf(S.sorted,e);
+  return{n,mean,p90:q(.9),p50:q(.5),p10:q(.1),min:S.sorted[0],max:S.sorted[n-1],col:{mean:mean-S.crest,p90:q(.9)-S.crest,p50:q(.5)-S.crest,p10:q(.1)-S.crest},shares:sh.map(c=>c/n)}}
+// well chance for a well entering the reservoir at z: success = accumulation exists and contact deeper than z
+const pos=(S,pG,z)=>pG*exceed(S,z);
+function curve(S,pG,z0,z1,k){const o=[];for(let i=0;i<=k;i++){const z=z0+(z1-z0)*i/k,F=exceedGE(S,z);o.push({z,F,pos:pG*exceed(S,z)})}return o}
+// what a success at z proves: conditional distribution of the contact given contact > z (given the accumulation), the share of realisations that are wet although the prospect works
+function proves(S,pG,z){const k=upper(S.sorted,z),t=S.sorted.subarray(k),sh=new Array(S.nl+1).fill(0);let s=0;for(let i=0;i<S.n;i++)if(S.raw[i]>z){sh[S.ctrl[i]<0?S.nl:S.ctrl[i]]++;s+=S.raw[i]}
+  const c=t.length;return{pSuccess:pG*c/S.n,pCond:c/S.n,wetGivenG:1-c/S.n,wetAbsolute:pG*(1-c/S.n),mean:c?s/c:NaN,p90:pctOf(t,.9),p50:pctOf(t,.5),p10:pctOf(t,.1),shares:sh.map(v=>c?v/c:0)}}
+// two wells on the same trials; probabilities include the factor P(G)
+function twoWells(S,pG,z1,z2){let both=0,o1=0,o2=0;for(let i=0;i<S.n;i++){const a=S.raw[i]>z1,b=S.raw[i]>z2;if(a&&b)both++;else if(a)o1++;else if(b)o2++}
+  const f=v=>pG*v/S.n,p1=f(both+o1),p2=f(both+o2);return{p1,p2,both:f(both),firstOnly:f(o1),secondOnly:f(o2),neither:1-f(both+o1+o2),secondGivenFirst:both+o1?both/(both+o1):NaN,firstGivenSecond:both+o2?both/(both+o2):NaN,failThenSucceed:f(o2)}}
+// DHI: likelihood ratio on the odds of P(G)
+function bayes(pG,LR){if(!(LR>=0)||!isFinite(LR))return pG;if(pG>=1)return 1;if(pG<=0)return 0;const o=pG/(1-pG)*LR;return o/(1+o)}
+const DHI_CLASSES=['strong','moderate','weak','absent'];
+function lrOf(m){const d=m.dhi||{};if(d.mode==='class'){const v=+(d.table||{})[d.cls];return v>=0?v:1}if(d.mode==='number'){const v=+d.value;return v>=0?v:1}return 1}
+// area-depth table -> gross rock volume above a contact (trapezoid; area in km2, depth in m, volume in 10^6 m3)
+function parseTable(text){const pts=[];for(const ln of String(text||'').split(/\r?\n/)){const p=ln.trim().split(/[\s,;]+/).filter(Boolean);if(p.length<2||!isFinite(+p[0])||!isFinite(+p[1]))continue;pts.push([+p[0],+p[1]])}
+  pts.sort((a,b)=>a[0]-b[0]);if(pts.length<2)return{err:'At least two depth, area lines are needed',pts};if(pts.some(p=>p[1]<0))return{err:'Areas must be ≥ 0',pts};for(let i=1;i<pts.length;i++)if(pts[i][0]===pts[i-1][0])return{err:'Duplicate depth '+pts[i][0],pts};return{err:null,pts}}
+function grvTable(pts){const cum=[0];for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+(pts[i][0]-pts[i-1][0])*(pts[i][1]+pts[i-1][1])/2);return{pts,cum,zmax:pts[pts.length-1][0],z0:pts[0][0]}}
+// volume between the first depth of the table and the contact c (0 above it); beyond the last depth the volume is that of the last depth (flag clipped)
+function grv(T,c){const p=T.pts;if(c<=T.z0)return 0;if(c>=T.zmax)return T.cum[T.cum.length-1];let lo=0,hi=p.length-1;while(hi-lo>1){const k=lo+hi>>1;if(p[k][0]<=c)lo=k;else hi=k}
+  const A=p[lo][1]+(p[hi][1]-p[lo][1])*(c-p[lo][0])/(p[hi][0]-p[lo][0]);return T.cum[lo]+(c-p[lo][0])*(p[lo][1]+A)/2}
+function grvStats(S,T){let s=0,clip=0;for(const v of S.raw){s+=grv(T,v);if(v>T.zmax)clip++}return{mean:s/S.n,p90:grv(T,pctOf(S.sorted,.9)),p50:grv(T,pctOf(S.sorted,.5)),p10:grv(T,pctOf(S.sorted,.1)),clipped:clip/S.n}}
+// Prospect risking file: P(G) from summary.gcos, else the product of the element chances (conditional links are not resolved); success-case volumes if present
+function fromRisking(o){if(!o||o.format!=='prospect-risk')throw new Error('not a Prospect risking file');const S=o.summary&&typeof o.summary==='object'?o.summary:null;let g=null,src='';
+  if(S&&num(S.gcos)){g=clamp(+S.gcos,0,1);src='summary.gcos'}else{g=1;for(const e of o.elements||[])g*=clamp(+e.p||0,0,1);src='product of the element chances'}
+  return{name:o.name||'Prospect',pG:g,source:src,summary:S?{p90:S.p90,p50:S.p50,p10:S.p10,mean:S.mean}:null}}
+const defaults=()=>({format:'contact-pos',version:1,name:'Prospect',pG:.35,crest:2000,base:2260,zmax:2400,limits:[],z1:2120,z2:null,dhi:{mode:'none',cls:'moderate',value:3,table:{strong:6,moderate:3,weak:1.5,absent:.4}},area:'',risk:null,n:50000,seed:1});
+function example(k){const m=defaults();
+  if(k==='b'){m.name='Single certain limit';m.limits=[{name:'Structural spill',kind:'Spill point',p:1,dist:'fixed',a:2200}];m.base=2260;m.pG=.4;m.z1=2100;m.z2=2250;return m}
+  m.name='Fictitious structure';m.limits=[
+    {name:'Charge (fill-to-spill)',kind:'Charge / fill-to-spill',p:.6,dist:'triangular',a:2050,b:2150,c:2260},
+    {name:'Fault seal',kind:'Fault seal',p:.4,dist:'uniform',a:2090,b:2200},
+    {name:'Seal capacity',kind:'Seal capacity',p:.3,dist:'normal',a:2170,b:50},
+    {name:'Mechanical failure',kind:'Mechanical failure',p:.15,dist:'uniform',a:2120,b:2250}];
+  m.z1=2120;m.z2=2200;m.area='2000, 0\n2040, 0.8\n2080, 3.2\n2120, 7.2\n2160, 12.8\n2200, 20\n2240, 28.8\n2280, 39.2\n2320, 51.2\n2360, 64.8\n2400, 80';return m}
+function csv(m,S,sum,k){const q=x=>/[",\n]/.test(x)?'"'+String(x).replace(/"/g,'""')+'"':x,lr=lrOf(m),pp=bayes(m.pG,lr),r=['prospect,'+q(m.name),'P(G),'+m.pG,'LR,'+lr,'P(G)_posterior,'+pp,'crest_m,'+m.crest,'base_case_contact_m,'+m.base,'trials,'+S.n,'seed,'+m.seed,'',
+    'exceedance convention,P90 = low case = shallow contact','','statistic,contact_depth_m,column_height_m','P90,'+sum.p90+','+sum.col.p90,'P50,'+sum.p50+','+sum.col.p50,'P10,'+sum.p10+','+sum.col.p10,'mean,'+sum.mean+','+sum.col.mean,'',
+    'controlling_limit,share'];(m.limits||[]).forEach((l,i)=>r.push(q(l.name)+','+sum.shares[i]));r.push('base case (no active limit),'+sum.shares[S.nl],'','depth_m,F_contact_ge_depth_given_G,POS_prior,POS_posterior');
+  for(const c of curve(S,m.pG,+m.crest,+m.zmax,k||100))r.push(c.z+','+c.F+','+m.pG*c.F+','+pp*c.F);return r.join('\n')+'\n'}
+window.CT={Phi,PhiInv,rng,KINDS,DHI_CLASSES,drawDepth,validate,sample,pctOf,exceed,exceedGE,summarize,pos,curve,proves,twoWells,bayes,lrOf,parseTable,grvTable,grv,grvStats,fromRisking,defaults,example,csv};
+})();
+</script><script>
+const $=id=>document.getElementById(id),C=window.CT;
+let M=C.example('a'),S=null,SUM=null;
+const COL=['#4a5a4e','#a8623a','#6c7fa0','#b8964a','#7a5c82','#5f9a8c','#8c7a5a','#c06a7c','#9a9a9a'],BASEC='#b9b4a6';
+const f0=x=>isFinite(x)?Math.round(x).toLocaleString('en'):'—',f1=x=>!isFinite(x)?'—':Math.abs(x)>=100?x.toFixed(0):Math.abs(x)>=10?x.toFixed(1):x.toFixed(2),pc=x=>isFinite(x)?(100*x).toFixed(x<.1?1:0)+' %':'—',esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function say(t,err){const m=$('msg');m.textContent=t;setTimeout(()=>{if(m.textContent===t)m.textContent=''},3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+const LAB={fixed:['Depth'],uniform:['Min','Max'],triangular:['Min','Mode','Max'],normal:['Mean','SD']};
+function colour(i){return i<0||i>=M.limits.length?BASEC:COL[i%COL.length]}
+function syncSide(){$('pname').value=M.name;$('pG').value=M.pG;$('crest').value=M.crest;$('base').value=M.base;$('zmax').value=M.zmax;$('z1').value=M.z1==null?'':M.z1;$('z2').value=M.z2==null?'':M.z2;$('nsim').value=M.n;$('seed').value=M.seed;$('area').value=M.area||'';
+  $('rMsg').textContent=M.risk?`Risking file “${M.risk.name}”: P(G) from ${M.risk.source}.`:'';const d=M.dhi;$('dMode').value=d.mode;$('dNum').value=d.value;
+  $('dCls').innerHTML=C.DHI_CLASSES.map(k=>`<option${k===d.cls?' selected':''}>${k}</option>`).join('');renderDhi();renderLimits()}
+function renderDhi(){const d=M.dhi;$('dClsRow').style.display=d.mode==='class'?'':'none';$('dNumRow').style.display=d.mode==='number'?'':'none';$('dTab').style.display=d.mode==='class'?'':'none';
+  $('dTab').innerHTML='<thead><tr><th>Class</th><th>LR (editable)</th></tr></thead><tbody>'+C.DHI_CLASSES.map(k=>`<tr><td>${k}</td><td><input type="number" min="0" step="any" data-dk="${k}" value="${d.table[k]}" style="width:80px"></td></tr>`).join('')+'</tbody>'}
+function renderLimits(){$('limits').innerHTML=M.limits.map((l,i)=>{const lab=LAB[l.dist]||LAB.fixed,ks=['a','b','c'];
+  return`<div class="lim"><div class="r"><span class="sw" style="background:${colour(i)};margin:0"></span><input type="text" data-i="${i}" data-k="name" value="${esc(l.name)}"><button data-del="${i}" title="Remove">✕</button></div>
+  <div class="r"><select data-i="${i}" data-k="kind">${C.KINDS.map(k=>`<option${k===l.kind?' selected':''}>${k}</option>`).join('')}</select><label>Presence<input type="number" min="0" max="1" step="0.05" data-i="${i}" data-k="p" value="${l.p}"></label></div>
+  <div class="r"><select data-i="${i}" data-k="dist">${['fixed','uniform','triangular','normal'].map(k=>`<option${k===l.dist?' selected':''}>${k}</option>`).join('')}</select>${lab.map((t,j)=>`<label>${t}<input type="number" step="any" data-i="${i}" data-k="${ks[j]}" value="${l[ks[j]]??''}"></label>`).join('')}</div></div>`}).join('')||'<div class="hint">No limit: the contact is the base case.</div>'}
+$('limits').addEventListener('input',e=>{const t=e.target,i=t.dataset.i;if(i==null)return;const k=t.dataset.k,l=M.limits[i];
+  if(k==='name'||k==='kind'||k==='dist'){l[k]=t.value;if(k==='dist'){if(!num(l.a))l.a=M.crest;if(l.dist==='uniform'&&!num(l.b))l.b=M.base;if(l.dist==='triangular'){if(!num(l.b))l.b=(+l.a+ +M.base)/2;if(!num(l.c))l.c=M.base}if(l.dist==='normal'&&!(+l.b>0&&+l.b<1e4))l.b=50;renderLimits()}}else l[k]=t.value===''?null:+t.value;update()});
+function num(x){return x!=null&&x!==''&&isFinite(+x)}
+$('limits').addEventListener('click',e=>{const d=e.target.dataset.del;if(d==null)return;M.limits.splice(+d,1);renderLimits();update()});
+$('bAdd').onclick=()=>{M.limits.push({name:'Limit '+(M.limits.length+1),kind:'Other',p:.5,dist:'uniform',a:+M.crest+ (M.base-M.crest)*.3,b:+M.crest+(M.base-M.crest)*.8});renderLimits();update()};
+const bind=(id,k,fn)=>$(id).addEventListener('input',()=>{M[k]=fn($(id).value);update()});
+bind('pname','name',v=>v);bind('pG','pG',v=>v===''?NaN:+v);bind('crest','crest',v=>v===''?NaN:+v);bind('base','base',v=>v===''?NaN:+v);bind('zmax','zmax',v=>v===''?NaN:+v);bind('z1','z1',v=>v===''?null:+v);bind('z2','z2',v=>v===''?null:+v);bind('nsim','n',v=>+v||20000);bind('seed','seed',v=>+v||0);bind('area','area',v=>v);
+$('dMode').onchange=()=>{M.dhi.mode=$('dMode').value;renderDhi();update()};$('dCls').onchange=()=>{M.dhi.cls=$('dCls').value;update()};$('dNum').oninput=()=>{M.dhi.value=+$('dNum').value;update()};
+$('dTab').addEventListener('input',e=>{const k=e.target.dataset.dk;if(k){M.dhi.table[k]=+e.target.value;update()}});
+let timer=0;function update(){clearTimeout(timer);timer=setTimeout(run,120)}
+function prep(id){const cv=$(id),r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,r.width,r.height);c.font='11px Inter,sans-serif';return{c,W:r.width,H:r.height}}
+function run(){const err=C.validate(M);const msg=$('rMsg');
+  if(err){S=null;SUM=null;$('tiles').innerHTML=`<div class="tile key2"><small>Inputs</small><b style="font-size:1rem">${esc(err)}</b></div>`;$('bars').innerHTML='';$('pct').innerHTML='';$('wells').innerHTML='';prep('cvp');prep('cvh');return}
+  S=C.sample(M);SUM=C.summarize(S);const lr=C.lrOf(M),pp=C.bayes(M.pG,lr),post=lr!==1;
+  const z1=num(M.z1)?+M.z1:null,z2=num(M.z2)?+M.z2:null,w1=z1!=null?C.proves(S,M.pG,z1):null,w2=z2!=null?C.proves(S,M.pG,z2):null,tw=z1!=null&&z2!=null?C.twoWells(S,M.pG,z1,z2):null;
+  const tb=C.parseTable(M.area),T=!tb.err?C.grvTable(tb.pts):null;$('aMsg').textContent=M.area&&tb.err?tb.err:T?`${tb.pts.length} points, ${f0(T.z0)} to ${f0(T.zmax)} m.`:'';
+  const top=SUM.shares.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0])[0],nm=i=>i<M.limits.length?M.limits[i].name:'Base case';
+  const tiles=[['P(G)',pc(M.pG),'key',post?`posterior ${pc(pp)} (LR ${f1(lr)})`:'prospect chance']];
+  if(w1)tiles.push([`POS well 1 (${f0(z1)} m)`,pc(w1.pSuccess),'key',post?`with DHI ${pc(pp*w1.pCond)} · = P(G) × ${pc(w1.pCond)}`:`= P(G) × P(contact &gt; z | G) = ${pc(w1.pCond)}`]);
+  if(w2)tiles.push([`POS well 2 (${f0(z2)} m)`,pc(w2.pSuccess),'key',post?`with DHI ${pc(pp*w2.pCond)}`:`P(contact &gt; z | G) = ${pc(w2.pCond)}`]);
+  tiles.push(['Contact P90 / P50 / P10, m',`${f0(SUM.p90)} / ${f0(SUM.p50)} / ${f0(SUM.p10)}`,'','P90 = shallow (low case)'],['Column height P50, m',f0(SUM.col.p50),'',`P90 ${f0(SUM.col.p90)} · P10 ${f0(SUM.col.p10)}`],['Controlling limit',nm(top[1]),'key2',pc(top[0])+' of the trials']);
+  if(w1)tiles.push(['Well 1 wet, prospect works',pc(w1.wetGivenG),'key2',`of the accumulations; ${pc(w1.wetAbsolute)} of all cases`]);
+  $('tiles').innerHTML=tiles.map(([a,b,k,s])=>`<div class="tile ${k}"><small>${a}</small><b${b.length>12?' style="font-size:1.05rem"':''}>${b}</b><small>${s}</small></div>`).join('');
+  $('bars').innerHTML=SUM.shares.map((q,i)=>`<div><span class="sw" style="background:${colour(i<S.nl?i:-1)}"></span>${esc(nm(i))}</div><div class="t"><i style="width:${q*100}%;background:${colour(i<S.nl?i:-1)}"></i></div><div class="v">${pc(q)}</div>`).join('');
+  const gs=T?C.grvStats(S,T):null,g0=T?C.grv(T,+M.base):0,sm=M.risk&&M.risk.summary&&num(M.risk.summary.mean)?+M.risk.summary.mean:null,rows=[['P90 (low, shallow)',SUM.p90,SUM.col.p90,gs&&gs.p90],['P50',SUM.p50,SUM.col.p50,gs&&gs.p50],['P10 (high, deep)',SUM.p10,SUM.col.p10,gs&&gs.p10],['Mean',SUM.mean,SUM.col.mean,gs&&gs.mean]];
+  if(w1)rows.push(['P90 / P50 / P10 given well 1 succeeds',null,null,null,`${f0(w1.p90)} / ${f0(w1.p50)} / ${f0(w1.p10)}`]);
+  $('pct').innerHTML=`<thead><tr><th></th><th>Contact, m</th><th>Column, m</th><th>${T?'GRV, 10<sup>6</sup> m³':''}</th>${sm&&T&&g0>0?'<th>Indicative volume, MMboe</th>':''}</tr></thead><tbody>`+rows.map(r=>r[4]?`<tr><td>${r[0]}</td><td colspan="${3+(sm&&T&&g0>0?1:0)}">${r[4]}</td></tr>`:`<tr><td>${r[0]}</td><td>${f0(r[1])}</td><td>${f0(r[2])}</td><td>${r[3]==null?'':f1(r[3])}</td>${sm&&T&&g0>0?`<td>${f1(sm*r[3]/g0)}</td>`:''}</tr>`).join('')+'</tbody>'+(gs&&gs.clipped>0?`<tfoot><tr><td colspan="5" class="warn">${pc(gs.clipped)} of the trials have a contact below the last table depth (${f0(T.zmax)} m): their volume is capped at that depth.</td></tr></tfoot>`:'')+(sm&&T&&g0>0?`<tfoot><tr><td colspan="5" style="color:var(--mut)">Indicative volume = success-case mean of the risking file (${f1(sm)} MMboe) × GRV(contact) / GRV(base case contact ${f0(+M.base)} m): assumes the file volumes were built for the base case contact.</td></tr></tfoot>`:'');
+  let h='';
+  if(w1)h+=wellHtml('Well 1',z1,w1,pp,post);if(w2)h+=wellHtml('Well 2',z2,w2,pp,post);
+  if(tw)h+=`<p><b>Two wells, same trials</b> (well 1 ${f0(z1)} m, well 2 ${f0(z2)} m)</p><div class="tw"><table><tbody><tr><td>P(well 1 succeeds)</td><td>${pc(tw.p1)}</td></tr><tr><td>P(well 2 succeeds)</td><td>${pc(tw.p2)}</td></tr><tr><td>Both succeed</td><td>${pc(tw.both)}</td></tr><tr><td>Well 1 fails, well 2 succeeds</td><td>${pc(tw.failThenSucceed)}</td></tr><tr><td>Well 1 succeeds, well 2 fails</td><td>${pc(tw.firstOnly)}</td></tr><tr><td>Both fail (including no accumulation)</td><td>${pc(tw.neither)}</td></tr><tr><td>P(well 2 succeeds | well 1 succeeds)</td><td>${pc(tw.secondGivenFirst)}</td></tr><tr><td>P(well 1 succeeds | well 2 succeeds)</td><td>${pc(tw.firstGivenSecond)}</td></tr></tbody></table></div><p class="note">A success at the deeper depth proves the contact is below it, so the shallower well then succeeds with certainty; a success at the shallower depth does not prove the deeper one.</p>`;
+  $('wells').innerHTML=h||'<p>Enter a well depth.</p>';
+  drawChance(pp,post,z1,z2);drawHist(z1,z2)}
+function wellHtml(t,z,w,pp,post){return`<p><b>${t}, ${f0(z)} m</b>: POS = ${pc(w.pSuccess)}.</p><p>A success proves the contact is at least ${f0(z)} m: the contact given success has P90 / P50 / P10 = ${f0(w.p90)} / ${f0(w.p50)} / ${f0(w.p10)} m (mean ${f0(w.mean)}), against ${f0(SUM.p90)} / ${f0(SUM.p50)} / ${f0(SUM.p10)} m before drilling. The well would be wet although the prospect works in ${pc(w.wetGivenG)} of the accumulations (${pc(w.wetAbsolute)} of all cases).</p>${post?`<p>With the DHI update, P(G) = ${pc(pp)} and POS = ${pc(pp*w.pCond)}.</p>`:''}`}
+function ticks(a,b,k){const s0=(b-a)/k,p=Math.pow(10,Math.floor(Math.log10(s0))),s=[1,2,5,10].map(x=>x*p).find(x=>x>=s0)||p*10,o=[];for(let v=Math.ceil(a/s)*s;v<=b+1e-9;v+=s)o.push(v);return o}
+function drawChance(pp,post,z1,z2){const{c,W,H}=prep('cvp'),m={l:56,r:14,t:14,b:38},pw=W-m.l-m.r,ph=H-m.t-m.b,y0=+M.crest,y1=+M.zmax,X=v=>m.l+v*pw,Y=z=>m.t+(z-y0)/(y1-y0)*ph,k=120,cv=C.curve(S,M.pG,y0,y1,k);
+  c.textAlign='right';c.textBaseline='middle';c.fillStyle='#5c5a52';for(const z of ticks(y0,y1,6)){c.strokeStyle='#eee';c.beginPath();c.moveTo(m.l,Y(z));c.lineTo(W-m.r,Y(z));c.stroke();c.fillText(f0(z),m.l-5,Y(z))}
+  c.textAlign='center';c.textBaseline='top';for(let v=0;v<=1.0001;v+=.2){c.strokeStyle='#eee';c.beginPath();c.moveTo(X(v),m.t);c.lineTo(X(v),m.t+ph);c.stroke();c.fillText(Math.round(v*100)+' %',X(v),m.t+ph+4)}
+  c.fillText('Probability',m.l+pw/2,m.t+ph+19);c.save();c.translate(12,m.t+ph/2);c.rotate(-Math.PI/2);c.fillText('Depth, m TVDSS',0,0);c.restore();
+  const line=(f,col,w,dash)=>{c.setLineDash(dash||[]);c.strokeStyle=col;c.lineWidth=w;c.beginPath();cv.forEach((p,i)=>i?c.lineTo(X(f(p)),Y(p.z)):c.moveTo(X(f(p)),Y(p.z)));c.stroke();c.setLineDash([])};
+  line(p=>p.F,'#9a9a9a',1.2);line(p=>p.pos,'#4a5a4e',2.4);if(post)line(p=>pp*p.F,'#a8623a',2,[6,4]);
+  c.setLineDash([2,4]);c.strokeStyle='#4a5a4e';c.lineWidth=1;c.beginPath();c.moveTo(X(M.pG),m.t);c.lineTo(X(M.pG),m.t+ph);c.stroke();c.setLineDash([]);c.fillStyle='#4a5a4e';c.textAlign='left';c.textBaseline='top';c.fillText('P(G) '+pc(M.pG),X(M.pG)+4,m.t+2);
+  [[z1,'W1'],[z2,'W2']].forEach(([z,t],i)=>{if(z==null||z<y0||z>y1)return;c.strokeStyle=i?'#6c7fa0':'#a8623a';c.lineWidth=1.4;c.setLineDash([5,3]);c.beginPath();c.moveTo(m.l,Y(z));c.lineTo(W-m.r,Y(z));c.stroke();c.setLineDash([]);c.fillStyle=c.strokeStyle;c.textAlign='left';c.textBaseline='bottom';const pz=M.pG*C.exceed(S,z);{const tx=`${t} ${f0(z)} m · POS ${pc(pz)}`;c.lineWidth=3;c.strokeStyle='#fff';c.strokeText(tx,m.l+6,Y(z)-3);c.fillText(tx,m.l+6,Y(z)-3);c.strokeStyle=c.fillStyle;c.lineWidth=1.4}c.beginPath();c.arc(X(pz),Y(z),4,0,7);c.fill()});
+  c.textAlign='right';c.textBaseline='bottom';[['F(h) = P(contact ≥ h | G)','#9a9a9a'],['POS(z)','#4a5a4e']].concat(post?[['POS with DHI','#a8623a']]:[]).forEach(([t,col],i)=>{c.fillStyle=col;c.fillText(t,W-m.r-4,m.t+ph-4-i*14)})}
+function drawHist(z1,z2){const{c,W,H}=prep('cvh'),m={l:44,r:14,t:14,b:38},pw=W-m.l-m.r,ph=H-m.t-m.b,x0=+M.crest,x1=+M.zmax,nb=48,nl=S.nl,h=Array.from({length:nb},()=>new Array(nl+1).fill(0)),X=v=>m.l+(v-x0)/(x1-x0)*pw;
+  for(let t=0;t<S.n;t++){const b=clamp(Math.floor((S.raw[t]-x0)/(x1-x0)*nb),0,nb-1);h[b][S.ctrl[t]<0?nl:S.ctrl[t]]++}
+  const mx=Math.max(1,...h.map(r=>r.reduce((a,b)=>a+b,0)));c.fillStyle='#5c5a52';c.textAlign='center';c.textBaseline='top';
+  for(const z of ticks(x0,x1,7)){c.strokeStyle='#eee';c.beginPath();c.moveTo(X(z),m.t);c.lineTo(X(z),m.t+ph);c.stroke();c.fillText(f0(z),X(z),m.t+ph+4)}c.fillText('Contact depth, m TVDSS',m.l+pw/2,m.t+ph+19);
+  c.textAlign='right';c.textBaseline='middle';c.save();c.translate(12,m.t+ph/2);c.rotate(-Math.PI/2);c.textAlign='center';c.fillText('Share of trials',0,0);c.restore();
+  h.forEach((r,b)=>{let y=m.t+ph;const x=m.l+b/nb*pw,w=pw/nb-1;r.forEach((v,i)=>{const hh=v/mx*ph;c.fillStyle=colour(i<nl?i:-1);c.fillRect(x,y-hh,w,hh);y-=hh})});
+  [[SUM.p90,'P90','#232220'],[SUM.p50,'P50','#232220'],[SUM.p10,'P10','#232220']].forEach(([z,t,col],i)=>{c.strokeStyle=col;c.lineWidth=1.3;c.setLineDash([4,3]);c.beginPath();c.moveTo(X(z),m.t);c.lineTo(X(z),m.t+ph);c.stroke();c.setLineDash([]);c.fillStyle=col;c.textAlign='center';c.textBaseline='top';c.fillText(t,X(z),m.t+2+i%2*12)});
+  [[z1,'W1','#a8623a'],[z2,'W2','#6c7fa0']].forEach(([z,t,col])=>{if(z==null||z<x0||z>x1)return;c.strokeStyle=col;c.lineWidth=2;c.beginPath();c.moveTo(X(z),m.t);c.lineTo(X(z),m.t+ph);c.stroke();c.fillStyle=col;c.textAlign='left';c.textBaseline='bottom';c.fillText(t,X(z)+3,m.t+ph-3)})}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+window.addEventListener('resize',()=>{if(S)run()});
+// ---- files
+$('bRisk').onclick=$('bLoad').onclick=()=>$('jfile').click();
+$('jfile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const o=JSON.parse(await f.text());
+  if(o.format==='contact-pos'){M=Object.assign(C.defaults(),o);M.dhi=Object.assign(C.defaults().dhi,o.dhi||{});syncSide();say('File opened.')}
+  else{const r=C.fromRisking(o);M.pG=r.pG;M.risk={name:r.name,source:r.source,summary:r.summary};if(M.name==='Prospect'||!M.name)M.name=r.name;syncSide();say('P(G) taken from the risking file.')}
+  run()}catch(err){$('rMsg').textContent=f.name+': '+err.message}};
+$('bSave').onclick=()=>{download((M.name||'contact').replace(/[^\w.-]+/g,'_')+'_contact.json',JSON.stringify(M,null,1),'application/json');say('Saved.')};
+$('bCsv').onclick=()=>{if(!S)return say('Fix the inputs first.');download('contact_pos.csv',C.csv(M,S,SUM,100));say('CSV saved.')};
+$('exSel').onchange=()=>{const k=$('exSel').value;if(k){M=C.example(k);syncSide();run()}$('exSel').value=''};
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+syncSide();run();
+</script>
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Contact and well POS','contact'],['Portfolio consolidation','portfolio'],['Field development screening','fdp']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you enter leaves your machine. A prospect has a chance of holding hydrocarbons, a well has a chance of finding them, and the two differ: a well placed below the shallowest possible contact only tests the realisations whose contact lies below it. The hydrocarbon–water contact is not one number: it is set by competing geological limits (charge or fill-to-spill, spill point, fault seal, seal capacity, mechanical failure, reservoir base), and the shallowest active limit sets the contact and is the controlling mechanism. The page simulates the contact, reports the controlling mechanisms and the column height, the well chance as a function of well depth, what a well proves, and optionally a DHI update and the gross rock volume at the contact percentiles.","method":["<b>Contact.</b> Given an accumulation (probability P(G)), each trial draws, for every limit, its presence (Bernoulli with the stated probability) and a depth from its distribution (fixed, uniform, triangular, or normal truncated between the crest and the depth axis maximum, by inverse CDF). The contact is the shallowest active limit; the limit that sets it is recorded as the controlling mechanism. A depth above the crest is read as an empty trap (contact at the crest). If no limit is active the contact is the base case depth entered by the user (for example the structural spill or the reservoir base). Seeded generator, same seed same result.","<b>Exceedance convention.</b> As elsewhere on this site P90 is the value exceeded with 90 % probability, the low case. For the contact depth that is the <b>shallow</b> case (small column, small volume); P10 is the deep case. F(h) = P(contact ≥ h | accumulation).","<b>Well chance.</b> A well entering the reservoir at depth z succeeds if the accumulation exists and the contact is deeper than z: POS(z) = P(G) × P(contact &gt; z | G). It equals P(G) above the shallowest possible contact and decreases with depth. Given success the contact is known to be at least z: the page gives the conditional distribution of the contact (the trials with contact &gt; z) and the share of accumulations in which the well would still be wet.","<b>Two wells.</b> Both depths are evaluated on the same trials: P(well 1), P(well 2), both, one only, neither, the chance that the first fails and the second succeeds (a deeper or shallower second depth), and the conditional chances. A success at the deeper depth proves the shallower one succeeds (probability 1); the reverse does not hold.","<b>DHI as evidence.</b> Optional likelihood ratio LR on the odds of P(G): posterior odds = LR × prior odds. The ratios of the class table are editable placeholders, not a calibration. The update is applied to P(G) only; the contact distribution is not changed by it, and the POS curve is scaled by the posterior P(G).","<b>Volume link.</b> From a pasted area–depth table (area enclosed by the closing contour, km² against depth, m) the gross rock volume above a contact is the trapezoidal integral of area over depth, in 10<sup>6</sup> m³ (km² × m). It is read at the P90 / P50 / P10 contact (volume is monotonic in the contact, so the percentile of the volume is the volume at the percentile of the contact) and averaged over all trials. If a Prospect risking file with a summary is loaded, an indicative volume is the success-case mean scaled by GRV(contact) / GRV(base case contact): this assumes that the file volumes were built for the base case contact."],"sources":[["Prospect chance versus well chance; well depth relative to the shallowest possible contact","concept: README of the public repository lhjelm-dk/WellVolPOS read for the idea only (not a scientific reference; no code read or reused)","concept: README read"],["Hydrocarbon–water contact as competing limits, the shallowest active limit as the controlling mechanism","concept: README of the public repository lhjelm-dk/HCWC-Builder read for the idea only (not a scientific reference; no code read or reused)","concept: README read"],["Monte Carlo of the minimum of independently present limits; POS(z) = P(G) × P(contact &gt; z | G)","Own formulation from basic probability; the independence between limits and between the accumulation and the contact is an assumption of the page","derived"],["Conditional probabilities between wells and the likelihood-ratio update of odds","Bayes' rule on the odds; no source consulted","derived"],["Gross rock volume by trapezoidal integration of an area–depth table","Standard numerical integration, checked against the closed form of a cone and of a prism in the test","derived"],["Exceedance convention (P90 = low case)","Convention used throughout this site (same as the Prospect risking tool)","on the page"],["Likelihood ratios of the DHI classes, limit probabilities and depths of the example","Fictitious and editable; no calibration is claimed","on the page"]],"validation":["A single certain limit gives a deterministic contact and a step-shaped POS; two certain uniform limits reproduce the closed-form distribution of their minimum and the closed-form probability that the first one controls; the controlling shares sum to 1; POS(z) is non-increasing and equals P(G) above the shallowest possible contact; a success at the deeper of two wells implies success at the shallower one (conditional probability 1) and the joint probabilities add up; the DHI update agrees with the odds formula; the gross rock volume of a cone-shaped table agrees with the closed form (and a prismatic table exactly). Run <code>node scripts/contact_test.mjs</code>."],"limits":["Not implemented: dependence between limits (a fault seal and a seal capacity are drawn independently), dependence between P(G) and the contact, a column limited by the structure geometry other than through the limits you enter, spill between prospects, a contact tilted by hydrodynamics, gas–oil and oil–water contacts together, uncertainty on the area–depth table, calibration of the DHI likelihood ratios. The contact is a depth in TVDSS in one reservoir; a well is treated as a point at depth z. A conditional link between elements of a risking file is not resolved when P(G) is rebuilt from the element chances (the summary gcos is preferred)."],"date":"26 November 2026"});
+</script>
+</body></html>
