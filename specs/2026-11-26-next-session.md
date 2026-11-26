@@ -41,3 +41,10 @@ Reply to the user in French. Push as soon as something is done and verified.
 - Tools are self-contained pages; pure logic in a `<script id="...-core">` block tested by `scripts/*_test.mjs`.
 - Headless Edge screenshots are flaky when several Edge instances run: use a fresh `--user-data-dir` per call and retry.
 - Work in sibling git worktrees (`../My_Website_xxx`), ff-merge into main, run all tests with `set -o pipefail`, build, push.
+
+## Added later on 26 Nov (Decision support)
+- `docs/risking` (gCOS / eCOS / EMV), `docs/portfolio` (shared play risk, Monte Carlo, budget selection, imports risking files),
+  `docs/fdp` (plateau + Arps profile, capex/opex/tax, NPV, IRR, break-even, MEFV). Tests: `scripts/risking_test.mjs`,
+  `portfolio_test.mjs`, `fdp_test.mjs`. Each page has a copy of the "Tools" menu (CAT) — add a new tool to all pages with sed.
+- GDE generator: paused at the user's request (they test and think). Left column now organised by map; consistency check in the verdict.
+- Ideas not done: FDP → push the MEFV into a risking file; portfolio import of an FDP case; gas volumetrics; production sharing regimes.
