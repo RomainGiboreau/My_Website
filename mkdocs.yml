@@ -76,12 +76,14 @@ nav:
           - Plot digitizer: digitizer/index.html
           - Continuous map digitizer: mapdigitizer/index.html
           - Discrete map digitizer: discretemap/index.html
+          - Well-log digitizer: logdigitizer/index.html
       - Mapping and spatial statistics:
           - Map interpolation: gridding/index.html
           - Variogram: variogram/index.html
           - Convex & concave hulls: hull/index.html
           - Clustering: clustering/index.html
           - GDE map generator: gdemap/index.html
+          - Grid attributes: gridattr/index.html
       - Organic geochemistry:
           - Rock-Eval QC: rockeval/index.html
           - Source rock potential: source/index.html
@@ -94,6 +96,8 @@ nav:
           - BHT correction: bht/index.html
           - TR Cycles: tr-cycles/index.html
           - Petroleum system events: psec/index.html
+          - Burial history (1D): burial/index.html
+          - Log correlation (DTW): logcorr/index.html
       - Decision support:
           - MCDA (AHP & PROMETHEE): mcda/index.html
           - Prospect risking (gCOS, eCOS): risking/index.html

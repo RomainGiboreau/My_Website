@@ -648,10 +648,10 @@ $('col').value=BH.EXAMPLE;$('thT').value=THT0;$('cal').value=CAL0;$('sl').value=
   btn.onclick=()=>set(!box.classList.contains('on'));
   // ---- Tools menu: switch between the tool pages without going back to the site
   (function(){
-    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
-      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap'],['Well-log digitizer','logdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap'],['Grid attributes','gridattr']]],
       ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
-      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec'],['Burial history (1D)','burial']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec'],['Burial history (1D)','burial'],['Log correlation (DTW)','logcorr']]],
       ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp'],['Contact and well POS','contact'],['Distribution fitting','distfit']]]];
     const top=document.querySelector('.top');if(!top)return;
     const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
@@ -712,7 +712,6 @@ $('col').value=BH.EXAMPLE;$('thT').value=THT0;$('cal').value=CAL0;$('sl').value=
 "Thermal calculations are steady-state, without radiogenic heat, with a single heat flow at the base of the column; the real basal heat flow history of a basin follows from lithosphere models that are not included here.",
 "Eroded thicknesses, paleo-water depths and sea-level curves are inputs with large uncertainty; the Monte Carlo only varies heat flow and one compaction coefficient.",
 "EASY%Ro limits (valid range 0.3 to 4.5 %Ro, dependence on the heating rate and on the kerogen type) are those listed on the Thermal maturity page."],
-"date":"26 November 2026"})
-);
+"date":"26 November 2026"});
 </script>
 </body></html>

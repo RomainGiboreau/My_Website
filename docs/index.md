@@ -128,6 +128,12 @@ Pull numbers back out of published plots and maps.
 
     Turn a facies or other class map with colour boxes into a grid of class codes and polygons (IRAP lines, GeoJSON, CSV).
 
+-   [![Well-log digitizer](assets/tools/logdigitizer.webp){ loading=lazy }](logdigitizer/index.html)
+
+    [**Well-log digitizer**](logdigitizer/index.html)
+
+    Scanned log image to LAS: depth calibration, tracks, log scales, curve tracing by ink colour or by ridge following.
+
 </div>
 
 ### :material-map-outline: Mapping & spatial statistics
@@ -165,6 +171,12 @@ Gridding, spatial correlation, grouping of point data and depositional environme
     [**GDE map generator**](gdemap/index.html)
 
     Gross depositional environment map from wells, seismic attributes and a concept: a whole margin from hinterland to basin floor (rivers feeding deltas, canyon and fan in line), or one of 17 systems, with editable key lines, reefs, faults and gradual transitions; calibrated on the wells; drawn as atlas-style EOD and facies maps (smooth domains, deltaic lobes, turbidite fairways, fans, platforms); polygons, lines and grid exports.
+
+-   [![Grid attributes](assets/tools/gridattr.webp){ loading=lazy }](gridattr/index.html)
+
+    [**Grid attributes**](gridattr/index.html)
+
+    Slope, curvature, TPI, rugosity, wavelet curvature and fractal dimension of a ZMAP or ASCII grid, at several scales.
 
 </div>
 
@@ -241,6 +253,18 @@ Inputs for burial and thermal history models.
     [**Petroleum system events**](psec/index.html)
 
     Events chart on the ICS time scale with uncertainty ranges and timing risk against the charge.
+
+-   [![Burial history (1D)](assets/tools/burial.webp){ loading=lazy }](burial/index.html)
+
+    [**Burial history (1D)**](burial/index.html)
+
+    Decompaction and Airy backstripping of a well, burial chart, geotherm and Easy%Ro, Monte Carlo bands.
+
+-   [![Log correlation (DTW)](assets/tools/logcorr.webp){ loading=lazy }](logcorr/index.html)
+
+    [**Log correlation (DTW)**](logcorr/index.html)
+
+    Align two logs with dynamic time warping, with datums, quality metrics and a null test.
 
 </div>
 
