@@ -71,6 +71,7 @@ nav:
       - Data preparation:
           - LAS checker: las-checker/index.html
           - ZMAP checker: zmap-checker/index.html
+          - Colour-blind check: cvd/index.html
       - Digitization:
           - Plot digitizer: digitizer/index.html
           - Continuous map digitizer: mapdigitizer/index.html
@@ -92,11 +93,14 @@ nav:
           - Compaction fit: compaction/index.html
           - BHT correction: bht/index.html
           - TR Cycles: tr-cycles/index.html
+          - Petroleum system events: psec/index.html
       - Decision support:
           - MCDA (AHP & PROMETHEE): mcda/index.html
           - Prospect risking (gCOS, eCOS): risking/index.html
           - Portfolio consolidation: portfolio/index.html
           - Field development screening: fdp/index.html
+          - Contact and well POS: contact/index.html
+          - Distribution fitting: distfit/index.html
   - Chess: chess/index.html
   - Tags: tags.md
   - Contact: contact.md

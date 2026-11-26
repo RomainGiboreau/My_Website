@@ -96,6 +96,12 @@ QC of transmitted files before loading them.
 
     Check ZMAP+ grids: header, value count, column layout, half-cell or swapped geometry; download a corrected copy.
 
+-   [![Colour-blind check](assets/tools/cvd.webp){ loading=lazy }](cvd/index.html)
+
+    [**Colour-blind check**](cvd/index.html)
+
+    Simulate colour-vision deficiency on a figure or a colour map; list the colour pairs that become hard to tell apart.
+
 </div>
 
 ### :material-chart-scatter-plot: Digitization
@@ -230,6 +236,12 @@ Inputs for burial and thermal history models.
 
     Spectral analysis of sea-level or proxy series, candidate Milankovitch bands.
 
+-   [![Petroleum system events](assets/tools/psec.webp){ loading=lazy }](psec/index.html)
+
+    [**Petroleum system events**](psec/index.html)
+
+    Events chart on the ICS time scale with uncertainty ranges and timing risk against the charge.
+
 </div>
 
 ### :material-scale-balance: Decision support
@@ -261,6 +273,18 @@ Ranking options against several criteria, and risking prospects. [Background not
     [**Field development screening**](fdp/index.html)
 
     Plateau and decline profile matched to the reserves, capex, opex, royalty and tax: NPV, IRR, break-even price, minimum economic volume, sensitivities.
+
+-   [![Contact and well POS](assets/tools/contact.webp){ loading=lazy }](contact/index.html)
+
+    [**Contact and well POS**](contact/index.html)
+
+    Hydrocarbon–water contact from competing limits and the chance of success of a well at a given depth.
+
+-   [![Distribution fitting](assets/tools/distfit.webp){ loading=lazy }](distfit/index.html)
+
+    [**Distribution fitting**](distfit/index.html)
+
+    Fit and rank 11 distributions on a dataset; P90/P50/P10 for the prospect tools.
 
 </div>
 
