@@ -250,6 +250,12 @@ Ranking options against several criteria, and risking prospects. [Background not
 
     Chance of success from play and prospect elements, volume distribution, economic chance against the minimum economic volume, EMV.
 
+-   [![Portfolio consolidation](assets/tools/portfolio.webp){ loading=lazy }](portfolio/index.html)
+
+    [**Portfolio consolidation**](portfolio/index.html)
+
+    Prospects with shared play risk and correlated volumes: portfolio value distribution, downside, capital efficiency, budget-constrained selection.
+
 </div>
 
 ### :material-chess-knight: Chess
