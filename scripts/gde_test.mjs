@@ -923,6 +923,19 @@ test('examples select: every example listed once and named, grouped by type, but
   for (const k of ['coast', 'rimmed']) assert.ok(G.examples[k], 'old hash link #' + k);
   for (const k of listed) { const ex = G.examples[k], mod = G.build(ex.M, ex.wells); for (const c of mod.check) assert.ok(c.honoured, `${k}: ${c.name} (${c.env}) not honoured`); }
 });
+test('consistency: on every example the EOD domain drawn under each well is the one of its belt (thin belts are pinned), and the check flags a misplaced facies object', () => {
+  for (const [k, ex] of Object.entries(G.examples)) {
+    const M = JSON.parse(JSON.stringify(ex.M)), mod = G.build(M, ex.wells, { dist: true }), e = M.ext;
+    const P = G.polygons(mod, e, Math.sqrt((e.xmax - e.xmin) * (e.ymax - e.ymin) / 160000), { stride: 3, minArea: 4 }), R = G.eodPolygons(mod, e, 0, { raster: P.raster }).raster, at = G.eodAt(mod);
+    for (const c of mod.check) if (c.b >= 0 && !c.ft && c.honoured) assert.equal(R.L[Math.floor((e.ymax - c.y) / R.cy) * R.nx + Math.floor((c.x - e.xmin) / R.cx)], at.of(c.b, c.x, c.y), k + ' ' + c.name);
+  }
+  const ex = G.examples.atlas, mod = G.build(ex.M, ex.wells), C0 = G.consistency(mod);
+  assert.ok(C0.objects.length && C0.objects.every(o => o.ok), 'generated objects are in their usual domains');
+  const lobe = mod.facies.find(o => o.type === 'lobe'); assert.ok(lobe);
+  lobe.x = (ex.M.ext.xmin + ex.M.ext.xmax) / 2; lobe.y = ex.M.ext.ymax - 1000;
+  assert.ok(G.consistency(mod).objects.some(o => o.type === 'lobe' && !o.ok), 'a deltaic lobe in deep water is flagged');
+});
+
 const eodKeysOf = (mod, M, cell) => { const E = G.eodPolygons(mod, M.ext, cell), a = new Map(); for (const p of E) a.set(p.key, (a.get(p.key) || 0) + p.area); return { E, a }; };
 test('atlas example 1: equatorial passive margin with a marginal plateau — eight EOD domains, slope wrapping the plateau, deltas, fairways, fans, platforms, MTCs; wells honoured', () => {
   const ex = G.examples.atlas, M = ex.M, mod = G.build(M, ex.wells), e = M.ext, A = extA(e);
