@@ -135,6 +135,8 @@ const TEXT_NULL=/^(na|n\/a|#n\/a|nan|null|\(null\)|inf|-inf|\+inf|-1\.#ind|-1\.#
 const NUM_NULL=[-999.25,-999,-9999,-99999,9999.25,999.25,-999.99,9999,32767,-32767,2147483647,-2147483648];
 const INDEX=/^(DEPT|DEPTH|DEP|MD|TDEP|TVD|TVDSS|TVDKB|TVDSD|TIME|ETIM|INDEX)$/i;
 const up=s=>String(s||'').toUpperCase();
+const GAP_FACTOR=1.5;
+const PLACEHOLDER=/^(UNKNOWN|UNK|NONE|N\/?A|NA|NULL|NIL|NO NAME|NONAME|UNNAMED|UNDEFINED|TBD|TBC|\?+|-+|\.+|XXX+|TEST|WELL|WELL NAME|NOT AVAILABLE|NOT KNOWN)$/i;
 
 // Split "MNEM.UNIT  VALUE : DESCRIPTION". Mnemonic ends at the first dot, unit at the first
 // whitespace after it; the description starts at the first colon preceded by whitespace (so colons
@@ -192,6 +194,7 @@ function parse(text,name){
   if(las.layout12)for(const h of las.well)if(is12(h)){const lab=h.value;h.value=h.desc;h.desc=lab;h.from12=true}
   // ~A
   const A=first('A');if(!A)return las;
+  las.aHeader=lines[A.start].trim().split(/\s+/).slice(1);
   las.wrapped=up(las.ver.WRAP)==='YES';
   const nc=las.curves.length,nullTok=(las.well.find(h=>up(h.mnem)==='NULL')||{}).value;
   las.nullStr=nullTok;las.nullVal=NUM.test(nullTok||'')?+nullTok:NaN;
@@ -230,8 +233,9 @@ const fmtN=v=>String(+(+v).toPrecision(10));
 // index statistics shared by check() and write()
 function indexInfo(las){
   // every row whose index token is a number, even if the rest of the row is bad: a truncated row must not leave a gap
-  const src=las.rows?las.rows.filter(r=>NUM.test(r.tokens[0])).map(r=>r.tokens[0]):las.data.map(r=>String(r[0]));
-  const idx=src.map(Number).filter(v=>!isNull(las,v));
+  const recs=las.rows?las.rows.filter(r=>NUM.test(r.tokens[0])).map(r=>({t:r.tokens[0],line:r.line})):las.data.map(r=>({t:String(r[0]),line:null}));
+  const src=recs.map(r=>r.t),keep=recs.filter(r=>!isNull(las,+r.t));
+  const idx=keep.map(r=>+r.t),lns=keep.map(r=>r.line);
   // printed precision: depths rounded to 2 decimals make a 0.1524 step look irregular
   let dec=0;for(const t of src){const m=/\.(\d+)/.exec(t);if(m&&m[1].length>dec)dec=m[1].length}
   const rtol=Math.pow(10,-dec)*1.0001;
@@ -241,7 +245,13 @@ function indexInfo(las){
   const jitter=d.length?amax(d.map(x=>Math.abs(x-md))):0;
   const n=idx.length,est=regular&&n>1?(idx[n-1]-idx[0])/(n-1):md;
   let mono=true;for(let i=1;i<d.length;i++)if(Math.sign(d[i])!==Math.sign(d[0])||!d[i]){mono=false;break}
-  return {idx,d,step:est,regular,jitter,dec,rtol,mono,stepTol:Math.max(Math.abs(est)*1e-3,2*rtol/Math.max(1,n-1)),endTol:Math.max(Math.abs(est)*0.01,rtol),first:idx[0],last:idx[n-1]};
+  // gaps: an interval longer than GAP_FACTOR x the nominal step (the declared STEP, else the median step), when most intervals are about that step
+  const gaps=[];let nominal=md,gapRegular=false;
+  if(d.length>1&&md){const sg=Math.sign(md),dst=las.well?parseFloat((las.well.find(h=>up(h.mnem)==='STEP')||{}).value):NaN;
+    for(const nm of [Math.abs(dst),Math.abs(md)]){if(!(nm>0))continue;const g=[];let near=0;
+      for(let i=0;i<d.length;i++){if(d[i]*sg>GAP_FACTOR*nm+tol)g.push({line:lns[i+1],from:idx[i],to:idx[i+1],dz:d[i]});else if(Math.abs(d[i]-sg*nm)<=Math.max(nm*1e-3,rtol))near++}
+      if(g.length&&g.length<=d.length/2&&near>=d.length/2){gaps.push(...g);nominal=sg*nm;gapRegular=d.every(x=>Math.abs(x-nominal)<=Math.max(Math.abs(nominal)*1e-3,rtol)||x*sg>GAP_FACTOR*nm+tol);break}}}
+  return {idx,d,gaps,nominal,gapRegular,step:est,regular,jitter,dec,rtol,mono,stepTol:Math.max(Math.abs(est)*1e-3,2*rtol/Math.max(1,n-1)),endTol:Math.max(Math.abs(est)*0.01,rtol),first:idx[0],last:idx[n-1]};
 }
 
 const lineList=a=>a.slice(0,5).join(', ')+(a.length>5?` … (${a.length} in all)`:'');
@@ -302,6 +312,7 @@ function check(las){
   const all={...Object.fromEntries(las.params.map(h=>[up(h.mnem),h])),...w};
   for(const k of ['STRT','STOP','STEP','NULL'])if(!w[k])P('E','well.required',null,`${k} missing in ~W.`);else if(!NUM.test(w[k].value))P('E','well.required',w[k].line,`${k} = “${w[k].value}” is not a number.`);
   if(!w.WELL||!w.WELL.value.trim())P('E','well.name',w.WELL?w.WELL.line:null,'WELL name is empty: importers fall back to the file name and cannot match the well.');
+  if(w.WELL&&PLACEHOLDER.test(w.WELL.value.trim()))P('I','well.name',w.WELL.line,`WELL name “${w.WELL.value.trim()}” is a placeholder: importers cannot match the well.`);
   const rec=['COMP','FLD','LOC','SRVC','DATE'].filter(k=>!w[k]||!w[k].value.trim());
   if(rec.length)P('W','well.recommended',null,`Missing or empty in ~W: ${rec.join(', ')}.`);
   if(!['PROV','CNTY','STAT','CTRY'].some(k=>w[k]&&w[k].value.trim()))P('W','well.location',null,'None of PROV, CNTY, STAT, CTRY given.');
@@ -315,6 +326,7 @@ function check(las){
     if(bad.length)P('W','well.strtstop',(w.STRT||w.STOP).line,bad.join('; ')+'.','strtstop');
     if(isFinite(step)){
       if(step===0&&ix.regular)P('W','well.step',w.STEP.line,`STEP = 0 (irregular) but the data step is constant (${fmtN(ix.step)}).`,'step');
+      else if(step!==0&&!ix.regular&&ix.gaps.length&&ix.gapRegular){if(Math.abs(Math.abs(step)-Math.abs(ix.nominal))>Math.max(Math.abs(ix.nominal)*1e-3,ix.rtol))P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is ${fmtN(Math.abs(ix.nominal))} between the depth gaps (see data.gap); STEP is not changed by the correction.`)}
       else if(step!==0&&!ix.regular)P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is irregular: it should be 0.`,'step');
       else if(step!==0&&Math.sign(step)!==Math.sign(ix.step))P('W','well.step',w.STEP.line,`STEP sign (${w.STEP.value}) does not match the index direction (${fmtN(ix.first)} → ${fmtN(ix.last)}).`,'step');
       else if(step!==0&&Math.abs(step-ix.step)>ix.stepTol)P('W','well.step',w.STEP.line,`STEP = ${w.STEP.value} but the data step is ${fmtN(ix.step)}.`,'step');
@@ -326,7 +338,11 @@ function check(las){
     if(diff.length)P('W','well.units',w.STRT?w.STRT.line:null,`STRT/STOP/STEP unit (${[...new Set(wu)].join(', ')||'none'}) differs from the index curve unit (${iu||'none'}).`);
     else if(iu&&!DEPTH_UNITS.test(iu))P('W','well.units',c0.line,`Index unit “${iu}” is not M or FT.`);
     else if(!iu)P('W','well.units',c0.line,'Index curve has no unit.');
-    if(normDU(iu)==='M'&&Math.max(Math.abs(ix.first||0),Math.abs(ix.last||0))>12000)P('I','well.depthunit',null,`Depth reaches ${fmtN(Math.max(Math.abs(ix.first),Math.abs(ix.last)))} with unit M: probably feet.`)}
+    const dmax=Math.max(Math.abs(ix.first||0),Math.abs(ix.last||0)),st=Math.abs(ix.regular?ix.step:ix.nominal||0),nearS=v=>Math.abs(st-v)<=v*0.005;
+    if(normDU(iu)==='M'){
+      if(dmax>9000)P('W','well.depthunit',null,`Depth reaches ${fmtN(dmax)} with unit M (deeper than almost any well): unit may be feet.`);
+      else if(st&&[0.1524,0.3048,0.6096].some(nearS))P('W','well.depthunit',null,`Step ${fmtN(st)} with unit M is a round number of feet (0.5 / 1 / 2 ft): unit may be feet.`)}
+    else if(normDU(iu)==='FT'&&st&&nearS(0.2))P('I','well.depthunit',null,`Step ${fmtN(st)} with unit FT is typical of metric logs: check the unit (m or ft).`)}
   const anyOf=ks=>ks.map(k=>all[k]).find(h=>h&&h.value.trim()&&NUM.test(h.value)&&+h.value!==0);
   const X=anyOf(['X','XCOORD','SURFX','XWELL','EAST','EASTING','X_COORD']),Y=anyOf(['Y','YCOORD','SURFY','YWELL','NORTH','NORTHING','Y_COORD']);
   const LA=anyOf(['LAT','SLAT','LATI','LATITUDE']),LO=anyOf(['LON','SLON','LONG','LONGITUDE']);
@@ -342,6 +358,8 @@ function check(las){
   if(nou.length)P('I','curve.nounit',nou[0].line,`Curve(s) without unit: ${nou.map(h=>h.mnem).join(', ')}.`);
   // ---- ~A
   const A=S.find(s=>s.tag==='A');
+  const ah=(las.aHeader||[]).map(x=>up(x.split(/[.([\[]/)[0])),cn=las.curves.map(h=>up(h.mnem));
+  if(A&&ah.some(x=>cn.includes(x))&&(ah.length!==cn.length||ah.some((x,i)=>x!==cn[i])))P('W','data.colorder',A.start+1,`The column names on the ~A line (${(las.aHeader||[]).join(' ')}) differ from the ~C curve order (${las.curves.map(h=>h.mnem).join(' ')}): most readers use the ~C order, so values may be attached to the wrong curve.`);
   if(A&&!las.rows.length){P('E','file.nodata',A.start+1,'~A contains no data.');return out}
   if(!A||!nc)return out;
   const lens=[...new Set(las.rows.map(r=>r.tokens.length))];
@@ -369,29 +387,47 @@ function check(las){
     for(let i=1;i<okr.length;i++){const d=(okr[i].vals[0]-okr[i-1].vals[0])*dir;if(d<0)back.push(okr[i].line);else if(d===0)dup.push(okr[i].line)}
     if(back.length)P('E','data.monotonic',back[0],`Index goes backwards on lines ${lineList(back)}.`);
     if(dup.length)P('E','data.dupindex',dup[0],`Duplicate index values on lines ${lineList(dup)}.`)}
+  if(ix.gaps.length){const g=ix.gaps,big=g.reduce((m,x)=>Math.abs(x.dz)>Math.abs(m.dz)?x:m,g[0]),nom=Math.abs(ix.nominal);
+    P('W','data.gap',g[0].line,`${g.length} depth gap${g.length>1?'s':''} (interval longer than ${GAP_FACTOR} x the step ${fmtN(nom)}): largest ${fmtN(Math.abs(big.dz))} (about ${Math.round(Math.abs(big.dz)/nom)-1} samples missing) between ${fmtN(big.from)} and ${fmtN(big.to)}, line ${big.line}; gaps at line${g.length>1?'s':''} ${lineList(g.map(x=>`${x.line} (${fmtN(x.from)} → ${fmtN(x.to)})`))}. Missing samples are not interpolated; the file is not changed.`)}
   // nulls
   const sent=new Map();
   for(const r of las.rows)r.tokens.forEach((t,j)=>{if(j===0&&!TEXT_NULL.test(t))return;const v=NUM.test(t)?+t:NaN;
     if(TEXT_NULL.test(t)||(NUM_NULL.includes(v)&&v!==las.nullVal))sent.set(t,(sent.get(t)||0)+1)});
-  if(sent.size)P('W','data.nulls',null,`Null markers other than NULL = ${las.nullStr}: ${[...sent].map(([k,n])=>`${k} (${n}×)`).join(', ')}.`,'nulls');
+  if(sent.size)P('W','data.nulls',null,`Candidate null markers other than NULL = ${las.nullStr}: ${[...sent].map(([k,n])=>`${k} (${n}×)`).join(', ')}. They are only candidates: a real measurement can have such a value, check before replacing.`,'nulls');
   // per curve
   const allnull=[],constant=[];
+  las.qc=[];
   for(let j=1;j<nc;j++){const v=las.data.map(r=>r[j]).filter(x=>!isNull(las,x)&&!NUM_NULL.includes(x));
-    if(!v.length){allnull.push(las.curves[j].mnem);continue}
-    if(v.length>2&&v.every(x=>x===v[0]))constant.push(las.curves[j].mnem);
+    const qv=[],qz=[];for(const r of las.data)if(!isNull(las,r[j])){qv.push(r[j]);if(!isNull(las,r[0]))qz.push(r[0])}
+    const q={mnem:las.curves[j].mnem,unit:las.curves[j].unit||'',n:las.data.length,nValid:qv.length,pctNull:las.data.length?+(100*(las.data.length-qv.length)/las.data.length).toFixed(2):0,
+      min:qv.length?amin(qv):null,max:qv.length?amax(qv):null,z0:qz.length?amin(qz):null,z1:qz.length?amax(qz):null,flags:[]};las.qc.push(q);
+    if(!v.length){allnull.push(las.curves[j].mnem);q.flags.push('all null');continue}
+    if(qv.length>v.length)q.flags.push(`${qv.length-v.length} candidate null value(s) kept as data`);
+    if(v.length>2&&v.every(x=>x===v[0])){constant.push(las.curves[j].mnem);q.flags.push('constant')}
     const c=las.curves[j],R=RANGES.find(x=>x[0].test(c.mnem));
     if(R){const [lo,hi]=R[1](c.unit),o=v.filter(x=>x<lo||x>hi);
-      if(o.length){const pct=/neutron/.test(R[2])&&!/%|PU/i.test(c.unit)&&median(v)>1.5?' — values look like % with a V/V unit':'';
+      if(o.length){q.flags.push(`${o.length} value(s) outside ${lo}-${hi}`);const pct=/neutron/.test(R[2])&&!/%|PU/i.test(c.unit)&&median(v)>1.5?' — values look like % with a V/V unit':'';
         P('I','plaus.range',null,`${c.mnem} (${R[2]}, ${c.unit||'no unit'}): ${o.length} value(s) outside ${lo}–${hi}, min ${fmtN(amin(v))}, max ${fmtN(amax(v))}${pct}.`)}
       if(/neutron/.test(R[2])&&/%|PU/i.test(c.unit)&&v.length>2&&amax(v.map(Math.abs))<1)P('I','plaus.range',null,`${c.mnem} unit ${c.unit} but all values < 1: probably a fraction (V/V).`)}
     if(v.length>=20){const d=[];for(let i=1;i<v.length;i++)d.push(v[i]-v[i-1]);const md=median(d),mad=median(d.map(x=>Math.abs(x-md)))*1.4826||1e-12;
       let n=0;for(let i=1;i<d.length;i++)if(Math.abs(d[i-1]-md)>10*mad&&Math.abs(d[i]-md)>10*mad&&Math.sign(d[i-1])!==Math.sign(d[i]))n++;
+      if(n)q.flags.push(`${n} possible spike(s)`);
       if(n)P('I','plaus.spike',null,`${c.mnem}: ${n} possible spike(s) (isolated jump > 10 robust σ of the sample-to-sample change).`)}}
   if(allnull.length)P('I','data.allnull',null,`Curve(s) entirely NULL: ${allnull.join(', ')}.`);
   if(constant.length)P('I','data.constant',null,`Constant curve(s): ${constant.join(', ')}.`);
   return out;
 }
-const verdict=f=>f.some(x=>x.sev==='E')?'fail':f.some(x=>x.sev==='W')?'warn':'pass';
+const LOOK=/^(plaus\.|data\.allnull|data\.constant)/;
+const lookCount=f=>f.filter(x=>x.sev==='I'&&LOOK.test(x.rule)).length;
+// pass (green) only when nothing at all about the data is flagged; plausibility flags give 'look' (amber)
+const verdict=f=>f.some(x=>x.sev==='E')?'fail':f.some(x=>x.sev==='W')?'warn':lookCount(f)?'look':'pass';
+// QC report: one row per curve and file, then the changes made by the corrections
+function qcCsv(items){const q=s=>{const num=typeof s==='number';s=String(s==null?'':s);if(!num&&/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=['file,curve,unit,n_rows,n_valid,percent_null,min,max,depth_first,depth_last,flags'];
+  for(const x of items)for(const c of (x.las.qc||[]))L.push([x.name,c.mnem,c.unit,c.n,c.nValid,c.pctNull,c.min,c.max,c.z0,c.z1,c.flags.join('; ')].map(q).join(','));
+  L.push('','file,change');
+  for(const x of items)for(const c of (x.changes||[]))L.push([x.name,c].map(q).join(','));
+  return L.join('\r\n')}
 
 function checkBatch(lases){
   const out=[],P=(sev,rule,file,msg)=>out.push({...F(sev,rule,null,msg),file});
@@ -462,7 +498,8 @@ function write(las,fixIds){
     if((on.has('strtstop')||trimmed)){
       if(S&&(!NUM.test(S.value)||Math.abs(+S.value-+f)>tol))setItem(S,{value:f},'first index');
       if(T&&(!NUM.test(T.value)||Math.abs(+T.value-+l)>tol))setItem(T,{value:l},'last index')}
-    if(on.has('step')&&P){const want=ix0.regular?+ix0.step.toFixed(6):0;
+    if(on.has('step')&&P&&!ix0.regular&&ix0.gaps.length&&ix0.gapRegular)log.push(`STEP not changed (${P.value}): the data have ${ix0.gaps.length} depth gap(s), writing STEP 0 would hide them.`);
+    else if(on.has('step')&&P){const want=ix0.regular?+ix0.step.toFixed(6):0;
       if(!NUM.test(P.value)||Math.abs(+P.value-want)>ix0.stepTol)setItem(P,{value:fmtN(want)},ix.regular?'data step':'irregular data')}}}
   // ---- syntax and tabs in the other header lines
   const touched=new Set();
@@ -489,7 +526,7 @@ function write(las,fixIds){
   return {text,log};
 }
 
-W.LAS={parse,check,verdict,checkBatch,FIXES,write,fmtItem,amin,amax,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
+W.LAS={parse,check,verdict,lookCount,qcCsv,checkBatch,FIXES,write,fmtItem,amin,amax,splitHeader,indexInfo,median,NUM,TEXT_NULL,NUM_NULL,INDEX,isNull,fmtN,F,up};
 })(window);
 </script>
 <style>
@@ -507,7 +544,7 @@ body.dragging .side .drop,body.dragging .intro .dz{border-color:var(--acc);backg
 .flist li button{padding:0 .35rem;font-size:.72rem;border-color:transparent;background:transparent;color:var(--mut)}
 .flist li button:hover{color:var(--acc2);border-color:var(--line)}
 .st{width:10px;height:10px;border-radius:50%;flex:none;background:#8c8a80}
-.st.pass{background:#4a5a4e}.st.warn{background:#c2924a}.st.fail{background:#a8623a}
+.st.pass{background:#4a5a4e}.st.look{background:#c2924a}.st.warn{background:#c2924a}.st.fail{background:#a8623a}
 .fx{display:flex;gap:6px;align-items:flex-start;font-size:.8rem;margin:5px 0;cursor:pointer}.fx input{margin-top:3px}.fx small{color:var(--mut);margin-left:auto;white-space:nowrap}
 
 /* empty state */
@@ -523,7 +560,7 @@ body.dragging .side .drop,body.dragging .intro .dz{border-color:var(--acc);backg
 
 /* verdict */
 .verdict{display:grid;grid-template-columns:auto 1fr auto;gap:6px 18px;align-items:center;background:#fff;border:1px solid var(--line);border-left:8px solid var(--vc);border-radius:10px;padding:16px 20px;--vc:#4a5a4e}
-.verdict.warn{--vc:#c2924a}.verdict.fail{--vc:#a8623a}
+.verdict.warn,.verdict.look{--vc:#c2924a}.verdict.fail{--vc:#a8623a}
 .verdict svg{width:40px;height:40px;color:var(--vc);grid-row:1/3}
 .verdict h2{font:700 1.45rem/1.2 "Space Grotesk",Inter,sans-serif;margin:0}
 .verdict .sub{color:var(--mut);font-size:.88rem;grid-column:2}
@@ -577,7 +614,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,li
 <div class="top"><h1>LAS checker</h1>
  <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
   <button id="bAll" disabled title="One corrected file per loaded file, with the corrections ticked">All corrected files</button>
-  <button id="bCsv" disabled title="Every problem of every file, one line each">Report (CSV)</button><span class="msg" id="exportMsg"></span>
+  <button id="bCsv" disabled title="Every problem of every file, one line each">Report (CSV)</button>
+  <button id="bQc" disabled title="Per curve: valid values, % null, min, max, interval covered, flags; then the changes made by the ticked corrections">QC report (CSV)</button><span class="msg" id="exportMsg"></span>
   <span class="tt" tabindex="0" data-tip="Everything runs in your browser: the files are read in memory and never uploaded. Each file is checked against the LAS 1.2 / 2.0 conventions and a few plausibility rules. Mechanical problems can be fixed in a downloaded copy; measured values are never changed unless you tick the null-marker correction.">?</span></div>
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
@@ -640,13 +678,13 @@ addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('d
 
 function refresh(){
   S.batch=S.files.length>1?LAS.checkBatch(S.files.map(x=>x.las)):[];
-  ['bAll','bCsv'].forEach(id=>$(id).disabled=!S.files.length);
+  ['bAll','bCsv','bQc'].forEach(id=>$(id).disabled=!S.files.length);
   if(S.sel>=S.files.length)S.sel=S.files.length-1;
   drawList();drawFixes();drawMain()}
 
 function drawList(){
   $('flist').innerHTML=S.files.map((x,i)=>{const n=x.f.filter(f=>f.sev!=='I').length;
-    return `<li tabindex="0" data-i="${i}" class="${i===S.sel?'sel':''}" title="${esc(x.name)}"><span class="st ${x.v}"></span><span class="nm">${esc(x.name)}</span><small>${x.v==='pass'?'ready':n+' to fix'}</small><button data-rm="${i}" aria-label="Remove ${esc(x.name)}">✕</button></li>`}).join('');
+    return `<li tabindex="0" data-i="${i}" class="${i===S.sel?'sel':''}" title="${esc(x.name)}"><span class="st ${x.v}"></span><span class="nm">${esc(x.name)}</span><small>${x.v==='pass'?'ready':x.v==='look'?LAS.lookCount(x.f)+' to look at':n+' to fix'}</small><button data-rm="${i}" aria-label="Remove ${esc(x.name)}">✕</button></li>`}).join('');
   $('flist').querySelectorAll('li').forEach(li=>{const go=()=>{S.sel=+li.dataset.i;S.target=null;drawList();drawFixes();drawMain()};li.onclick=e=>{if(e.target.dataset.rm!=null){S.files.splice(+e.target.dataset.rm,1);if(S.sel>=+e.target.dataset.rm)S.sel--;if(S.sel<0&&S.files.length)S.sel=0;refresh();return}go()};li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}})}
 
 function drawFixes(){const fl=cur()?cur().f:[];
@@ -657,6 +695,7 @@ function setFix(id,on){on?S.fixes.add(id):S.fixes.delete(id);drawFixes();drawMai
 
 // ---- main column
 const ICON={pass:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 20.5l5.5 5.5L29 14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ look:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="20" cy="20" r="6" fill="none" stroke="currentColor" stroke-width="3"/></svg>',
  warn:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4L37 34H3z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M20 15v9" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="currentColor"/></svg>',
  fail:'<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M13.5 13.5l13 13M26.5 13.5l-13 13" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>'};
 function drawMain(keepDetails){
@@ -673,8 +712,8 @@ function drawMain(keepDetails){
   const f=x.f,cnt=s=>f.filter(y=>y.sev===s).length,E=cnt('E'),Wn=cnt('W');
   const l=x.las,g=k=>{const h=(l.well||[]).find(h=>h.mnem.toUpperCase()===k);return h?h.value:''},ix=l.ix||{},iu=l.curves&&l.curves[0]?l.curves[0].unit:'';
   const fixable=f.filter(y=>y.fix&&S.fixes.has(y.fix)).length,log=l.sections.length?written(x).log:[];
-  const title={pass:'Ready to load',warn:`Loads, with ${Wn} point${Wn>1?'s':''} to review`,fail:`Will not load cleanly: ${E} blocking problem${E>1?'s':''}`}[x.v];
-  const sub=x.v==='pass'?'No problem found by the checks.':(fixable?`${fixable} problem${fixable>1?'s are':' is'} fixed automatically in the corrected file.`:'Nothing here can be fixed automatically: see the details below.');
+  const nl=LAS.lookCount(f),title={pass:'Ready to load',look:`Loads. ${nl} point${nl>1?'s':''} to look at`,warn:`Loads, with ${Wn} point${Wn>1?'s':''} to review`,fail:`Will not load cleanly: ${E} blocking problem${E>1?'s':''}`}[x.v];
+  const sub=x.v==='pass'?'No problem found by the checks.':x.v==='look'?'The file format is fine, but some values look odd (outside the usual range, spikes, constant or empty curves): see “For information” below before trusting the data.':(fixable?`${fixable} problem${fixable>1?'s are':' is'} fixed automatically in the corrected file.`:'Nothing here can be fixed automatically: see the details below.');
   const facts=[['Well',g('WELL')||'—'],['UWI',g('UWI')||g('API')||'—'],['Curves',Math.max(0,(l.curves||[]).length-1)],['Depth',isFinite(ix.first)?`${LAS.fmtN(ix.first)} – ${LAS.fmtN(ix.last)} ${iu}`:'—'],['Step',g('STEP')||'—'],['Null',g('NULL')||'—'],['Version',(l.ver&&l.ver.VERS)||'—']];
   let h=`<section class="verdict ${x.v}" aria-live="polite">${ICON[x.v]}<h2>${esc(title)}</h2><div class="sub">${esc(x.name)} — ${esc(sub)}</div>
     <div class="act"><button class="pri" id="bLas" ${l.sections.length?'':'disabled'}>Download corrected file</button><a id="aChanges" tabindex="0">${log.length?log.length+' change'+(log.length>1?'s':'')+' — see them':'no change needed'}</a></div>
@@ -762,6 +801,9 @@ $('bCsv').onclick=()=>{// cells starting with = + - @ are prefixed so a spreadsh
   for(const x of S.files)for(const f of x.f)L.push([x.name,GRP[f.sev],f.line||'',f.rule,T[f.rule]||'',f.msg,f.fix||'',f.fix&&S.fixes.has(f.fix)?'yes':''].map(q).join(','));
   for(const b of S.batch)L.push([b.file,GRP[b.sev],'',b.rule,T[b.rule]||'',b.msg,'',''].map(q).join(','));
   download('las_check_report.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved las_check_report.csv'};
+
+$('bQc').onclick=()=>{const items=S.files.map(x=>({name:x.name,las:x.las,changes:x.las.sections.length?written(x).log:[]}));
+  download('las_qc_report.csv','﻿'+LAS.qcCsv(items),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved las_qc_report.csv'};
 
 // ---- example: two synthetic files of the same well (main log with deliberate defects, overlapping repeat)
 function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
@@ -901,6 +943,6 @@ window.DG={S,refresh,addText};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: the files are read in memory and never uploaded. Quality control of transmitted LAS well log files before loading them in an interpretation package: a file that follows the LAS conventions passes with nothing to do; otherwise every problem is listed with its line, and the mechanical ones can be fixed in a downloaded copy.","method":["Parsing: sections start with “~”; header lines are split as MNEM.UNIT VALUE : DESCRIPTION — the mnemonic ends at the first dot, the unit at the first space after it, the description starts at the first colon preceded by a space (so hh:mm units and 23:15 values survive), otherwise at the last colon. LAS 1.2 ~W layout (value after the colon) is detected.","Data: whitespace-separated values; wrapped files (WRAP YES) are read record by record (index alone on its line, then values until the curve count is reached).","Checks, by severity: E = import fails or data is wrong (missing sections, unreadable lines, STRT/STOP/STEP/NULL missing, empty WELL, curve count ≠ data columns, truncated rows, non-numeric or glued values, index not monotonic); W = non-conforming, imports with risk (BOM, tabs, non-ASCII, missing dot or colon, duplicate mnemonics, STRT/STOP/STEP inconsistent with the data, unit mismatch, wrapped data, comments in ~A, other null markers); I = worth a look (no coordinates or KB, LAS 3.0, implausible ranges, spikes, all-NULL or constant curves).","Plausibility ranges (report only): GR 0–1000 GAPI; RHOB 1.0–3.2 g/cm³; NPHI −0.15–1 V/V or −15–100 %; DT 40–200 µs/ft or 130–650 µs/m; caliper 0–40; resistivity > 0. Spike: isolated jump of more than 10 robust σ (MAD) of the sample-to-sample change, on curves of ≥ 20 samples.","Batch (several files): same WELL with different UWI or the reverse, overlapping depth ranges on the same curve for one well (duplicate runs), mixed depth units, same mnemonic with different units.","Fixes, applied to the downloaded copy only: byte-order mark, line endings, tabs, malformed header lines, unwrap, LAS 2.0 version and ~W layout, STRT/STOP from the first/last index, STEP from the data (0 if irregular), all-NULL rows at the top/bottom. Replacing other null markers by the declared NULL changes values and is off by default. Number text is copied as is, never reformatted."],"sources":[["LAS 2.0 file structure: ~V first, ~W, ~C, ~A last; ~P and ~O optional; one occurrence of each; “#” comment lines; no blank line inside ~A; numeric data separated by at least one space; printable ASCII (13, 10, 32-126)","Canadian Well Logging Society, LAS Committee (C. Struyk, D. Greenwood), LAS Version 2.0: A Digital Standard for Logs, Update February 2017 (first issued 1992; LAS 1.2 in 1989; LAS 3.0 in 1999). A published specification of the society (cwls.org), not a peer-reviewed article. Pages 1-9 read on 26 November 2026 from a copy hosted at kcpetrophysics.mynucleus.ca/LAS_2_Documentation_Feb2017.pdf (the cwls.org site could not be opened from the checking machine) (sections 3.0, 5.1, 5.8)","published (read)"],["Header line syntax: delimiters are the first dot, the first space after it and the last colon; mnemonic without spaces, dots or colons; units directly after the dot","CWLS, LAS Version 2.0, Update February 2017 (full citation in the first row of this table; read) (section 5.2)","published (read)"],["~V content (VERS, WRAP), wrapped mode (index alone on its line, lines of at most 80 characters) and the 2017 withdrawal of the line-length limit in unwrapped mode","CWLS, LAS Version 2.0, Update February 2017 (full citation in the first row of this table; read) (sections 5.3, 5.8)","published (read)"],["Mandatory ~W items (STRT, STOP, STEP, NULL, COMP, WELL, FLD, LOC, PROV or CNTY/STAT/CTRY, SRVC, DATE, UWI or API); STEP 0 when irregular; start/step must be a whole number; usual NULL values (-9999, -999.25, -9999.25); depth units M, F or FT; index mnemonic DEPT, DEPTH, TIME or INDEX","CWLS, LAS Version 2.0, Update February 2017 (full citation in the first row of this table; read) (sections 5.4, 5.5)","published (read)"],["LAS 1.2 ~W layout (value after the colon) and LAS 3.0 detection (version only)","The 2017 CWLS document (read) names LAS 1.2 (1989) and LAS 3.0 (1999) but contains neither specification; those two specifications were not consulted","to complete (LAS 1.2 and LAS 3.0 specifications not read)"],["Behaviours that go beyond the standard: tolerant header split (first colon preceded by a space, so hh:mm units and 23:15 values survive), glued (run-on) values, other null markers, non-numeric tokens, WELL falling back to the file name, X/Y and KB mnemonics, BOM, tabs, encoding","No publication: practice of LAS readers, chosen by the site author and exercised by scripts/las_check_test.mjs (earlier software-documentation sources were removed: they are not scientific sources)","on the page (no publication)"],["Spike rule: robust scale of the sample-to-sample change = 1.4826 x median absolute deviation (MAD), flag an isolated jump beyond 10 such sigmas","Hampel, F. R. (1974), The influence curve and its role in robust estimation, Journal of the American Statistical Association 69(346), 383-393, doi:10.1080/01621459.1974.10482962; Rousseeuw, P. J. & Croux, C. (1993), Alternatives to the median absolute deviation, Journal of the American Statistical Association 88(424), 1273-1283, doi:10.1080/01621459.1993.10476408; Leys, C., Ley, C., Klein, O., Bernard, P. & Licata, L. (2013), Detecting outliers: do not use standard deviation around the mean, use absolute deviation around the median, Journal of Experimental Social Psychology 49(4), 764-766, doi:10.1016/j.jesp.2013.03.013. The median/MAD robust scale and its 1.4826 factor come from this literature; the 10-sigma threshold and the 20-sample minimum are the author's choice (the papers were not re-read)","published (metadata verified)"],["Plausibility ranges (GR, RHOB, NPHI, DT, caliper, resistivity) and batch checks (same well with different UWI, overlapping depth ranges, mixed units)","Thresholds and rules chosen by the site author; not taken from a publication","on the page (no publication)"],["General reference on the log types checked (gamma ray, density, neutron, sonic, caliper, resistivity)","Ellis, D. V. & Singer, J. M. (2007), Well Logging for Earth Scientists, 2nd ed., Springer, doi:10.1007/978-1-4020-4602-5. Listed for context only: the ranges of this page are not taken from it and the book was not read for this check","published (metadata verified)"]],"validation":["Self-check script (scripts/las_check_test.mjs): one clean LAS 2.0 file with no error or warning, one broken variant per rule, wrapped reading, and round trips of the writer (each fix resolves its findings; values unchanged unless the null fix is ticked; no fix = identical file).","The reading rules above (structure, header delimiters, ~V / ~W content, wrap) were read against the text of the CWLS LAS 2.0 specification (update of February 2017, pages 1-9) on 26 November 2026. The self-check uses the page's own sample files, not an independent implementation of the standard."],"limits":["LAS 3.0: version detected, typed sections and Definition/Data pairs not validated.","Units and mnemonics are not checked against a dictionary; plausibility ranges cover only the common curves.","Encoding: UTF-8, otherwise read as Windows-1252 and written back the same way.","Corrected files are written unwrapped LAS 2.0 with CRLF line endings; ~O and comments are copied as they are.","Header split: the standard uses the last colon of the line; the page uses the first colon preceded by a space, otherwise the last one, to keep colons inside values. The two agree on well-formed lines.","Source status: the LAS rules are taken from the CWLS specification (a society standard, not a peer-reviewed article); the page's practical checks beyond the standard have no publication behind them."],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: the files are read in memory and never uploaded. Quality control of transmitted LAS well log files before loading them in an interpretation package: a file that follows the LAS conventions passes with nothing to do; otherwise every problem is listed with its line, and the mechanical ones can be fixed in a downloaded copy.","method":["Parsing: sections start with “~”; header lines are split as MNEM.UNIT VALUE : DESCRIPTION — the mnemonic ends at the first dot, the unit at the first space after it, the description starts at the first colon preceded by a space (so hh:mm units and 23:15 values survive), otherwise at the last colon. LAS 1.2 ~W layout (value after the colon) is detected.","Data: whitespace-separated values; wrapped files (WRAP YES) are read record by record (index alone on its line, then values until the curve count is reached).","Checks, by severity: E = import fails or data is wrong (missing sections, unreadable lines, STRT/STOP/STEP/NULL missing, empty WELL, curve count ≠ data columns, truncated rows, non-numeric or glued values, index not monotonic); W = non-conforming, imports with risk (BOM, tabs, non-ASCII, missing dot or colon, duplicate mnemonics, STRT/STOP/STEP inconsistent with the data, unit mismatch, wrapped data, comments in ~A, other null markers); I = worth a look (no coordinates or KB, LAS 3.0, placeholder well name, implausible ranges, spikes, all-NULL or constant curves). The headline is green (“Ready to load”) only when nothing at all is flagged; a file with no E or W but with implausible ranges, spikes, constant or all-NULL curves reads “Loads. N points to look at” (amber).","Depth gaps (rule data.gap, W): an interval between two consecutive depths longer than 1.5 times the step (the declared STEP, else the median step, provided most intervals are about that step) is listed with its line and size; the number of gaps and the largest one are reported. When gaps explain the irregular step the STEP correction does not write STEP 0 (it would hide them): STEP is left as declared and the change log says so. Missing samples are never interpolated.","Depth unit cross-check (well.depthunit): unit M with a depth beyond 9000 or a step of 0.1524, 0.3048 or 0.6096 (round numbers of feet) gives a W “unit may be feet” (earlier: information, and only beyond 12000). Unit FT with a step of 0.2 gives an information note. These are hints from typical values, not proof.","Other checks added: the column names written on the ~A line must follow the ~C curve order (data.colorder, W); placeholder well names (UNKNOWN, NONE, N/A…) are information; the other null markers (9999, 32767, 999.25…) are called candidates because a real value can equal them.","QC report (CSV): per file and curve, rows, valid values (not equal to the declared NULL), percent null, min, max, first and last depth with a valid value, flags; then the list of changes made by the ticked corrections.","Plausibility ranges (report only): GR 0–1000 GAPI; RHOB 1.0–3.2 g/cm³; NPHI −0.15–1 V/V or −15–100 %; DT 40–200 µs/ft or 130–650 µs/m; caliper 0–40; resistivity > 0. Spike: isolated jump of more than 10 robust σ (MAD) of the sample-to-sample change, on curves of ≥ 20 samples.","Batch (several files): same WELL with different UWI or the reverse, overlapping depth ranges on the same curve for one well (duplicate runs), mixed depth units, same mnemonic with different units.","Fixes, applied to the downloaded copy only: byte-order mark, line endings, tabs, malformed header lines, unwrap, LAS 2.0 version and ~W layout, STRT/STOP from the first/last index, STEP from the data (0 if irregular), all-NULL rows at the top/bottom. Replacing other null markers by the declared NULL changes values and is off by default. Number text is copied as is, never reformatted."],"sources":[["LAS 2.0 file structure: ~V first, ~W, ~C, ~A last; ~P and ~O optional; one occurrence of each; “#” comment lines; no blank line inside ~A; numeric data separated by at least one space; printable ASCII (13, 10, 32-126)","Canadian Well Logging Society, LAS Committee (C. Struyk, D. Greenwood), LAS Version 2.0: A Digital Standard for Logs, Update February 2017 (first issued 1992; LAS 1.2 in 1989; LAS 3.0 in 1999). A published specification of the society (cwls.org), not a peer-reviewed article. Pages 1-9 read on 26 November 2026 from a copy hosted at kcpetrophysics.mynucleus.ca/LAS_2_Documentation_Feb2017.pdf (the cwls.org site could not be opened from the checking machine) (sections 3.0, 5.1, 5.8)","published (read)"],["Header line syntax: delimiters are the first dot, the first space after it and the last colon; mnemonic without spaces, dots or colons; units directly after the dot","CWLS, LAS Version 2.0, Update February 2017 (full citation in the first row of this table; read) (section 5.2)","published (read)"],["~V content (VERS, WRAP), wrapped mode (index alone on its line, lines of at most 80 characters) and the 2017 withdrawal of the line-length limit in unwrapped mode","CWLS, LAS Version 2.0, Update February 2017 (full citation in the first row of this table; read) (sections 5.3, 5.8)","published (read)"],["Mandatory ~W items (STRT, STOP, STEP, NULL, COMP, WELL, FLD, LOC, PROV or CNTY/STAT/CTRY, SRVC, DATE, UWI or API); STEP 0 when irregular; start/step must be a whole number; usual NULL values (-9999, -999.25, -9999.25); depth units M, F or FT; index mnemonic DEPT, DEPTH, TIME or INDEX","CWLS, LAS Version 2.0, Update February 2017 (full citation in the first row of this table; read) (sections 5.4, 5.5)","published (read)"],["LAS 1.2 ~W layout (value after the colon) and LAS 3.0 detection (version only)","The 2017 CWLS document (read) names LAS 1.2 (1989) and LAS 3.0 (1999) but contains neither specification; those two specifications were not consulted","to complete (LAS 1.2 and LAS 3.0 specifications not read)"],["Behaviours that go beyond the standard: tolerant header split (first colon preceded by a space, so hh:mm units and 23:15 values survive), glued (run-on) values, other null markers, non-numeric tokens, WELL falling back to the file name, X/Y and KB mnemonics, BOM, tabs, encoding","No publication: practice of LAS readers, chosen by the site author and exercised by scripts/las_check_test.mjs (earlier software-documentation sources were removed: they are not scientific sources)","on the page (no publication)"],["Spike rule: robust scale of the sample-to-sample change = 1.4826 x median absolute deviation (MAD), flag an isolated jump beyond 10 such sigmas","Hampel, F. R. (1974), The influence curve and its role in robust estimation, Journal of the American Statistical Association 69(346), 383-393, doi:10.1080/01621459.1974.10482962; Rousseeuw, P. J. & Croux, C. (1993), Alternatives to the median absolute deviation, Journal of the American Statistical Association 88(424), 1273-1283, doi:10.1080/01621459.1993.10476408; Leys, C., Ley, C., Klein, O., Bernard, P. & Licata, L. (2013), Detecting outliers: do not use standard deviation around the mean, use absolute deviation around the median, Journal of Experimental Social Psychology 49(4), 764-766, doi:10.1016/j.jesp.2013.03.013. The median/MAD robust scale and its 1.4826 factor come from this literature; the 10-sigma threshold and the 20-sample minimum are the author's choice (the papers were not re-read)","published (metadata verified)"],["Plausibility ranges (GR, RHOB, NPHI, DT, caliper, resistivity) and batch checks (same well with different UWI, overlapping depth ranges, mixed units)","Thresholds and rules chosen by the site author; not taken from a publication","on the page (no publication)"],["General reference on the log types checked (gamma ray, density, neutron, sonic, caliper, resistivity)","Ellis, D. V. & Singer, J. M. (2007), Well Logging for Earth Scientists, 2nd ed., Springer, doi:10.1007/978-1-4020-4602-5. Listed for context only: the ranges of this page are not taken from it and the book was not read for this check","published (metadata verified)"]],"validation":["Review of 26 November 2026: regression tests for the depth gap (STEP 0.25, depths 1000, 1000.25, 1000.5, 1002.5, 1003: the gap is listed and STEP stays 0.25 in the corrected file), the amber headline (GR from -5000 to 500000, constant RHOB 0, all-NULL curve), feet labelled M (9000-15000 and 0.1524 steps), ~A order, placeholder names, candidate nulls and the QC report. Numbers shown to users change in one way: files that were “Ready to load” can now read “Loads. N points to look at”.","Self-check script (scripts/las_check_test.mjs): one clean LAS 2.0 file with no error or warning, one broken variant per rule, wrapped reading, and round trips of the writer (each fix resolves its findings; values unchanged unless the null fix is ticked; no fix = identical file).","The reading rules above (structure, header delimiters, ~V / ~W content, wrap) were read against the text of the CWLS LAS 2.0 specification (update of February 2017, pages 1-9) on 26 November 2026. The self-check uses the page's own sample files, not an independent implementation of the standard."],"limits":["The gap threshold (1.5 x the step) and the 9000 m depth limit are the author's choices, not from a publication; an irregular log (no dominant step) gets no gap list. Feet versus metres is a hint only: a 0.5 ft step or a 2000 m well in feet cannot be told from metres by the numbers.","LAS 3.0: version detected, typed sections and Definition/Data pairs not validated.","Units and mnemonics are not checked against a dictionary; plausibility ranges cover only the common curves.","Encoding: UTF-8, otherwise read as Windows-1252 and written back the same way.","Corrected files are written unwrapped LAS 2.0 with CRLF line endings; ~O and comments are copied as they are.","Header split: the standard uses the last colon of the line; the page uses the first colon preceded by a space, otherwise the last one, to keep colons inside values. The two agree on well-formed lines.","Source status: the LAS rules are taken from the CWLS specification (a society standard, not a peer-reviewed article); the page's practical checks beyond the standard have no publication behind them."],"date":"26 November 2026"});
 </script>
 </body></html>
