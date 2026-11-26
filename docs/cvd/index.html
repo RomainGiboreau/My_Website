@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Colour-blind check</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/cvd/">
+<meta name="description" content="Simulate colour-vision deficiency (protanomaly, deuteranomaly, tritanomaly, achromatopsia) on a figure or a colour map, check which colours of a palette become hard to tell apart (CIEDE2000) and whether a colour map is monotonic in lightness. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+/* tooltip near the left edge (two-column layout): open to the right instead */
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
+main{min-width:0}
+table.pt td,table.pt th{padding:2px 3px;text-align:right;white-space:nowrap}
+table.pt td.l,table.pt th.l{text-align:left}
+table.pt input[type=number]{width:56px;padding:.1rem .25rem}
+table.pt input[type=text]{width:92px;padding:.1rem .25rem}
+table.pt tr.off td{opacity:.45}
+table.pt td.neg{color:var(--acc2)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tile small{display:block;color:var(--mut);font-size:.74rem}
+.tile b{font:700 1.5rem "Space Grotesk",Inter,sans-serif;font-variant-numeric:tabular-nums}
+.tile.key{border-left:6px solid var(--acc)}.tile.key2{border-left:6px solid var(--acc2)}
+.card canvas{height:320px;width:100%;max-width:100%}.card{overflow:hidden}.side table.pt{width:100%}.side table.pt input[type=number]{width:60px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:12px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+.bars{display:grid;grid-template-columns:70px 1fr 54px;gap:3px 10px;align-items:center;font-size:.8rem;padding:6px 8px}
+.bars .t{background:var(--alt);border-radius:3px;height:12px;position:relative;overflow:hidden}.bars .t i{position:absolute;left:0;top:0;bottom:0;background:var(--acc)}
+.bars .v{text-align:right;font-variant-numeric:tabular-nums}
+.cmp td,.cmp th{padding:3px 8px}.cmp th:first-child,.cmp td:first-child{text-align:left}
+.warn{color:var(--acc2)}
+.fdpm{background:#e2e8e0;border-color:#4a5a4e;color:#2f3d33;font-weight:600}.pt td.act{white-space:nowrap}
+.stagewrap{display:flex;justify-content:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px}
+.stage{position:relative;height:auto;width:100%;max-width:100%;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/16px 16px;cursor:ew-resize;user-select:none;touch-action:none;border-radius:6px}
+.stage canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+#cS{clip-path:inset(0 0 0 50%)}
+#hdl{position:absolute;top:0;bottom:0;left:50%;width:0;border-left:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45);pointer-events:none}
+#hdl i{position:absolute;top:50%;left:-13px;width:24px;height:24px;margin-top:-12px;border-radius:50%;background:var(--acc);border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4)}
+.lbl{position:absolute;bottom:8px;background:rgba(35,34,32,.78);color:#f5f3ed;border-radius:4px;padding:1px 8px;font-size:.76rem;pointer-events:none}
+.lbl.l{left:8px}.lbl.r{right:8px}
+.side{overflow-x:hidden}
+.stage.over{outline:3px dashed var(--acc2)}
+.pal{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;align-items:center;font-size:.8rem;margin:6px 0 10px}
+.pal .strip{display:flex;height:30px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.pal .strip i{flex:1;min-width:0}
+textarea{font:12px/1.4 ui-monospace,Consolas,monospace;width:100%;height:96px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .5rem;resize:vertical}
+.pr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.8rem;margin:3px 0}
+.pr .c{display:inline-block;width:14px;height:14px;border:1px solid rgba(0,0,0,.35);border-radius:3px;vertical-align:middle}
+.pr .lost{color:var(--acc2);font-weight:600}
+.cvt .ok{color:var(--acc)}
+ul.hints{margin:4px 0 0 18px;padding:0;font-size:.84rem;max-width:90ch}ul.hints li{margin:4px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:12px}
+.card h3{margin:0 0 6px;font:600 .95rem "Space Grotesk",Inter,sans-serif;display:flex;gap:8px;align-items:center}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Colour-blind check</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Image</span>
+  <button class="pri" id="bOpen" title="Open an image file (or drop it on the picture, or paste it from the clipboard)">Open image…</button><input type="file" id="ifile" accept="image/*" hidden>
+  <button id="bEx" title="Reload the built-in synthetic example">Example</button>
+  <button id="bPng" title="Save the simulated image as PNG">Download simulation (PNG)</button>
+  <span class="msg" id="msg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: images and colours never leave your machine. Drag the picture to move the divider between the original (left) and the simulated image (right). The palette checker works on a list of colours independently of the picture.">?</span>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Simulation<span class="tt" tabindex="0" data-tip="Machado, Oliveira &amp; Fernandes (2009) model, applied in linear RGB. Severity 1 = dichromacy (protanopia, deuteranopia, tritanopia); smaller values = anomalous trichromacy, interpolated between the tabulated steps of 0.1. Achromatopsia = luminance only (severity not used).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row" id="types"></div>
+   <div class="row"><span style="width:70px;font-size:.82rem">Severity</span><input type="range" id="sev" min="0" max="1" step="0.05" value="1" style="flex:1"><span id="sevv" style="width:34px;text-align:right;font-variant-numeric:tabular-nums"></span></div>
+   <div class="msg" id="sMsg"></div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Palette to check<span class="tt" tabindex="0" data-tip="One colour per line or separated by commas or spaces: #RRGGBB or #RGB. Pick a built-in map to fill the list (continuous maps are sampled at N evenly spaced points; the built-in maps are approximations from control points). Pairs whose CIEDE2000 difference after simulation is below the threshold are listed as hard to tell apart. About 2 is just noticeable side by side; 10 is a safe-ish margin for symbols and lines on a map, a user choice rather than a standard.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><select id="mapSel" style="flex:1;min-width:0"></select><span style="font-size:.82rem">N</span><input type="number" id="nS" min="3" max="64" value="10" style="width:56px"></div>
+   <textarea id="txt" spellcheck="false" aria-label="Colours"></textarea><div class="msg" id="pMsg"></div>
+   <div class="row"><span style="font-size:.82rem;width:120px">ΔE threshold</span><input type="number" id="thr" min="1" max="50" step="0.5" value="10" style="width:70px"></div>
+   <label class="inl"><input type="checkbox" id="full" checked>Palette check at severity 1 (full dichromacy)</label></div></section>
+</aside>
+<main>
+ <div class="stagewrap" id="wrap"><div class="stage" id="stage"><canvas id="cO"></canvas><canvas id="cS"></canvas><div id="hdl"><i></i></div><span class="lbl l">Original</span><span class="lbl r" id="lblS">Simulation</span></div></div>
+ <div class="card"><h3>Palette under colour-vision deficiency<span class="tt" tabindex="0" data-tip="First row: your colours. Next rows: the same colours as simulated for each type. Below, the pairs whose difference falls under the threshold. “lost” = the pair was clearly different in normal vision (ΔE at or above the threshold) and no longer is.">?</span></h3><div id="pal"></div><div id="res"></div></div>
+ <div class="card"><h3>Greyscale (lightness) check<span class="tt" tabindex="0" data-tip="CIE L* of each colour in the order given. A sequential colour map should have L* rising (or falling) steadily so that it also reads in greyscale, in print and for people who rely on lightness. Only meaningful for an ordered list, not for a categorical set.">?</span></h3><div id="lc"></div></div>
+ <div class="card"><h3>Hints for geoscience figures</h3>
+  <ul class="hints">
+   <li><b>Rainbow / jet on attribute maps.</b> Red, green and yellow collapse for red-green deficiencies and lightness goes up and down, so the same value can look like two things and two values like one. Prefer a map with steadily rising lightness (viridis, cividis or a grey ramp) and test it here.</li>
+   <li><b>Red / green well-log curves.</b> Two thin lines in red and green merge for most colour-blind readers. Vary line style (solid, dashed), width or markers, and use colours that differ in lightness, such as dark blue and orange.</li>
+   <li><b>Fault traces and picks.</b> A thin red or green line over a rainbow map dissolves. Use black or white outlines (a halo), thicker lines, or a colour that sits far from the background in lightness.</li>
+   <li><b>Seismic red-white-blue.</b> Red-blue is usually safe for red-green deficiencies, but check that the two polarities differ in lightness, and check the greyscale result because many prints are black and white.</li>
+   <li><b>Categorical legends (lithology, facies).</b> More than 5 to 6 colours get confused quickly. Add patterns, labels or symbols; a palette designed for colour-blind readers such as Okabe-Ito helps, but does not remove the need for a second cue.</li>
+   <li><b>Do not rely on one test.</b> This is a model of an average observer for a given type and severity; real people vary, and screens and print differ. Treat it as a screening check, not a certification.</li>
+  </ul></div>
+</main></div>
+<script id="cv-core">
+/* Colour-vision-deficiency (CVD) core: sRGB / linear RGB, Machado et al. (2009) simulation matrices, CIELAB (D65), CIEDE2000, palette analysis. Pure logic, no DOM; window.CV. Tested by scripts/cvd_test.mjs. */
+(function(){
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+// ---- sRGB transfer (IEC 61966-2-1)
+const srgbToLinear=c=>{c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)};
+const linearToSrgb=v=>{v=clamp(v,0,1);return 255*(v<=0.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-0.055)};
+// ---- Machado, Oliveira & Fernandes (2009), Table 1: 3x3 matrices (row-major) for severity 0.0 ... 1.0 in steps of 0.1, applied to LINEAR RGB
+const TAB={
+protan:[
+[1,0,0,0,1,0,0,0,1],
+[0.856167,0.182038,-0.038205,0.029342,0.955115,0.015544,-0.002880,-0.001563,1.004443],
+[0.734766,0.334872,-0.069637,0.051840,0.919198,0.028963,-0.004928,-0.004209,1.009137],
+[0.630323,0.465641,-0.095964,0.069181,0.890046,0.040773,-0.006308,-0.007724,1.014032],
+[0.539009,0.579343,-0.118352,0.082546,0.866121,0.051332,-0.007136,-0.011959,1.019095],
+[0.458064,0.679578,-0.137642,0.092785,0.846313,0.060902,-0.007494,-0.016807,1.024301],
+[0.385450,0.769005,-0.154455,0.100526,0.829802,0.069673,-0.007442,-0.022190,1.029632],
+[0.319627,0.849633,-0.169261,0.106241,0.815969,0.077790,-0.007025,-0.028051,1.035076],
+[0.259411,0.923008,-0.182420,0.110296,0.804340,0.085364,-0.006276,-0.034346,1.040622],
+[0.203876,0.990338,-0.194214,0.112975,0.794542,0.092483,-0.005222,-0.041043,1.046265],
+[0.152286,1.052583,-0.204868,0.114503,0.786281,0.099216,-0.003882,-0.048116,1.051998]],
+deutan:[
+[1,0,0,0,1,0,0,0,1],
+[0.866435,0.177704,-0.044139,0.049567,0.939063,0.011370,-0.003453,0.007233,0.996220],
+[0.760729,0.319078,-0.079807,0.090568,0.889315,0.020117,-0.006027,0.013325,0.992702],
+[0.675425,0.433850,-0.109275,0.125303,0.847755,0.026942,-0.007950,0.018572,0.989378],
+[0.605511,0.528560,-0.134071,0.155318,0.812366,0.032316,-0.009376,0.023176,0.986200],
+[0.547494,0.607765,-0.155259,0.181692,0.781742,0.036566,-0.010410,0.027275,0.983136],
+[0.498864,0.674741,-0.173604,0.205199,0.754872,0.039929,-0.011131,0.030969,0.980162],
+[0.457771,0.731899,-0.189670,0.226409,0.731012,0.042579,-0.011595,0.034333,0.977261],
+[0.422823,0.781057,-0.203881,0.245752,0.709602,0.044646,-0.011843,0.037423,0.974421],
+[0.392952,0.823610,-0.216562,0.263559,0.690210,0.046232,-0.011910,0.040281,0.971630],
+[0.367322,0.860646,-0.227968,0.280085,0.672501,0.047413,-0.011820,0.042940,0.968881]],
+tritan:[
+[1,0,0,0,1,0,0,0,1],
+[0.926670,0.092514,-0.019184,0.021191,0.964503,0.014306,0.008437,0.054813,0.936750],
+[0.895720,0.133330,-0.029050,0.029997,0.945400,0.024603,0.013027,0.104707,0.882266],
+[0.905871,0.127791,-0.033662,0.026856,0.941251,0.031893,0.013410,0.148296,0.838294],
+[0.948035,0.089490,-0.037526,0.014364,0.946792,0.038844,0.010853,0.193991,0.795156],
+[1.017277,0.027029,-0.044306,-0.006113,0.958479,0.047634,0.006379,0.248708,0.744913],
+[1.104996,-0.046633,-0.058363,-0.032137,0.971635,0.060503,0.001336,0.317922,0.680742],
+[1.193214,-0.109812,-0.083402,-0.058496,0.979410,0.079086,-0.002346,0.403492,0.598854],
+[1.257728,-0.139648,-0.118081,-0.078003,0.975409,0.102594,-0.003316,0.501214,0.502102],
+[1.278864,-0.125333,-0.153531,-0.084748,0.957674,0.127074,-0.000989,0.601151,0.399838],
+[1.255528,-0.076749,-0.178779,-0.078411,0.930809,0.147602,0.004733,0.691367,0.303900]]};
+const LUM=[0.2126729,0.7151522,0.0721750]; // linear luminance Y of sRGB (D65)
+const TYPES=['protan','deutan','tritan','achroma'];
+const NAMES={protan:'Protanomaly / protanopia',deutan:'Deuteranomaly / deuteranopia',tritan:'Tritanomaly / tritanopia',achroma:'Achromatopsia (luminance)'};
+// 3x3 matrix (array of 9) for a type and a severity in [0,1]; linear interpolation between the tabulated steps of 0.1
+function matrix(type,sev){
+  if(type==='achroma')return [...LUM,...LUM,...LUM];
+  const T=TAB[type];if(!T)throw new Error('unknown type '+type);
+  const s=clamp(+sev,0,1)*10,i=Math.min(9,Math.floor(s)),f=s-i;
+  return T[i].map((v,k)=>v+(T[i+1][k]-v)*f);
+}
+const mulv=(m,r,g,b)=>[m[0]*r+m[1]*g+m[2]*b,m[3]*r+m[4]*g+m[5]*b,m[6]*r+m[7]*g+m[8]*b];
+// one colour: rgb 0..255 in, 0..255 out (floats, clipped)
+function simulateRGB(rgb,type,sev){
+  const m=matrix(type,sev),v=mulv(m,srgbToLinear(rgb[0]),srgbToLinear(rgb[1]),srgbToLinear(rgb[2]));
+  return [linearToSrgb(v[0]),linearToSrgb(v[1]),linearToSrgb(v[2])];
+}
+// RGBA byte array (ImageData.data) -> new Uint8ClampedArray; alpha kept
+const L2S=(()=>{const n=4096,t=new Uint8Array(n+1);for(let i=0;i<=n;i++)t[i]=Math.round(linearToSrgb(i/n));return t})();
+const S2L=(()=>{const t=new Float64Array(256);for(let i=0;i<256;i++)t[i]=srgbToLinear(i);return t})();
+function simulateImage(data,type,sev){
+  const m=matrix(type,sev),out=new Uint8ClampedArray(data.length),n=data.length;
+  for(let i=0;i<n;i+=4){
+    const r=S2L[data[i]],g=S2L[data[i+1]],b=S2L[data[i+2]];
+    let R=m[0]*r+m[1]*g+m[2]*b,G=m[3]*r+m[4]*g+m[5]*b,B=m[6]*r+m[7]*g+m[8]*b;
+    R=R<0?0:R>1?1:R;G=G<0?0:G>1?1:G;B=B<0?0:B>1?1:B;
+    out[i]=L2S[Math.round(R*4096)];out[i+1]=L2S[Math.round(G*4096)];out[i+2]=L2S[Math.round(B*4096)];out[i+3]=data[i+3];
+  }
+  return out;
+}
+// ---- hex
+function hexToRgb(h){h=String(h).trim().replace(/^#/,'');if(/^[0-9a-f]{3}$/i.test(h))h=h.replace(/./g,'$&$&');if(!/^[0-9a-f]{6}$/i.test(h))return null;return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]}
+const rgbToHex=c=>'#'+c.map(v=>Math.round(clamp(v,0,255)).toString(16).padStart(2,'0')).join('').toUpperCase();
+function parseColors(text){const colors=[],bad=[];for(const t of String(text).split(/[\s,;]+/).filter(Boolean)){const c=hexToRgb(t);if(c)colors.push(rgbToHex(c));else bad.push(t)}return{colors,bad}}
+// ---- CIELAB (D65, 2 degree)
+const WHITE=[0.95047,1,1.08883];
+function rgbToLab(rgb){
+  const r=srgbToLinear(rgb[0]),g=srgbToLinear(rgb[1]),b=srgbToLinear(rgb[2]);
+  const X=0.4124564*r+0.3575761*g+0.1804375*b,Y=0.2126729*r+0.7151522*g+0.0721750*b,Z=0.0193339*r+0.1191920*g+0.9503041*b;
+  const f=t=>t>216/24389?Math.cbrt(t):(24389/27*t+16)/116,fx=f(X/WHITE[0]),fy=f(Y/WHITE[1]),fz=f(Z/WHITE[2]);
+  return [116*fy-16,500*(fx-fy),200*(fy-fz)];
+}
+// ---- CIEDE2000 (Sharma, Wu & Dalal 2005), kL = kC = kH = 1
+function deltaE2000(p,q){
+  const rad=Math.PI/180,[L1,a1,b1]=p,[L2,a2,b2]=q,p7=Math.pow(25,7);
+  const C1=Math.hypot(a1,b1),C2=Math.hypot(a2,b2),Cb=(C1+C2)/2,Cb7=Math.pow(Cb,7),G=0.5*(1-Math.sqrt(Cb7/(Cb7+p7)));
+  const a1p=(1+G)*a1,a2p=(1+G)*a2,C1p=Math.hypot(a1p,b1),C2p=Math.hypot(a2p,b2);
+  const hp=(b,a)=>{if(b===0&&a===0)return 0;const h=Math.atan2(b,a)/rad;return h<0?h+360:h};
+  const h1p=hp(b1,a1p),h2p=hp(b2,a2p),dLp=L2-L1,dCp=C2p-C1p;
+  let dhp=0;if(C1p*C2p!==0){dhp=h2p-h1p;if(dhp>180)dhp-=360;else if(dhp<-180)dhp+=360}
+  const dHp=2*Math.sqrt(C1p*C2p)*Math.sin(dhp*rad/2),Lbp=(L1+L2)/2,Cbp=(C1p+C2p)/2;
+  let hbp;if(C1p*C2p===0)hbp=h1p+h2p;else if(Math.abs(h1p-h2p)<=180)hbp=(h1p+h2p)/2;else hbp=(h1p+h2p<360)?(h1p+h2p+360)/2:(h1p+h2p-360)/2;
+  const T=1-0.17*Math.cos((hbp-30)*rad)+0.24*Math.cos(2*hbp*rad)+0.32*Math.cos((3*hbp+6)*rad)-0.20*Math.cos((4*hbp-63)*rad);
+  const dth=30*Math.exp(-Math.pow((hbp-275)/25,2)),Cbp7=Math.pow(Cbp,7),Rc=2*Math.sqrt(Cbp7/(Cbp7+p7));
+  const Sl=1+0.015*Math.pow(Lbp-50,2)/Math.sqrt(20+Math.pow(Lbp-50,2)),Sc=1+0.045*Cbp,Sh=1+0.015*Cbp*T,Rt=-Math.sin(2*dth*rad)*Rc;
+  const x=dLp/Sl,y=dCp/Sc,z=dHp/Sh;
+  return Math.sqrt(x*x+y*y+z*z+Rt*y*z);
+}
+const dE=(h1,h2)=>deltaE2000(rgbToLab(hexToRgb(h1)),rgbToLab(hexToRgb(h2)));
+// ---- built-in colour maps: control points (sRGB), approximations, not the exact published tables
+const MAPS={
+  jet:{name:'Rainbow / jet (approx.)',kind:'continuous',stops:['#000080','#0000FF','#00FFFF','#FFFF00','#FF0000','#800000'],at:[0,.125,.375,.625,.875,1]},
+  viridis:{name:'viridis (approx., 10 points)',kind:'continuous',stops:['#440154','#482878','#3E4A89','#31688E','#26828E','#1F9E89','#35B779','#6DCD59','#B4DE2C','#FDE725']},
+  cividis:{name:'cividis (approx., 6 points)',kind:'continuous',stops:['#00204D','#31446B','#666970','#958F78','#CBBA69','#FFEA46']},
+  grey:{name:'Grey',kind:'continuous',stops:['#000000','#FFFFFF']},
+  seismic:{name:'Seismic red-white-blue (approx.)',kind:'continuous',stops:['#00004D','#0000FF','#FFFFFF','#FF0000','#800000']},
+  tab10:{name:'Categorical: Tab10',kind:'categorical',stops:['#1F77B4','#FF7F0E','#2CA02C','#D62728','#9467BD','#8C564B','#E377C2','#7F7F7F','#BCBD22','#17BECF']},
+  okabe:{name:'Categorical: Okabe-Ito',kind:'categorical',stops:['#000000','#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7']},
+  set1:{name:'Categorical: ColorBrewer Set1',kind:'categorical',stops:['#E41A1C','#377EB8','#4DAF4A','#984EA3','#FF7F00','#FFFF33','#A65628','#F781BF','#999999']}
+};
+// colour of a continuous map at t in [0,1] (linear interpolation in sRGB between control points); rgb 0..255
+function mapColor(id,t){
+  const M=MAPS[id],n=M.stops.length,at=M.at||M.stops.map((_,i)=>i/(n-1));t=clamp(t,0,1);
+  let k=0;while(k<n-2&&t>at[k+1])k++;
+  const f=(t-at[k])/(at[k+1]-at[k]),a=hexToRgb(M.stops[k]),b=hexToRgb(M.stops[k+1]);
+  return a.map((v,i)=>v+(b[i]-v)*f);
+}
+// list of hex colours: all entries for a categorical set, n evenly spaced samples for a continuous map
+function sampleMap(id,n){
+  const M=MAPS[id];if(!M)throw new Error('unknown map '+id);
+  if(M.kind==='categorical')return M.stops.slice();
+  n=Math.max(2,Math.round(n||10));return Array.from({length:n},(_,i)=>rgbToHex(mapColor(id,i/(n-1))));
+}
+// ---- palette analysis
+function simulateHex(hex,type,sev){return rgbToHex(simulateRGB(hexToRgb(hex),type,sev))}
+// all pairs: dE before and after the simulation; hard = dE after below thr; lost = was >= thr before
+function analysePalette(hexes,type,sev,thr){
+  const sim=hexes.map(h=>simulateHex(h,type,sev)),lab0=hexes.map(h=>rgbToLab(hexToRgb(h))),lab1=sim.map(h=>rgbToLab(hexToRgb(h))),pairs=[];
+  for(let i=0;i<hexes.length;i++)for(let j=i+1;j<hexes.length;j++){const d0=deltaE2000(lab0[i],lab0[j]),d1=deltaE2000(lab1[i],lab1[j]);pairs.push({i,j,a:hexes[i],b:hexes[j],dE0:d0,dE:d1,hard:d1<thr,lost:d1<thr&&d0>=thr})}
+  const hard=pairs.filter(p=>p.hard).sort((x,y)=>x.dE-y.dE);
+  return{type,sev,thr,sim,pairs,hard,nLost:hard.filter(p=>p.lost).length,minDE:pairs.length?Math.min(...pairs.map(p=>p.dE)):null};
+}
+// lightness (CIE L*) along the list in the order given: is it monotonic? tol = largest tolerated opposite step (L* units)
+function lightnessCheck(hexes,tol){
+  tol=tol==null?0.5:tol;const L=hexes.map(h=>rgbToLab(hexToRgb(h))[0]);
+  let up=0,down=0,rev=0,last=0;
+  for(let i=1;i<L.length;i++){const d=L[i]-L[i-1];if(d>tol){up++;if(last<0)rev++;last=1}else if(d<-tol){down++;if(last>0)rev++;last=-1}}
+  const mono=L.length<2?'flat':(up&&down)?'non-monotonic':up?'increasing':down?'decreasing':'flat';
+  return{L,mono,reversals:rev,Lmin:Math.min(...L),Lmax:Math.max(...L),range:Math.max(...L)-Math.min(...L)};
+}
+window.CV={TAB,TYPES,NAMES,MAPS,srgbToLinear,linearToSrgb,matrix,simulateRGB,simulateImage,hexToRgb,rgbToHex,parseColors,rgbToLab,deltaE2000,dE,mapColor,sampleMap,simulateHex,analysePalette,lightnessCheck};
+})();
+</script><script>
+const $=id=>document.getElementById(id),C=window.CV;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let type='deutan',sev=1,orig=null,IW=0,IH=0,revealX=.5;
+const SHORT={protan:'Protan',deutan:'Deutan',tritan:'Tritan',achroma:'Achromatopsia'};
+function say(t){const m=$('msg');m.textContent=t;setTimeout(()=>{if(m.textContent===t)m.textContent=''},3500)}
+// ---- type buttons
+$('types').innerHTML=C.TYPES.map(t=>`<button data-t="${t}" title="${C.NAMES[t]}">${SHORT[t]}</button>`).join('');
+$('types').onclick=e=>{const t=e.target.dataset.t;if(!t)return;type=t;syncSim();simulate()};
+$('sev').oninput=()=>{sev=+$('sev').value;syncSim();simulate()};
+function syncSim(){document.querySelectorAll('#types button').forEach(b=>b.classList.toggle('on',b.dataset.t===type));
+  $('sevv').textContent=sev.toFixed(2);$('sev').disabled=type==='achroma';
+  const name=type==='achroma'?'Achromatopsia':SHORT[type]+(sev>=1?' (dichromacy)':' (severity '+sev.toFixed(2)+')');$('lblS').textContent=name;
+  $('sMsg').textContent=type==='achroma'?'Luminance only; severity not used.':sev>=1?'Severity 1: '+{protan:'protanopia',deutan:'deuteranopia',tritan:'tritanopia'}[type]+'.':'Anomalous trichromacy, '+{protan:'protanomaly',deutan:'deuteranomaly',tritan:'tritanomaly'}[type]+'.'}
+// ---- image
+function layout(){if(!IW)return;const w=$('wrap').clientWidth-18,maxH=Math.max(320,innerHeight*.74),s=Math.min(w/IW,maxH/IH),st=$('stage');st.style.width=Math.round(IW*s)+'px';st.style.height=Math.round(IH*s)+'px'}
+function setReveal(f){revealX=Math.min(1,Math.max(0,f));$('cS').style.clipPath=`inset(0 0 0 ${(revealX*100).toFixed(2)}%)`;$('hdl').style.left=(revealX*100)+'%'}
+function simulate(){if(!orig)return;const o=C.simulateImage(orig.data,type,sev),cs=$('cS'),ctx=cs.getContext('2d');ctx.putImageData(new ImageData(o,IW,IH),0,0)}
+function setImage(src,w,h){const MAX=1600,k=Math.min(1,MAX/Math.max(w,h));IW=Math.max(1,Math.round(w*k));IH=Math.max(1,Math.round(h*k));
+  for(const id of['cO','cS']){$(id).width=IW;$(id).height=IH}
+  const c=$('cO').getContext('2d',{willReadFrequently:true});c.clearRect(0,0,IW,IH);c.drawImage(src,0,0,IW,IH);orig=c.getImageData(0,0,IW,IH);layout();simulate()}
+function loadBlob(b,name){if(!b||!/^image\//.test(b.type)){say('Not an image file.');return}
+  const u=URL.createObjectURL(b),im=new Image();im.onload=()=>{setImage(im,im.naturalWidth,im.naturalHeight);URL.revokeObjectURL(u);say((name||'Image')+' loaded ('+IW+' × '+IH+').')};im.onerror=()=>{URL.revokeObjectURL(u);say('Cannot read this image.')};im.src=u}
+$('bOpen').onclick=()=>$('ifile').click();
+$('ifile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)loadBlob(f,f.name)};
+document.addEventListener('paste',e=>{for(const it of e.clipboardData?e.clipboardData.items:[])if(it.type.startsWith('image/')){loadBlob(it.getAsFile(),'Pasted image');e.preventDefault();return}});
+const stage=$('stage');
+stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('over')});stage.addEventListener('dragleave',()=>stage.classList.remove('over'));
+stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('over');const f=e.dataTransfer.files[0];if(f)loadBlob(f,f.name)});
+let drag=false;const mv=e=>{const r=stage.getBoundingClientRect();setReveal((e.clientX-r.left)/r.width)};
+stage.addEventListener('pointerdown',e=>{drag=true;stage.setPointerCapture(e.pointerId);mv(e)});stage.addEventListener('pointermove',e=>{if(drag)mv(e)});stage.addEventListener('pointerup',()=>{drag=false});
+window.addEventListener('resize',()=>{layout();renderPal()});
+$('bPng').onclick=()=>{if(!orig)return;$('cS').toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='simulation_'+type+(type==='achroma'?'':'_'+sev.toFixed(2))+'.png';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);say('PNG saved.')},'image/png')};
+// ---- synthetic example: seismic section, structure map, colour strips, well log, categorical legend
+function example(){
+  const W=960,H=580,cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,W,H);
+  g.font='12px Inter,sans-serif';g.textBaseline='top';g.fillStyle='#232220';
+  // seismic section (460 x 250 at 10,24)
+  const sx=10,sy=24,sw=460,sh=250,im=g.createImageData(sw,sh);
+  for(let y=0;y<sh;y++)for(let x=0;x<sw;x++){const fault=x>230?1:0,yy=y-(fault?18:0),dip=22*Math.sin(x*.012)+x*.06,ph=(yy-dip)*.42,env=Math.exp(-Math.pow((yy-dip-130)/160,2))*.9+.25;
+    let a=Math.sin(ph)*Math.sin(ph*.37+1.3)*env*1.5+.12*Math.sin(x*1.7+y*.9);a=Math.max(-1,Math.min(1,a));
+    const c=C.mapColor('seismic',.5+.5*a),i=(y*sw+x)*4;im.data[i]=c[0];im.data[i+1]=c[1];im.data[i+2]=c[2];im.data[i+3]=255}
+  g.putImageData(im,sx,sy);g.fillText('Seismic amplitude (red-white-blue), fault in red',sx,6);g.strokeStyle='#D62728';g.lineWidth=2;g.beginPath();g.moveTo(sx+230,sy);g.lineTo(sx+230,sy+sh);g.stroke();
+  // structure map with jet (460 x 250 at 490,24) and fault traces
+  const mx=490,my=24,mw=460,mh=250,jm=g.createImageData(mw,mh);
+  for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){const dx=(x-250)/150,dy=(y-110)/90,z=Math.exp(-(dx*dx+dy*dy))*.8+.12*Math.sin(x*.03)+.12*Math.cos(y*.04)+.25*(x/mw),c=C.mapColor('jet',Math.max(0,Math.min(1,z))),i=(y*mw+x)*4;
+    jm.data[i]=c[0];jm.data[i+1]=c[1];jm.data[i+2]=c[2];jm.data[i+3]=255}
+  g.putImageData(jm,mx,my);g.fillStyle='#232220';g.fillText('Structure map (rainbow), faults in green and red',mx,6);
+  g.lineWidth=2;g.strokeStyle='#00AA00';g.beginPath();g.moveTo(mx+60,my+20);g.lineTo(mx+170,my+150);g.lineTo(mx+250,my+235);g.stroke();
+  g.strokeStyle='#D62728';g.beginPath();g.moveTo(mx+300,my+10);g.lineTo(mx+360,my+120);g.lineTo(mx+430,my+200);g.stroke();
+  // colour strips (10,300)
+  g.fillStyle='#232220';g.fillText('Colour maps',10,280);
+  [['jet','Rainbow / jet'],['viridis','viridis'],['cividis','cividis'],['seismic','Seismic'],['grey','Grey']].forEach(([id,nm],k)=>{const y=304+k*34;
+    for(let x=0;x<300;x++){const c=C.mapColor(id,x/299);g.fillStyle=`rgb(${c.map(Math.round)})`;g.fillRect(10+x,y,1,22)}g.fillStyle='#232220';g.fillText(nm,320,y+4)});
+  // well log (470,300)
+  const lx=490,ly=300,lw=210,lh=270;g.strokeStyle='#999';g.lineWidth=1;g.strokeRect(lx,ly,lw,lh);g.fillStyle='#232220';g.fillText('Well log: red / green curves',lx,280);
+  for(const [col,ph] of [['#D62728',0],['#2CA02C',1.6]]){g.strokeStyle=col;g.lineWidth=1.6;g.beginPath();for(let y=0;y<=lh;y+=2){const x=lx+lw*(.5+.28*Math.sin(y*.05+ph)+.1*Math.sin(y*.21+ph*2));y?g.lineTo(x,ly+y):g.moveTo(x,ly+y)}g.stroke()}
+  // categorical legend (730,290)
+  g.fillStyle='#232220';g.fillText('Facies (categorical, Tab10)',730,280);
+  const nm=['Sand','Shale','Silt','Coal','Carbonate','Salt','Marl','Anhydrite','Conglomerate','Basement'];
+  C.MAPS.tab10.stops.forEach((h,k)=>{const y=304+k*23;g.fillStyle=h;g.fillRect(730,y,40,20);g.fillStyle='#232220';g.fillText(nm[k],780,y+3)});
+  return cv}
+function loadExample(){const cv=example();setImage(cv,cv.width,cv.height);setReveal(.5);say('Synthetic example loaded.')}
+$('bEx').onclick=loadExample;
+// ---- palette checker
+const mapSel=$('mapSel');mapSel.innerHTML='<option value="">Own list</option>'+Object.entries(C.MAPS).map(([k,m])=>`<option value="${k}">${esc(m.name)}</option>`).join('');
+function fillMap(){const id=mapSel.value;if(!id)return;$('txt').value=C.sampleMap(id,+$('nS').value).join('\n');$('nS').disabled=C.MAPS[id].kind==='categorical';renderPal()}
+mapSel.onchange=fillMap;$('nS').oninput=fillMap;
+$('txt').oninput=()=>{mapSel.value='';$('nS').disabled=false;renderPal()};$('thr').oninput=renderPal;$('full').onchange=renderPal;
+const sw=h=>`<span class="c" style="background:${h}"></span>`;
+function renderPal(){
+  const P=C.parseColors($('txt').value),cols=P.colors,thr=Math.max(0,+$('thr').value||0),sp=$('full').checked?1:sev;
+  $('pMsg').textContent=P.bad.length?'Not understood: '+P.bad.slice(0,5).join(', ')+(P.bad.length>5?'…':''):cols.length+' colours.';
+  if(cols.length<1){$('pal').innerHTML='<div class="hint">No colour yet.</div>';$('res').innerHTML='';$('lc').innerHTML='';return}
+  const strip=l=>'<div class="strip">'+l.map(h=>`<i style="background:${h}" title="${h}"></i>`).join('')+'</div>';
+  const an=C.TYPES.map(t=>C.analysePalette(cols,t,sp,thr));
+  $('pal').innerHTML='<div class="pal"><div>Original</div>'+strip(cols)+an.map(a=>`<div>${SHORT[a.type]}${a.type==='achroma'?'':' '+sp.toFixed(2)}</div>`+strip(a.sim)).join('')+'</div>';
+  const MAXL=24;
+  $('res').innerHTML='<table class="cvt cmp"><thead><tr><th>Type</th><th>Pairs</th><th>Hard to tell apart (ΔE &lt; '+thr+')</th><th>of which lost</th><th>Smallest ΔE</th></tr></thead><tbody>'+
+    an.map(a=>`<tr><td>${SHORT[a.type]}</td><td>${a.pairs.length}</td><td class="${a.hard.length?'warn':'ok'}">${a.hard.length}</td><td>${a.nLost}</td><td>${a.minDE==null?'—':a.minDE.toFixed(1)}</td></tr>`).join('')+'</tbody></table>'+
+    an.map(a=>a.hard.length?`<div class="hint" style="margin-top:8px"><b>${SHORT[a.type]}</b>: ${a.hard.length} pair${a.hard.length>1?'s':''} hard to tell apart${a.hard.length>MAXL?' (first '+MAXL+' shown)':''}</div>`+a.hard.slice(0,MAXL).map(p=>`<div class="pr">${sw(p.a)}${p.a} ${sw(p.b)}${p.b} · ΔE ${p.dE.toFixed(1)} after, ${p.dE0.toFixed(1)} before${p.lost?' <span class="lost">lost</span>':''} · simulated ${sw(a.sim[p.i])}${sw(a.sim[p.j])}</div>`).join(''):'').join('');
+  const L=C.lightnessCheck(cols),msg={increasing:'L* rises steadily along the list: reads well in greyscale.',decreasing:'L* falls steadily along the list: reads well in greyscale.',flat:'L* is almost constant: the colours cannot be told apart in greyscale.','non-monotonic':'L* goes up and down ('+L.reversals+' reversal'+(L.reversals>1?'s':'')+'): not monotonic, so a grey print can be misleading. Fine for a categorical set, a warning for a sequential colour map.'}[L.mono];
+  const W=300,H=70,sx=i=>6+(W-12)*(L.L.length>1?i/(L.L.length-1):.5),sy=v=>H-6-(H-12)*v/100;
+  $('lc').innerHTML=`<div class="${L.mono==='non-monotonic'||L.mono==='flat'?'warn':'ok'}" style="font-weight:600">${L.mono}</div><div class="hint">${msg} Range ${L.Lmin.toFixed(0)} to ${L.Lmax.toFixed(0)} (span ${L.range.toFixed(0)}).</div>`+
+    `<svg width="${W}" height="${H}" style="border:1px solid var(--line);border-radius:4px;background:#fff"><polyline fill="none" stroke="#4a5a4e" stroke-width="1.5" points="${L.L.map((v,i)=>sx(i).toFixed(1)+','+sy(v).toFixed(1)).join(' ')}"/>${L.L.map((v,i)=>`<circle cx="${sx(i).toFixed(1)}" cy="${sy(v).toFixed(1)}" r="4" fill="${cols[i]}" stroke="#232220" stroke-width=".6"/>`).join('')}</svg><div class="hint">L* (0 to 100) against the order in the list.</div>`+
+    '<div class="strip" style="display:flex;height:22px;max-width:300px;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-top:4px">'+L.L.map(v=>`<i style="flex:1;background:rgb(${[0,0,0].map(()=>Math.round(C.linearToSrgb(Math.pow((v+16)/116,3)>.008856?Math.pow((v+16)/116,3):v/903.3))).join(',')})"></i>`).join('')+'</div><div class="hint">The same colours in grey (same L*).</div>';
+}
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+mapSel.value='jet';fillMap();syncSim();loadExample();renderPal();
+</script>
+<script id="rgm-js">
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Simulates how a figure (seismic section, attribute or structure map, well log, geological map) looks with colour-vision deficiency, with a divider to compare the original and the simulation, and checks a colour palette or colour map: which colours become hard to tell apart for each deficiency (CIEDE2000) and whether a colour map is monotonic in lightness.","method":["<b>Simulation.</b> Each pixel is decoded from sRGB to linear RGB, multiplied by the 3 × 3 matrix of Machado, Oliveira &amp; Fernandes (2009) for the chosen type and severity, clipped to [0, 1] and encoded back to sRGB. The matrices are tabulated for severities 0.0 to 1.0 in steps of 0.1; intermediate severities are interpolated linearly between the two nearest tabulated matrices. Severity 1 is the dichromat (protanopia, deuteranopia, tritanopia); severity 0 is the identity.","<b>Achromatopsia.</b> Rod monochromacy is modelled in the simplest way: the linear luminance Y = 0.2127 R + 0.7152 G + 0.0722 B (sRGB primaries, D65) is written to the three channels. This is a screening approximation, not a model of the relative spectral sensitivity of the rods.","<b>Colour difference.</b> Colours are converted to CIELAB (D65 white, 2° observer) and compared with CIEDE2000 (kL = kC = kH = 1). For every pair of colours the page computes the difference before and after the simulation; a pair is <i>hard to tell apart</i> when the difference after is below the threshold (default 10, set by the user), and <i>lost</i> when it was at or above the threshold before.","<b>Greyscale check.</b> CIE L* of each colour in the order of the list; the list is monotonic when no step goes against the main direction by more than 0.5 L*. Meaningful for sequential colour maps; a categorical set has no order.","<b>Built-in colour maps.</b> Continuous maps are rebuilt from a few control points with linear interpolation in sRGB and sampled at N evenly spaced points; they are faithful approximations for checking, not the exact published tables. Categorical sets are the listed colours."],"sources":[["Simulation matrices (protan, deutan, tritan, severity 0.0 to 1.0)","Machado, G.M., Oliveira, M.M., Fernandes, L.A.F. (2009), A physiologically-based model for simulation of color vision deficiency, IEEE Trans. Visualization and Computer Graphics 15(6), 1291-1298; Table 1 as given on the authors' page (www.inf.ufrgs.br/~oliveira/pubs_files/CVD_Simulation/CVD_Simulation.html), read on 26 November 2026; the 33 matrices of this page were copied from it","published (authors' page)"],["Application in linear RGB after sRGB decoding","Procedure of the same model; the paper itself (PDF) was not re-read for this page","published (second hand)"],["sRGB transfer function, primaries, luminance coefficients","IEC 61966-2-1 (standard formulas, document not re-read)","classical"],["CIELAB, D65 white","CIE 15 colorimetry (standard formulas, not re-read)","classical"],["CIEDE2000","Sharma, G., Wu, W., Dalal, E.N. (2005), The CIEDE2000 color-difference formula: implementation notes, supplementary test data, and mathematical observations, Color Research &amp; Application 30(1), 21-30. The 34 test pairs of the supplementary data file (hajim.rochester.edu/ece/sites/gsharma/ciede2000/) were read and are used in the test","published"],["Colour maps (rainbow / jet, viridis, cividis, grey, seismic)","Control points written from memory of the usual maps (viridis and cividis from about 10 and 6 sampled colours); approximations, not checked against the published tables","memory"],["Categorical sets (Tab10, Okabe-Ito, ColorBrewer Set1)","Hex values written from memory, not checked against the original publications","memory"],["ΔE threshold (default 10)","Choice of the page author, editable; not a standard","on the page"],["Hints for geoscience figures","Plain practical advice, not claims from a paper","on the page"],["Example image","Synthetic, drawn by the page; not data","on the page"]],"validation":["Tested in <code>scripts/cvd_test.mjs</code> (run <code>node scripts/cvd_test.mjs</code>): the matrices at severity 0 are the identity; white and black are preserved by every simulation; the rows of the dichromat matrices (and of every tabulated matrix) sum to about 1; sRGB decode and encode round trip; CIEDE2000 reproduces the 34 published test pairs of Sharma et al. (2005) to 1e-4; sRGB to Lab known values (white L* 100, black 0, #808080 about 53.6, pure red, green and blue); symmetry and zero for identical colours; protanopia makes red and green nearly indistinguishable in lightness-matched pairs while a blue-yellow pair stays distinct; the rainbow map is non-monotonic in lightness and viridis is monotonic; a greyscale list is monotonic.","The page was looked at in a headless browser (layout, example image, divider)."],"limits":["A model of an average observer for a given type and severity: real people vary, and the screen and the print also change the colours. Treat the result as a screening check.","The model is for anomalous trichromacy and dichromacy; achromatopsia is a plain luminance approximation. Cone monochromacy and acquired deficiencies are not modelled.","CIEDE2000 is a colour-difference formula fitted on large uniform patches; it does not account for thin lines, small symbols or texture, where discrimination is worse. It is computed on the simulated sRGB colours, not on the cone responses.","Colours are taken as sRGB; images with an embedded colour profile are not converted. Images are reduced to 1600 pixels on the longer side.","The built-in colour maps and categorical sets are approximations or from memory (see the sources table); paste the exact values if you need them."],"date":"26 November 2026"});
+</script>
+</body></html>
