@@ -84,8 +84,10 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
  <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
   <select id="exWhich"><option value="all" selected>All datasets</option><option value="active">Active dataset</option></select>
   <label><input type="checkbox" id="sortX">Sort by X</label>
+  <label title="Adds # comment lines to the CSV with the calibration points, the axis scales and the extraction parameters (audit trail). Untick for a file without comment lines."><input type="checkbox" id="hdr" checked>Calibration header</label>
   <button class="pri" id="bCopy" title="Copy as tab-separated text, ready to paste into Excel">Copy</button>
   <button id="bCsv">Download CSV</button>
+  <button id="bJson" title="Calibration, parameters and points in one JSON file (audit trail)">Download JSON</button>
   <span class="msg" id="exportMsg"></span>
   <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the image is never uploaded. Points are stored in image pixels, so re-calibrating the axes updates every value. Without calibration the table shows pixel coordinates.">?</span>
  </div>
@@ -96,6 +98,7 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <div class="body">
   <div class="row"><button class="pri" id="bOpen">Open image…</button><button id="bExample">Try an example</button></div>
   <input type="file" id="file" accept="image/*" hidden>
+  <div class="msg" id="imgMsg"></div>
   </div>
  </section>
  <section class="panel"><h2><span class="n">2</span>Axes<span class="tt" tabindex="0" data-tip="Click two points on the X axis, then two on the Y axis (ticks or grid lines), then type their values. Axes may be slightly rotated.">?</span><i class="chev"></i></h2>
@@ -144,7 +147,116 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
  </section>
 </aside>
 </div>
-<script>
+<script id="dg-core">
+var DGC=(function(){
+  // Pure image / colour logic of the Plot digitizer (no DOM): colour picking, colour mask, connected part, curve tracker, blobs,
+  // plausibility checks, pixel size, export precision, audit header. Tested by scripts/digitizer_test.mjs.
+  const med=a=>{const s=a.slice().sort((p,q)=>p-q),n=s.length;return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2};
+  // background = the most frequent colour of the image (4-bit quantised bins, mean colour of the winning bin)
+  function bgColor(d,w,h){
+    const cnt=new Uint32Array(4096),sr=new Float64Array(4096),sg=new Float64Array(4096),sb=new Float64Array(4096),n=w*h;
+    for(let i=0;i<n;i+=2){const p=i*4,k=((d[p]>>4)<<8)|((d[p+1]>>4)<<4)|(d[p+2]>>4);cnt[k]++;sr[k]+=d[p];sg[k]+=d[p+1];sb[k]+=d[p+2]}
+    let b=0;for(let k=1;k<4096;k++)if(cnt[k]>cnt[b])b=k;
+    return cnt[b]?[sr[b]/cnt[b],sg[b]/cnt[b],sb[b]/cnt[b]]:[255,255,255]}
+  // colour of the curve = the purest pixel near the click, i.e. the one farthest from the background (median of the 3 farthest, to resist noise).
+  // The mean of the 3x3 around the click mixed the line with the background (a 2 px #c0392b line gave #d57a71).
+  function pickColor(d,w,h,x,y,bg){
+    bg=bg||[255,255,255];const c=[];
+    for(let j=-2;j<=2;j++)for(let i=-2;i<=2;i++){const xx=x+i,yy=y+j;if(xx<0||yy<0||xx>=w||yy>=h)continue;const o=(yy*w+xx)*4;
+      c.push({v:[d[o],d[o+1],d[o+2]],q:(d[o]-bg[0])**2+(d[o+1]-bg[1])**2+(d[o+2]-bg[2])**2})}
+    c.sort((a,b)=>b.q-a.q);const t=c.slice(0,3);
+    return[0,1,2].map(k=>med(t.map(e=>e.v[k])))}
+  function colorMask(d,w,h,col,tol,box){const m=new Uint8Array(w*h),t2=tol*tol,cr=col[0],cg=col[1],cb=col[2];
+    for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const i=y*w+x,p=i*4;if((d[p]-cr)**2+(d[p+1]-cg)**2+(d[p+2]-cb)**2<=t2)m[i]=1}return m}
+  // keep only the pixels linked to the picked pixel (8-neighbourhood widened by `gap` px, so thin breaks do not cut the curve)
+  function keepConnected(m,w,box,seed,gap){
+    const sx=Math.floor(seed[0]),sy=Math.floor(seed[1]);let si=-1;
+    for(let r=0;r<=8&&si<0;r++){let best=1e9;       // nearest matching pixel to the click (the clicked pixel itself may be anti-aliased)
+      for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const x=sx+dx,y=sy+dy;if(x<box.x0||y<box.y0||x>=box.x1||y>=box.y1)continue;
+        const i=y*w+x;if(m[i]){const q=dx*dx+dy*dy;if(q<best){best=q;si=i}}}}
+    if(si<0)return m;                                // nothing matches near the click: keep everything
+    const out=new Uint8Array(m.length),st=new Int32Array(m.length),R=1+gap;let sp=0;st[sp++]=si;out[si]=1;
+    while(sp){const j=st[--sp],jx=j%w,jy=(j/w)|0;
+      for(let dy=-R;dy<=R;dy++){const y=jy+dy;if(y<box.y0||y>=box.y1)continue;
+        for(let dx=-R;dx<=R;dx++){const x=jx+dx;if(x<box.x0||x>=box.x1)continue;const k=y*w+x;if(m[k]&&!out[k]){out[k]=1;st[sp++]=k}}}}
+    return out}
+  // Curve mode: one point per column. Runs of matching pixels separated by <=2 px are one segment. Tracking starts at the picked pixel and goes
+  // right then left. When a column holds several segments (crossing curves, grid, text) the one closest to the line fitted through the last
+  // accepted points is taken (continuity prior), and the column is counted as ambiguous.
+  function extractCurve(m,w,box,step,seed){
+    const cols=[];for(let x=box.x0;x<box.x1;x+=step)cols.push(x);
+    const runsAt=x=>{const runs=[];let y=box.y0;
+      while(y<box.y1){if(m[y*w+x]){let y2=y;while(y2+1<box.y1&&m[(y2+1)*w+x])y2++;
+          const L=runs[runs.length-1];
+          if(L&&y-L.y2-1<=2){L.y2=y2;L.c=(L.y1+y2+1)/2;L.n=y2-L.y1+1}else runs.push({y1:y,y2,c:(y+y2+1)/2,n:y2-y+1});
+          y=y2+1}else y++}
+      return runs};
+    const R=cols.map(runsAt);let amb=0;const ambFirst=[];
+    // starting column: the one nearest to the click that holds matching pixels (else the first)
+    const sxc=seed&&seed[0]>=box.x0&&seed[0]<box.x1?seed[0]:null;let k0=-1,bd=1e9;
+    R.forEach((r,k)=>{if(r.length){const dd=sxc==null?k:Math.abs(cols[k]-sxc);if(dd<bd){bd=dd;k0=k}}});
+    if(k0<0)return{pts:[],amb:0,ambFirst:[]};
+    const pick=(runs,hist,x)=>{
+      if(runs.length===1)return runs[0];
+      if(!hist.length){if(seed)return runs.reduce((a,b)=>Math.abs(b.c-seed[1])<Math.abs(a.c-seed[1])?b:a);return runs.reduce((a,b)=>b.n>a.n?b:a)}
+      const k=hist.slice(-6),n=k.length,mx=k.reduce((s,p)=>s+p[0],0)/n,mc=k.reduce((s,p)=>s+p[1],0)/n;
+      let sxx=0,sxc2=0;k.forEach(p=>{sxx+=(p[0]-mx)**2;sxc2+=(p[0]-mx)*(p[1]-mc)});
+      const sl=n>=3&&sxx>0?sxc2/sxx:0,pred=mc+sl*(x-mx);
+      return runs.reduce((a,b)=>Math.abs(b.c-pred)<Math.abs(a.c-pred)?b:a)};
+    const walk=(from,to,dir,hist)=>{const o=[];
+      for(let k=from;k!==to;k+=dir){const runs=R[k];if(!runs.length)continue;
+        if(runs.length>1){amb++;if(ambFirst.length<5)ambFirst.push(cols[k])}
+        const r=pick(runs,hist,cols[k]);hist.push([cols[k],r.c]);o.push([cols[k]+.5,r.c])}
+      return o};
+    const fwd=walk(k0,cols.length,1,[]),first=fwd[0];
+    const back=walk(k0-1,-1,-1,[[first[0]-.5,first[1]]]).reverse();
+    return{pts:back.concat(fwd),amb,ambFirst:ambFirst.sort((p,q)=>p-q)}}
+  // Scatter mode: centres of the 4-connected blobs of at least minA pixels
+  function extractBlobs(m,w,box,minA){
+    const out=[],seen=new Uint8Array(m.length),stack=new Int32Array(m.length);
+    for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const i=y*w+x;if(!m[i]||seen[i])continue;
+      let sp=0,n=0,sx=0,sy=0;stack[sp++]=i;seen[i]=1;
+      while(sp){const j=stack[--sp],jx=j%w,jy=(j/w)|0;n++;sx+=jx+.5;sy+=jy+.5;
+        if(jx>box.x0){const k=j-1;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
+        if(jx<box.x1-1){const k=j+1;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
+        if(jy>box.y0){const k=j-w;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
+        if(jy<box.y1-1){const k=j+w;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}}
+      if(n>=minA)out.push([sx/n,sy/n])}
+    return out}
+  // Plausibility checks after an extraction. o: {mode,pts,mask,w,box,tol,tolAtPick,step,amb,ambFirst,plotW,plotH} (plotW/plotH: plot size in px, may be null)
+  function assess(o){
+    const W=[],n=o.pts.length,b=o.box,bw=b.x1-b.x0,bh=b.y1-b.y0,pw=o.plotW||bw,ph=o.plotH||bh;
+    const rows=new Int32Array(bh),cols=new Int32Array(bw);let cnt=0;
+    for(let y=b.y0;y<b.y1;y++)for(let x=b.x0;x<b.x1;x++)if(o.mask[y*o.w+x]){cnt++;rows[y-b.y0]++;cols[x-b.x0]++}
+    const area=o.plotW&&o.plotH?o.plotW*o.plotH:bw*bh,coverage=cnt/area;
+    const groups=(a,lim)=>{let g=0,on=false;for(let i=0;i<a.length;i++){const f=a[i]>=lim;if(f&&!on)g++;on=f}return g};
+    const hg=groups(rows,.7*pw),vg=groups(cols,.7*ph);
+    if(coverage>0.04)W.push(`The mask covers ${(coverage*100).toFixed(1)} % of the plot area (a curve normally covers well under 4 %): the tolerance is probably too high, so background, grid or text is matched.`);
+    if(hg+vg>=2||vg>=1)W.push(`The mask contains long straight lines (${hg} horizontal, ${vg} vertical: grid lines or axes of the same colour): lower the tolerance or draw a Region inside the axes.`);
+    if(o.mode==='curve'&&n>1){let mj=0,at=0;for(let i=1;i<n;i++){const j=Math.abs(o.pts[i][1]-o.pts[i-1][1]);if(j>mj){mj=j;at=o.pts[i][0]}}
+      if(mj>0.25*ph)W.push(`Vertical jump of ${mj.toFixed(0)} px (${(100*mj/ph).toFixed(0)} % of the plot height) between consecutive points near x = ${at.toFixed(0)} px: the tracker may have jumped to another object or curve.`);}
+    if(o.mode==='curve'&&o.plotW&&n*o.step<0.5*o.plotW)W.push(`Fewer points than expected: ${n} points cover about ${Math.round(n*o.step)} px of a plot ${Math.round(o.plotW)} px wide (the curve may be broken: raise the tolerance or the gap, or it is only partly matched).`);
+    if(o.amb>0)W.push(`${o.amb} column${o.amb>1?'s':''} hold several candidate segments (first at x = ${o.ambFirst.map(v=>Math.round(v)).join(', ')} px): crossing curves of the same colour, grid or text; the one that continues the previous slope was taken, check the result.`);
+    if(o.tol!==o.tolAtPick)W.push(`The tolerance was changed after the colour was picked (${o.tolAtPick} to ${o.tol}); the colour itself was not picked again.`);
+    return{warnings:W,coverage,n}}
+  // size of one image pixel in data units at image point p (largest change of each coordinate for a one-pixel move; the axes may be rotated or log)
+  function pixelSize(f,p){const a=f(p),bx=f([p[0]+1,p[1]]),by=f([p[0],p[1]+1]);
+    return[Math.max(Math.abs(bx[0]-a[0]),Math.abs(by[0]-a[0])),Math.max(Math.abs(bx[1]-a[1]),Math.abs(by[1]-a[1]))]}
+  // number rounded to a tenth of the pixel size (no 15-digit doubles); res not usable: 7 significant digits
+  function fmtRes(v,res){if(!isFinite(v))return'';if(!(res>0)||!isFinite(res))return String(+v.toPrecision(7));
+    const dec=Math.min(12,Math.max(0,Math.ceil(-Math.log10(res/10))));return String(+v.toFixed(dec))}
+  // audit trail as '#' comment lines: calibration, axis scales and extraction parameters of each dataset
+  function auditLines(s){
+    const L=['# Plot digitizer export, '+(s.date||'')+(s.image?'; image '+s.image[0]+' x '+s.image[1]+' px':'')];
+    L.push('# X axis: '+(s.xlog?'log':'linear')+'; Y axis: '+(s.ylog?'log':'linear'));
+    ['X1','X2','Y1','Y2'].forEach((l,i)=>{const p=s.cal.pts[i];L.push('# '+l+': pixel '+(p?p[0].toFixed(1)+', '+p[1].toFixed(1):'not set')+' = '+(s.cal.vals[i]===''||s.cal.vals[i]==null?'(no value)':s.cal.vals[i]))});
+    if(s.res)L.push('# pixel size in data units at the image centre: '+s.res[0].toPrecision(3)+' (x) by '+s.res[1].toPrecision(3)+' (y); values are rounded to a tenth of it');
+    (s.sets||[]).forEach(d=>{const e=d.extract;
+      L.push('# dataset "'+d.name.replace(/[\r\n]/g,' ')+'": '+d.n+' points'+(e?'; auto-extraction colour rgb('+e.color.map(v=>Math.round(v)).join(',')+'), tolerance '+e.tol+', mode '+e.mode+(e.mode==='curve'?', step '+e.step+' px, connected part only '+(e.conn?'yes, gap '+e.gap+' px':'no'):', min area '+e.minA+' px')+(e.warnings&&e.warnings.length?'; '+e.warnings.length+' warning(s) at extraction':'')+'; points may have been edited by hand afterwards':'; placed by hand'))});
+    return L}
+  return{bgColor,pickColor,colorMask,keepConnected,extractCurve,extractBlobs,assess,pixelSize,fmtRes,auditLines}
+})();
+</script><script>
 const EXAMPLE='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAG4CAMAAACQHcT6AAAAwFBMVEX////+/v79/f79/f38/f77+/z++vr5+vz39/j09vjx9Pjx8fHs8fnw8PDv7+/p7/jq7PDt5ubj6/fj4+Pd5/Xl4uLZ4OrX2tzS0tLI2O++zePDxcirw+apu9avsrXInp6dnZ2RsN+BpdqOmKdtl9XJhISKiop9g411dXVci9BPgcxEeck6csZmZmaCTU1RUVFGRkYxa8QqZ8I3QlEwMDAjYcAfX78eWbTWKSrWJygpKSkgICATExMLCwsEBAQAAACrW3UPAAAhKElEQVR42u3dDXOiyrYGYEzGo8ZMPsSKqGw2Wg6ihgIt9ZwrKP//X91erWacjIkIDQ3yrqqdmkwyrk3z2K7+ABQFgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAJR7jDHPKyr/6EVNr/+YSc0v/xZtY5WRwiJ5S6gWGaHdxxW0ewIIXg3Mf8h8CJyg/fe4t4Mq6HUDdtxTCLWsV76jmOwv3acPvu+bmma7bJfOeJtWuw3T+qAvu3S9wyvZjtWjf1Nw2B/ZdyzP2lWk17GCy3LaqLlEQJ7XpN6y/7OZn/aeq4XekyvETqBuwlN23f9HTP8ErqB6+2WzQNezQ9cd7tsHF/DDn3XCwyG1wk89hKEnL3YMnQrlID+0tyEnue9oOURyfEGfMDGYCrutvPiLxlZlfpFI6QON1w+KbXl1msoDd8jvLs+/a29x1vZbJhCjcDzYNbZP288MbxBh36F/bLa4G8Mg74sX1A2IEQO2HwK4vfkL71A3f918+UlcEijqRwQKk7Ae176qefv8fbJJFN/7L29oH6seekF1UPly15sax8EAy8ilQFbf7fn1XSCkIVLePu831R5SUB4x/vqoM7xmqHnsvC3hxegzvlkwFYNLfaW2L+YQy+jAS8iJbxGeOhJt6amvvocr8bxvn7gtfZ4mxyvFdoWj6/wjqk3Njvqa+Ac3wPAi0gBb4cNvqhUrfIatr47i9fhuoN92WDssX8ElROf8DY596fwN14LeBGi8daW/hMbsNWUytbhxs7iDdiYS905e7zNYMmL3OPEl7UvcisneOv8nWD/gVdFsyOE4N16PGqKTRMJfKrM2dmm4wdn8S59y/L3UwmMrLHbjM2x5xz9ezvHtDzjtGxwt7bp+idlg7ZbOs4TWh6ROGx3HzXV5b2m6apK0974rmqzz/u+S94M94n/hNe85tJ3Nf6X1OlqzsZf2trx1erW0l86qqK6NNC7dw0asG02juqY9GIv+3Gh47rAi8g6DgM2BAJ4EQjgLUl0bG/zMcHT2VBoaJWIcd/5iUaQGIZn78wPvKFpGAZGD4jCxPYE7yuaA1FUvKbZR4MgCol3u1zuvEPZUG82m0+dn00EQmz8VO9TwFtv0pL+YYFoHCIQ6YSaAl4etv+751VD9UlKaKVKW7K8avgzLbzj4Pefm6GcqYd7gR8s+U9btrxPYVMw3j77Ssei+i7wIm8h8Gq+HwZ02YuzoUtbPG+7VIEXeQuBt2lQaExxn72qYVnG6fEAL/Lmu2z4jjbwIi/wAi/yAi8QAS/wAhHwAi/yAi/wAi/wAhHwAi/yAi/wIi/wAhHwAi8QAS/wIi/wAi/wAi8QAS/wIi/wAi/yAi8QAS/wAhHwAi/yAi/wAi/wAhHwAi/yAi/wIi/wAhHwAi8QAS/wIi/wAi/wAi8QAS/wAi/wAi/yAi8QAS/wAhHwAi/yAi/wAi/wAhHwAi/wAi/wIi/wAi/wAi8QAS/wIi/wAi/wAi8QAS/wAi/wRo/ac7v71m5VgRd4i4S30RtO3tf7WL1PBt0G8AJvEfA+6tPV+lOsJvoD8AJvzHjRToCqhlFLB2+lOzrIXUxHo+FwNJotDn5H3QrwAu/1YfhhaH58Z+6W/uYlBbyV7pRDnQ17zx9SKy19uK8hpr0K8ALvtaGZ2vYDr7ozlfrSEY/3jdOdD9tnVA/nnG8XeIH3+viN1wpYB2hu64LxPg55p6t/Mb1Q02f081ELeIE3Pl7Xo7441MTi7VHXOuvdfVNU9IjvYlAFXuCNi9dzqXYI+/yberPZVMOn+4TxMOIua9//VlUn4dPW8Vu1ei8hJKUtW94U8XYOeMchhaYmix6NyCady7/Y4cj/OXyXNG3MkJS2ZHm1VPA6VDb0w464nre3YCL1aO/vLjkf1dHzoueNg5eP1azgXlTNWxlQtduO+uu8wpg+o+ZFzRstGv3+1u6zvtZiJcNTYNc6vi1qqqxKGEe1K/6Fvlqv513gBd5o87wBhaMo9pJKBn+3c2qC8NYmzO6gct2EMCsdVj3gBd44H/TqH6+bBO/DlDu8dk6YxOvAC7yJIwFesrvoxuivqdYYAC/wysNLduftOP/yjtbjRlUgAl5JeBux7bKgOYphBYiAVwpeGqvFtqsouiS9wAu8yh2rWxftBHlJ7wCIgFcCXla1rrqJWnUgRS/wAq8eZ47sU6tS36sDEfBmjLeb3B1rVep7e0AEvJnibS/YaEtAqw6S1h5ABLxXxsP7ej26E9CqlVGiGQsgAt5r8d5N1utpTUir0nzb+yMQAW9WeNmH/bwlqFUbs/V6UgUi4M0GLw3WusJatTVPXj4DEfBGi+e5mOnZY6t2V5lOmAFvifH+YFXq5E5kq+qZTjkAb4nxDkSNsH636lBIDQ1EwHup4F0JKXj/aNUqzV5UgQh408XbeBe2H+GkVWneeAhEwJsu3qG4PvK0Vak/7wER8KaJt5twG+SXrcoGbYsWEAFvenjp411PpVVpnTj5oh0QAe+XMRI0S3amVR9mGZW9wFtOvD2hn+2fWvUto7IXeEuJV2jR8HersrJ3/ghEwJsKXioaKum1amUi9vWBCHj/mGlopdmqtGlCByLgFY+3NhNM6+9W7QmciAMi4P0dg/V6+iPlVh1msEwMvOXD21qs129ptyr17gMgAl6xeGk0NUy/Vd9W69UbEAGvULz6ev3eyKBVWXEyqwER8ArES5vJelm0avqFA/CWDe8ghSnY862aeuEAvCXD22Ki2hm1atqFA/CWDO8ojU0zX7Rq2oUD8JYLb3e9njcya9W3NLr5UiCqtXv6YDBkMdD1bqsKvIpSnaWybPtlq9JyyB3wXhUPvcGEns94GqvZaNCtlRyvng6mL1u1Nktzj8Pt4f3RHU7XX8VqMnyrlBfvw1zU9cJRz2Y3zWuCbgxvpTucH5wupiMqFyhY+TAczVaHH7xL8JsTvMP1epTx2RyluDnypvA+DmZ7n7Nhr/VXi9Xe9NGhlpgNHsuIl6bJWhmfTerse8B7Kdoj3rcuRvo3MtvDCf+t1eitfHhHaV1b9t3ZpKsqHoD323gb8T51ojcu5X3U9zXxpFspF9631Bh9dzZT2Ad0Y3jbnO5i2I6Wt72vjKe9SpnwTlJbMvj2bIrfgXlTeB+HVArMB43oeWs6L38nb+XBywb+7zUZZ1P43vcbwvtDXxBdvXZd3qrOR3ejVknw3qU45fr92Uxtsrf4eN+ogl0MatfnveN8V4NakfCqtmurhz+/2BRqNLx6iotdF85mN6Ur4YuOtzbg3edzvLw1nWrf915x8L74nun5B6Kd0HUcpxMJb+09nfWJSGdzlM78csHxtqnvnHXj520MVlfhl43X9utK3bePeF8jlw2s451IO5vPi1TeOYXGWyV5q0E1Ud72hMoOvVIMvEtyay+PeNVmRLy1eVpD/khnk711ZlXgPX0/E7vZW9K8FV47jB4LgXdrsi/W9oh3FwbW4W1Xbzabavh0fz7o+on71KKqVi/8AhuYDLJPK+twL0eXzA3rAvI+0izxvJfi4QrDuyO85u5QABuqau2s/TfjkEJTz0aHFmnV9EK79At0E5JO9mllHe6loLnd+T+C8v5Ds22jTnpHK7TnNbcnf+MsI/S8rOMdye2Khin8HxS1532gkmHyLCzvvgRp577n/aPm5WEFl2veB/bebMstAh9T2I1Z0Jq3RbMMgx8C81b0FY3bcj/bsLlX7jdM8MtxetdbXsY7SGkr5DVnUxe/zlZMvFTuLnqC8/Jpt2Et33jVwDXcgMF1NkyyY1rezriI93GR0lbIa85mClcgFRJvj30KvreF523QuG36nGu8SsdZ8mUJc6wofcfzTtcovsI7TPs2+5HOZlf4prYi4qVFteljCnl56fDezTXeb+M83tQ73ohnU/h24uLhrQxpYqCWTt639/V6pd8Y3kHqzzeJdjZbC8EXwhcO7w/6bB9U0sr7TNt8hne3hPch9Y436tkUfaepouGtkV09xby1RB17HvGm3/FGPZs1wff4Kxje2iThx3qEvFT4ih62ScSbQccb+Wz2xO6HLxZesrvopp03wWRGDvGmPcd7zdmsiL0SqVB4k9uNlrf9njhPbvA25qneLuzKs9lmDftcSryNaXJT0fLSsG3Vuwm8WXS8V5xNoVPOBcIrwm7UvI2J2CkzaXhpH287R2fzWeQui+Lg5TXDW1Z5+azGoPh49Sw63mvOpsjpssLgrQqxGz3v3VDkhK8svNX3LDrea86myOmyouCltQkRY6joeSu0Cj2qFhtvqleuxTubAq8IKgheWhNedbNvZlF6JeGlezV0c3Y2K1Nhu8sKgncoavR/Vd7einVctQLj7a3X09ydTXG7y4qBd7AW9W69Lq8wvXLwUifXy9/ZFLa7rBB49bWsT5rugultFBUv6+NmlfzhFba7rAh4uytxs1bXHi/pnT4UFO8kzQdCJGjVgaBhZAHwtpmfkbSpQTF6peB9W6/fq3nE2xB0MWb+8bbe2fu0qsjCq7zNBeiVgneUVcd7davSdNmPEuBtzJidmiIPr9ImvY3i4W2zUX0tn3jvxEyX5R3vD1a3vT8qMvGK0CsD7yjth64nKcaEPIgz73iH6/WircjFK0CvBLzPq/WikVe8Yt5ZOcerC1pYS3i8vO6tFQtvBlf/JGjV9krAwwXzjZcmyXRFPl7lbZFstSJ7vI3FevWcX7xCnmeYa7z0cT1U8oA3qd7s8WazFzJ+qz4IuGFwnvE+zM5Okr3+++vf18yPt5tIb+Z4M9oLmaBVBWzszTFemmiY/TXB+p9f/6P49Z+sj5f0xt5jljnejPZCJmhVARt7c4yXvTXnf9f0v/73fxT/+5X58XK9d8XAS1tyuvnGS1veEm7szS/e3tmJhte9Xab3NfPjpeHjsFIIvJltyUnQqsk39uYWL+1oODMT+O8H3n+zP95ebL1Z481sS06SVk28sTeveB/ez+/G+fWB95eE49XjXpWZMd52ek9qFdmqSTf25hQvDdbOrgpI7Xnj642M9+kj6gnwDrNbGU7Sqq1VsjtR5RTv+cGa5Jr38D8W5wM5Mt7wI+z4eB9X68VDAfAmvSNKPvGywdpXg2V5sw1J9EbGq32EGh9vlivDiVo14cbeXOL9YrDGQ9o873GMTPdz6KWGV0TNW5unf19IQa1KT1mp3BReesT9N5dOyFlh+0Pv1VcyX4W32umziN/zZroynKxVkz1lJY94mY5ZI2/N/DvuRtdvdbsGb99PVvNWZpkuUCRr1UR37M0hXl3wFl7hx1u9/u49V+CtBZbhvZrL17h4uxndrEFIqya6Y2/+8FLBqyt5xsvv+Tdvp4S3E1T6nqKMY/e8GS9QJGxVumPv463gpWvWRkq+8Sq16ZV6r8Cr+Yq2URTDi4m3ndk1w2JaNcFKRd7wVtixzGp5x8vvFfzeSgVvc9usB4bqOTHxZr1AkbRVn+PfgiRveFMteAUe7yP7gJg9poFXGfcVcxf6MWcbHhbxFijkzeHEvwVJzvC+rVK+u5aw431+P7fbWARe3rN3Yn3yM7zxFihkzp7Txt7uDeCl7Tg5eEpupKCboUS+pDizRYqXeFdQSF23jH0LklzhpYJ3Wi0IXn6FXdQLg67Bq9rekoUVC+8/sT6D5e4YiX0Lklzh1b/ajpNLvPuLMqui8VY3y7HFoh8Lb7wFCsl79box7+2TJ7w0w9tTioN3f2HQD8F4te2FX/1jr2S98ife/8a6gkLuLmk+NT0oNl7a0jBUioQ3+oVBVy1SfPtj0w994wP6MtzalT/xxvkAltzz8luQPBca7zDdGd5UjjfqhUHX1Lyu+c0P+zvzydxphzkJ33npB9YfeGN9/sreJR3zFiT5wUsXXObpcXeRR8pRPvGuwFv3wo3H4jxhx2NfjgsYJlUYll85xRtvgUL2LunHRZxbkOQG7/M8kyV54ccbTe81eO19GGd/6o/Zl7F/Irkfqqd4493iSfYu6Xi3IMkLXrpobVQpIN5ol1YIm+fdmbzH3X/juVQjh/t5iXqz2VTDyX3M4Ctscf9xVa3eJ4s63YIk+7RiDndAt+GVkFdAcL0Xfkcw3t0JXvWAd8x3Af+jSgkt8Sv8wwBISCvicGng809BmvmvoM3pF/7nteh4G8E+ls65wRMfnlmHCQmXygYt1E563qdcdEVxXmJ6uQvIZ89Ly8KDojTz36/JL60Q1fNWbd8yTTZgW27OXP3Ox2q81iXEPu+G6yc171NuZu3jrFQ8FLDmzWBZONXjvfxg5GsGbAENwKrLft0/M2Yz2U/VgNUOBvuvszOUKq8dbgBvjI29ucBL+yBbSnHx8kfSf7s5/brN6BS2fXbCt+YFbuCxN7qzoTp3625O904WGu/1tyDJA94sloVTPt5LFwZdgVflSxD1pXV+teLesAw6hA4fpmmWefrChcZ7/UpFDvBmsiyc9vFeuLTimtkGZ+tYtu8/1f3Otf8Xxcb7cO0tSHKAN5Nl4dSPl27jPnsWgffe9JaeHUthsfFefQuS1E7mhctKfufNZlk4/Tfr83d65Tx7uGitSrcg6ck/mReXGz/yZrQsnMEnDV1a8ZXeyHhfGsrLPhrlw3vtLUhSOpkXN3oc89Ky8CQn9/BOdA3i93qj3yXSaSa/S2Rh8V55C5J08F7eYnfMOxD7dNYEx5twb8qH3sdEeDX1/nCXyNcS4qUH1V9xC5J08F7e3HzIS7u5u/lo5oS7Ar/Xi5o3Yly1UpEO3suXlezz8mXhfDRz0v3Y+2h/oTcy3nqH/f9VLdfRyon3+ZqNvVJ73gyXhS8eb9IrYb7XGxmvSQtnduj5W7WUeKmOjDxdJrXmzXBZ+OLxJr0G8Q+9z7HxOmyc1tyNldrSLife2hV37JU525Du/SDl9LwHva24eOnqH4OujbDccuLlu8saUvFGmeetzTK/g3fqNe9R7+eV4sh4XYtVDbQ1x/JKipeugx9KxRtlhS3TZeFsZhsOcw7sXfnejofX2nRUn+/ZdcqKl3aXteXivZiXloXfctTMAuZ5P4bMTO/8LRbe5jIMaUNvPTDKijf6xZjS8Hbm2Re8SrorbL/jcfppd3r0ed563yCAL2aztHgjPw9eFl66ZCnLZeGMj/fhk14sUlwTesQtDrLw0iMuH5Wbxas02LBjpQNvrIi6xUES3syXhTM/Xrq24nddBLxXBd27rJVXvOnfRFr+8VbpUZmDCvDGiWhXBEnBy5eFazeOV6nQ3UhGVeCN07vNo4zZpOClZWHt/tbx7u9jNmkAb1pjNhl4WUWz1tUS4FX01WGpGHjTGLNJwMuvFr4vBV5+7/R5F3hj9XAX19kkIOLLwiXByzc6LHrAe31EWGfLHlGPPyawLHj5Ytt6ALzXf0C/X1yCzfxktvb7IEuDV6mNaNIBeOP0chfuvJf1yaRlYbqJdHnw8imz/wLv9XHxerasTyZdLfyglAov60MWwBsj6Hq2bp5G33QnW6VseJW3OfDG6+m+3fGd7cmk2+MMlPLhVd6AN2aNOcjLyeT7IO/KiBezDfHe899P9mZ6Mk9ujwO8wBtNzDf3RsjyZPaOBS/wAm+0oNXYQR5OZmt+8j8CvMAbdYTfln8ya39c+AO8wBsphh/DJJknc3iY4QVe4L2mz/tmlTizk/npSnfgBd7IhcNXlwRldTI/39oJeIE3Yoy+3F6W0cmsTT89Fxt4gTdiPHxZOGRzMumitVlDAV7gjVdxLtryTqb+V3rgBd5rxvpnlyoyOZl0lwZdAd5S4hVwE62vliqyOJm0HWeoAG8Z8Yq5fWH3/E0ZMziZfHWieuN4L/QvpcUr6Max5zdHZoBoeO5pVbeF92L/Ula8om7Zff751Okj0s92+beF92L/Ula84h6WsDpzC53UEZ0ZrN0c3sv9i0C8fbN//GO9T9HMMV5Rj6nhfeC8lTGi1vz8VXQ3hfdy/yIMb9UNvMA9HEMn3AZB0C9Dz3v2sWcpI2rMzgzWbg7v5f5FGF5z21E6W/OI97UkNa9y9oGT6SKix2LPHpRbx5thz+vRc1Zcryh4BT6m5sw9ndNFNGSFSlu5ebwZ1ryBxb5YwRGv5zmdXOMV+Jgafjf958wQ6SfX/WC2IX7UD8Hqrx1VDObugNexLG93qHnrzWZTDZ/uZURVrX75Mz4DLibLhG7rHDFt0uATDTEOV1Yzx4+P/uWrX0iE9zU8hHPEuz0ZyHiHGmLMf0VTpUQ2aekJUqNs0vYWn1JJONzM8mq/fv365qW1JHirx1d5URR/TE79k58ea4i89rzpdYfi+vS/ovVOEw33peh5L4awmpeP1bzT5xI7fp5rXvGF6HF7oshq+q+ZjRkrUBryDzcfeYXh7e/MqkllLj1Y2zBU1dqNS4SXbwx/ED2P8TnoSU7vzwrwCsarmEEYUN1re1QxhGFg3ZcIL9/kwBcOBM4gf4670ZeTZMCbLKovJ4s+T82cz/MKD75kWxG5dvdX7z789Oxd4MWVFILisFlG3K6JM9PJFx6jBbzAG3/QxnCl1vMO1vl7nADw3kyrDmjKIa2aV79sF3iBN9GA6r2VzmwD2R0owAu8qU05TNfr2Usa87xkd1gBXuBNLx75IoKA65Jj2QVe4E0SfPlW+JMoud07BXiBN9Vo0x6dmti0Eftd4AXehNHl275Eph1EtQu8wJtU74oqB3FTGMPIdoEXeJNGb0WVg6gJDHrI7qCiAC/wZqZXUN/bmERYmwBe4BWrd/ogYvJiul6vegrwAm92af9ho7ZZK3n5PL+0jwx4gVd42jfGbv6W8GV01oG/txXgBd5s07bfWafZS/IiVZpmmDwqwAu8Wad9nNI0wY9E5e56WFWAF3izT8snua7rOU/HfKxqXunFOFzgvTm8SoWWxt67cV7gYRTrnwIv8ApLS7MF6+H1M75dVjCvRw8K8AKvvLS8cJ1dOevwTN3uQq8owAu8MtP+GKyo821cMcmgL6hWbhXocIH3NvEqytuMWZzrEacNKr39r1cU4AVe6XiV6oC60lkvwmbyux6VGevRY7EOF3hvFi+rfKmIXc/0CyO3mk697nraLdrhAu8N41WULu9R58Nv1nrbwzkn3qsowAu8OcLLalnOdz0dnPN79zaY7X8cpbgAXuDNOm13tOJA30d69/Gje620eoPJgv9gNeoW83CB9+bxKsrzoX+lCmI2nYwmk+n74vg3U/2hqIcLvCXAS5XtsZv9I+Yj/bnAhwu85cDLovqmDyfHHnc+mwz19l2xDxd4S4P3ELXn5+fH2k0cLvCWDS/yAi/wAi/wAhHwAi/wAi/wIi/wAhHwAi8QAS/wIi/wAi/wAi8QAS/wAi/wAi/yAi/wAi/wAtFN4230Lbv/8V197Ll94EXeYuA1d8ud+fGdtzHtXR94kbcQeJs1ZfuBtx92FMVZAi/yFqXm/Y3XJrdG+AK8yFs4vK7LvnTCfd1Qbzabavh0LyOqarVEacuWNxHeunmI/ie8HuFVD3jHIYWmSolypS1ZXi0J3qflISz0vOh5C9bzouZF7XlbNe9rh7ndYbYBeYuDV3Wcnecwvs7mOM9rAC/yFgOvTcHwGlQAN2yssCFvkcqGbwJ4kRd4gRd5gReIgBd4gQh4gRd5gRd4gRd4gQh4gRd5gRd4kRd4gQh4gReIgBd4kRd4gRd4gReIgBd4kRd4gRd5gReIgBd4gQh4gRd5gRd4gRd4gQh4gRd5gRd4kRd4gQh4gReIgBd4kRd4gRd4gReIgBd4gRd4gRd5gReIgBd4gQh4gRd5gRd4gRd4gQh4gRd4gRd4kRd4gRd4gReIgBd4kRd4gRd5gReIgBd4gRd4gRd5gRd4gRd4gQh4gRd5c4pXc5aBefymE1BowIu8hcBruNbuN97Q6Pf7TeBF3qKUDdsTvK8oG5C3qHgty6gCL/IWEW/gedvlofetN5tNNVSfpIRWqrQly6uGPxPI9w5hfcJbqymK6jv7b8YhApFOdOLjbViHMD7h3aP1/+h5mzJCUt6SHa68Zn5KoWzgYQenNW9TSjEmKW/JDvcWmnmP12A1RKdOda+LVkXeQqTVgiDcBqzMdTbsv+1yufNe0arIW4i0jT4FK6A7Gitz+6bZP/1pfVyX0qqS8pbscMvWzAgEAoFAIBBflNaSarGS1USVp6qUvD9lHnLKK9OqF+7c7Mej1mYXbgwpTWr/3h6a4XkcB+HOyTxt1d6GW6eWZcon2wts/ifDDwMr1UZdeq+dTfat6pia6uw0CXb7/taU8o5RtezfrNa2X++nK+iv3tAdL7knbWfVjV2ax9ynJWhj9yLlUyXbVj1UKxtDAl51J+dTxqXFKNfLOKvH8TrLtHNbtE78Ekpp2rqULtBRJKQ1t0+mKeFzZuzX2dvVloKX97/mNs1zSW8PZWfKwGsH2Xf4fZZTAl478D1vl/0HTd32Pd+pS8Hr0+EaYSNtvDK6QMWU8FFa35hSjtYJLTpgNeu8mu9art+XgjfY401xtoPvjazLKBsMGWWg5RuGsXUyz2yHL7Tcn3le/tHNi8/s8fJqxdzdp0no6TBqy9yujN7e2rDY+V7mR0sXDv7MHi/v/axACl4+VrPTfOM0gzFLsyyJ3X1IKBuapMjaZl42eF5dqXlyZhuMnaa8pDuhZGy9ZZD9OHizo7tH2GXBy5p5uZSQV2MDRT/j0xsEu13AusOKs/UCL93Bomqa2Q/6Fe24S1NC9F8lJFVNQ5WQtmGYRiPj5qXg75e+achZEkcgEAgEAoFAIBAIBAKBQCAQCASiWKEd7+72uvl+G1Z9qSmaf27pyDHRjAgZ0XddN/DZl477PV7Lpb1M5/D2gwbaESEplidX81Vfq+zLy/Gbj619Vd84i7eusn+PrhchFy/T2QnMIPT77Mumoyj39na3tQ98jW1tj7fheiavHhxXsTz2K4oy9tCGCKl4twxv6KkN1/fUnx4rEsygX9H8Q6/Kt6gyvK9Lt16ny+if2O9bO+flibYB4g5dCPl4+7SFXGNwfdYVk1vrsOuZX5HbDzXfud9Ltvx7xdpytVrYQSMipONVSSgbfxmB0gz95XLpHy5IcB2ON+C/qu40ZTP+kN0JNTQiIh946xzvz9DsUOx/x9n3vNaWX9TjOX26rvKAVwtVNCIiT3iVP24pZG32Na/J9RoBLyMOeM0AbYjIF15jZ/cNa6wcSoPDjwzSe+/zyyoPeB0HbYiQFDafUXA05dV9YkxdmhTjJa67WTrHpQt6Ohj/keEyxrZfoQ6YX45XD/poQ0Seo3+6NHy/Obk+1vTQOoh8h/l7PszygubZHyAQeQ9rDK8IBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEKWL/wcqpHiLJ8B6DwAAAABJRU5ErkJggg==';
 const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
@@ -186,20 +298,31 @@ function recal(){CAL=buildCal();const ok=CAL&&!CAL.err;
 function updCalPx(){S.cal.pts.forEach((p,i)=>$('px'+i).textContent=p?`${p[0].toFixed(1)}, ${p[1].toFixed(1)}`:'not set')}
 $('xs').onchange=$('ys').onchange=recal;
 $('bCal').onclick=()=>{if(!S.img)return;S.cal.pts=[null,null,null,null];S.cal.step=0;setTool('cal');updCalPx();recal()};
-$('bCalReset').onclick=()=>{S.cal.pts=[null,null,null,null];S.cal.step=-1;S.cal.vals=['','','',''];[0,1,2,3].forEach(i=>$('cv'+i).value='');if(S.tool==='cal')setTool('edit');updCalPx();recal()};
+function resetCal(){S.cal.pts=[null,null,null,null];S.cal.step=-1;S.cal.vals=['','','',''];[0,1,2,3].forEach(i=>$('cv'+i).value='');if(S.tool==='cal')setTool('edit');updCalPx();recal()}
+$('bCalReset').onclick=resetCal;
 
 // ---------- image ----------
+function showImgMsg(t,err){const e=$('imgMsg');e.textContent=t||'';e.className='msg'+(err?' err':'')}
+// a failed load must not leave the previous image, points, calibration or mask on screen
+function clearImage(msg){S.img=null;S.imgC=null;S.imgData=null;S.w=0;S.h=0;S.bg=null;S.mask=null;S.maskC=null;S.region=null;S.color=null;S.seed=null;
+  S.sets.forEach(d=>{d.pts=[];d.extract=null});S.sel=null;S.undo=[];resetCal();
+  $('swTxt').textContent='no colour';$('sw').style.background='';$('exMsg').textContent='';$('drop').style.display='';loupe.style.display='none';
+  showImgMsg(msg,true);renderDs();renderTable();draw()}
 function setImage(img){
-  const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
-  const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0);
-  S.img=img;S.imgC=c;S.w=c.width;S.h=c.height;S.imgData=g.getImageData(0,0,S.w,S.h);
+  let c,g;
+  try{c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0);S.imgData=g.getImageData(0,0,c.width,c.height)}
+  catch(e){clearImage('The image could not be read ('+e.message+'). The previous image and points were cleared.');return}
+  S.img=img;S.imgC=c;S.w=c.width;S.h=c.height;S.bg=DGC.bgColor(S.imgData.data,S.w,S.h);
   S.mask=null;S.maskC=null;S.region=null;S.color=null;S.seed=null;$('swTxt').textContent='no colour';$('sw').style.background='';
-  S.sets.forEach(d=>d.pts=[]);S.sel=null;S.undo=[];
-  $('drop').style.display='none';fit();recal();updMask();
+  S.sets.forEach(d=>{d.pts=[];d.extract=null});S.sel=null;S.undo=[];resetCal();showImgMsg('');$('exMsg').textContent='';
+  $('drop').style.display='none';fit();recal();updMask();renderDs();
 }
-function loadFile(f){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();i.onload=()=>{setImage(i);URL.revokeObjectURL(u)};i.src=u}
-$('bOpen').onclick=()=>$('file').click();$('file').onchange=e=>loadFile(e.target.files[0]);
-$('bExample').onclick=()=>{const i=new Image();i.onload=()=>setImage(i);i.src=EXAMPLE};
+function loadFile(f){if(!f)return;
+  if(!f.type.startsWith('image/')){clearImage('“'+f.name+'” is not an image file (type '+(f.type||'unknown')+'). The previous image and points were cleared.');return}
+  const u=URL.createObjectURL(f),i=new Image();i.onload=()=>{setImage(i);URL.revokeObjectURL(u)};
+  i.onerror=()=>{URL.revokeObjectURL(u);clearImage('“'+f.name+'” could not be decoded as an image. The previous image and points were cleared.')};i.src=u}
+$('bOpen').onclick=()=>$('file').click();$('file').onchange=e=>{loadFile(e.target.files[0]);e.target.value=''};
+$('bExample').onclick=()=>{const i=new Image();i.onload=()=>setImage(i);i.onerror=()=>clearImage('The example image could not be decoded.');i.src=EXAMPLE};
 ['dragover','dragenter'].forEach(ev=>$('stage').addEventListener(ev,e=>{e.preventDefault()}));
 $('stage').addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfer.files[0])});
 document.addEventListener('paste',e=>{if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type==='text')return;
@@ -325,73 +448,68 @@ function renderTable(){
   $('tb').innerHTML=h;renderDs();}
 $('tb').addEventListener('click',e=>{const tr=e.target.closest('tr');if(!tr||tr.dataset.i==null)return;S.sel={set:S.active,idx:+tr.dataset.i};renderTable();draw()});
 let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2500)}
-function exportText(sep){
+// values are written at a precision consistent with the pixel size (a tenth of a pixel), not as 15-digit doubles
+function rowsOf(ds){const ok=CAL&&!CAL.err;let v=ds.pts.map(p=>({p,v:ok?CAL.f(p):[p[0],p[1]]}));
+  if($('sortX').checked)v.sort((a,b)=>a.v[0]-b.v[0]);
+  return v.map(o=>{const r=ok?DGC.pixelSize(CAL.f,o.p):[1,1];return[DGC.fmtRes(o.v[0],r[0]),DGC.fmtRes(o.v[1],r[1])]})}
+function auditState(sets){const ok=CAL&&!CAL.err;
+  return{date:new Date().toISOString().slice(0,10),image:[S.w,S.h],cal:{pts:S.cal.pts,vals:S.cal.vals},xlog:$('xs').value==='log',ylog:$('ys').value==='log',
+    res:ok?DGC.pixelSize(CAL.f,[S.w/2,S.h/2]):null,sets:sets.map(d=>({name:d.name,n:d.pts.length,extract:d.extract}))}}
+function exportText(sep,header){
   const all=$('exWhich').value==='all',sets=all?S.sets:[A()],lines=[];
   const ok=CAL&&!CAL.err,hx=ok?'x':'x_px',hy=ok?'y':'y_px';
+  if(header){lines.push(...DGC.auditLines(auditState(sets)));if(!ok)lines.push('# not calibrated: values are image pixel coordinates')}
   lines.push((all?['dataset',hx,hy]:[hx,hy]).join(sep));
-  sets.forEach(ds=>{let v=valuesOf(ds);if($('sortX').checked)v=v.slice().sort((a,b)=>a[0]-b[0]);
-    v.forEach(r=>lines.push((all?[ds.name.replace(/[\t,]/g,' '),r[0],r[1]]:[r[0],r[1]]).join(sep)))});
+  sets.forEach(ds=>{rowsOf(ds).forEach(r=>lines.push((all?[ds.name.replace(/[\t,]/g,' '),r[0],r[1]]:[r[0],r[1]]).join(sep)))});
   return lines.join('\n');}
-$('bCopy').onclick=async()=>{const t=exportText('\t');try{await navigator.clipboard.writeText(t);toast('Copied — paste into Excel.')}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Copied — paste into Excel.')}};
-$('bCsv').onclick=()=>{if(!A().pts.length&&$('exWhich').value!=='all'){toast('Nothing to export: the active dataset is empty.');return}const b=new Blob([exportText(',')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='digitized.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('CSV downloaded.')};
+function exportJson(){
+  const all=$('exWhich').value==='all',sets=all?S.sets:[A()],ok=CAL&&!CAL.err;
+  return JSON.stringify({tool:'Plot digitizer',date:new Date().toISOString().slice(0,10),image:{width:S.w,height:S.h},
+    calibration:{calibrated:!!ok,xScale:$('xs').value,yScale:$('ys').value,points:S.cal.pts.map((p,i)=>({label:LABELS[i],pixel:p,value:S.cal.vals[i]}))},
+    pixelSize:ok?DGC.pixelSize(CAL.f,[S.w/2,S.h/2]):null,
+    datasets:sets.map(ds=>{const rows=rowsOf(ds);return{name:ds.name,extraction:ds.extract||null,points:rows.map(r=>({x:ok?+r[0]:null,y:ok?+r[1]:null}))}})},null,1)}
+$('bCopy').onclick=async()=>{const t=exportText('\t',false);try{await navigator.clipboard.writeText(t);toast('Copied — paste into Excel.')}catch(_){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Copied — paste into Excel.')}};
+$('bCsv').onclick=()=>{if(!A().pts.length&&$('exWhich').value!=='all'){toast('Nothing to export: the active dataset is empty.');return}const b=new Blob([exportText(',',$('hdr').checked)],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='digitized.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('CSV downloaded.')};
+$('bJson').onclick=()=>{const b=new Blob([exportJson()],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='digitized.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('JSON downloaded.')};
 
 // ---------- auto-extraction ----------
-function pick(ix,iy){const x=Math.min(S.w-1,Math.max(0,Math.floor(ix))),y=Math.min(S.h-1,Math.max(0,Math.floor(iy))),d=S.imgData.data;
-  let r=0,g=0,b=0,n=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++){const xx=x+i,yy=y+j;if(xx<0||yy<0||xx>=S.w||yy>=S.h)continue;const o=(yy*S.w+xx)*4;r+=d[o];g+=d[o+1];b+=d[o+2];n++}
-  S.color=[r/n,g/n,b/n];S.seed=[x,y];const hex='#'+S.color.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');$('sw').style.background=hex;$('swTxt').textContent=hex;updMask()}
+function pick(ix,iy){const x=Math.min(S.w-1,Math.max(0,Math.floor(ix))),y=Math.min(S.h-1,Math.max(0,Math.floor(iy)));
+  S.color=DGC.pickColor(S.imgData.data,S.w,S.h,x,y,S.bg);S.seed=[x,y];S.tolPick=+$('tol').value;
+  const hex='#'+S.color.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');$('sw').style.background=hex;$('swTxt').textContent=hex;updMask()}
 let maskT=null;function updMask(){clearTimeout(maskT);maskT=setTimeout(computeMask,60)}
 function regionBox(){const r=S.region;return r?{x0:Math.max(0,Math.floor(r.x0)),y0:Math.max(0,Math.floor(r.y0)),x1:Math.min(S.w,Math.ceil(r.x1)),y1:Math.min(S.h,Math.ceil(r.y1))}:{x0:0,y0:0,x1:S.w,y1:S.h}}
-// keep only the pixels linked to the picked pixel (8-neighbourhood widened by `gap` px, so thin breaks do not cut the curve)
-function keepConnected(m,w,box,seed,gap){
-  const sx=Math.floor(seed[0]),sy=Math.floor(seed[1]);let si=-1;
-  for(let r=0;r<=8&&si<0;r++){let best=1e9;       // nearest matching pixel to the click (the clicked pixel itself may be anti-aliased)
-    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const x=sx+dx,y=sy+dy;if(x<box.x0||y<box.y0||x>=box.x1||y>=box.y1)continue;
-      const i=y*w+x;if(m[i]){const q=dx*dx+dy*dy;if(q<best){best=q;si=i}}}}
-  if(si<0)return m;                                // nothing matches near the click: keep everything
-  const out=new Uint8Array(m.length),st=new Int32Array(m.length),R=1+gap;let sp=0;st[sp++]=si;out[si]=1;
-  while(sp){const j=st[--sp],jx=j%w,jy=(j/w)|0;
-    for(let dy=-R;dy<=R;dy++){const y=jy+dy;if(y<box.y0||y>=box.y1)continue;
-      for(let dx=-R;dx<=R;dx++){const x=jx+dx;if(x<box.x0||x>=box.x1)continue;const k=y*w+x;if(m[k]&&!out[k]){out[k]=1;st[sp++]=k}}}}
-  return out}
 function computeMask(){
   if(!S.img||!S.color){S.mask=null;S.maskC=null;draw();return}
-  const {w,h}=S,d=S.imgData.data,t2=(+$('tol').value)**2,[cr,cg,cb]=S.color,box=regionBox();let m=new Uint8Array(w*h);
-  for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const i=y*w+x,p=i*4;
-    if((d[p]-cr)**2+(d[p+1]-cg)**2+(d[p+2]-cb)**2<=t2)m[i]=1}
-  if($('conn').checked&&$('mode').value==='curve'&&S.seed)m=keepConnected(m,w,box,S.seed,Math.max(0,+$('gap').value|0));
+  const {w,h}=S,d=S.imgData.data,box=regionBox();let m=DGC.colorMask(d,w,h,S.color,+$('tol').value,box);
+  if($('conn').checked&&$('mode').value==='curve'&&S.seed)m=DGC.keepConnected(m,w,box,S.seed,Math.max(0,+$('gap').value|0));
   const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d'),im=g.createImageData(w,h),o=im.data;
   for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const i=y*w+x,p=i*4;if(m[i]){o[p]=255;o[p+1]=43;o[p+2]=214;o[p+3]=170}}
   g.putImageData(im,0,0);S.mask=m;S.maskC=c;draw()}
 $('tol').oninput=e=>{$('tolV').textContent=e.target.value;updMask()};['conn','gap','mode'].forEach(id=>$(id).addEventListener('input',updMask));$('showMask').onchange=draw;
+// size of the plot in px: the region if drawn, else the span of the calibration points, else unknown
+function plotSize(){const c=S.cal.pts;if(S.region)return{w:S.region.x1-S.region.x0,h:S.region.y1-S.region.y0};
+  if(c.every(p=>p)){const L=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);return{w:L(c[0],c[1]),h:L(c[2],c[3])}}return{w:null,h:null}}
 $('bExtract').onclick=()=>{
   clearTimeout(maskT);computeMask();                // make sure the mask matches the current colour/tolerance/region
-  if(!S.mask){$('exMsg').textContent='Pick the curve colour first.';return}
-  const {w,h}=S,m=S.mask,box=regionBox(),mode=$('mode').value,out=[];
-  if(mode==='curve'){
-    const st=Math.max(1,+$('step').value|0);let prev=null;
-    for(let x=box.x0;x<box.x1;x+=st){const runs=[];let y=box.y0;
-      while(y<box.y1){if(m[y*w+x]){let y2=y;while(y2+1<box.y1&&m[(y2+1)*w+x])y2++;runs.push({c:(y+y2+1)/2,n:y2-y+1});y=y2+1}else y++}
-      if(!runs.length)continue;
-      const r=prev==null?runs.reduce((a,b)=>b.n>a.n?b:a):runs.reduce((a,b)=>Math.abs(b.c-prev)<Math.abs(a.c-prev)?b:a);
-      prev=r.c;out.push([x+.5,r.c])}
-  }else{
-    const minA=Math.max(1,+$('minA').value|0),seen=new Uint8Array(w*h),stack=new Int32Array(w*h);
-    for(let y=box.y0;y<box.y1;y++)for(let x=box.x0;x<box.x1;x++){const i=y*w+x;if(!m[i]||seen[i])continue;
-      let sp=0,n=0,sx=0,sy=0;stack[sp++]=i;seen[i]=1;
-      while(sp){const j=stack[--sp],jx=j%w,jy=(j/w)|0;n++;sx+=jx+.5;sy+=jy+.5;
-        if(jx>box.x0){const k=j-1;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
-        if(jx<box.x1-1){const k=j+1;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
-        if(jy>box.y0){const k=j-w;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}
-        if(jy<box.y1-1){const k=j+w;if(m[k]&&!seen[k]){seen[k]=1;stack[sp++]=k}}}
-      if(n>=minA)out.push([sx/n,sy/n])}
-  }
-  if(!out.length){$('exMsg').textContent='No matching pixels in the region. Increase the tolerance or check the colour.';return}
-  pushUndo();A().pts.push(...out);renderTable();draw();
-  $('exMsg').textContent=`${out.length} point${out.length>1?'s':''} added to “${A().name}”.`;
+  if(!S.mask){$('exMsg').className='msg';$('exMsg').textContent='Pick the curve colour first.';return}
+  const {w}=S,m=S.mask,box=regionBox(),mode=$('mode').value,tol=+$('tol').value,step=Math.max(1,+$('step').value|0),minA=Math.max(1,+$('minA').value|0);
+  let out,amb=0,ambFirst=[];
+  if(mode==='curve'){const r=DGC.extractCurve(m,w,box,step,S.seed);out=r.pts;amb=r.amb;ambFirst=r.ambFirst}
+  else out=DGC.extractBlobs(m,w,box,minA);
+  if(!out.length){$('exMsg').className='msg err';$('exMsg').textContent='No matching pixels in the region. Increase the tolerance or check the colour.';return}
+  const ps=plotSize(),a=DGC.assess({mode,pts:out,mask:m,w,box,tol,tolAtPick:S.tolPick,step,amb,ambFirst,plotW:ps.w,plotH:ps.h});
+  pushUndo();A().pts.push(...out);
+  A().extract={color:S.color.slice(),tol,mode,step,minA,conn:$('conn').checked,gap:+$('gap').value|0,n:out.length,coverage:a.coverage,warnings:a.warnings};
+  renderTable();draw();
+  let res=' · no calibration, pixel size unknown';
+  if(CAL&&!CAL.err){const r=DGC.pixelSize(CAL.f,out[out.length>>1]);res=' · one pixel = '+fmt(r[0])+' (x) by '+fmt(r[1])+' (y) in data units'}
+  const head=out.length+' point'+(out.length>1?'s':'')+' added to “'+esc(A().name)+'” · mask covers '+(a.coverage*100).toFixed(1)+' % of the plot area'+res;
+  $('exMsg').className='msg'+(a.warnings.length?' err':'');
+  $('exMsg').innerHTML=a.warnings.length?'<b>Check the result.</b> '+head+'<ul style="margin:4px 0 0 16px;padding:0">'+a.warnings.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':head;
 };
 
 // test/debug hook
-window.DG={S,toScr,buildCal:()=>CAL,exportText,imgToScreen:(x,y)=>{const r=cv.getBoundingClientRect(),p=toScr(x,y);return[r.left+p[0],r.top+p[1]]}};
+window.DG={S,DGC,loadFile,clearImage,toScr,buildCal:()=>CAL,exportText,imgToScreen:(x,y)=>{const r=cv.getBoundingClientRect(),p=toScr(x,y);return[r.left+p[0],r.top+p[1]]}};
 setTool('edit');recal();renderDs();draw();
 </script><script id="rgm-js">
 /* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
@@ -471,6 +589,6 @@ setTool('edit');recal();renderDs();draw();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. Extract data from a plot image: axis calibration (linear or log), manual points and automatic curve detection by colour.","method":["Axis calibration: two points on the X axis and two on the Y axis (ticks or grid lines) with their values; axes may be slightly rotated. Points are stored in image pixels, so re-calibrating updates every value. Without calibration the table shows pixel coordinates.","Automatic detection: pick the colour on the curve, set the tolerance until only the curve is highlighted, optionally restrict to a region, then extract. In Curve mode, by default only the pixels connected to the picked pixel are kept (8-neighbourhood widened by a gap you set, 2 px by default), so axes, text and other objects of the same colour are ignored; untick the option to keep every matching pixel. A curve cut by a gap wider than the setting, or touching another object of the same colour, needs a larger gap or a region.","Export: the default is ‘All datasets’ (a dataset column is added); choose ‘Active dataset’ for the current one only.","Editing: click to add a point, drag to move it, Delete removes it, arrows nudge it (Shift = 10 px), Ctrl+Z undoes."],"sources":[["Axis calibration: two points per axis, the two axis lines meet at the origin, a point is expressed in the (possibly oblique) basis of the two axes; log axes are linear in log10 of the value","Derived by the page's author (an affine map fixed by four points); no publication","derived"],["Background on 2D affine transformations and their estimation","Hartley, R. & Zisserman, A. (2004), Multiple View Geometry in Computer Vision, 2nd ed., Cambridge University Press, doi:10.1017/CBO9780511811685 (chapter and section not checked)","published (metadata verified)"],["Automatic detection by colour: pixel kept when its Euclidean RGB distance to the picked colour is below the tolerance","Choice of the page's author; the distance is not a perceptual one (for a perceptual difference see CIE 1976 L*a*b* in CIE (2018), CIE 015:2018 Colorimetry, 4th edition, International Commission on Illumination, Vienna, doi:10.25039/TR.015.2018, metadata verified, not used here)","on the page (no publication)"],["Curve mode: keep the pixels connected to the picked pixel (8-neighbourhood widened by a gap)","Rosenfeld, A. & Pfaltz, J. L. (1966), Sequential operations in digital picture processing, Journal of the ACM 13(4), 471-494, doi:10.1145/321356.321357; Rosenfeld, A. (1970), Connectivity in digital pictures, Journal of the ACM 17(1), 146-160, doi:10.1145/321556.321570. The classical definition of digital connectivity; the page's gap widening is the author's","published (metadata verified)"]],"validation":["No validation against an independent implementation is recorded for this page."],"limits":["Accuracy is limited by the image resolution and by the placement of the calibration points.","The colour match is a Euclidean distance in RGB, not in a perceptual colour space: similar-looking colours may need a different tolerance.","Logarithmic axes need positive values; the calibration assumes each axis is linear (or logarithmic) between its two points."],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Extract data from a plot image: axis calibration (linear or log), manual points and automatic curve detection by colour.","method":["Axis calibration: two points on the X axis and two on the Y axis (ticks or grid lines) with their values; axes may be slightly rotated. Points are stored in image pixels, so re-calibrating updates every value. Without calibration the table shows pixel coordinates.","Automatic detection: pick the colour on the curve, set the tolerance until only the curve is highlighted, optionally restrict to a region, then extract. In Curve mode, by default only the pixels connected to the picked pixel are kept (8-neighbourhood widened by a gap you set, 2 px by default), so axes, text and other objects of the same colour are ignored; untick the option to keep every matching pixel. A curve cut by a gap wider than the setting, or touching another object of the same colour, needs a larger gap or a region.","Colour picking: the curve colour is the purest pixel in the 5 x 5 pixels around the click, i.e. the one farthest from the image background (the most frequent colour of the image; the median of the three farthest pixels, to resist noise). It is no longer the mean of the 3 x 3 pixels, which mixed a thin line with the background (a 2 px #c0392b line gave #d57a71).","Tracking in Curve mode: one point per column, starting at the picked pixel and going right then left. Runs of matching pixels separated by 2 px or less count as one segment. When a column holds several segments (crossing curves of the same colour, grid, text), the segment closest to the line fitted through the last six accepted points is taken (continuity prior) and the column is counted as ambiguous.","Checks after every extraction: the message gives the number of points, the share of the plot area covered by the mask and the size of one pixel in data units, and turns into a warning when the mask covers more than 4 % of the plot area, contains long straight lines (grid or axes of the same colour), when two consecutive points are more than 25 % of the plot height apart, when the points cover less than half of the plot width (plot = region, else the span of the X calibration points), when columns hold several candidate segments, or when the tolerance was changed after the colour was picked. The points are still added (Ctrl+Z undoes them).","Export: values are rounded to a tenth of the pixel size (no 15-digit numbers); the CSV starts with # comment lines (calibration points and values, axis scales, colour, tolerance, mode and step of each extraction; the Calibration header box removes them) and a JSON file with the same information can be downloaded. Copy never adds the header.","Loading an image: a file that is not an image, or cannot be decoded, clears the previous image, points, mask and calibration and shows the error; a new image also resets the calibration points (they were positions in the previous image).","Export: the default is ‘All datasets’ (a dataset column is added); choose ‘Active dataset’ for the current one only.","Editing: click to add a point, drag to move it, Delete removes it, arrows nudge it (Shift = 10 px), Ctrl+Z undoes."],"sources":[["Axis calibration: two points per axis, the two axis lines meet at the origin, a point is expressed in the (possibly oblique) basis of the two axes; log axes are linear in log10 of the value","Derived by the page's author (an affine map fixed by four points); no publication","derived"],["Background on 2D affine transformations and their estimation","Hartley, R. & Zisserman, A. (2004), Multiple View Geometry in Computer Vision, 2nd ed., Cambridge University Press, doi:10.1017/CBO9780511811685 (chapter and section not checked)","published (metadata verified)"],["Automatic detection by colour: pixel kept when its Euclidean RGB distance to the picked colour is below the tolerance","Choice of the page's author; the distance is not a perceptual one (for a perceptual difference see CIE 1976 L*a*b* in CIE (2018), CIE 015:2018 Colorimetry, 4th edition, International Commission on Illumination, Vienna, doi:10.25039/TR.015.2018, metadata verified, not used here)","on the page (no publication)"],["Curve mode: keep the pixels connected to the picked pixel (8-neighbourhood widened by a gap)","Rosenfeld, A. & Pfaltz, J. L. (1966), Sequential operations in digital picture processing, Journal of the ACM 13(4), 471-494, doi:10.1145/321356.321357; Rosenfeld, A. (1970), Connectivity in digital pictures, Journal of the ACM 17(1), 146-160, doi:10.1145/321556.321570. The classical definition of digital connectivity; the page's gap widening is the author's","published (metadata verified)"]],"validation":["Regression test scripts/digitizer_test.mjs on synthetic charts (anti-aliased 1, 2 and 6 px lines, JPEG-like noise and chroma blur, grid, light line on dark background, two same-colour curves crossing steeply): picked colour within 25 RGB units of the true colour for a 2 px line, mean error below 1.5 px at tolerance 40 to 80 on a 1 px line, below 2 px on a JPEG-like 2 px line, the right curve kept through crossings, and a warning in every case of a wrong tolerance (mask covering the plot, grid in the mask, too few points). This is a self-consistency check on drawn images, not a comparison with another digitizer.","What changed on 26 November 2026 (numbers you may see differ from earlier versions): the picked colour is purer, so the same tolerance now matches thin lines better; exported values are rounded to a tenth of a pixel instead of printed as 15-digit numbers; merged segments in a column are one point."],"limits":["Curve mode gives one point per column (the centre of the matching segment), which is a poor description of near-vertical or multi-valued curves (loops, steps): use Scatter mode or click the points.","Two curves of the same colour that cross or touch cannot be separated reliably: the tracker follows the previous slope and counts the ambiguous columns, but after a crossing at a shallow angle it can still switch; check the result and use different regions or manual points.","JPEG images blur colours and add noise: the colour match needs a larger tolerance, which raises the risk of matching the background or grid; the checks warn but do not repair.","Accuracy is limited by the image resolution and by the placement of the calibration points.","The colour match is a Euclidean distance in RGB, not in a perceptual colour space: similar-looking colours may need a different tolerance.","Logarithmic axes need positive values; the calibration assumes each axis is linear (or logarithmic) between its two points."],"date":"26 November 2026"});
 </script>
 </body></html>
