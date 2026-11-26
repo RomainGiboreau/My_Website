@@ -1,0 +1,355 @@
+<!doctype html><html><body><script id="ga-core">
+/* Grid attributes core: readers / writers and terrain-complexity attributes on a regular grid. No DOM; exposed as window.GA.
+   Grid object: {nx, ny, dx, dy, x0, y1, z, name}. z is a Float64Array, row-major, row 0 = TOP row (y = y1), column 0 = left (x = x0);
+   null nodes are NaN. Node (r, c) is at x = x0 + c*dx, y = y1 - r*dy. Planar grid assumed (no geodesic correction).
+   Sign convention for curvatures and the wavelet response: positive = convex-up (crest, dome), negative = concave-up (valley, bowl).
+   Aspect / dip azimuth: direction of steepest descent, degrees clockwise from north (0 = faces north), undefined (NaN) on a flat cell. */
+(function(W){
+const DEG=180/Math.PI;
+const toNum=x=>+String(x).replace(/[dD]/,'e');
+const NUM=/^[-+]?(\d+\.?\d*|\.\d+)([eEdD][-+]?\d+)?$/;
+const NULL_ZMAP_TXT='1.0000000E+30',NULL_SURFER=1.70141e38,NULL_ESRI=-9999;
+const isBig=v=>!(Math.abs(v)<1e29);   // NaN, Infinity, 1e30, 1.70141e38 ...
+function makeGrid(nx,ny,dx,dy,x0,y1,z,name){return {nx,ny,dx,dy,x0,y1,z,name:name||'grid'}}
+
+// ------------------------------------------------------------------ readers
+function lines(text){if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);const L=text.split(/\r\n|\n|\r/);return L}
+function parseZmap(text,name){
+  const L=lines(text),at=[];L.forEach((l,i)=>{if(l.trim()[0]==='@')at.push(i)});
+  if(at.length<2)throw new Error('ZMAP+: the two "@" header markers were not found');
+  const csv=s=>s.split(',').map(x=>x.trim());
+  const t1=csv(L[at[0]].trim().slice(1));
+  if(t1[1]&&t1[1].toUpperCase()!=='GRID')throw new Error('ZMAP+ file of type '+t1[1]+': only GRID is supported');
+  const hdr=[];for(let i=at[0]+1;i<at[1];i++){const t=L[i].trim();if(t&&t[0]!=='!')hdr.push(t)}
+  if(hdr.length<2)throw new Error('ZMAP+: header lines missing');
+  const t2=csv(hdr[0]),t3=csv(hdr[1]).map(Number);
+  const width=+t2[0],nullTxt=t2[1]||t2[2]||'1.0E+30',nullVal=NUM.test(nullTxt)?toNum(nullTxt):1e30;
+  if(t3.length<6||!t3.slice(0,6).every(isFinite))throw new Error('ZMAP+: third header line must hold rows, columns, xmin, xmax, ymin, ymax');
+  const [nr,nc,xmin,xmax,ymin,ymax]=t3;
+  if(!(nr>=2&&nc>=2&&Number.isInteger(nr)&&Number.isInteger(nc)))throw new Error('ZMAP+: invalid number of rows or columns');
+  const vals=new Float64Array(nr*nc);let k=0;
+  for(let i=at[1]+1;i<L.length;i++){const l=L[i],t=l.trim();if(!t||t[0]==='!'||(t[0]==='+'&&!NUM.test(t.split(/\s+/)[0])))continue;
+    let tk=t.split(/\s+/);
+    if(width>0&&l.length%width===0&&tk.some(x=>!NUM.test(x))){const c=[];for(let a=0;a<l.length;a+=width)c.push(l.slice(a,a+width).trim());if(c.every(x=>NUM.test(x)||!x))tk=c.filter(Boolean)}
+    for(const x of tk){if(k>=vals.length){k++;continue}vals[k++]=NUM.test(x)?toNum(x):NaN}}
+  if(k!==nr*nc)throw new Error(`ZMAP+: ${k} values for ${nr} x ${nc} = ${nr*nc} nodes`);
+  const z=new Float64Array(nr*nc);
+  for(let c=0;c<nc;c++)for(let r=0;r<nr;r++){const v=vals[c*nr+r];z[r*nc+c]=(v===nullVal||isBig(v))?NaN:v}
+  return makeGrid(nc,nr,(xmax-xmin)/(nc-1),(ymax-ymin)/(nr-1),xmin,ymax,z,name||t1[0]);
+}
+function parseSurfer(text,name){
+  const tk=text.replace(/^﻿/,'').trim().split(/\s+/);
+  if(tk[0]!=='DSAA')throw new Error('Surfer ASCII: DSAA keyword not found');
+  const h=tk.slice(1,9).map(Number);if(h.length<8||!h.every(isFinite))throw new Error('Surfer ASCII: header incomplete');
+  const [nx,ny,xlo,xhi,ylo,yhi]=h;if(!(nx>=2&&ny>=2))throw new Error('Surfer ASCII: invalid size');
+  if(tk.length-9!==nx*ny)throw new Error(`Surfer ASCII: ${tk.length-9} values for ${nx} x ${ny} = ${nx*ny} nodes`);
+  const z=new Float64Array(nx*ny);   // file order: bottom row first
+  for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const v=toNum(tk[9+r*nx+c]);z[(ny-1-r)*nx+c]=(isBig(v)||v>=1.7e38)?NaN:v}
+  return makeGrid(nx,ny,(xhi-xlo)/(nx-1),(yhi-ylo)/(ny-1),xlo,yhi,z,name);
+}
+function parseEsri(text,name){
+  const L=lines(text),hd={};let i=0;
+  for(;i<L.length;i++){const t=L[i].trim();if(!t)continue;const m=t.match(/^([A-Za-z_]+)\s+(\S+)$/);if(!m||NUM.test(t.split(/\s+/)[0]))break;hd[m[1].toLowerCase()]=m[2]}
+  const nx=+hd.ncols,ny=+hd.nrows;if(!(nx>=2&&ny>=2))throw new Error('Esri ASCII: ncols / nrows not found');
+  let dx=+hd.cellsize,dy=dx;if(!isFinite(dx)){dx=+hd.dx;dy=+hd.dy}
+  if(!(dx>0&&dy>0))throw new Error('Esri ASCII: cellsize not found');
+  let x0=hd.xllcenter!=null?+hd.xllcenter:+hd.xllcorner+dx/2,yb=hd.yllcenter!=null?+hd.yllcenter:+hd.yllcorner+dy/2;
+  if(!isFinite(x0)||!isFinite(yb))throw new Error('Esri ASCII: xllcorner / yllcorner not found');
+  const nd=hd.nodata_value!=null?+hd.nodata_value:NULL_ESRI;
+  const z=new Float64Array(nx*ny);let k=0;
+  for(;i<L.length;i++){const t=L[i].trim();if(!t)continue;for(const x of t.split(/\s+/)){if(k<z.length){const v=toNum(x);z[k]=(v===nd||isBig(v))?NaN:v}k++}}
+  if(k!==nx*ny)throw new Error(`Esri ASCII: ${k} values for ${nx} x ${ny} = ${nx*ny} nodes`);
+  return makeGrid(nx,ny,dx,dy,x0,yb+(ny-1)*dy,z,name);
+}
+// x y z text on a regular lattice (missing lattice nodes become null)
+function parseXYZ(text,name){
+  const P=[];for(const l of lines(text)){const t=l.trim();if(!t||/^[#!\/]/.test(t))continue;const s=t.split(/[\s,;]+/);if(s.length<3)continue;const x=+s[0],y=+s[1],z=+s[2];if(isFinite(x)&&isFinite(y))P.push([x,y,z])}
+  if(P.length<4)throw new Error('x y z text: fewer than 4 numeric lines');
+  const uniq=a=>{const s=[...new Set(a)].sort((p,q)=>p-q);return s};
+  const ux=uniq(P.map(p=>p[0])),uy=uniq(P.map(p=>p[1]));
+  const step=u=>{if(u.length<2)return NaN;const d=[];for(let i=1;i<u.length;i++)d.push(u[i]-u[i-1]);d.sort((a,b)=>a-b);return d[0]>0&&d[Math.floor(d.length/2)]>0?d[0]:NaN};
+  // the smallest gap is the cell size when it is regular (checked below); gaps from rounding noise are merged
+  const clean=(u,tol)=>{const o=[u[0]];for(let i=1;i<u.length;i++)if(u[i]-o[o.length-1]>tol)o.push(u[i]);return o};
+  const r0x=(ux[ux.length-1]-ux[0]),r0y=(uy[uy.length-1]-uy[0]);
+  const gx=clean(ux,1e-9*Math.max(1,r0x)),gy=clean(uy,1e-9*Math.max(1,r0y));
+  const dx=step(gx),dy=step(gy);
+  if(!(dx>0&&dy>0))throw new Error('x y z text: cannot find the cell size (need at least 2 distinct x and y)');
+  const nx=Math.round((gx[gx.length-1]-gx[0])/dx)+1,ny=Math.round((gy[gy.length-1]-gy[0])/dy)+1;
+  if(nx*ny>2.5e7)throw new Error('x y z text: lattice too large ('+nx+' x '+ny+')');
+  const z=new Float64Array(nx*ny).fill(NaN);let bad=0,dup=0;
+  for(const [x,y,v] of P){const fc=(x-gx[0])/dx,fr=(gy[gy.length-1]-y)/dy,c=Math.round(fc),r=Math.round(fr);
+    if(Math.abs(fc-c)>1e-3||Math.abs(fr-r)>1e-3){bad++;continue}
+    if(!isNaN(z[r*nx+c]))dup++;z[r*nx+c]=isBig(v)?NaN:v}
+  if(bad>0.01*P.length)throw new Error(`x y z text: ${bad} of ${P.length} points are off a regular lattice (spacing ${dx} x ${dy}); resample the data on a grid first`);
+  const g=makeGrid(nx,ny,dx,dy,gx[0],gy[gy.length-1],z,name);g.note=bad||dup?`${bad} off-lattice and ${dup} duplicate points ignored or overwritten`:'';return g;
+}
+function parseGrid(text,name){
+  const head=text.slice(0,400).replace(/^﻿/,'').trimStart();
+  if(/^DSAA/.test(head))return parseSurfer(text,name);
+  if(/^ncols\b/i.test(head))return parseEsri(text,name);
+  if(/^(!|@)/m.test(text.slice(0,4000))&&/^\s*@/m.test(text.slice(0,20000)))return parseZmap(text,name);
+  return parseXYZ(text,name);
+}
+
+// ------------------------------------------------------------------ writers
+const fnum=v=>String(+(+v).toPrecision(12));
+function validRange(g){let mn=Infinity,mx=-Infinity;for(const v of g.z)if(v===v){if(v<mn)mn=v;if(v>mx)mx=v}return [mn,mx]}
+// ZMAP+: fixed-width fields, 20 characters, decimals chosen for ~10 significant digits of the largest value
+function writeZmap(g,o){o=o||{};const npl=o.npl||5,width=o.width||20,nr=g.ny,nc=g.nx;
+  const [mn,mx]=validRange(g),sc=Math.max(Math.abs(mn),Math.abs(mx))||1;
+  const dec=o.dec!=null?o.dec:Math.max(0,Math.min(15,Math.ceil(10-Math.log10(sc))));
+  const label=String(o.label||g.name||'GRID').replace(/[,@\r\n]/g,'_').slice(0,40)||'GRID';
+  const xmax=g.x0+(nc-1)*g.dx,ymin=g.y1-(nr-1)*g.dy;
+  const out=['!','! '+label+' - written by Grid attributes','!',`@${label}, GRID, ${npl}`,`${width}, ${NULL_ZMAP_TXT}, , ${dec}, 1`,`${nr}, ${nc}, ${fnum(g.x0)}, ${fnum(xmax)}, ${fnum(ymin)}, ${fnum(g.y1)}`,'0.0, 0.0, 0.0','@'];
+  for(let c=0;c<nc;c++){let s='',k=0;for(let r=0;r<nr;r++){const v=g.z[r*nc+c];s+=(v===v?v.toFixed(dec):NULL_ZMAP_TXT).padStart(width);if(++k===npl||r===nr-1){out.push(s);s='';k=0}}}
+  return out.join('\r\n')+'\r\n';
+}
+function writeSurfer(g){const [mn,mx]=validRange(g),nx=g.nx,ny=g.ny,L=['DSAA',`${nx} ${ny}`,`${fnum(g.x0)} ${fnum(g.x0+(nx-1)*g.dx)}`,`${fnum(g.y1-(ny-1)*g.dy)} ${fnum(g.y1)}`,`${fnum(isFinite(mn)?mn:0)} ${fnum(isFinite(mx)?mx:0)}`];
+  for(let r=ny-1;r>=0;r--){for(let c0=0;c0<nx;c0+=10){const a=[];for(let c=c0;c<Math.min(nx,c0+10);c++){const v=g.z[r*nx+c];a.push(v===v?String(+v.toPrecision(10)):'1.70141e+38')}L.push(a.join(' '))}L.push('')}
+  return L.join('\r\n')+'\r\n'}
+function writeEsri(g){const nx=g.nx,ny=g.ny,sq=Math.abs(g.dx-g.dy)<=1e-9*Math.abs(g.dx);
+  const L=[`ncols ${nx}`,`nrows ${ny}`,`xllcorner ${fnum(g.x0-g.dx/2)}`,`yllcorner ${fnum(g.y1-(ny-1)*g.dy-g.dy/2)}`,sq?`cellsize ${fnum(g.dx)}`:`dx ${fnum(g.dx)}\r\ndy ${fnum(g.dy)}`,`NODATA_value ${NULL_ESRI}`];
+  for(let r=0;r<ny;r++){const a=new Array(nx);for(let c=0;c<nx;c++){const v=g.z[r*nx+c];a[c]=v===v?String(+v.toPrecision(10)):String(NULL_ESRI)}L.push(a.join(' '))}
+  return L.join('\r\n')+'\r\n'}
+
+// ------------------------------------------------------------------ helpers
+function nanArr(n){return new Float64Array(n).fill(NaN)}
+function validMask(g){const n=g.z.length,m=new Float64Array(n);for(let i=0;i<n;i++)m[i]=g.z[i]===g.z[i]?1:0;return m}
+// elevations with the mean removed (conditioning of the window sums) and 0 at nulls
+function prep(g){const n=g.z.length,m=new Float64Array(n),z0=new Float64Array(n);let s=0,k=0;
+  for(let i=0;i<n;i++)if(g.z[i]===g.z[i]){s+=g.z[i];k++}
+  const mean=k?s/k:0;for(let i=0;i<n;i++)if(g.z[i]===g.z[i]){m[i]=1;z0[i]=g.z[i]-mean}
+  return {m,z0,mean}}
+
+// Window sums of several arrays at every cell.
+// shape 'square': (2R+1)^2 cells from a summed-area table, O(1) per cell and array.
+// shape 'disc': cells with distance <= R; 'annulus': R_in < distance <= R. Rows are summed from row prefix sums, O(R) per cell.
+// Windows are cut at the grid edge (they shrink; callers divide by the number of valid cells inside).
+function windowSums(nx,ny,arrs,R,shape,rin){
+  R=Math.max(0,Math.floor(R));const n=nx*ny,out=[];
+  if(shape==='disc'||shape==='annulus'){
+    const disc=Rr=>arrs.map(a=>{const sx=nx+1,P=new Float64Array(ny*sx),o=new Float64Array(n);
+      for(let r=0;r<ny;r++){let run=0;for(let c=0;c<nx;c++){run+=a[r*nx+c];P[r*sx+c+1]=run}}
+      for(let dy=-Rr;dy<=Rr;dy++){const w=Math.floor(Math.sqrt(Rr*Rr-dy*dy)+1e-9);
+        for(let r=0;r<ny;r++){const rr=r+dy;if(rr<0||rr>=ny)continue;const b=rr*sx;
+          for(let c=0;c<nx;c++){const c0=c-w<0?0:c-w,c1=c+w+1>nx?nx:c+w+1;o[r*nx+c]+=P[b+c1]-P[b+c0]}}}
+      return o});
+    const A=disc(R);
+    if(shape==='annulus'){const ri=Math.max(0,Math.min(R-1,Math.floor(rin==null?R/2:rin))),B=disc(ri);A.forEach((o,k)=>{for(let i=0;i<n;i++)o[i]-=B[k][i]})}
+    return A}
+  const sx=nx+1;
+  for(const a of arrs){const S=new Float64Array(sx*(ny+1)),o=new Float64Array(n);
+    for(let r=0;r<ny;r++){let run=0;for(let c=0;c<nx;c++){run+=a[r*nx+c];S[(r+1)*sx+c+1]=S[r*sx+c+1]+run}}
+    for(let r=0;r<ny;r++){const r0=Math.max(0,r-R),r1=Math.min(ny,r+R+1);
+      for(let c=0;c<nx;c++){const c0=Math.max(0,c-R),c1=Math.min(nx,c+R+1);o[r*nx+c]=S[r1*sx+c1]-S[r0*sx+c1]-S[r1*sx+c0]+S[r0*sx+c0]}}
+    out.push(o)}
+  return out;
+}
+
+// ------------------------------------------------------------------ slope, aspect
+// Horn (1981) 3x3 gradient, z1..z9 = NW N NE / W C E / SW S SE, x east, y north:
+//   dz/dx = ((z3 + 2 z6 + z9) - (z1 + 2 z4 + z7)) / (8 dx)      dz/dy = ((z1 + 2 z2 + z3) - (z7 + 2 z8 + z9)) / (8 dy)
+// i.e. the weighted (1,2,1) mean of three central differences. A pair with a null end is dropped, the middle one falls back
+// to a one-sided difference: the window shrinks instead of the cell becoming null. slope = atan(sqrt(p^2+q^2)).
+function gradient(g){
+  const {nx,ny,dx,dy,z}=g,n=nx*ny,p=nanArr(n),q=nanArr(n);
+  for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const i=r*nx+c,zc=z[i];if(zc!==zc)continue;
+    let sp=0,wp=0,sq=0,wq=0;
+    for(let d=-1;d<=1;d++){const w=d===0?2:1,rr=r+d;if(rr<0||rr>=ny)continue;
+      const L=c>0?z[rr*nx+c-1]:NaN,R=c<nx-1?z[rr*nx+c+1]:NaN,C=z[rr*nx+c];
+      if(L===L&&R===R){sp+=w*(R-L)/(2*dx);wp+=w}
+      else if(d===0){if(R===R){sp+=w*(R-C)/dx;wp+=w}else if(L===L){sp+=w*(C-L)/dx;wp+=w}}}
+    for(let d=-1;d<=1;d++){const w=d===0?2:1,cc=c+d;if(cc<0||cc>=nx)continue;
+      const N=r>0?z[(r-1)*nx+cc]:NaN,S=r<ny-1?z[(r+1)*nx+cc]:NaN,C=z[r*nx+cc];
+      if(N===N&&S===S){sq+=w*(N-S)/(2*dy);wq+=w}
+      else if(d===0){if(N===N){sq+=w*(N-C)/dy;wq+=w}else if(S===S){sq+=w*(C-S)/dy;wq+=w}}}
+    if(wp&&wq){p[i]=sp/wp;q[i]=sq/wq}}
+  return {p,q};
+}
+function slope(g){const {p,q}=gradient(g),o=nanArr(p.length);for(let i=0;i<o.length;i++)if(p[i]===p[i])o[i]=Math.atan(Math.hypot(p[i],q[i]))*DEG;return o}
+function aspect(g){const {p,q}=gradient(g),o=nanArr(p.length);
+  for(let i=0;i<o.length;i++)if(p[i]===p[i]&&Math.hypot(p[i],q[i])>1e-12){let a=Math.atan2(-p[i],-q[i])*DEG;if(a<0)a+=360;if(a>=360)a-=360;o[i]=a}
+  return o}
+
+// ------------------------------------------------------------------ curvatures
+// Zevenbergen & Thorne (1987) fit of z = A x^2y^2 + B x^2y + C xy^2 + D x^2 + E y^2 + F xy + G x + H y + I on the 3x3 window, L = cell size:
+//   D = ((z4+z6)/2 - z5)/L^2   E = ((z2+z8)/2 - z5)/L^2   F = (-z1+z3+z7-z9)/(4 L^2)   G = (-z4+z6)/(2L)   H = (z2-z8)/(2L)
+// Used with dx and dy separately. Signs here: positive = convex-up (crest), so the reported curvatures are the opposite of the second derivatives:
+//   profile = -2 (D G^2 + E H^2 + F G H)/(G^2+H^2)    (along the steepest-descent line)
+//   plan    = -2 (D H^2 + E G^2 - F G H)/(G^2+H^2)    (along the contour)
+//   mean    = -(D + E)                                 (half the Laplacian, small-slope form)
+//   gauss   = (4 D E - F^2)/(1 + G^2 + H^2)^2          (Monge patch, sign-independent)
+// All in 1/length. Where the gradient is nil (G = H = 0) profile and plan are set to the mean curvature (direction undefined).
+// The full 3x3 window must be valid: the outermost ring of nodes and cells next to a null are null.
+function curvatures(g){
+  const {nx,ny,dx,dy,z}=g,n=nx*ny,prof=nanArr(n),plan=nanArr(n),mean=nanArr(n),gau=nanArr(n);
+  for(let r=1;r<ny-1;r++)for(let c=1;c<nx-1;c++){const i=r*nx+c;
+    const z1=z[i-nx-1],z2=z[i-nx],z3=z[i-nx+1],z4=z[i-1],z5=z[i],z6=z[i+1],z7=z[i+nx-1],z8=z[i+nx],z9=z[i+nx+1];
+    if(!(z1===z1&&z2===z2&&z3===z3&&z4===z4&&z5===z5&&z6===z6&&z7===z7&&z8===z8&&z9===z9))continue;
+    const D=((z4+z6)/2-z5)/(dx*dx),E=((z2+z8)/2-z5)/(dy*dy),F=(-z1+z3+z7-z9)/(4*dx*dy),G=(z6-z4)/(2*dx),H=(z2-z8)/(2*dy),s2=G*G+H*H;
+    mean[i]=-(D+E);gau[i]=(4*D*E-F*F)/((1+s2)*(1+s2));
+    if(s2>1e-18){prof[i]=-2*(D*G*G+E*H*H+F*G*H)/s2;plan[i]=-2*(D*H*H+E*G*G-F*G*H)/s2}else{prof[i]=plan[i]=-(D+E)}}
+  return {profile:prof,plan,mean,gauss:gau};
+}
+
+// ------------------------------------------------------------------ TPI and roughness
+// Terrain Position Index (Weiss 2001): cell minus the mean of the other valid cells of the window. Windows: square (2R+1)^2,
+// disc (distance <= R), annulus (rin < distance <= R). Positive = higher than the surroundings. Window mean from summed tables.
+function tpi(g,R,shape,rin){
+  const n=g.z.length,{m,z0}=prep(g),[Sm,Sz]=windowSums(g.nx,g.ny,[m,z0],R,shape,rin),o=nanArr(n),self=shape==='annulus'?0:1;
+  for(let i=0;i<n;i++)if(m[i]){const cnt=Sm[i]-self,sum=Sz[i]-self*z0[i];if(cnt>=1)o[i]=z0[i]-sum/cnt}
+  return o}
+// Roughness: standard deviation of z in the window (mode 'std', n-1), or of the residuals after removing the least-squares plane
+// fitted in the window (mode 'plane', n-3). Both in the units of z; the plane version ignores the regional dip.
+function roughness(g,R,mode,shape,rin){
+  const {nx,ny}=g,n=nx*ny,{m,z0}=prep(g),o=nanArr(n);
+  if(mode!=='plane'){const zz=new Float64Array(n);for(let i=0;i<n;i++)zz[i]=z0[i]*z0[i];
+    const [N,Sz,Szz]=windowSums(nx,ny,[m,z0,zz],R,shape,rin);
+    for(let i=0;i<n;i++)if(m[i]&&N[i]>=3)o[i]=Math.sqrt(Math.max(0,(Szz[i]-Sz[i]*Sz[i]/N[i])/(N[i]-1)));
+    return o}
+  const X=new Float64Array(n),Y=new Float64Array(n);
+  const zz=new Float64Array(n),xz=new Float64Array(n),yz=new Float64Array(n),xx=new Float64Array(n),yy=new Float64Array(n),xy=new Float64Array(n);
+  for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const i=r*nx+c;if(!m[i])continue;X[i]=c;Y[i]=r;zz[i]=z0[i]*z0[i];xz[i]=c*z0[i];yz[i]=r*z0[i];xx[i]=c*c;yy[i]=r*r;xy[i]=c*r}
+  const [N,Sz,Szz,Sx,Sy,Sxz,Syz,Sxx,Syy,Sxy]=windowSums(nx,ny,[m,z0,zz,X,Y,xz,yz,xx,yy,xy],R,shape,rin);
+  for(let i=0;i<n;i++){if(!m[i]||N[i]<4)continue;const k=N[i];
+    const cxx=Sxx[i]-Sx[i]*Sx[i]/k,cyy=Syy[i]-Sy[i]*Sy[i]/k,cxy=Sxy[i]-Sx[i]*Sy[i]/k,cxz=Sxz[i]-Sx[i]*Sz[i]/k,cyz=Syz[i]-Sy[i]*Sz[i]/k,czz=Szz[i]-Sz[i]*Sz[i]/k;
+    const det=cxx*cyy-cxy*cxy;let sse=czz;
+    if(det>1e-9*cxx*cyy&&cxx>0&&cyy>0){const a=(cxz*cyy-cyz*cxy)/det,b=(cyz*cxx-cxz*cxy)/det;sse=czz-a*cxz-b*cyz}
+    o[i]=Math.sqrt(Math.max(0,sse)/(k-3))}
+  return o}
+
+// ------------------------------------------------------------------ rugosity
+// Jenness (2004): the surface area of a cell is the sum of the 8 triangles joining the centre to each pair of adjacent neighbours,
+// taken at half size (the part inside the cell): area_k = |u x v| / 8, u and v the 3D vectors centre -> neighbour. Planar area dx*dy
+// (8 triangles of dx*dy/8 each). A triangle with a null vertex is dropped from both areas. The index of a window of radius R is
+// sum(surface areas) / sum(planar areas) over its cells (R = 0: the cell alone). 1 = flat; tilted plane = 1/cos(slope).
+const RING=[[-1,0],[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1],[-1,-1]];   // N NE E SE S SW W NW as (row offset, column offset)
+function cellAreas(g){
+  const {nx,ny,dx,dy,z}=g,n=nx*ny,sA=new Float64Array(n),pA=new Float64Array(n),ux=new Float64Array(8),uy=new Float64Array(8),uz=new Float64Array(8),ok=new Uint8Array(8);
+  for(let k=0;k<8;k++){ux[k]=RING[k][1]*dx;uy[k]=-RING[k][0]*dy}
+  for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const i=r*nx+c,zc=z[i];if(zc!==zc)continue;
+    for(let k=0;k<8;k++){const rr=r+RING[k][0],cc=c+RING[k][1];if(rr<0||rr>=ny||cc<0||cc>=nx){ok[k]=0;continue}const v=z[rr*nx+cc];ok[k]=v===v?1:0;uz[k]=v-zc}
+    let s=0,p=0;
+    for(let k=0;k<8;k++){const j=(k+1)&7;if(!ok[k]||!ok[j])continue;
+      const cx=uy[k]*uz[j]-uz[k]*uy[j],cy=uz[k]*ux[j]-ux[k]*uz[j],cz=ux[k]*uy[j]-uy[k]*ux[j];
+      s+=Math.sqrt(cx*cx+cy*cy+cz*cz)/8;p+=dx*dy/8}
+    sA[i]=s;pA[i]=p}
+  return {sA,pA}}
+function rugosity(g,R,shape,rin){
+  const n=g.z.length,{sA,pA}=cellAreas(g),o=nanArr(n);let S=sA,P=pA;
+  if(R>0){[S,P]=windowSums(g.nx,g.ny,[sA,pA],R,shape,rin)}
+  for(let i=0;i<n;i++)if(g.z[i]===g.z[i]&&P[i]>0)o[i]=S[i]/P[i];
+  return o}
+
+// ------------------------------------------------------------------ Mexican-hat CWT
+// Isotropic 2D Mexican hat (Ricker) = Laplacian of a Gaussian, scale-normalised: psi_s = -s^2 * Laplacian(G_s), G_s the unit-integral
+// Gaussian of standard deviation s (in cells). W(s) = psi_s * z. Exactly separable:
+//   W = -( s^2 [g''_s along x, g_s along y] + s^2 [g_s along x, g''_s along y] )   (kernels truncated at 4 s, g'' forced to zero mean)
+// Units of z; positive over crests. A Gaussian bump of amplitude A and standard deviation b responds 2 A s^2 b^2 / (s^2 + b^2)^2 at its
+// centre: maximum A/2 for s = b, so the scale of maximum response estimates the size of the feature. With dx != dy the standard
+// deviation is s cells in x and s*dx/dy cells in y (same ground distance). Nulls are filled by normalised Gaussian averaging before the
+// transform and masked again afterwards; borders are reflected. Cost O(n * s) per scale.
+function kernels(sig){const K=Math.max(2,Math.ceil(4*sig)),g=new Float64Array(2*K+1),d=new Float64Array(2*K+1);let sg=0,sd=0;
+  for(let k=-K;k<=K;k++){const e=Math.exp(-k*k/(2*sig*sig));g[k+K]=e;sg+=e;d[k+K]=e*(k*k/(sig*sig)-1)/(sig*sig)}
+  for(let k=0;k<g.length;k++){g[k]/=sg;sd+=d[k]}
+  // scale g'' so that its second moment is exactly 1 (a discrete Laplacian of the plane x^2/2), zero mean
+  const md=sd/d.length;let m2=0;for(let k=0;k<d.length;k++){d[k]-=md;m2+=d[k]*(k-K)*(k-K)}
+  for(let k=0;k<d.length;k++)d[k]*=2/m2;   // sum(d k^2) = 2: applied to x^2/2 it returns exactly 1
+  return {K,g,d}}
+function conv1(src,nx,ny,ker,horiz){const K=ker.length>>1,out=new Float64Array(nx*ny);
+  if(horiz){for(let r=0;r<ny;r++){const b=r*nx;for(let c=0;c<nx;c++){let s=0;for(let k=-K;k<=K;k++){let cc=c+k;if(cc<0)cc=-cc-1;else if(cc>=nx)cc=2*nx-1-cc;if(cc<0)cc=0;if(cc>=nx)cc=nx-1;s+=ker[k+K]*src[b+cc]}out[b+c]=s}}}
+  else{for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){let s=0;for(let k=-K;k<=K;k++){let rr=r+k;if(rr<0)rr=-rr-1;else if(rr>=ny)rr=2*ny-1-rr;if(rr<0)rr=0;if(rr>=ny)rr=ny-1;s+=ker[k+K]*src[rr*nx+c]}out[r*nx+c]=s}}
+  return out}
+function fillNulls(g){const {nx,ny,z}=g,n=nx*ny,m=validMask(g),f=new Float64Array(n);let cnt=0,sum=0;
+  for(let i=0;i<n;i++)if(m[i]){f[i]=z[i];cnt++;sum+=z[i]}
+  if(cnt===n)return f;if(!cnt)return f;const gm=sum/cnt;
+  let sig=2;const have=m.slice();const val=new Float64Array(n);for(let i=0;i<n;i++)val[i]=m[i]?z[i]:0;
+  const done=m.slice();
+  for(let it=0;it<8;it++){const {g:ker}=kernels(sig),zs=conv1(conv1(val,nx,ny,ker,true),nx,ny,ker,false),ms=conv1(conv1(have,nx,ny,ker,true),nx,ny,ker,false);let left=0;
+    for(let i=0;i<n;i++)if(!done[i]){if(ms[i]>1e-4){f[i]=zs[i]/ms[i];done[i]=1}else left++}
+    if(!left)break;sig*=2;if(it===7)for(let i=0;i<n;i++)if(!done[i])f[i]=gm}
+  return f}
+function cwt(g,sig){
+  const {nx,ny,dx,dy}=g,n=nx*ny,f=fillNulls(g),sy=sig*dx/dy,kx=kernels(sig),ky=kernels(Math.max(0.5,sy));
+  const A=conv1(f,nx,ny,kx.d,true),B=conv1(f,nx,ny,kx.g,true),Wa=conv1(A,nx,ny,ky.g,false),Wb=conv1(B,nx,ny,ky.d,false),o=nanArr(n);
+  for(let i=0;i<n;i++)if(g.z[i]===g.z[i])o[i]=-(sig*sig*Wa[i]+sy*sy*Wb[i]);
+  return o}
+// scale (among sigmas) of the largest positive response at each cell
+function cwtBest(g,sigmas){const n=g.z.length,best=nanArr(n),mx=new Float64Array(n).fill(-Infinity);
+  for(const s of sigmas){const w=cwt(g,s);for(let i=0;i<n;i++)if(w[i]===w[i]&&w[i]>mx[i]){mx[i]=w[i];best[i]=s}}
+  return best}
+
+// ------------------------------------------------------------------ local fractal dimension
+// For lags h (cells, default 2,4,8) the semivariance gamma(h) = 1/2 mean[(z(p+h) - z(p))^2] is taken over the x and y pairs whose first node
+// lies in the square window of radius R. Assuming a self-affine, isotropic surface with stationary increments, gamma(h) ~ h^(2H): the slope of
+// ln gamma versus ln h (least squares) is 2H, and D = 3 - H (H clipped to [0,1], so 2 <= D <= 3). Sources of bias: a nugget / noise floor
+// flattens the slope (D rises towards 3), short windows are noisy, lag 1 on a band-limited (sampled) surface is flatter than the power law (D biased low by ~0.1 on spectral fBm, hence the default lags 2, 4, 8), a smooth trend gives H = 1 (D = 2). A flat window gives D = 2 by convention.
+// Cost: O(n) per lag with summed-area tables (a 1000 x 1000 grid, 3 lags: about 2 s); the window radius is raised to 2 * the largest lag
+// if smaller, and needs at least 8 pairs per lag.
+function fractal(g,R,lags){
+  lags=(lags&&lags.length?lags:[2,4,8]).filter(h=>h>=1&&Number.isInteger(h)).sort((a,b)=>a-b);if(lags.length<2)lags=[1,2];
+  const {nx,ny,z}=g,n=nx*ny,Re=Math.max(R,2*lags[lags.length-1]),o=nanArr(n),L=lags.length,lg=new Array(L);
+  for(let k=0;k<L;k++){const h=lags[k],q=new Float64Array(n),cnt=new Float64Array(n);
+    for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const i=r*nx+c,a=z[i];if(a!==a)continue;
+      if(c+h<nx){const b=z[i+h];if(b===b){q[i]+=(b-a)*(b-a);cnt[i]++}}
+      if(r+h<ny){const b=z[i+h*nx];if(b===b){q[i]+=(b-a)*(b-a);cnt[i]++}}}
+    const [S,N]=windowSums(nx,ny,[q,cnt],Re,'square');const gm=new Float64Array(n);
+    for(let i=0;i<n;i++)gm[i]=N[i]>=8?S[i]/(2*N[i]):NaN;
+    lg[k]=gm}
+  const lx=lags.map(Math.log),mx=lx.reduce((a,b)=>a+b,0)/L;let sxx=0;for(const v of lx)sxx+=(v-mx)*(v-mx);
+  for(let i=0;i<n;i++){if(g.z[i]!==g.z[i])continue;let ok=true,allZero=true,sy=0;const y=new Array(L);
+    for(let k=0;k<L;k++){const v=lg[k][i];if(!(v===v)){ok=false;break}if(v>1e-300)allZero=false;y[k]=v}
+    if(!ok)continue;if(allZero){o[i]=2;continue}
+    let zero=false;for(let k=0;k<L;k++){if(!(y[k]>1e-300)){zero=true;break}y[k]=Math.log(y[k]);sy+=y[k]}
+    if(zero)continue;const my=sy/L;let sxy=0;for(let k=0;k<L;k++)sxy+=(lx[k]-mx)*(y[k]-my);
+    const H=Math.max(0,Math.min(1,sxy/sxx/2));o[i]=3-H}
+  return o}
+
+// ------------------------------------------------------------------ registry, statistics
+const ATTRS=[
+  {id:'slope',name:'Slope',unit:'°',kind:'seq',scaled:false,f:g=>slope(g)},
+  {id:'aspect',name:'Aspect (dip azimuth)',unit:'°',kind:'circ',scaled:false,f:g=>aspect(g)},
+  {id:'cprofile',name:'Profile curvature',unit:'1/length',kind:'div',scaled:false,f:g=>curvatures(g).profile},
+  {id:'cplan',name:'Plan curvature',unit:'1/length',kind:'div',scaled:false,f:g=>curvatures(g).plan},
+  {id:'cmean',name:'Mean curvature',unit:'1/length',kind:'div',scaled:false,f:g=>curvatures(g).mean},
+  {id:'cgauss',name:'Gaussian curvature',unit:'1/length²',kind:'div',scaled:false,f:g=>curvatures(g).gauss},
+  {id:'tpi',name:'Terrain Position Index',unit:'z',kind:'div',scaled:true,f:(g,s,o)=>tpi(g,s,o.shape,o.rin)},
+  {id:'rstd',name:'Roughness (std of z)',unit:'z',kind:'seq',scaled:true,f:(g,s,o)=>roughness(g,s,'std',o.shape,o.rin)},
+  {id:'rplane',name:'Roughness (std of residuals after plane)',unit:'z',kind:'seq',scaled:true,f:(g,s,o)=>roughness(g,s,'plane',o.shape,o.rin)},
+  {id:'rug',name:'Rugosity index (Jenness)',unit:'-',kind:'seq',scaled:true,f:(g,s,o)=>rugosity(g,s,o.shape,o.rin)},
+  {id:'cwt',name:'Mexican-hat wavelet response',unit:'z',kind:'div',scaled:true,f:(g,s)=>cwt(g,Math.max(1,s))},
+  {id:'cwtbest',name:'Scale of maximum wavelet response',unit:'cells',kind:'seq',scaled:'all',f:(g,s,o)=>cwtBest(g,o.scales&&o.scales.length?o.scales:[2,4,8,16])},
+  {id:'fractal',name:'Local fractal dimension (variogram)',unit:'-',kind:'seq',scaled:true,f:(g,s,o)=>fractal(g,s,o.lags)}];
+function compute(g,id,scale,o){const a=ATTRS.find(x=>x.id===id);if(!a)throw new Error('unknown attribute '+id);return a.f(g,scale,o||{})}
+function stats(arr,circ){let n=0,s=0,s2=0,sc=0,ss=0;
+  for(let i=0;i<arr.length;i++){const v=arr[i];if(!(v===v))continue;n++;if(circ){const t=v/DEG;sc+=Math.cos(t);ss+=Math.sin(t)}else{s+=v;s2+=v*v}}
+  if(!n)return {n:0,mean:NaN,std:NaN};
+  if(circ){const Rb=Math.hypot(sc,ss)/n;let m=Math.atan2(ss,sc)*DEG;if(m<0)m+=360;return {n,mean:m,std:Rb>0?Math.sqrt(-2*Math.log(Math.min(1,Rb)))*DEG:NaN}}
+  const mean=s/n;return {n,mean,std:n>1?Math.sqrt(Math.max(0,(s2-n*mean*mean)/(n-1))):0}}
+// quantile of the valid values (sampled when large)
+function quantiles(arr,ps){const v=[];const st=Math.max(1,Math.floor(arr.length/300000));for(let i=0;i<arr.length;i+=st)if(arr[i]===arr[i])v.push(arr[i]);
+  if(!v.length)return ps.map(()=>NaN);const f=Float64Array.from(v).sort();return ps.map(p=>f[Math.min(f.length-1,Math.max(0,Math.round(p*(f.length-1))))])}
+// summary rows: every attribute at every scale (unscaled attributes once)
+function summary(g,scales,o,ids){const rows=[];
+  for(const a of ATTRS){if(ids&&!ids.includes(a.id))continue;
+    const sc=a.scaled===true?scales:[null];
+    for(const s of sc){const arr=a.f(g,s,Object.assign({scales},o||{})),st=stats(arr,a.kind==='circ');rows.push({id:a.id,name:a.name,unit:a.unit,scale:s,n:st.n,mean:st.mean,std:st.std})}}
+  return rows}
+function parseList(txt,min){const a=String(txt).split(/[\s,;]+/).map(Number).filter(v=>isFinite(v)&&v>=(min==null?0:min));return [...new Set(a)].sort((p,q)=>p-q)}
+// does the spacing look like degrees? (extent within +-360 / +-90 and a cell below 0.5)
+function looksLikeDegrees(g){const xr=Math.max(Math.abs(g.x0),Math.abs(g.x0+(g.nx-1)*g.dx)),yr=Math.max(Math.abs(g.y1),Math.abs(g.y1-(g.ny-1)*g.dy));return xr<=360&&yr<=90&&g.dx<0.5&&g.dy<0.5}
+
+// synthetic example: two domes, a fault-like step, noise (seeded, fictitious)
+function rng(seed){let a=seed>>>0;return ()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function example(nx,ny,seed){nx=nx||200;ny=ny||150;const dx=25,dy=25,x0=450000,y1=6784000,R=rng(seed||7),z=new Float64Array(nx*ny),gauss=()=>{let u=0;do{u=R()}while(!u);return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*R())};
+  for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const u=c/(nx-1),v=1-r/(ny-1);
+    let h=2000+90*Math.exp(-((u-.32)**2/.018+(v-.55)**2/.04))+60*Math.exp(-((u-.72)**2/.01+(v-.38)**2/.012))-70*u+18*Math.sin(14*u+3*v)*Math.exp(-v)+gauss()*1.2;
+    const fault=v-(0.25+0.55*u);   // fault trace: a line across the map, throw 35 m on its south-east side
+    if(fault<0)h-=35;
+    const hole=Math.hypot((u-.55)*1.33,(v-.8))<.06;
+    z[r*nx+c]=hole?NaN:h}
+  return makeGrid(nx,ny,dx,dy,x0,y1,z,'synthetic structure (fictitious)')}
+
+W.GA={makeGrid,parseGrid,parseZmap,parseSurfer,parseEsri,parseXYZ,writeZmap,writeSurfer,writeEsri,gradient,slope,aspect,curvatures,tpi,roughness,cellAreas,rugosity,cwt,cwtBest,fractal,windowSums,ATTRS,compute,stats,quantiles,summary,parseList,looksLikeDegrees,example,validRange,NUM};
+})(window);
+</script></body></html>
