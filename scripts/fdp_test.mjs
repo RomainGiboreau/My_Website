@@ -57,7 +57,7 @@ test('annual aggregation conserves volume and cash flow; run() is complete on th
 // ---- 1. interchange file ----
 test('fdp-link: exact format, values consistent with the computed tiles', () => {
   const p = base({ name: 'Test field' }), L = F.link(p), r = F.economics(p);
-  assert.deepEqual(Object.keys(L), ['format', 'version', 'name', 'mefv', 'breakeven', 'utc', 'capex', 'npv', 'reserves', 'price']);
+  assert.deepEqual(Object.keys(L).slice(0, 10), ['format', 'version', 'name', 'mefv', 'breakeven', 'utc', 'capex', 'npv', 'reserves', 'price']);
   assert.equal(L.format, 'fdp-link'); assert.equal(L.version, 1); assert.equal(L.name, 'Test field');
   near(L.mefv, F.mefv(p), 1e-9); near(L.breakeven, F.breakeven(p), 1e-9); near(L.utc, r.utc, 1e-12); near(L.capex, p.facilities + p.wells * p.wellCost, 1e-9);
   near(L.npv, r.npv, 1e-9); assert.equal(L.reserves, p.reserves); assert.equal(L.price, p.price);
@@ -139,5 +139,42 @@ test('drilling schedule: later wells are paid when drilled (not before first oil
   near(rs.rows.filter(x => x.m >= m0 && x.m < m0 + 12).reduce((a, x) => a + x.capex, 0), 2 * s.wellCost, 1e-6);
   assert.ok(rs.npv < rf.npv, 'late wells reduce NPV when plateau is capacity-limited: ' + rs.npv + ' vs ' + rf.npv);
   assert.deepEqual(F.clean({ wellMode: 'sched', drill: ['x'] }).drill, F.defaults().drill);
+});
+// ---- review fixes (26 Nov 2026) ----
+test('validation: empty / invalid capex phasing is reported and replaced by [100] (was: capex silently cleared)', () => {
+  for (const ph of [[], [0, 0], [-10, 110], [NaN, 50], 'x']) {
+    const raw = Object.assign(F.defaults(), { phasing: ph }), v = F.validate(raw);
+    assert.ok(v.errors.some(e => /phasing/i.test(e)), JSON.stringify(ph));
+    assert.deepEqual(F.clean(raw).phasing, [100]);
+    near(F.economics(F.clean(raw)).npv, F.economics(base({ phasing: [100] })).npv, 1e-9);
+  }
+  assert.equal(F.validate(F.defaults()).errors.length, 0);
+});
+test('validation: price <= 0, reserves <= 0, tax / royalty outside 0..100 give errors; huge reserves a warning', () => {
+  const d = o => F.validate(Object.assign(F.defaults(), o));
+  assert.ok(d({ price: 0 }).errors.length); assert.ok(d({ price: -5 }).errors.length); assert.ok(d({ reserves: 0 }).errors.length); assert.ok(d({ reserves: -3 }).errors.length);
+  assert.ok(d({ tax: 120 }).errors.length); assert.ok(d({ tax: -1 }).errors.length); assert.ok(d({ royalty: 101 }).errors.length); assert.ok(d({ royalty: -1 }).errors.length);
+  assert.ok(d({ reserves: 1e6 }).warnings.length);
+  assert.ok(d({ regime: 'psc', pscTax: 150 }).errors.length); assert.ok(d({ regime: 'psc', tax: 150 }).errors.length === 0);
+});
+test('depreciation: when the producing life is shorter than the depreciation period the remainder is deducted in the last producing month', () => {
+  const p = base({ dep: 30, reserves: 10, plateau: 10, wells: 2, wellIP: 5, qmin: 2 }), r = F.economics(p);
+  const sum = r.rows.reduce((a, x) => a + x.dep, 0); near(sum, r.capTot, 1e-6);
+  const q = base(), r2 = F.economics(q); near(r2.rows.reduce((a, x) => a + x.dep, 0), r2.capTot, 1e-6);
+});
+test('fdp-link v2: marginalValue, npvCurve, fiscal, computedBy; v1 fields kept', () => {
+  const p = base({ name: 'Test field' }), L = F.link(p), mv = F.mefv(p), h = .05 * mv;
+  for (const k of ['format', 'version', 'name', 'mefv', 'breakeven', 'utc', 'capex', 'npv', 'reserves', 'price']) assert.ok(k in L, k);
+  assert.equal(L.format, 'fdp-link'); assert.equal(L.version, 1); assert.equal(L.linkVersion, 2);
+  const npv = v => F.economics(Object.assign({}, p, { reserves: v })).npv;
+  near(L.marginalValue, (npv(mv + h) - npv(mv - h)) / (2 * h), 1e-9); assert.ok(L.marginalValue > 5 && L.marginalValue < 30, 'slope ' + L.marginalValue);
+  assert.equal(L.npvCurve.length, 9); near(L.npvCurve[0][0], .4 * p.reserves, 1e-9); near(L.npvCurve[8][0], 2.5 * p.reserves, 1e-9);
+  const r = Math.pow(6.25, 1 / 8); for (let i = 1; i < 9; i++) near(L.npvCurve[i][0] / L.npvCurve[i - 1][0], r, 1e-9);
+  for (const [v, n] of L.npvCurve) near(n, npv(v), 1e-9);
+  assert.equal(typeof L.fiscal, 'string'); assert.ok(/royalty/i.test(L.fiscal) && /10/.test(L.fiscal)); assert.ok(/Field development screening/.test(L.computedBy));
+  assert.equal(F.link(base({ regime: 'psc' })).fiscal.includes('production sharing'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(L)), L);
+  // MEFV null: marginalValue null
+  const dead = F.link(base({ price: 1 })); assert.equal(dead.mefv, null); assert.equal(dead.marginalValue, null);
 });
 console.log(`${n}/${n} passed`);
