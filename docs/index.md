@@ -170,7 +170,7 @@ Gridding, spatial correlation, grouping of point data and depositional environme
 
     [**GDE map generator**](gdemap/index.html)
 
-    Gross depositional environment map from wells, seismic attributes and a concept: a whole margin from hinterland to basin floor (rivers feeding deltas, canyon and fan in line), or one of 17 systems, with editable key lines, reefs, faults and gradual transitions; calibrated on the wells; drawn as atlas-style EOD and facies maps (smooth domains, deltaic lobes, turbidite fairways, fans, platforms); polygons, lines and grid exports.
+    Depositional environment maps from wells and a concept: belts, EOD and facies views, polygon and grid exports.
 
 -   [![Grid attributes](assets/tools/gridattr.webp){ loading=lazy }](gridattr/index.html)
 
@@ -290,13 +290,13 @@ Ranking options against several criteria, and risking prospects. [Background not
 
     [**Portfolio consolidation**](portfolio/index.html)
 
-    Prospects with shared play risk and correlated volumes: portfolio value distribution, downside, capital efficiency, budget-constrained selection.
+    Prospects with shared play risk: portfolio value distribution, downside, budget-constrained selection.
 
 -   [![Field development screening](assets/tools/fdp.webp){ loading=lazy }](fdp/index.html)
 
     [**Field development screening**](fdp/index.html)
 
-    Plateau and decline profile matched to the reserves, capex, opex, royalty and tax: NPV, IRR, break-even price, minimum economic volume, sensitivities.
+    Plateau and decline profile, capex, opex and tax: NPV, IRR, break-even price, minimum economic volume.
 
 -   [![Contact and well POS](assets/tools/wellpos.webp){ loading=lazy }](wellpos/index.html)
 
