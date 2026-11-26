@@ -285,6 +285,59 @@ test('1.2 layout rewritten as 2.0 with vers fix', () => {
   assert.equal(las2.well.find(h => h.mnem === 'WELL').value, 'ACME-1');
 });
 
+// ---- expert review fixes (26 Nov 2026)
+test('RV1: a gap in depth is reported by data.gap, with line and size, and the STEP fix does not write 0', () => {
+  const t = withData('1000.00 45 2.4 0.2 1\n1000.25 46 2.4 0.2 2\n1000.50 47 2.4 0.2 3\n1002.50 48 2.4 0.2 4\n1003.00 49 2.4 0.2 5\n').replace('1001.0000 ', '1003.0000 ');
+  const { las, f } = run(t);
+  const g = f.find(x => x.rule === 'data.gap');
+  assert.ok(g, 'data.gap missing; got ' + rules(f).join(', '));
+  assert.equal(g.sev, 'W');
+  assert.ok(/2 depth gaps?|largest/.test(g.msg) && /line/.test(g.msg), g.msg);
+  assert.ok(!f.some(x => x.rule === 'well.step' && /should be 0/.test(x.msg)), 'STEP must not be asked to be 0');
+  const { text, log } = LAS.write(las, defaults());
+  assert.equal(+LAS.parse(text, 'g.las').well.find(h => h.mnem === 'STEP').value, 0.25);
+  assert.ok(log.every(x => !/STEP .*→ 0\b/.test(x)), log.join('\n'));
+});
+test('RV1b: no gap on regular data, and no data.gap when the declared STEP is wrong but data are regular', () => {
+  assert.ok(!rules(run(CLEAN).f).includes('data.gap'));
+  assert.ok(!rules(run(CLEAN.replace('0.2500', '0.1524')).f).includes('data.gap'));
+});
+test('RV2: verdict is not green when data plausibility is flagged', () => {
+  const g = LAS.verdict(run(withData('1000.00 -5000 2.4 0.2 1\n1000.25 500000 2.4 0.2 2\n1000.50 47 2.4 0.2 3\n1000.75 48 2.4 0.2 4\n1001.00 49 2.4 0.2 5\n')).f);
+  assert.equal(g, 'look');
+  assert.equal(LAS.verdict(run(withData('1000.00 45 0 0.2 1\n1000.25 46 0 0.2 2\n1000.50 47 0 0.2 3\n1000.75 48 0 0.2 4\n1001.00 49 0 0.2 5\n')).f), 'look');
+  assert.equal(LAS.verdict(run(withData('1000.00 -999.25 2.4 0.2 1\n1000.25 -999.25 2.4 0.2 2\n1000.50 -999.25 2.4 0.2 3\n1000.75 -999.25 2.4 0.2 4\n1001.00 -999.25 2.4 0.2 5\n')).f), 'look');
+  assert.equal(LAS.verdict(run(CLEAN).f), 'pass');
+  assert.equal(LAS.verdict(run(withData('1000 x\n')).f), 'fail');
+});
+test('RV3: feet labelled M are detected below 12000 m', () => {
+  const rows = []; for (let i = 0; i < 40; i++) rows.push(`${(9000 + i * 0.5).toFixed(2)} 45 2.4 0.2 1`);
+  const t = withData(rows.join('\n') + '\n').replace('1000.0000 ', '9000.0000 ').replace('1001.0000 ', '9019.5000 ').replace('0.2500', '0.5000');
+  const f = run(t).f; assert.ok(f.some(x => x.rule === 'well.depthunit' && x.sev === 'W'), rules(f).join(', '));
+  const rows2 = []; for (let i = 0; i < 40; i++) rows2.push(`${(2000 + i * 0.1524).toFixed(4)} 45 2.4 0.2 1`);
+  const t2 = withData(rows2.join('\n') + '\n').replace('1000.0000 ', '2000.0000 ').replace('1001.0000 ', (2000 + 39 * 0.1524).toFixed(4) + ' ').replace('0.2500', '0.1524');
+  assert.ok(run(t2).f.some(x => x.rule === 'well.depthunit' && /feet/i.test(x.msg)), 'step 0.1524 in M');
+  assert.ok(!rules(run(CLEAN).f).includes('well.depthunit'));
+});
+test('RV4: ~A header differing from ~C order is flagged; placeholder well name; candidate nulls wording', () => {
+  assert.ok(rules(run(CLEAN.replace('~A  DEPT     GR      RHOB    NPHI    RT', '~A  DEPT     RHOB    GR      NPHI    RT')).f).includes('data.colorder'));
+  assert.ok(!rules(run(CLEAN).f).includes('data.colorder'));
+  for (const n of ['UNKNOWN', 'NONE', 'N/A']) { const f = run(CLEAN.replace('ACME-1  ', n.padEnd(7))).f; const x = f.find(y => y.rule === 'well.name'); assert.ok(x && x.sev === 'I', n); }
+  const f = run(withData('1000.00 45.2 2.45 0.21 9999\n1000.25 47 2.44 0.22 11.9\n1000.50 80 2.52 0.30 3.2\n1000.75 47 2.50 0.29 3.5\n1001.00 52.0 2.46 0.23 10.1\n')).f;
+  const n = f.find(x => x.rule === 'data.nulls'); assert.equal(n.sev, 'W'); assert.match(n.msg, /candidate/i);
+});
+test('RV5: QC report per curve and verdict count', () => {
+  const las = LAS.parse(CLEAN, 'q.las'); LAS.check(las);
+  const q = las.qc; assert.equal(q.length, 4);
+  const gr = q.find(c => c.mnem === 'GR');
+  assert.equal(gr.n, 5); assert.equal(gr.nValid, 4); assert.equal(gr.pctNull, 20);
+  assert.equal(gr.min, 45.2); assert.equal(gr.max, 80.1); assert.equal(gr.z0, 1000); assert.equal(gr.z1, 1001);
+  const l2 = LAS.parse(withData(['1000.00 -5000 2.4 0.2 1', '1000.25 40 2.4 0.2 2', '1000.50 47 2.4 0.2 3', ''].join('\n')), 'q2.las'); LAS.check(l2);
+  const csv = LAS.qcCsv([{ name: 'q2.las', las: l2, changes: ['a change'] }]);
+  assert.ok(csv.includes('q2.las,GR,GAPI,3,3,0,-5000,47,1000,1000.5,1 value(s) outside'), csv);
+  assert.ok(csv.includes('q2.las,a change'));
+});
+
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
