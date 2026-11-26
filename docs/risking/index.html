@@ -209,7 +209,18 @@ const effP=e=>{const p=clamp(+e.p||0,0,1);return hasLR(e)?bayes(p,+e.lr):p};
 // conditional chance: element i is "conditional on" element e.on (its chance is then P(i | on)); invalid links (self, out of range, cycle) are ignored
 const link=(els,i)=>{const o=els[i]&&els[i].on;return(o==null||o===''||!Number.isInteger(+o)||+o<0||+o>=els.length||+o===i)?-1:+o};
 function parentOf(els,i){let j=link(els,i),k=0;const first=j;while(j>=0&&k<=els.length){if(j===i)return -1;j=link(els,j);k++}return k>els.length?-1:first}
-function gcos(els){els=els||[];let play=1,prospect=1;const eff=[],marg=[];
+// ---- Evidence Support Logic ("Italian flag", Cui & Blockley 1990): each element carries green g (evidence for), red r (evidence against), white w = 1 - g - r (uncommitted)
+const eslFlag=e=>{let g,r;if(e.g==null||e.g===''){const p=clamp(+e.p||0,0,1);g=p;r=1-p}else{g=clamp(+e.g||0,0,1);r=clamp(+e.r||0,0,1)}const s=g+r;if(s>1){g/=s;r/=s}return{g,r,w:Math.max(0,1-g-r)}};
+// stance on the unknown: neutral s = 0.5; custom s; base rate b (P = g + b w)
+const eslStance=x=>{const f=(v,d)=>isFinite(+v)&&v!==''&&v!=null?clamp(+v,0,1):d,m=x&&x.stance;return m==='custom'?f(x.s,.5):m==='base'?f(x.b,.5):.5};
+const eslPolicy=(f,s)=>f.g+s*f.w;
+// series roll-up (all elements must work): green = prod g_i (all support); red = 1 - prod(1 - r_i) (at least one element is contradicted); white = the rest
+function eslRoll(flags,s){let G=1,N=1;for(const f of flags){G*=f.g;N*=1-f.r}const green=G,red=1-N,white=Math.max(0,1-green-red);return{green,red,white,p:clamp(green+s*white,0,1)}}
+function eslGcos(els,esl){const s=eslStance(esl),fl=els.map(eslFlag),pol=els.map((e,i)=>({level:e.level,p:eslPolicy(fl[i],s)})),cl=gcos(pol),all=eslRoll(fl,s),
+  pl=eslRoll(fl.filter((f,i)=>els[i].level==='play'),s),pr=eslRoll(fl.filter((f,i)=>els[i].level!=='play'),s),useE=esl.use==='esl',
+  play=useE?pl.p:cl.play,prospect=useE?(pl.p>0?clamp(all.p/pl.p,0,1):pr.p):cl.prospect,eff=cl.eff;
+  return{play,prospect,gcos:useE?all.p:cl.gcos,eff,marg:eff.slice(),esl:{s,flags:fl,green:all.green,red:all.red,white:all.white,pESL:all.p,pClassic:cl.gcos,gap:all.p-cl.gcos,play:pl,prospect:pr,use:useE?'esl':'classic'}}}
+function gcos(els,esl){els=els||[];if(esl&&esl.on)return eslGcos(els,esl);let play=1,prospect=1;const eff=[],marg=[];
   els.forEach((e,i)=>{const p=effP(e);eff.push(p);if(e.level==='play')play*=p;else prospect*=p});
   // product rule: P(A and B) = P(A) x P(B | A), so the product of the entered chances is the joint chance; the marginal chance of a conditional element is P(B|A) x P(A)
   const mg=i=>{let m=eff[i],j=parentOf(els,i),k=0;while(j>=0&&k<=els.length){m*=eff[j];j=parentOf(els,j);k++}return m};
@@ -228,10 +239,47 @@ const TRI_GAS=TRI.map(x=>x[0]==='bo'?['bg','Bg, rm³/sm³']:x);
 const GAS_K=35.3147/6000;
 // Monte Carlo of the volumetric product: oil V = GRV · 6.2898 · NTG · φ · (1 − Sw) / Bo · RF  (MMstb for GRV in 10⁶ m³);
 // gas V = GRV · NTG · φ · (1 − Sw) / Bg · RF · 35.3147 / 6000 (MMboe; GRV in 10⁶ m³, Bg in rm³/sm³)
-function sampleDist(t,n,seed,fluid){const gas=fluid==='gas',bk=gas?'bg':'bo',K=gas?GAS_K:6.2898,R=rng(seed|0),v=new Float64Array(n);for(let i=0;i<n;i++){const g=k=>tri(R(),t[k][0],t[k][1],t[k][2]);v[i]=g('grv')*K*g('ntg')*g('phi')*(1-g('sw'))/Math.max(1e-9,g(bk))*g('rf')}
-  v.sort();const S=new Float64Array(n+1);for(let i=n-1;i>=0;i--)S[i]=S[i+1]+v[i];
+// rank-correlation matrix of the six volumetric parameters (order of TRI; Bo or Bg in the fifth place), Gaussian copula:
+// the user enters Spearman rho_s; the normal-score (Pearson) correlation is 2 sin(pi rho_s / 6); the matrix is made positive semi-definite if needed (eigenvalues clipped, unit diagonal restored)
+const cholesky=A=>{const n=A.length,L=A.map(()=>new Array(n).fill(0));for(let i=0;i<n;i++)for(let j=0;j<=i;j++){let s=A[i][j];for(let k=0;k<j;k++)s-=L[i][k]*L[j][k];if(i===j){if(!(s>1e-10))return null;L[i][i]=Math.sqrt(s)}else L[i][j]=s/L[j][j]}return L};
+function jacobi(A0){const n=A0.length,A=A0.map(r=>r.slice()),V=A.map((r,i)=>r.map((_,j)=>i===j?1:0));for(let sw=0;sw<60;sw++){let off=0;for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)off+=A[i][j]*A[i][j];if(off<1e-22)break;
+  for(let p=0;p<n;p++)for(let q=p+1;q<n;q++){if(Math.abs(A[p][q])<1e-300)continue;const th=(A[q][q]-A[p][p])/(2*A[p][q]),t=Math.sign(th||1)/(Math.abs(th)+Math.sqrt(th*th+1)),c=1/Math.sqrt(t*t+1),s=t*c;
+   for(let k=0;k<n;k++){const a=A[k][p],b=A[k][q];A[k][p]=c*a-s*b;A[k][q]=s*a+c*b}for(let k=0;k<n;k++){const a=A[p][k],b=A[q][k];A[p][k]=c*a-s*b;A[q][k]=s*a+c*b}for(let k=0;k<n;k++){const a=V[k][p],b=V[k][q];V[k][p]=c*a-s*b;V[k][q]=s*a+c*b}}}
+  return{val:A.map((r,i)=>r[i]),vec:V}}
+function corrFactor(C){const n=TRI.length,none={identity:true,projected:false,L:null,used:null};
+  if(!Array.isArray(C)||C.length!==n||C.some(r=>!Array.isArray(r)||r.length!==n))return none;
+  const S=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>i===j?1:clamp(+(i<j?C[i][j]:C[j][i])||0,-.999,.999)));
+  if(S.every((r,i)=>r.every((x,j)=>i===j||x===0)))return none;
+  const P=S.map((r,i)=>r.map((x,j)=>i===j?1:2*Math.sin(Math.PI*x/6)));let L=cholesky(P),projected=false,Pu=P;
+  if(!L){projected=true;const{val,vec}=jacobi(P),B=P.map((_,i)=>P.map((_,j)=>{let s=0;for(let k=0;k<n;k++)s+=vec[i][k]*Math.max(val[k],1e-6)*vec[j][k];return s}));
+   Pu=B.map((r,i)=>r.map((x,j)=>x/Math.sqrt(B[i][i]*B[j][j])));L=cholesky(Pu);if(!L)return none}
+  const used=Pu.map((r,i)=>r.map((x,j)=>i===j?1:6/Math.PI*Math.asin(clamp(x,-1,1)/2)));return{identity:false,projected,L,used}}
+function sampleDist(t,n,seed,fluid,corr){const gas=fluid==='gas',bk=gas?'bg':'bo',K=gas?GAS_K:6.2898,R=rng(seed|0),v=new Float64Array(n),ks=['grv','ntg','phi','sw',bk,'rf'],cf=corrFactor(corr),par=ks.map(()=>new Float64Array(n)),x=new Array(6),z=new Array(6);
+  for(let i=0;i<n;i++){
+   if(cf.identity){for(let k=0;k<6;k++)x[k]=tri(R(),t[ks[k]][0],t[ks[k]][1],t[ks[k]][2])}
+   else{for(let k=0;k<6;k++)z[k]=PhiInv(clamp(R(),1e-12,1-1e-12));for(let k=0;k<6;k++){let s=0;for(let j=0;j<=k;j++)s+=cf.L[k][j]*z[j];x[k]=tri(Phi(s),t[ks[k]][0],t[ks[k]][1],t[ks[k]][2])}}
+   for(let k=0;k<6;k++)par[k][i]=x[k];
+   v[i]=x[0]*K*x[1]*x[2]*(1-x[3])/Math.max(1e-9,x[4])*x[5]}
+  const raw=v.slice();v.sort();const S=new Float64Array(n+1);for(let i=n-1;i>=0;i--)S[i]=S[i+1]+v[i];
   const up=x=>{let lo=0,hi=n;while(lo<hi){const m=(lo+hi)>>1;if(v[m]<=x)lo=m+1;else hi=m}return lo};
-  return{kind:'mc',n,mean:S[0]/n,v,sf:x=>(n-up(x))/n,pct:e=>v[clamp(Math.floor((1-e)*n),0,n-1)],lo:v[0],hi:v[n-1],call:K=>{const i=up(K);return(S[i]-K*(n-i))/n}}}
+  return{kind:'mc',n,mean:S[0]/n,v,sf:x=>(n-up(x))/n,pct:e=>v[clamp(Math.floor((1-e)*n),0,n-1)],lo:v[0],hi:v[n-1],call:K=>{const i=up(K);return(S[i]-K*(n-i))/n},keys:ks,par,raw,corr:cf}}
+// sensitivity: Spearman rank correlation of each sampled parameter with the success-case volume, and the variance share rho^2 / sum(rho^2); first 20000 samples
+function ranks(a,m){const idx=new Uint32Array(m);for(let i=0;i<m;i++)idx[i]=i;idx.sort((i,j)=>a[i]-a[j]);const r=new Float64Array(m);for(let i=0;i<m;){let j=i;while(j+1<m&&a[idx[j+1]]===a[idx[i]])j++;const av=(i+j)/2;for(let k=i;k<=j;k++)r[idx[k]]=av;i=j+1}return r}
+function pearson(a,b){const m=a.length;let ma=0,mb=0;for(let i=0;i<m;i++){ma+=a[i];mb+=b[i]}ma/=m;mb/=m;let sab=0,saa=0,sbb=0;for(let i=0;i<m;i++){const x=a[i]-ma,y=b[i]-mb;sab+=x*y;saa+=x*x;sbb+=y*y}return saa>0&&sbb>0?sab/Math.sqrt(saa*sbb):0}
+function sensitivity(d){if(!d||!d.par)return null;const m=Math.min(d.n,20000),rv=ranks(d.raw,m),out=d.keys.map((k,j)=>({key:k,rho:pearson(ranks(d.par[j],m),rv)})),tot=out.reduce((s,o)=>s+o.rho*o.rho,0);out.forEach(o=>o.share=tot>0?o.rho*o.rho/tot:0);return out}
+// input QC of the volumetric parameters: warnings, never errors
+function qcVol(t,fluid){const out=[],gas=fluid==='gas',nm={grv:'GRV',ntg:'Net / gross',phi:'Porosity',sw:'Water saturation',bo:'Bo',bg:'Bg',rf:'Recovery factor'};t=t||{};
+  for(const [k] of (gas?TRI_GAS:TRI)){const a=t[k];if(!Array.isArray(a)||a.length!==3||a.some(x=>x===''||x==null||!isFinite(+x))){out.push(nm[k]+': incomplete (min, mode, max expected)');continue}
+   const [lo,md,hi]=a.map(Number),w=s=>out.push(nm[k]+': '+s);
+   if(md<lo||md>hi)w('mode outside [min, max]');
+   if(k==='phi'&&hi>.45)w('porosity above 0.45 is implausible for a reservoir (max '+hi+')');
+   if(k==='ntg'&&hi>1)w('net / gross above 1 (max '+hi+')');if(k==='ntg'&&lo<0)w('net / gross below 0');
+   if(k==='sw'&&(lo<0||hi>1))w('water saturation outside 0 to 1');
+   if(k==='bo'&&lo<1)w('Bo below 1 rb/stb is implausible for an oil (min '+lo+')');
+   if(k==='bg'&&lo<=0)w('Bg must be positive');
+   if(k==='rf'&&hi>.8)w('recovery factor above 0.8 is implausible (max '+hi+')');if(k==='rf'&&lo<0)w('recovery factor below 0');
+   if(k==='grv'&&lo<0)w('negative GRV')}
+  return out}
 // economics: value = u·V − F if developed (V > MEFV = F/u), dry-hole cost D spent in every case
 function economics(dist,g,e){const u=+e.u,mef=+e.mefv>0?+e.mefv:(u>0?(+e.F||0)/u:Infinity),F=+e.mefv>0?mef*u:+e.F||0,D=+e.D||0,pEcon=isFinite(mef)?dist.sf(mef):0,ecos=g*pEcon,
   cond=isFinite(mef)&&u>0?u*dist.call(mef):0;
@@ -239,17 +287,17 @@ function economics(dist,g,e){const u=+e.u,mef=+e.mefv>0?+e.mefv:(u>0?(+e.F||0)/u
 const defaults=()=>({format:'prospect-risk',version:1,name:'Prospect A',
  elements:[{name:'Source / charge',level:'play',p:.85},{name:'Reservoir presence',level:'play',p:.8},{name:'Migration & timing',level:'play',p:.75},{name:'Trap / closure',level:'prospect',p:.7},{name:'Seal',level:'prospect',p:.75},{name:'Reservoir effectiveness',level:'prospect',p:.8}],
  vol:{mode:'direct',fluid:'oil',p90:20,p50:60,p10:180,tri:{grv:[150,300,600],ntg:[.5,.7,.85],phi:[.15,.2,.25],sw:[.25,.35,.5],bo:[1.15,1.25,1.4],bg:[.004,.005,.006],rf:[.2,.3,.4]},n:20000,seed:1},
- econ:{u:9,F:220,D:45,mefv:null}});
-function distOf(m){const v=m.vol;if(v.mode==='vol'){const t={},gas=v.fluid==='gas',dt=defaults().vol.tri;for(const [k] of (gas?TRI_GAS:TRI)){const a=(v.tri[k]||(k==='bg'?dt.bg:[])).map(Number);if(a.length!==3||a.some(x=>!isFinite(x))||!(a[0]<=a[1]&&a[1]<=a[2]))return{err:'Volumetric parameter '+k+': min ≤ mode ≤ max expected.'};t[k]=a}return{dist:sampleDist(t,clamp(Math.round(v.n)||20000,1000,200000),v.seed,gas?'gas':'oil')}}
+ econ:{u:9,F:220,D:45,mefv:null},esl:{on:false,stance:'neutral',s:.5,b:.3,use:'classic'}});
+function distOf(m){const v=m.vol;if(v.mode==='vol'){const t={},gas=v.fluid==='gas',dt=defaults().vol.tri;for(const [k] of (gas?TRI_GAS:TRI)){const a=(v.tri[k]||(k==='bg'?dt.bg:[])).map(Number);if(a.length!==3||a.some(x=>!isFinite(x))||!(a[0]<=a[1]&&a[1]<=a[2]))return{err:'Volumetric parameter '+k+': min ≤ mode ≤ max expected.'};t[k]=a}return{dist:sampleDist(t,clamp(Math.round(v.n)||20000,1000,200000),v.seed,gas?'gas':'oil',v.corr)}}
   const d=lognormalDist(+v.p90,+v.p50,+v.p10);return d?{dist:d}:{err:'Volumes: 0 < P90 ≤ P50 ≤ P10 expected.'}}
-function run(m){const r=distOf(m);if(r.err)return{err:r.err};const gc=gcos(m.elements);return Object.assign({dist:r.dist,chances:gc},economics(r.dist,gc.gcos,m.econ))}
+function run(m){const r=distOf(m);if(r.err)return{err:r.err};const gc=gcos(m.elements,m.esl);return Object.assign({dist:r.dist,chances:gc},economics(r.dist,gc.gcos,m.econ))}
 // exceedance curve sampled on a log grid
 function curve(dist,gc,n=120){const a=Math.log(Math.max(1e-6,dist.lo*.8)),b=Math.log(dist.hi*1.25),out=[];for(let i=0;i<n;i++){const x=Math.exp(a+(b-a)*i/(n-1)),s=dist.sf(x);out.push([x,s,gc*s])}return out}
 // optional "summary" written beside the full prospect, so that other tools need not re-implement the volumetrics (MMboe, success case, P90 = low)
 function summary(r){if(!r||r.err)return null;const f=x=>isFinite(x)?x:null;return{p90:f(r.p90),p50:f(r.p50),p10:f(r.p10),mean:f(r.meanSuccess),gcos:f(r.gcos),pPlay:f(r.chances.play),pPros:f(r.chances.prospect),mefv:f(r.mefv)}}
 // import of a file saved by Field development screening ({format:'fdp-link'}): returns the MEFV to use as override
 function fdpLink(o){if(!o||o.format!=='fdp-link')throw new Error('not a Field development screening link file');const mefv=+o.mefv;if(!(mefv>0&&isFinite(mefv)))throw new Error('the file holds no usable MEFV');return{mefv,name:o.name||'field development case',breakeven:o.breakeven==null?null:+o.breakeven}}
-window.RISK={Phi,PhiInv,gcos,bayes,lognormalDist,sampleDist,economics,defaults,run,curve,TRI,TRI_GAS,GAS_K,rng,summary,fdpLink};
+window.RISK={eslRoll,eslFlag,eslStance,corrFactor,sensitivity,qcVol,Phi,PhiInv,gcos,bayes,lognormalDist,sampleDist,economics,defaults,run,curve,TRI,TRI_GAS,GAS_K,rng,summary,fdpLink};
 })();
 </script><script>
 const $=id=>document.getElementById(id),R=window.RISK;
