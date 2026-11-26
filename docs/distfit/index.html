@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Distribution fitting</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/distfit/">
+<meta name="description" content="Fit and rank probability distributions on a one-dimensional dataset (field sizes, porosity, net/gross, recovery factors, costs): normal, lognormal, gamma, Weibull, exponential, uniform, logistic, Gumbel, Pareto, beta, triangular. Maximum likelihood, KS, Anderson-Darling, AIC and BIC, Q-Q and exceedance plots, manual fit, P90/P50/P10 export. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2,h3{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0;position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px;overflow-x:hidden}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
+main{min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:8px}.panel.collapsed .body{display:none}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number],textarea{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+textarea{width:100%;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:.78rem;min-height:96px}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}.msg.err{color:var(--acc2)}
+.hint{color:var(--mut);font-size:.78rem}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tile small{display:block;color:var(--mut);font-size:.74rem}
+.tile b{font:700 1.3rem "Space Grotesk",Inter,sans-serif;font-variant-numeric:tabular-nums}
+.tile.key{border-left:6px solid var(--acc)}.tile.key2{border-left:6px solid var(--acc2)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow:hidden;min-width:0;margin-bottom:12px}
+.card h3{font-size:.9rem;font-weight:600;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.card h3 .sp{margin-left:auto;display:flex;gap:4px;align-items:center}
+.card h3 button{padding:.05rem .45rem;font-size:.72rem}
+.card h3 .tt{margin-left:auto}.card h3 .sp+.tt,.card h3 .tt:nth-last-child(1){margin-left:auto}
+.card canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid var(--line);border-radius:6px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+.tw{overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+td.l,th.l{text-align:left}td.pc{white-space:normal;min-width:150px;max-width:260px}
+table.rk tbody tr{cursor:pointer}table.rk tbody tr:hover{background:rgba(74,90,78,.08)}table.rk tbody tr.sel{background:rgba(74,90,78,.18)}
+table.rk td.best{font-weight:700;color:var(--acc)}
+table.rk tr.skip{color:var(--mut);cursor:default}table.rk tr.skip:hover{background:none}
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.prm{display:grid;grid-template-columns:78px minmax(0,1fr) 84px;gap:4px 8px;align-items:center;font-size:.8rem;margin:6px 0}
+.prm input[type=number]{width:100%;padding:.15rem .3rem}
+.mst{overflow-wrap:anywhere;font-size:.78rem;color:var(--mut);line-height:1.5;font-variant-numeric:tabular-nums}
+.seg{display:flex;gap:0}.seg button{border-radius:0;margin-left:-1px;flex:1}.seg button:first-child{border-radius:4px 0 0 4px;margin-left:0}.seg button:last-child{border-radius:0 4px 4px 0}
+.pt tr.hl td{font-weight:700;background:rgba(168,98,58,.12)}
+.warn{color:var(--acc2)}
+.empty{padding:50px 16px;text-align:center;color:var(--mut)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Distribution fitting</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Data</span>
+  <select id="exSel" aria-label="Example"><option value="">Example…</option><option value="fields">Field sizes (fictitious)</option><option value="poro">Porosity (fictitious)</option><option value="cost">Well costs (fictitious)</option></select>
+  <button id="bCsv" title="Ranking of the fitted distributions as CSV">Ranking CSV</button>
+  <button class="pri" id="bPros" title="Download a Prospect risking file whose direct volumes are the P90 / P50 / P10 of the selected fit (exceedance convention, P90 = low case)">Save as prospect volumes</button>
+  <span class="msg" id="msg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. Paste or open a one-dimensional sample, the page fits eleven distributions by maximum likelihood, ranks them by AIC (with BIC, Kolmogorov-Smirnov and Anderson-Darling shown) and draws the checks. Click a row of the ranking to select a fit; the manual fit lets you move the parameters yourself.">?</span>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Data<span class="tt tt-r" tabindex="0" data-tip="Paste numbers separated by commas, spaces, tabs or new lines, or open a text / CSV file. A table with a header gives a choice of column; with a semicolon or tab separator a decimal comma is accepted. Lines starting with # are ignored. Non-numeric entries are skipped and counted.">?</span><i class="chev"></i></h2>
+  <div class="body"><textarea id="txt" spellcheck="false" placeholder="Paste values here (comma, space, tab or newline separated)"></textarea>
+   <div class="row"><button class="pri" id="bUse">Use data</button><button id="bOpen">Open file…</button><input type="file" id="ffile" accept=".csv,.txt,.tsv,.dat,text/plain,text/csv" hidden></div>
+   <div class="row" id="colRow" style="display:none"><span style="font-size:.82rem">Column</span><select id="colSel" style="flex:1;min-width:0"></select></div>
+   <div class="msg" id="dMsg"></div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Display<span class="tt tt-r" tabindex="0" data-tip="Convention for P90 / P50 / P10 and the percentile table. Exceedance (used on this site): P90 = value exceeded with 90 % probability = low case, so P90 &lt; P50 &lt; P10. Cumulative: P90 = 90th percentile. The file saved for the Prospect risking tool always uses the exceedance convention.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="seg"><button id="convE" class="on" title="P90 = low case: 90 % chance to exceed">P90 = low (exceedance)</button><button id="convC" title="P90 = 90th percentile of the distribution">P90 = high (cumulative)</button></div>
+   <div class="row"><label class="inl"><input type="checkbox" id="hlog"> Histogram on a log x axis</label></div>
+   <div class="row"><label class="inl"><input type="checkbox" id="allc" checked> Show all fitted curves</label></div></div></section>
+ <section class="panel"><h2><span class="n">3</span>Manual fit<span class="tt tt-r" tabindex="0" data-tip="Move the parameters of the selected distribution yourself: the charts, the percentile table and the KS / AD / AIC below follow live. Reset returns to the maximum-likelihood values. Untick to go back to the ML fit.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="row"><label class="inl"><input type="checkbox" id="man"> Use manual parameters for</label><b id="manName" style="font-size:.85rem"></b></div>
+   <div id="prm"></div><div class="row"><button id="bReset">Reset to ML fit</button></div><div class="mst" id="mst"></div></div></section>
+</aside>
+<main>
+ <div class="tiles" id="tiles"></div>
+ <div class="card"><h3>Ranking<span class="tt" tabindex="0" data-tip="Distributions fitted by maximum likelihood, best AIC first. k = number of fitted parameters; ΔAIC = AIC − best AIC; w = Akaike weight (relative support among the listed models); KS D and approximate p; AD A² (smaller is better for D and A²). The KS p-value is optimistic-conservative because the parameters were estimated from the same data: use it to flag poor fits, not to certify good ones. Bold = best in column. Click a row to select it.">?</span></h3>
+  <div class="tw"><table class="rk" id="rk"></table></div><div class="hint" id="skipN" style="margin-top:6px"></div></div>
+ <div class="two">
+  <div class="card"><h3>Histogram and fitted densities<span class="tt" tabindex="0" data-tip="Density histogram of the data with the fitted pdfs. The selected fit is the thick line; with the log axis the bins are equal in ln x and the curves are densities of ln x.">?</span></h3><canvas id="cvH"></canvas></div>
+  <div class="card"><h3>Exceedance curve<span class="tt" tabindex="0" data-tip="P(X &gt; x) against x (log axis when all values are positive): dots are the data at plotting positions 1 − (i − 0.5) / n, lines are the fitted survival functions 1 − F(x). Dashed lines mark 90 %, 50 % and 10 % exceedance.">?</span></h3><canvas id="cvE"></canvas></div>
+ </div>
+ <div class="two">
+  <div class="card"><h3>Probability plot<span class="sp"><button id="qq" class="on">Q-Q</button><button id="pp">P-P</button></span><span class="tt" tabindex="0" data-tip="Q-Q: data quantiles against the quantiles of the selected fit at (i − 0.5) / n; points on the diagonal mean a good fit, a curved tail shows a wrong tail. P-P: fitted cdf at each observation against (i − 0.5) / n.">?</span></h3><canvas id="cvQ"></canvas></div>
+  <div class="card"><h3>CDF difference<span class="tt" tabindex="0" data-tip="Empirical cdf minus fitted cdf (both sides of each step). The dashed lines are ± the Kolmogorov-Smirnov statistic D of the selected fit.">?</span></h3><canvas id="cvD"></canvas></div>
+ </div>
+ <div class="card"><h3 id="selT">Selected fit</h3><div class="two"><div class="tw"><table class="pt" id="pt"></table></div><div id="selP" class="mst" style="padding:4px 6px"></div></div></div>
+</main></div>
+<script id="df-core">
+(function(g){
+'use strict';
+/* ---------- special functions ---------- */
+const LG=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+function lgamma(x){if(x<0.5)return Math.log(Math.PI/Math.abs(Math.sin(Math.PI*x)))-lgamma(1-x);x-=1;let a=LG[0];const t=x+7.5;for(let i=1;i<9;i++)a+=LG[i]/(x+i);return 0.5*Math.log(2*Math.PI)+(x+0.5)*Math.log(t)-t+Math.log(a)}
+const lbeta=(a,b)=>lgamma(a)+lgamma(b)-lgamma(a+b);
+function gser(a,x){let ap=a,sum=1/a,del=sum;for(let n=0;n<20000;n++){ap++;del*=x/ap;sum+=del;if(Math.abs(del)<Math.abs(sum)*1e-16)break}return sum*Math.exp(-x+a*Math.log(x)-lgamma(a))}
+function gcf(a,x){let b=x+1-a,c=1e300,d=1/b,h=d;for(let i=1;i<20000;i++){const an=-i*(i-a);b+=2;d=an*d+b;if(Math.abs(d)<1e-300)d=1e-300;c=b+an/c;if(Math.abs(c)<1e-300)c=1e-300;d=1/d;const del=d*c;h*=del;if(Math.abs(del-1)<1e-16)break}return Math.exp(-x+a*Math.log(x)-lgamma(a))*h}
+const gammaP=(a,x)=>x<=0?0:!isFinite(x)?1:x<a+1?gser(a,x):1-gcf(a,x);
+const gammaQ=(a,x)=>x<=0?1:!isFinite(x)?0:x<a+1?1-gser(a,x):gcf(a,x);
+function betacf(a,b,x){const qab=a+b,qap=a+1,qam=a-1;let c=1,d=1-qab*x/qap;if(Math.abs(d)<1e-300)d=1e-300;d=1/d;let h=d;
+ for(let m=1;m<=20000;m++){const m2=2*m;let aa=m*(b-m)*x/((qam+m2)*(a+m2));d=1+aa*d;if(Math.abs(d)<1e-300)d=1e-300;c=1+aa/c;if(Math.abs(c)<1e-300)c=1e-300;d=1/d;h*=d*c;
+  aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));d=1+aa*d;if(Math.abs(d)<1e-300)d=1e-300;c=1+aa/c;if(Math.abs(c)<1e-300)c=1e-300;d=1/d;const del=d*c;h*=del;if(Math.abs(del-1)<1e-16)break}return h}
+function betaI(a,b,x){if(x<=0)return 0;if(x>=1)return 1;const bt=Math.exp(-lbeta(a,b)+a*Math.log(x)+b*Math.log1p(-x));return x<(a+1)/(a+b+2)?bt*betacf(a,b,x)/a:1-bt*betacf(b,a,1-x)/b}
+function digamma(x){let r=0;while(x<15){r-=1/x;x++}const f=1/(x*x);return r+Math.log(x)-0.5/x-f*(1/12-f*(1/120-f*(1/252-f*(1/240-f/132))))}
+function trigamma(x){let r=0;while(x<15){r+=1/(x*x);x++}const f=1/(x*x);return r+1/x+f/2+f/x*(1/6-f*(1/30-f*(1/42-f/30)))}
+const Phi=z=>{const q=0.5*gammaQ(0.5,z*z/2);return z<0?q:1-q};
+function PhiInv(p){if(!(p>0))return -Infinity;if(!(p<1))return Infinity;
+ const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00],
+  b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01],
+  c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00],
+  d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];let x;
+ if(p<0.02425){const q=Math.sqrt(-2*Math.log(p));x=(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+ else if(p>1-0.02425){const q=Math.sqrt(-2*Math.log(1-p));x=-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+ else{const q=p-0.5,r=q*q;x=(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)}
+ for(let i=0;i<3;i++){const e=Phi(x)-p,u=e*Math.sqrt(2*Math.PI)*Math.exp(x*x/2);x-=u/(1+x*u/2)}return x}
+/* inversion of a cdf on [lo,hi] (hi may be Infinity): bracketing then bisection */
+function invNum(cdf,lo,hi,u,guess){if(!(u>0))return lo;if(!(u<1))return hi;let a=lo,b=hi;
+ if(!isFinite(b)){b=Math.max(guess>lo?guess:lo+1,lo+1e-9);let k=0;while(cdf(b)<u&&k++<2000)b=lo+(b-lo)*2}
+ for(let i=0;i<200;i++){const m=0.5*(a+b);if(m===a||m===b)break;if(cdf(m)<u)a=m;else b=m}return 0.5*(a+b)}
+/* ---------- distributions ---------- */
+const HLN2PI=0.5*Math.log(2*Math.PI),NEG=-Infinity;
+const mom=(x)=>{const n=x.length;let s=0;for(const v of x)s+=v;const m=s/n;let q=0;for(const v of x)q+=(v-m)*(v-m);return{m,v:q/n}};
+function bisect(f,a,b,it){let fa=f(a);for(let i=0;i<(it||100);i++){const m=0.5*(a+b),fm=f(m);if((fm>0)===(fa>0)){a=m;fa=fm}else b=m}return 0.5*(a+b)}
+const ext=st=>st.range/(st.n-1),lowB=(st,e)=>st.min>0?Math.max(0,st.min-e):st.min-e;
+const DIST={
+normal:{name:'Normal',k:2,np:[{k:'mu',l:'μ',t:'loc'},{k:'sigma',l:'σ',t:'pos'}],
+ why:st=>null,fit:(x,st)=>({mu:st.mean,sigma:Math.sqrt(st.var0)}),
+ valid:p=>p.sigma>0,logpdf:(p,x)=>{const z=(x-p.mu)/p.sigma;return -0.5*z*z-Math.log(p.sigma)-HLN2PI},
+ cdf:(p,x)=>Phi((x-p.mu)/p.sigma),inv:(p,u)=>p.mu+p.sigma*PhiInv(u),mean:p=>p.mu},
+lognormal:{name:'Lognormal',k:2,np:[{k:'mu',l:'μ (of ln x)',t:'loc',s:'log'},{k:'sigma',l:'σ (of ln x)',t:'pos'}],
+ why:st=>st.min>0?null:'needs strictly positive values',fit:(x,st)=>{const l=st.lg;return{mu:l.m,sigma:Math.sqrt(l.v)}},
+ valid:p=>p.sigma>0,logpdf:(p,x)=>{if(!(x>0))return NEG;const l=Math.log(x),z=(l-p.mu)/p.sigma;return -l-0.5*z*z-Math.log(p.sigma)-HLN2PI},
+ cdf:(p,x)=>x>0?Phi((Math.log(x)-p.mu)/p.sigma):0,inv:(p,u)=>Math.exp(p.mu+p.sigma*PhiInv(u)),mean:p=>Math.exp(p.mu+p.sigma*p.sigma/2)},
+gamma:{name:'Gamma',k:2,np:[{k:'shape',l:'shape k',t:'pos'},{k:'scale',l:'scale θ',t:'pos'}],
+ why:st=>st.min>0?null:'needs strictly positive values',
+ fit:(x,st)=>{const s=Math.log(st.mean)-st.lg.m;if(!(s>0))return null;let k=(3-s+Math.sqrt((s-3)*(s-3)+24*s))/(12*s);
+  for(let i=0;i<100;i++){const f=Math.log(k)-digamma(k)-s,df=1/k-trigamma(k);let kn=k-f/df;if(!(kn>0))kn=k/2;if(Math.abs(kn-k)<1e-13*k){k=kn;break}k=kn}
+  return{shape:k,scale:st.mean/k}},
+ valid:p=>p.shape>0&&p.scale>0,logpdf:(p,x)=>x>0?(p.shape-1)*Math.log(x)-x/p.scale-lgamma(p.shape)-p.shape*Math.log(p.scale):(x===0&&p.shape===1?-Math.log(p.scale):NEG),
+ cdf:(p,x)=>gammaP(p.shape,x/p.scale),inv:(p,u)=>invNum(x=>gammaP(p.shape,x/p.scale),0,Infinity,u,p.shape*p.scale),mean:p=>p.shape*p.scale},
+weibull:{name:'Weibull',k:2,np:[{k:'shape',l:'shape k',t:'pos'},{k:'scale',l:'scale λ',t:'pos'}],
+ why:st=>st.min>0?null:'needs strictly positive values',
+ fit:(x,st)=>{const n=x.length,y=x.map(v=>v/st.max),ly=y.map(Math.log),ml=st.lg.m-Math.log(st.max);
+  const f=k=>{let a=0,b=0;for(let i=0;i<n;i++){const w=Math.exp(k*ly[i]);a+=w*ly[i];b+=w}return a/b-1/k-ml};
+  const lo=Math.log(0.02),hi=Math.log(2000);if(!(f(Math.exp(hi))>0)||!(f(Math.exp(lo))<0))return null;
+  const k=Math.exp(bisect(t=>f(Math.exp(t)),lo,hi,70));let s=0;for(let i=0;i<n;i++)s+=Math.exp(k*ly[i]);return{shape:k,scale:st.max*Math.pow(s/n,1/k)}},
+ valid:p=>p.shape>0&&p.scale>0,logpdf:(p,x)=>{if(!(x>0))return NEG;const z=x/p.scale;return Math.log(p.shape/p.scale)+(p.shape-1)*Math.log(z)-Math.pow(z,p.shape)},
+ cdf:(p,x)=>x>0?-Math.expm1(-Math.pow(x/p.scale,p.shape)):0,inv:(p,u)=>p.scale*Math.pow(-Math.log1p(-u),1/p.shape),mean:p=>p.scale*Math.exp(lgamma(1+1/p.shape))},
+exponential:{name:'Exponential',k:1,np:[{k:'theta',l:'mean θ',t:'pos'}],
+ why:st=>st.min>=0?null:'needs non-negative values',fit:(x,st)=>st.mean>0?{theta:st.mean}:null,
+ valid:p=>p.theta>0,logpdf:(p,x)=>x>=0?-Math.log(p.theta)-x/p.theta:NEG,cdf:(p,x)=>x>0?-Math.expm1(-x/p.theta):0,inv:(p,u)=>-p.theta*Math.log1p(-u),mean:p=>p.theta},
+uniform:{name:'Uniform',k:2,np:[{k:'a',l:'min a',t:'loc'},{k:'b',l:'max b',t:'loc'}],
+ why:st=>st.range>0?null:'all values are equal',fit:(x,st)=>({a:st.min,b:st.max}),
+ valid:p=>p.b>p.a,logpdf:(p,x)=>x>=p.a&&x<=p.b?-Math.log(p.b-p.a):NEG,cdf:(p,x)=>x<=p.a?0:x>=p.b?1:(x-p.a)/(p.b-p.a),inv:(p,u)=>p.a+u*(p.b-p.a),mean:p=>(p.a+p.b)/2},
+logistic:{name:'Logistic',k:2,np:[{k:'mu',l:'location μ',t:'loc'},{k:'s',l:'scale s',t:'pos'}],
+ why:st=>null,
+ fit:(x,st)=>{const n=x.length,th=(m,s)=>{let a=0;for(let i=0;i<n;i++)a+=Math.tanh((x[i]-m)/(2*s));return a};
+  const muOf=s=>bisect(m=>th(m,s),st.min,st.max,50);
+  const gOf=s=>{const m=muOf(s);let a=0;for(let i=0;i<n;i++){const z=(x[i]-m)/s;a+=z*Math.tanh(z/2)}return a/n-1};
+  const s0=st.sd0*Math.sqrt(3)/Math.PI;let lo=Math.log(s0/50),hi=Math.log(s0*50);if(!(gOf(Math.exp(lo))>0)||!(gOf(Math.exp(hi))<0))return{mu:st.mean,s:s0};
+  const s=Math.exp(bisect(t=>gOf(Math.exp(t)),lo,hi,45));return{mu:muOf(s),s}},
+ valid:p=>p.s>0,logpdf:(p,x)=>{const z=(x-p.mu)/p.s;return -Math.abs(z)-Math.log(p.s)-2*Math.log1p(Math.exp(-Math.abs(z)))},
+ cdf:(p,x)=>1/(1+Math.exp(-(x-p.mu)/p.s)),inv:(p,u)=>p.mu+p.s*Math.log(u/(1-u)),mean:p=>p.mu},
+gumbel:{name:'Gumbel (max)',k:2,np:[{k:'mu',l:'location μ',t:'loc'},{k:'beta',l:'scale β',t:'pos'}],
+ why:st=>null,
+ fit:(x,st)=>{const n=x.length,h=b=>{let sw=0,sx=0;for(let i=0;i<n;i++){const w=Math.exp(-(x[i]-st.min)/b);sw+=w;sx+=x[i]*w}return b-st.mean+sx/sw};
+  const lo=Math.log(st.sd0*1e-6),hi=Math.log(st.sd0*1e3);if(!(h(Math.exp(lo))<0)||!(h(Math.exp(hi))>0))return null;
+  const b=Math.exp(bisect(t=>h(Math.exp(t)),lo,hi,80));let sw=0;for(let i=0;i<n;i++)sw+=Math.exp(-(x[i]-st.min)/b);return{mu:st.min-b*Math.log(sw/n),beta:b}},
+ valid:p=>p.beta>0,logpdf:(p,x)=>{const z=(x-p.mu)/p.beta;return -Math.log(p.beta)-z-Math.exp(-z)},
+ cdf:(p,x)=>Math.exp(-Math.exp(-(x-p.mu)/p.beta)),inv:(p,u)=>p.mu-p.beta*Math.log(-Math.log(u)),mean:p=>p.mu+0.5772156649015329*p.beta},
+pareto:{name:'Pareto (type I)',k:2,np:[{k:'xm',l:'minimum xm',t:'pos'},{k:'alpha',l:'shape α',t:'pos'}],
+ why:st=>st.min>0?null:'needs strictly positive values',
+ fit:(x,st)=>{let s=0;for(const v of x)s+=Math.log(v/st.min);return s>0?{xm:st.min,alpha:x.length/s}:null},
+ valid:p=>p.xm>0&&p.alpha>0,logpdf:(p,x)=>x>=p.xm?Math.log(p.alpha)+p.alpha*Math.log(p.xm)-(p.alpha+1)*Math.log(x):NEG,
+ cdf:(p,x)=>x>p.xm?1-Math.pow(p.xm/x,p.alpha):0,inv:(p,u)=>p.xm*Math.pow(1-u,-1/p.alpha),mean:p=>p.alpha>1?p.alpha*p.xm/(p.alpha-1):Infinity},
+beta:{name:'Beta (scaled)',k:4,np:[{k:'a',l:'shape a',t:'pos'},{k:'b',l:'shape b',t:'pos'},{k:'lo',l:'lower bound',t:'loc'},{k:'hi',l:'upper bound',t:'loc'}],
+ why:st=>st.n>=3&&st.range>0?null:'needs at least 3 distinct values',
+ fit:(x,st)=>{const e=ext(st),lo=lowB(st,e),hi=st.max+e,w=hi-lo,n=x.length;let l1=0,l2=0,s=0,q=0;const u=x.map(v=>(v-lo)/w);for(const v of u){l1+=Math.log(v);l2+=Math.log1p(-v);s+=v}l1/=n;l2/=n;const m=s/n;for(const v of u)q+=(v-m)*(v-m);q/=n;
+  let c=m*(1-m)/q-1;if(!(c>0.2))c=0.2;let a=Math.max(m*c,0.05),b=Math.max((1-m)*c,0.05);
+  for(let i=0;i<200;i++){const sg=digamma(a+b),f1=digamma(a)-sg-l1,f2=digamma(b)-sg-l2,t=trigamma(a+b),j11=trigamma(a)-t,j22=trigamma(b)-t,j12=-t,det=j11*j22-j12*j12;
+   let da=(f1*j22-f2*j12)/det,db=(j11*f2-j12*f1)/det,k=1;while((a-k*da<=1e-6||b-k*db<=1e-6)&&k>1e-8)k/=2;a-=k*da;b-=k*db;if(Math.abs(k*da)<1e-12*a&&Math.abs(k*db)<1e-12*b)break}
+  return{a,b,lo,hi}},
+ valid:p=>p.a>0&&p.b>0&&p.hi>p.lo,logpdf:(p,x)=>{const u=(x-p.lo)/(p.hi-p.lo);return u>0&&u<1?(p.a-1)*Math.log(u)+(p.b-1)*Math.log1p(-u)-lbeta(p.a,p.b)-Math.log(p.hi-p.lo):NEG},
+ cdf:(p,x)=>betaI(p.a,p.b,(x-p.lo)/(p.hi-p.lo)),inv:(p,u)=>p.lo+(p.hi-p.lo)*invNum(t=>betaI(p.a,p.b,t),0,1,u),mean:p=>p.lo+(p.hi-p.lo)*p.a/(p.a+p.b)},
+triangular:{name:'Triangular',k:3,np:[{k:'a',l:'min a',t:'loc'},{k:'c',l:'mode c',t:'loc'},{k:'b',l:'max b',t:'loc'}],
+ why:st=>st.range>0?null:'all values are equal',
+ fit:(x,st)=>{const e=ext(st),a=lowB(st,e),b=st.max+e;return{a,c:Math.min(b,Math.max(a,3*st.mean-a-b)),b}},
+ valid:p=>p.b>p.a&&p.c>=p.a&&p.c<=p.b,
+ logpdf:(p,x)=>{if(x<p.a||x>p.b)return NEG;if(x<p.c)return Math.log(2*(x-p.a)/((p.b-p.a)*(p.c-p.a)));if(x>p.c)return Math.log(2*(p.b-x)/((p.b-p.a)*(p.b-p.c)));return Math.log(2/(p.b-p.a))},
+ cdf:(p,x)=>x<=p.a?0:x>=p.b?1:x<p.c?(x-p.a)*(x-p.a)/((p.b-p.a)*(p.c-p.a)):1-(p.b-x)*(p.b-x)/((p.b-p.a)*(p.b-p.c)),
+ inv:(p,u)=>u<(p.c-p.a)/(p.b-p.a)?p.a+Math.sqrt(u*(p.b-p.a)*(p.c-p.a)):p.b-Math.sqrt((1-u)*(p.b-p.a)*(p.b-p.c)),mean:p=>(p.a+p.b+p.c)/3}
+};
+const ORDER=['normal','lognormal','gamma','weibull','exponential','uniform','logistic','gumbel','pareto','beta','triangular'];
+for(const id of ORDER){DIST[id].id=id;DIST[id].pdf=(p,x)=>Math.exp(DIST[id].logpdf(p,x))}
+/* ---------- statistics of the sample ---------- */
+function qSample(s,p){const n=s.length;if(n===1)return s[0];const h=(n-1)*Math.min(1,Math.max(0,p)),i=Math.floor(h);return i+1<n?s[i]+(h-i)*(s[i+1]-s[i]):s[n-1]}
+function kdeMode(s){const n=s.length,min=s[0],max=s[n-1];if(!(max>min))return min;const sd=Math.sqrt(mom(s).v*n/Math.max(1,n-1)),iqr=qSample(s,.75)-qSample(s,.25),sg=iqr>0?Math.min(sd,iqr/1.34):sd,h=0.9*sg*Math.pow(n,-0.2);if(!(h>0))return qSample(s,.5);
+ const stp=Math.max(1,Math.floor(n/1500)),pts=[];for(let i=0;i<n;i+=stp)pts.push(s[i]);let best=-1,bx=min;
+ for(let j=0;j<=512;j++){const x=min+(max-min)*j/512;let d=0;for(const v of pts){const z=(x-v)/h;if(z>-8&&z<8)d+=Math.exp(-0.5*z*z)}if(d>best){best=d;bx=x}}return bx}
+function stats(x){/* x sorted ascending, finite */const n=x.length,s0=mom(x),min=x[0],max=x[n-1],st={n,min,max,range:max-min,mean:s0.m,var0:s0.v,sd0:Math.sqrt(s0.v)};
+ if(min>0){st.lg=mom(x.map(Math.log))}return st}
+function describe(x,conv){const st=stats(x),n=st.n;let m3=0,m4=0;for(const v of x){const d=v-st.mean;m3+=d*d*d;m4+=d*d*d*d}m3/=n;m4/=n;
+ const sd=n>1?Math.sqrt(st.var0*n/(n-1)):0,q=p=>qSample(x,p),ex=conv!=='cum';
+ return{n,min:st.min,max:st.max,mean:st.mean,median:q(.5),mode:kdeMode(x),sd,skew:st.var0>0?m3/Math.pow(st.var0,1.5):0,kurt:st.var0>0?m4/(st.var0*st.var0)-3:0,
+  p90:ex?q(.1):q(.9),p50:q(.5),p10:ex?q(.9):q(.1)}}
+/* ---------- goodness of fit ---------- */
+function ksP(D,n){if(!(D>0))return 1;const l=(Math.sqrt(n)+0.12+0.11/Math.sqrt(n))*D;if(l<0.2)return 1;let s=0;for(let j=1;j<=100;j++){const t=2*(j&1?1:-1)*Math.exp(-2*j*j*l*l);s+=t;if(Math.abs(t)<1e-12)break}return Math.min(1,Math.max(0,s))}
+function evalFit(id,p,xs){const d=DIST[id],n=xs.length;let ll=0,dp=0,dm=0;const F=new Float64Array(n);
+ for(let i=0;i<n;i++){ll+=d.logpdf(p,xs[i]);const f=d.cdf(p,xs[i]);F[i]=f;const a=(i+1)/n-f,b=f-i/n;if(a>dp)dp=a;if(b>dm)dm=b}
+ const ks=Math.max(dp,dm),cl=v=>Math.min(1-1e-16,Math.max(1e-16,v));let sa=0;for(let i=0;i<n;i++)sa+=(2*i+1)*(Math.log(cl(F[i]))+Math.log(cl(1-F[n-1-i])));
+ const ad=-n-sa/n,k=d.k,bad=!isFinite(ll)||isNaN(ll);
+ return{ll:bad?NEG:ll,k,aic:bad?Infinity:2*k-2*ll,bic:bad?Infinity:k*Math.log(n)-2*ll,ks,ksp:ksP(ks,n),ad}}
+function fitAll(xs){const st=stats(xs),out=[];
+ for(const id of ORDER){const d=DIST[id],r={id,name:d.name,ok:false,why:null};const w=st.n<3?'needs at least 3 values':!(st.range>0)?'all values are equal':d.why(st);
+  if(w){r.why=w;out.push(r);continue}
+  let p=null;try{p=d.fit(xs,st)}catch(e){p=null}
+  if(!p||!d.valid(p)||Object.values(p).some(v=>!isFinite(v))){r.why='maximum-likelihood fit did not converge';out.push(r);continue}
+  const e=evalFit(id,p,xs);if(!isFinite(e.aic)){r.why='zero density at some observations';r.p=p;out.push(r);continue}
+  Object.assign(r,e,{ok:true,p});out.push(r)}
+ const okr=out.filter(r=>r.ok).sort((a,b)=>a.aic-b.aic),best=okr.length?okr[0].aic:0;let sw=0;for(const r of okr){r.daic=r.aic-best;r.w0=Math.exp(-r.daic/2);sw+=r.w0}
+ okr.forEach((r,i)=>{r.w=r.w0/sw;r.rank=i+1;delete r.w0});
+ return okr.concat(out.filter(r=>!r.ok))}
+/* ---------- outputs ---------- */
+const LEVELS=[99,95,90,80,70,60,50,40,30,20,10,5,1];
+const exceedU=(P,conv)=>conv==='cum'?P/100:1-P/100;
+function pctTable(id,p,conv){const d=DIST[id];return LEVELS.map(P=>({P,v:d.inv(p,exceedU(P,conv))}))}
+function p90p50p10(id,p){const d=DIST[id];return{p90:d.inv(p,.1),p50:d.inv(p,.5),p10:d.inv(p,.9)}}/* exceedance convention: P90 = low case */
+const defaultsRisk=()=>({format:'prospect-risk',version:1,name:'Prospect A',
+ elements:[{name:'Source / charge',level:'play',p:.85},{name:'Reservoir presence',level:'play',p:.8},{name:'Migration & timing',level:'play',p:.75},{name:'Trap / closure',level:'prospect',p:.7},{name:'Seal',level:'prospect',p:.75},{name:'Reservoir effectiveness',level:'prospect',p:.8}],
+ vol:{mode:'direct',fluid:'oil',p90:20,p50:60,p10:180,tri:{grv:[150,300,600],ntg:[.5,.7,.85],phi:[.15,.2,.25],sw:[.25,.35,.5],bo:[1.15,1.25,1.4],bg:[.004,.005,.006],rf:[.2,.3,.4]},n:20000,seed:1},
+ econ:{u:9,F:220,D:45,mefv:null}});
+const sig=v=>+v.toPrecision(5);
+function prospectFile(name,p90,p50,p10){if(!(p90>0&&p90<p50&&p50<p10))throw new Error('P90 < P50 < P10 with P90 > 0 is required');
+ const m=defaultsRisk();m.name=name||'Prospect A';m.vol.p90=sig(p90);m.vol.p50=sig(p50);m.vol.p10=sig(p10);return m}
+function csvRank(res,conv,fmt){const f=fmt||(v=>String(v)),rows=['rank,distribution,parameters,n_parameters,loglik,AIC,dAIC,Akaike_weight,BIC,KS_D,KS_p,AD_A2,P90,P50,P10,mean'];
+ const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
+ for(const r of res){if(!r.ok){rows.push(['',q(r.name),q('skipped: '+r.why),'','','','','','','','','','','','',''].join(','));continue}
+  const d=DIST[r.id],pp=p90p50p10(r.id,r.p),a=conv==='cum'?[pp.p10,pp.p50,pp.p90]:[pp.p90,pp.p50,pp.p10];
+  rows.push([r.rank,q(r.name),q(d.np.map(n=>n.k+'='+f(r.p[n.k])).join('; ')),r.k,f(r.ll),f(r.aic),f(r.daic),f(r.w),f(r.bic),f(r.ks),f(r.ksp),f(r.ad),f(a[0]),f(a[1]),f(a[2]),f(d.mean(r.p))].join(','))}
+ return rows.join('\n')+'\n'}
+/* ---------- input ---------- */
+const NUM=/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+const parseNum=t=>{t=String(t).trim();return NUM.test(t)?+t:NaN};
+function table(text){const lines=String(text).split(/\r?\n/).map(s=>s.trim()).filter(s=>s&&s[0]!=='#');if(!lines.length)return{cols:[],flat:true,skipped:0};
+ let delim=null;if(lines.length>1)for(const d of ['\t',';',',']){const c=lines.map(l=>l.split(d).length);if(c[0]>1&&c.every(v=>v===c[0])){delim=d;break}}
+ if(!delim){const semi=lines.some(l=>l.includes(';')),tok=lines.join(' ').split(semi?/[;\s]+/:/[\s,;]+/).filter(Boolean),vals=[];let sk=0;for(const t of tok){const v=parseNum(semi?t.replace(',','.'):t);if(isFinite(v))vals.push(v);else sk++}
+  return{cols:vals.length?[{name:'values',values:vals}]:[],flat:true,skipped:sk}}
+ const fix=c=>delim===','?c:c.replace(',','.'),rows=lines.map(l=>l.split(delim).map(c=>fix(c.trim())));
+ const header=rows[0].some(c=>c!==''&&!isFinite(parseNum(c)));const names=header?rows[0].map((c,i)=>c||'col '+(i+1)):rows[0].map((c,i)=>'col '+(i+1)),data=header?rows.slice(1):rows,cols=[];let sk=0;
+ for(let j=0;j<names.length;j++){const v=[];for(const r of data){const t=parseNum(r[j]===undefined?'':r[j]);if(isFinite(t))v.push(t)}if(v.length&&v.length>=0.5*data.length){cols.push({name:names[j],values:v});sk+=data.length-v.length}}
+ return{cols,flat:false,header,skipped:sk}}
+/* ---------- fictitious example data ---------- */
+function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+const clampU=u=>Math.min(.999,Math.max(.001,u));
+const EXAMPLES={
+ fields:{name:'Fictitious field sizes, MMboe (70 synthetic fields)',gen:()=>{const r=rng(2026),o=[];for(let i=0;i<70;i++)o.push(Math.max(0.5,Math.round(10*DIST.lognormal.inv({mu:Math.log(18),sigma:1.15},clampU(r())))/10));return o}},
+ poro:{name:'Fictitious porosity, fraction (80 synthetic plugs)',gen:()=>{const r=rng(7),o=[];for(let i=0;i<80;i++)o.push(Math.round(1000*Math.min(.32,Math.max(.05,DIST.normal.inv({mu:.18,sigma:.035},clampU(r())))))/1000);return o}},
+ cost:{name:'Fictitious well costs, $MM (60 synthetic wells)',gen:()=>{const r=rng(11),o=[];for(let i=0;i<60;i++)o.push(Math.round(10*DIST.gamma.inv({shape:4,scale:12.5},clampU(r())))/10);return o}}};
+function example(key){const e=EXAMPLES[key];return e?{name:e.name,values:e.gen()}:null}
+g.DF={DIST,ORDER,LEVELS,lgamma,gammaP,gammaQ,betaI,digamma,trigamma,Phi,PhiInv,qSample,kdeMode,stats,describe,ksP,evalFit,fitAll,pctTable,p90p50p10,exceedU,defaultsRisk,prospectFile,csvRank,table,parseNum,rng,example,EXAMPLES};
+})(window);
+</script><script>
+const $=id=>document.getElementById(id),D=window.DF;
+const COL={normal:'#3b6ea5',lognormal:'#a8623a',gamma:'#3f8a55',weibull:'#8a5aa0',exponential:'#b08a2a',uniform:'#8a8a8a',logistic:'#2a9aa8',gumbel:'#c0507a',pareto:'#6a4a1a',beta:'#6a8a2a',triangular:'#d0703a'};
+const S={x:[],name:'',desc:null,conv:'exceed',res:[],by:{},sel:null,man:false,mp:null,qp:'qq',cols:[]};
+const fs=v=>{if(v==null||isNaN(v))return '—';if(v===Infinity)return '∞';if(v===-Infinity)return '−∞';if(v===0)return '0';const a=Math.abs(v);if(a>=1e6||a<1e-3)return v.toExponential(3);return String(+v.toPrecision(4))};
+const f2=v=>isFinite(v)?v.toFixed(2):'—',pv=p=>p==null?'—':p<1e-4?'<1e-4':p.toFixed(3);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function say(t,err){const m=$('msg');m.textContent=t;m.style.fontWeight=err?'700':'';setTimeout(()=>{if(m.textContent===t)m.textContent=''},4500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+const pl=P=>'P'+P;
+/* ---------- data ---------- */
+function load(vals,name){const x=vals.filter(isFinite).sort((a,b)=>a-b);
+ if(x.length<3){$('dMsg').textContent='At least 3 numbers are needed.';$('dMsg').className='msg err';return}
+ S.x=x;S.name=name||'Data';S.desc=D.describe(x,S.conv);S.res=D.fitAll(x);S.by={};S.res.forEach(r=>S.by[r.id]=r);
+ const best=S.res.find(r=>r.ok);S.sel=best?best.id:null;S.man=false;$('man').checked=false;
+ $('hlog').disabled=!(x[0]>0);if(!(x[0]>0))$('hlog').checked=false;
+ buildManual();renderAll()}
+function useText(name){const t=D.table($('txt').value);let cols=t.cols;
+ if(!cols.length){$('dMsg').textContent='No numeric value found.';$('dMsg').className='msg err';return}
+ if(cols.length>1)cols=[{name:'(all numeric cells)',values:[].concat(...cols.map(c=>c.values))}].concat(cols);
+ S.cols=cols;$('colSel').innerHTML=cols.map((c,i)=>`<option value="${i}">${esc(c.name)} (${c.values.length})</option>`).join('');$('colRow').style.display=cols.length>1?'flex':'none';
+ if(cols.length>1)$('colSel').value='1';pickCol(name)}
+function pickCol(name){const c=S.cols[+$('colSel').value||0],t=D.table($('txt').value);
+ $('dMsg').className='msg';$('dMsg').textContent=`${c.values.length} values${t.skipped?`, ${t.skipped} non-numeric entr${t.skipped>1?'ies':'y'} skipped`:''}.`;
+ load(c.values,(name||S.name||'Data')+(S.cols.length>1&&$('colSel').value!=='0'?' – '+c.name:''))}
+/* ---------- selected fit ---------- */
+function act(){const r=S.by[S.sel];if(!r||!r.ok)return null;const d=D.DIST[S.sel];
+ if(S.man&&S.mp&&d.valid(S.mp))return{id:S.sel,p:S.mp,ev:D.evalFit(S.sel,S.mp,S.x),man:true};return{id:S.sel,p:r.p,ev:r,man:false}}
+function paramText(id,p){return D.DIST[id].np.map(n=>`${n.l.replace(/ \(.*\)/,'')} = ${fs(p[n.k])}`).join(', ')}
+/* ---------- rendering ---------- */
+function renderTiles(){const d=S.desc,e=S.conv==='exceed',b=S.res.find(r=>r.ok);
+ const T=[['n · range',`${d.n}`,'',`${fs(d.min)} to ${fs(d.max)}`],['Mean · median',`${fs(d.mean)}`,'key',`median ${fs(d.median)}`],['Mode (KDE) · std',fs(d.mode),'',`std ${fs(d.sd)}`],['Skewness · excess kurtosis',f2(d.skew),'',`excess kurtosis ${f2(d.kurt)}`],
+  [`Sample P90 / P50 / P10`,`${fs(d.p90)} / ${fs(d.p50)} / ${fs(d.p10)}`,'key2',e?'P90 = low case (exceedance)':'P90 = 90th percentile (cumulative)'],['Best fit (AIC)',b?b.name:'—','key',b?`ΔAIC to the next: ${S.res.filter(r=>r.ok)[1]?f2(S.res.filter(r=>r.ok)[1].daic):'—'}`:'no valid fit']];
+ $('tiles').innerHTML=T.map(([a,v,k,s])=>`<div class="tile ${k}"><small>${a}</small><b${v.length>14?' style="font-size:1.02rem"':''}>${esc(v)}</b><small>${esc(s)}</small></div>`).join('')}
+function renderRank(){const ok=S.res.filter(r=>r.ok),mn=k=>Math.min(...ok.map(r=>r[k])),mx=k=>Math.max(...ok.map(r=>r[k]));
+ const b={aic:mn('aic'),bic:mn('bic'),ks:mn('ks'),ksp:mx('ksp'),ad:mn('ad'),ll:mx('ll')},cl=(k,r)=>r[k]===b[k]?' class="best"':'';
+ let h='<thead><tr><th>#</th><th class="l">Distribution</th><th class="l">Parameters (maximum likelihood)</th><th>k</th><th>log L</th><th>AIC</th><th>ΔAIC</th><th>w</th><th>BIC</th><th>KS D</th><th>KS p</th><th>AD A²</th></tr></thead><tbody>';
+ h+=ok.map(r=>`<tr data-id="${r.id}" class="${r.id===S.sel?'sel':''}"><td>${r.rank}</td><td class="l"><span class="sw" style="background:${COL[r.id]}"></span>${r.name}</td><td class="l pc">${esc(paramText(r.id,r.p))}</td><td>${r.k}</td><td${cl('ll',r)}>${f2(r.ll)}</td><td${cl('aic',r)}>${f2(r.aic)}</td><td>${f2(r.daic)}</td><td>${r.w<.001?'<0.001':r.w.toFixed(3)}</td><td${cl('bic',r)}>${f2(r.bic)}</td><td${cl('ks',r)}>${r.ks.toFixed(4)}</td><td${cl('ksp',r)}>${pv(r.ksp)}</td><td${cl('ad',r)}>${f2(r.ad)}</td></tr>`).join('');
+ $('rk').innerHTML=h+'</tbody>';
+ const sk=S.res.filter(r=>!r.ok);$('skipN').innerHTML=sk.length?'Not fitted: '+sk.map(r=>`<b>${r.name}</b> (${esc(r.why)})`).join('; ')+'.':'';}
+function renderSel(){const a=act();if(!a){$('pt').innerHTML='<tbody><tr><td class="l">No valid fit.</td></tr></tbody>';$('selP').textContent='';$('selT').textContent='Selected fit';return}
+ const d=D.DIST[a.id],tab=D.pctTable(a.id,a.p,S.conv),e=S.conv==='exceed';
+ $('selT').innerHTML=`Selected fit: ${d.name}${a.man?' <span class="warn">(manual parameters)</span>':''}`;
+ let h=`<thead><tr><th class="l">Level</th><th>Fit</th><th>Data</th></tr></thead><tbody>`;
+ h+=tab.map(r=>`<tr class="${[90,50,10].includes(r.P)?'hl':''}"><td class="l">${pl(r.P)}${r.P===90?(e?' (low)':''):r.P===10?(e?' (high)':''):''}</td><td>${fs(r.v)}</td><td>${fs(D.qSample(S.x,D.exceedU(r.P,S.conv)))}</td></tr>`).join('');
+ h+=`<tr><td class="l">Mean</td><td>${fs(d.mean(a.p))}</td><td>${fs(S.desc.mean)}</td></tr></tbody>`;$('pt').innerHTML=h;
+ const ev=a.ev;$('selP').innerHTML=`<b>${esc(paramText(a.id,a.p))}</b><br>log L ${f2(ev.ll)} · k = ${ev.k}<br>AIC ${f2(ev.aic)} · BIC ${f2(ev.bic)}<br>KS D ${isFinite(ev.ks)?ev.ks.toFixed(4):'—'} (p ≈ ${pv(ev.ksp)})<br>AD A² ${f2(ev.ad)}<br><br><span class="hint">${e?'Exceedance convention: P<i>x</i> is the value exceeded with <i>x</i> % probability.':'Cumulative convention: P<i>x</i> is the <i>x</i>-th percentile.'} The prospect file takes P90 = quantile 10 %, P50, P10 = quantile 90 % of this fit.</span>`}
+function renderAll(){renderTiles();renderRank();renderSel();manStat();drawAll()}
+/* ---------- manual fit ---------- */
+function buildManual(){const r=S.by[S.sel],box=$('prm');
+ if(!r||!r.ok){box.innerHTML='<div class="hint">No valid fit to adjust.</div>';$('manName').textContent='';S.mp=null;return}
+ const d=D.DIST[S.sel],st=D.stats(S.x);S.mp=Object.assign({},r.p);$('manName').textContent=d.name;
+ box.innerHTML=d.np.map(n=>{const v=r.p[n.k];let lo,hi;if(n.t==='pos'){lo=v/4;hi=v*4}else{const sc=n.s==='log'&&st.lg?Math.sqrt(st.lg.v):st.sd0||st.range/4;lo=v-3*sc;hi=v+3*sc}
+  return`<div class="prm"><span>${esc(n.l)}</span><input type="range" data-k="${n.k}" min="${lo}" max="${hi}" step="${(hi-lo)/1000}" value="${v}"><input type="number" data-k="${n.k}" step="any" value="${+v.toPrecision(6)}"></div>`}).join('')}
+$('prm').addEventListener('input',e=>{const k=e.target.dataset.k;if(!k||!S.mp)return;const v=+e.target.value;if(!isFinite(v))return;S.mp[k]=v;
+ box_sync(k,v,e.target);S.man=true;$('man').checked=true;renderSel();manStat();drawAll()});
+function box_sync(k,v,src){$('prm').querySelectorAll(`[data-k="${k}"]`).forEach(el=>{if(el!==src){if(el.type==='range'){if(v<+el.min)el.min=v;if(v>+el.max)el.max=v}el.value=el.type==='number'?+v.toPrecision(6):v}})}
+function manStat(){const r=S.by[S.sel];if(!r||!r.ok){$('mst').textContent='';return}const a=act(),ml=r;
+ const line=(t,e)=>`<b>${t}</b>: KS D ${isFinite(e.ks)?e.ks.toFixed(4):'—'} (p ≈ ${pv(e.ksp)}) · AD ${f2(e.ad)} · log L ${f2(e.ll)} · AIC ${f2(e.aic)} · BIC ${f2(e.bic)}`;
+ let h=a.man?line('Manual',a.ev)+'<br>':'';if(S.man&&!a.man)h+='<span class="warn">These parameters are invalid (a scale or a bound is out of order); showing the ML fit.</span><br>';h+=line('ML fit',ml);
+ if(a.man&&isFinite(a.ev.aic))h+=`<br>ΔAIC (manual − ML) = ${f2(a.ev.aic-ml.aic)}`;$('mst').innerHTML=h}
+$('man').onchange=()=>{S.man=$('man').checked;renderSel();manStat();drawAll()};
+$('bReset').onclick=()=>{const r=S.by[S.sel];if(!r||!r.ok)return;buildManual();S.man=false;$('man').checked=false;renderSel();manStat();drawAll()};
+/* ---------- charts ---------- */
+function prep(id){const cv=$(id),r=cv.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d));const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,r.width,r.height);c.font='11px Inter,sans-serif';return{c,W:r.width,H:r.height}}
+function nice(lo,hi,n){const span=hi-lo,raw=span/n,p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p,st=(f<1.5?1:f<3?2:f<7?5:10)*p,t=[];for(let v=Math.ceil(lo/st-1e-9)*st;v<=hi+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t}
+function logTicks(lo,hi){const t=[],a=Math.floor(Math.log10(lo)),b=Math.ceil(Math.log10(hi)),dec=b-a,ms=dec>5?[1]:dec>2?[1,3]:[1,2,5];for(let e=a;e<=b;e++)for(const m of ms){const v=m*Math.pow(10,e);if(v>=lo*(1-1e-9)&&v<=hi*(1+1e-9))t.push(+v.toPrecision(6))}return t.length>1?t:[lo,hi]}
+function frame(id,o){const{c,W,H}=prep(id),m={l:52,r:12,t:10,b:38},pw=W-m.l-m.r,ph=H-m.t-m.b,lx=o.xlog?Math.log(o.x0):o.x0,hx=o.xlog?Math.log(o.x1):o.x1;
+ const X=v=>m.l+((o.xlog?Math.log(v):v)-lx)/(hx-lx)*pw,Y=v=>m.t+ph-(v-o.y0)/(o.y1-o.y0)*ph,yf=o.yf||fs;
+ c.lineWidth=1;c.fillStyle='#5c5a52';c.textAlign='center';c.textBaseline='top';
+ for(const v of(o.xlog?logTicks(o.x0,o.x1):nice(o.x0,o.x1,6))){c.strokeStyle='#ebe8df';c.beginPath();c.moveTo(X(v),m.t);c.lineTo(X(v),m.t+ph);c.stroke();c.fillText(fs(v),X(v),m.t+ph+4)}
+ c.textAlign='right';c.textBaseline='middle';for(const v of nice(o.y0,o.y1,5)){c.strokeStyle='#ebe8df';c.beginPath();c.moveTo(m.l,Y(v));c.lineTo(m.l+pw,Y(v));c.stroke();c.fillText(yf(v),m.l-5,Y(v))}
+ c.strokeStyle='#9a9688';c.strokeRect(m.l,m.t,pw,ph);c.fillStyle='#232220';c.textAlign='center';c.textBaseline='top';c.fillText(o.xl||'',m.l+pw/2,m.t+ph+20);
+ c.save();c.translate(12,m.t+ph/2);c.rotate(-Math.PI/2);c.textBaseline='top';c.fillText(o.yl||'',0,-2);c.restore();
+ return{c,W,H,X,Y,m,pw,ph,clip(){c.save();c.beginPath();c.rect(m.l,m.t,pw,ph);c.clip()}}}
+function curves(){const L=[],a=act();if(!a)return L;if($('allc').checked)for(const r of S.res)if(r.ok&&r.id!==S.sel)L.push({id:r.id,p:r.p,w:1.3,al:.75});
+ if(a.man){const r=S.by[S.sel];L.push({id:S.sel,p:r.p,w:1.6,al:.9,dash:[5,4],col:'#888'})}
+ L.push({id:S.sel,p:a.p,w:3,al:1,col:a.man?'#a8623a':COL[S.sel]});return L}
+function xdom(){const x=S.x,lo=x[0],hi=x[x.length-1];if(lo>0){const r=Math.pow(hi/lo,.04);return{x0:lo/r,x1:hi*r,xlog:true}}const pad=(hi-lo)*.04;return{x0:lo-pad,x1:hi+pad,xlog:false}}
+function grid(dom,N){const g=[];for(let i=0;i<=N;i++){const t=i/N;g.push(dom.xlog?dom.x0*Math.pow(dom.x1/dom.x0,t):dom.x0+(dom.x1-dom.x0)*t)}return g}
+function drawH(){const x=S.x,n=x.length,a=act(),lg=$('hlog').checked&&x[0]>0,dom=xdom();if(lg){dom.xlog=true}else{dom.xlog=false;const pad=(x[n-1]-x[0])*.04;dom.x0=x[0]-pad;dom.x1=x[n-1]+pad}
+ const T=lg?Math.log:(v=>v),nb=Math.max(5,Math.min(40,Math.ceil(Math.sqrt(n)))),t0=T(x[0]),t1=T(x[n-1]),w=(t1-t0)/nb,h=new Array(nb).fill(0);
+ for(const v of x){let b=Math.floor((T(v)-t0)/w);if(b>=nb)b=nb-1;h[b]++}const dens=h.map(q=>q/(n*w)),mxB=Math.max(...dens),L=curves(),G=grid(dom,300);
+ const ycv=(id,p)=>G.map(v=>{const y=D.DIST[id].pdf(p,v)*(lg?v:1);return isFinite(y)?y:0}),sel=L.length?ycv(L[L.length-1].id,L[L.length-1].p):[0],mxS=Math.max(...sel);
+ const y1=1.12*Math.max(mxB,Math.min(mxS,2*mxB)),F=frame('cvH',{x0:dom.x0,x1:dom.x1,y0:0,y1,xlog:dom.xlog,xl:(S.name?S.name:'x')+(lg?' (log axis, bins equal in ln x)':''),yl:lg?'density of ln x':'density'}),c=F.c;
+ F.clip();c.fillStyle='rgba(74,90,78,.28)';c.strokeStyle='#4a5a4e';c.lineWidth=1;
+ dens.forEach((q,j)=>{const a0=lg?Math.exp(t0+j*w):t0+j*w,a1=lg?Math.exp(t0+(j+1)*w):t0+(j+1)*w,xa=F.X(a0),xb=F.X(a1),y=F.Y(q);c.fillRect(xa,y,xb-xa,F.Y(0)-y);c.strokeRect(xa,y,xb-xa,F.Y(0)-y)});
+ L.forEach(cv=>{const ys=ycv(cv.id,cv.p);c.strokeStyle=cv.col||COL[cv.id];c.globalAlpha=cv.al;c.lineWidth=cv.w;c.setLineDash(cv.dash||[]);c.beginPath();ys.forEach((y,i)=>i?c.lineTo(F.X(G[i]),F.Y(y)):c.moveTo(F.X(G[i]),F.Y(y)));c.stroke()});c.restore()}
+function drawE(){const x=S.x,n=x.length,dom=xdom(),L=curves(),G=grid(dom,300),F=frame('cvE',{x0:dom.x0,x1:dom.x1,y0:0,y1:1,xlog:dom.xlog,xl:S.name||'x',yl:'P(X > x)',yf:v=>(100*v).toFixed(0)+' %'}),c=F.c;
+ F.clip();c.setLineDash([4,4]);c.strokeStyle='#b8b3a2';c.lineWidth=1;for(const q of[.1,.5,.9]){c.beginPath();c.moveTo(F.m.l,F.Y(q));c.lineTo(F.m.l+F.pw,F.Y(q));c.stroke()}c.setLineDash([]);
+ L.forEach(cv=>{const d=D.DIST[cv.id];c.strokeStyle=cv.col||COL[cv.id];c.globalAlpha=cv.al;c.lineWidth=cv.w;c.setLineDash(cv.dash||[]);c.beginPath();G.forEach((v,i)=>{const y=1-d.cdf(cv.p,v);i?c.lineTo(F.X(v),F.Y(y)):c.moveTo(F.X(v),F.Y(y))});c.stroke()});
+ c.globalAlpha=1;c.setLineDash([]);c.fillStyle='rgba(35,34,32,.75)';const st=Math.max(1,Math.floor(n/700));for(let i=0;i<n;i+=st){c.beginPath();c.arc(F.X(x[i]),F.Y(1-(i+.5)/n),2.2,0,7);c.fill()}c.restore()}
+function drawQ(){const x=S.x,n=x.length,a=act(),pp=S.qp==='pp';const m=Math.min(n,400),pts=[];
+ if(a){const d=D.DIST[a.id];for(let j=0;j<m;j++){const i=m>1?Math.round(j*(n-1)/(m-1)):0,u=(i+.5)/n;const px=pp?u:d.inv(a.p,u),py=pp?d.cdf(a.p,x[i]):x[i];if(isFinite(px)&&isFinite(py))pts.push([px,py])}}
+ let lo,hi;if(pp){lo=0;hi=1}else{const all=pts.flat().concat([x[0],x[n-1]]);lo=Math.min(...all);hi=Math.max(...all);const pad=(hi-lo)*.04;lo-=pad;hi+=pad}
+ const F=frame('cvQ',{x0:lo,x1:hi,y0:lo,y1:hi,xl:pp?'empirical probability (i − 0.5) / n':'theoretical quantile of the selected fit',yl:pp?'fitted cdf':'data quantile'}),c=F.c;F.clip();
+ c.strokeStyle='#a8623a';c.lineWidth=1.2;c.setLineDash([5,4]);c.beginPath();c.moveTo(F.X(lo),F.Y(lo));c.lineTo(F.X(hi),F.Y(hi));c.stroke();c.setLineDash([]);
+ c.fillStyle=a&&a.man?'#a8623a':COL[S.sel]||'#4a5a4e';c.globalAlpha=.85;for(const p of pts){c.beginPath();c.arc(F.X(p[0]),F.Y(p[1]),2.6,0,7);c.fill()}c.restore()}
+function drawD(){const x=S.x,n=x.length,a=act(),dom=xdom();const st=Math.max(1,Math.floor(n/1500)),A=[],B=[];let ks=a?a.ev.ks:0;
+ if(a){const d=D.DIST[a.id];for(let i=0;i<n;i+=st){const f=d.cdf(a.p,x[i]);A.push([x[i],(i+1)/n-f]);B.push([x[i],i/n-f])}}
+ const mx=Math.max(.02,isFinite(ks)?ks:0,...A.map(p=>Math.abs(p[1])),...B.map(p=>Math.abs(p[1])))*1.15,F=frame('cvD',{x0:dom.x0,x1:dom.x1,y0:-mx,y1:mx,xlog:dom.xlog,xl:S.name||'x',yl:'F_n(x) − F(x)',yf:v=>v.toFixed(2)}),c=F.c;F.clip();
+ c.strokeStyle='#9a9688';c.lineWidth=1;c.beginPath();c.moveTo(F.m.l,F.Y(0));c.lineTo(F.m.l+F.pw,F.Y(0));c.stroke();
+ if(a&&isFinite(ks)){c.setLineDash([5,4]);c.strokeStyle='#a8623a';for(const s of[ks,-ks]){c.beginPath();c.moveTo(F.m.l,F.Y(s));c.lineTo(F.m.l+F.pw,F.Y(s));c.stroke()}c.setLineDash([])}
+ [[A,'#4a5a4e',1.6],[B,'#8a9a8c',1.2]].forEach(([P,col,w])=>{c.strokeStyle=col;c.lineWidth=w;c.beginPath();P.forEach((p,i)=>i?c.lineTo(F.X(p[0]),F.Y(p[1])):c.moveTo(F.X(p[0]),F.Y(p[1])));c.stroke()});c.restore()}
+function drawAll(){if(!S.x.length)return;drawH();drawE();drawQ();drawD()}
+/* ---------- events ---------- */
+$('rk').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;S.sel=tr.dataset.id;S.man=false;$('man').checked=false;buildManual();renderRank();renderSel();manStat();drawAll()});
+$('bUse').onclick=()=>useText('Pasted data');
+let tm=0;$('txt').addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(()=>useText('Pasted data'),500)});
+$('colSel').onchange=()=>pickCol();
+$('bOpen').onclick=()=>$('ffile').click();
+$('ffile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const t=await f.text();$('txt').value=t.length>400000?t.slice(0,400000):t;useText(f.name.replace(/\.[^.]+$/,''))};
+$('exSel').onchange=()=>{const k=$('exSel').value;if(k){const e=D.example(k);$('txt').value=e.values.join('\n');S.cols=[];$('colRow').style.display='none';useText(e.name);S.name=e.name;S.cols=S.cols}$('exSel').value=''};
+function setConv(c){S.conv=c;$('convE').className=c==='exceed'?'on':'';$('convC').className=c==='cum'?'on':'';if(S.x.length){S.desc=D.describe(S.x,c);renderTiles();renderSel()}}
+$('convE').onclick=()=>setConv('exceed');$('convC').onclick=()=>setConv('cum');
+$('hlog').onchange=drawH;$('allc').onchange=()=>{drawH();drawE()};
+$('qq').onclick=()=>{S.qp='qq';$('qq').className='on';$('pp').className='';drawQ()};$('pp').onclick=()=>{S.qp='pp';$('pp').className='on';$('qq').className='';drawQ()};
+$('bCsv').onclick=()=>{if(!S.res.length)return;download('distfit_ranking.csv',D.csvRank(S.res,S.conv,v=>typeof v==='number'?String(+v.toPrecision(8)):v));say('Ranking CSV saved.')};
+$('bPros').onclick=()=>{const a=act();if(!a){say('No valid fit selected.',true);return}
+ try{const t=D.p90p50p10(a.id,a.p),nm=(S.name||'Data')+' – '+D.DIST[a.id].name+(a.man?' (manual)':''),f=D.prospectFile(nm,t.p90,t.p50,t.p10);
+  download((nm.replace(/[^\w.-]+/g,'_')||'prospect')+'.json',JSON.stringify(f,null,1),'application/json');say(`Prospect file saved: P90 ${fs(t.p90)}, P50 ${fs(t.p50)}, P10 ${fs(t.p10)}.`)}
+ catch(err){say('Cannot save: '+err.message+'. The fit must give positive volumes.',true)}};
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+let rz=0;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(drawAll,80)});
+{const e=D.example('fields');$('txt').value=e.values.join('\n');useText(e.name);S.name=e.name;renderAll()}
+</script>
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp'],['Distribution fitting','distfit']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you enter leaves your machine. Fits eleven probability distributions to a one-dimensional sample (field or analogue volumes, porosity, net/gross, recovery factors, costs) by maximum likelihood, ranks them by AIC with BIC, Kolmogorov–Smirnov and Anderson–Darling shown, and draws the checks (histogram with fitted densities, exceedance curve on a log axis, Q-Q and P-P plots, cdf difference). The parameters can also be moved by hand, and the selected fit gives a percentile table and a Prospect risking file with its P90 / P50 / P10 as direct volumes.","method":["<b>Distributions and parameters.</b> Normal (μ, σ), lognormal (μ, σ of ln x), gamma (shape k, scale θ), Weibull (shape k, scale λ), exponential (mean θ), uniform (a, b), logistic (μ, s), Gumbel for maxima (μ, β), Pareto type I (xm, α), beta (a, b, with lower and upper bounds) and triangular (a, mode c, b). A distribution whose support does not contain all the data is not fitted and the reason is shown (lognormal, gamma, Weibull and Pareto need strictly positive values, exponential non-negative ones).","<b>Maximum likelihood.</b> Closed form: normal (σ with divisor n), lognormal (same on ln x), exponential (θ = mean), uniform (a = min, b = max), Pareto (xm = min, α = n / Σ ln(x / xm)). Gamma: the shape k solves ln k − ψ(k) = ln(mean) − mean(ln x) = s by Newton iteration from the start k0 = (3 − s + √((s − 3)² + 24 s)) / (12 s), then θ = mean / k. Weibull: k solves Σ x<sup>k</sup> ln x / Σ x<sup>k</sup> − 1/k − mean(ln x) = 0 (monotone in k, bisection on ln k, data scaled by the maximum), then λ = (mean x<sup>k</sup>)<sup>1/k</sup>. Logistic: the scores Σ tanh(z/2) = 0 and mean(z tanh(z/2)) = 1, z = (x − μ)/s, solved by nested bisection (μ inside, s outside). Gumbel: β solves β = mean − Σ x e<sup>−x/β</sup> / Σ e<sup>−x/β</sup> by bisection, then μ = −β ln mean(e<sup>−x/β</sup>). Beta: with the bounds fixed at min − r/(n − 1) and max + r/(n − 1) (r = range, the usual unbiased widening of the sample range), a and b solve ψ(a) − ψ(a + b) = mean ln u and ψ(b) − ψ(a + b) = mean ln(1 − u) by damped two-dimensional Newton with the trigamma Jacobian. Triangular: same widened bounds, mode c = 3 × mean − a − b clamped to [a, b] (method of moments, keeps the mean).","<b>Number of parameters (AIC, BIC).</b> k = 2 for most, 1 for the exponential, 3 for the triangular (a, c, b) and 4 for the beta (a, b and the two bounds, which are estimated from the data).","<b>Goodness of fit.</b> Kolmogorov–Smirnov D = max(max<sub>i</sub> (i/n − F(x<sub>i</sub>)), max<sub>i</sub> (F(x<sub>i</sub>) − (i − 1)/n)) with the asymptotic p-value 2 Σ (−1)<sup>j−1</sup> exp(−2 j² λ²), λ = (√n + 0.12 + 0.11/√n) D. Anderson–Darling A² = −n − (1/n) Σ (2i − 1)[ln F(x<sub>i</sub>) + ln(1 − F(x<sub>n+1−i</sub>))]. Log-likelihood, AIC = 2k − 2 ln L, BIC = k ln n − 2 ln L. The ranking is by AIC; ΔAIC and the Akaike weights w = exp(−ΔAIC/2) / Σ exp(−ΔAIC/2) are shown.","<b>Special functions</b> implemented in the page: log-gamma (Lanczos), regularised incomplete gamma (series and continued fraction), regularised incomplete beta (continued fraction), digamma and trigamma (recurrence and asymptotic series), normal cdf through the incomplete gamma, normal quantile (rational approximation refined by Newton steps). Gamma and beta quantiles are found by bisection on the cdf.","<b>Percentiles.</b> Exceedance convention used on this site: P90 is the value exceeded with 90 % probability (low case), so P90 &lt; P50 &lt; P10; the toggle switches to the cumulative convention (P90 = 90th percentile). Sample percentiles use linear interpolation between order statistics (type 7). The mode shown for the data is the maximum of a Gaussian kernel density (bandwidth 0.9 min(σ, IQR/1.34) n<sup>−1/5</sup>): a rough estimate, unreliable on small or strongly skewed samples. Skewness and excess kurtosis are the moment coefficients.","<b>Plots.</b> Plotting position (i − 0.5)/n for the Q-Q and P-P plots and for the empirical exceedance. The histogram has ⌈√n⌉ bins (5 to 40); on the log axis the bins are equal in ln x and the curves are the densities of ln x.","<b>Manual fit.</b> The parameters of the selected distribution can be set by hand; the charts, the percentile table and KS, AD, log L, AIC and BIC are recomputed for those parameters and compared with the ML fit.","<b>Prospect file.</b> “Save as prospect volumes” writes a <code>prospect-risk</code> file with the default six risk elements and economics of the Prospect risking tool and <code>vol = {mode: \"direct\", p90, p50, p10}</code> from the selected fit (P90 = quantile 10 %, P50 = median, P10 = quantile 90 %, five significant digits); it can be opened in that tool. It is refused if the fit gives non-positive volumes."],"sources":[["Probability density, cdf and quantile formulas of the eleven distributions","Standard results, e.g. Johnson, Kotz &amp; Balakrishnan, Continuous Univariate Distributions (as commonly cited; not re-read for this page)","classical (not re-read)"],["Maximum-likelihood equations (gamma, Weibull, logistic, Gumbel, beta, Pareto)","Derived from the log-likelihood and solved numerically; the recovered parameters on large seeded samples are checked in the test of the page","derived"],["Lanczos log-gamma, incomplete gamma and beta functions, digamma, trigamma","Standard numerical methods (Press et al., Numerical Recipes; Lanczos 1964; as commonly cited, not re-read); values checked against closed forms in the test","classical (not re-read)"],["Normal quantile approximation","Rational approximation (Acklam), coefficients typed from memory and refined with Newton steps on the exact cdf, so the result does not depend on their accuracy; checked against known values","derived"],["Kolmogorov–Smirnov statistic and asymptotic p-value","Kolmogorov (1933), Smirnov (1948); the finite-n correction √n + 0.12 + 0.11/√n is Stephens' (as commonly cited; not re-read). With parameters estimated from the same data the test is conservative (Lilliefors)","classical (not re-read)"],["Anderson–Darling statistic","Anderson &amp; Darling (1952); the statistic only, no p-value (its critical values depend on the distribution and on which parameters are estimated)","classical (not re-read)"],["AIC, BIC, Akaike weights","Akaike (1974), Schwarz (1978); Burnham &amp; Anderson, Model Selection and Multimodel Inference (as commonly cited; not re-read)","classical (not re-read)"],["Use of lognormal, Pareto, gamma and Weibull for field sizes, volumes and costs","Common practice in exploration and risk analysis; no specific reference is claimed here, and which family is appropriate depends on the play and the data","classical (not re-read)"],["Beta and triangular bounds widened by range/(n − 1)","Unbiased bound estimator for a uniform sample; adopted here so that the density does not vanish at the extreme observations","derived"],["P90 / P50 / P10 exceedance convention and the prospect file layout","Same as the Prospect risking tool of this site","on the page"],["Example data sets","Fictitious, generated from seeded random numbers, for illustration only","on the page"]],"validation":["Special functions agree with closed forms and known values; quantile(cdf(x)) = x to 1e-6 and the numerical derivative of the cdf equals the pdf for every distribution. On large seeded synthetic samples (n = 20 000, logistic 8 000, generated with independent samplers) the maximum-likelihood parameters of each family are recovered within 3 % (1 % of the range for the uniform bounds, 4 % for the beta). The KS statistic is below 0.015 for a sample from the fitted family and above 0.1 for a normal fit to a lognormal sample; AIC ranks the true family first for lognormal, normal and Weibull samples (and the lognormal above normal and uniform by more than 100 AIC units); P90 &lt; P50 &lt; P10 for every fit; the Pareto and the beta fits recover known samples (the beta shapes are invariant to a change of scale). The prospect file equals the Prospect risking defaults apart from the three volumes and runs in that tool's calculation core. Run <code>node scripts/distfit_test.mjs</code>."],"limits":["Not implemented: censored or truncated data, mixtures, weighted samples, bootstrap confidence intervals on the parameters or on the ranking, Bayesian fits, dependence between observations.","AIC says which of the listed families is closest to the data, not that any of them is true; differences below about 2 AIC units are not meaningful, and with few points (say n &lt; 20) several families are indistinguishable. Extrapolating to P99 or P1 beyond the data is driven by the assumed tail.","The KS p-value is the asymptotic one for a fully specified distribution, so with estimated parameters it is too large (conservative); there is no p-value for the Anderson–Darling statistic.","The beta and triangular bounds come from the sample range: when the true distribution has a thin tail near its bounds the sample extremes are inside them and the shapes are biased (for example a Beta(2, 5) on [0, 1] fitted this way gives b near 4). The triangular mode is a moment estimate, not a likelihood maximum.","The Pareto type I has its minimum at the smallest observation: it describes the tail above that value only, and its mean is infinite for α ≤ 1. A Pareto fitted to a whole field-size sample is usually a poor fit below the mode; truncated or censored fits, as used for creaming curves, are not implemented.","Large samples: the logistic and Gumbel fits use nested bisection and take noticeable time beyond a few tens of thousands of points."],"date":"26 November 2026"});
+</script>
+</body></html>
