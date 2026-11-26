@@ -178,34 +178,52 @@ function fromRisking(o,play){if(!o||o.format!=='prospect-risk')throw new Error('
   let p90,p50,p10;const v=o.vol||{};
   if(v.mode==='vol'){const R=rng(v.seed|0),n=clamp(Math.round(v.n)||20000,1000,200000),t=v.tri,a=new Float64Array(n);for(let i=0;i<n;i++){const g=k=>tri(R(),t[k][0],t[k][1],t[k][2]);a[i]=g('grv')*6.2898*g('ntg')*g('phi')*(1-g('sw'))/Math.max(1e-9,g('bo'))*g('rf')}a.sort();const q=e=>a[clamp(Math.floor((1-e)*n),0,n-1)];p90=q(.9);p50=q(.5);p10=q(.1)}
   else{p90=+v.p90;p50=+v.p50;p10=+v.p10}
-  const e=o.econ||{};return{name:o.name||'Prospect',play:play||'Play A',pPlay,pPros,p90,p50,p10,u:+e.u,F:+e.F||0,D:+e.D||0,mefv:e.mefv>0?+e.mefv:null,on:true}}
+  // optional summary written by the Prospect risking tool (success-case volumes, chances, MEFV): preferred when present, volumes are not recomputed
+  const S=o.summary&&typeof o.summary==='object'?o.summary:null,num=x=>x!=null&&x!==''&&isFinite(+x);
+  if(S){if(+S.p90>0&&+S.p50>0&&+S.p10>0){p90=+S.p90;p50=+S.p50;p10=+S.p10}if(num(S.pPlay))pPlay=clamp(+S.pPlay,0,1);if(num(S.pPros))pPros=clamp(+S.pPros,0,1)}
+  const e=o.econ||{},mv=S&&+S.mefv>0?+S.mefv:(e.mefv>0?+e.mefv:null);return{name:o.name||'Prospect',play:play||'Play A',pPlay,pPros,p90,p50,p10,u:+e.u,F:+e.F||0,D:+e.D||0,mefv:mv,on:true}}
+// fdp-link file (Field development screening) -> the prospect takes its MEFV, so F = mefv x u
+function applyFdp(p,o){if(!o||o.format!=='fdp-link')throw new Error('not a Field development link file');if(!(+o.mefv>0))throw new Error('the file has no usable MEFV');
+  p.mefv=+o.mefv;if(+p.u>0)p.F=+(p.mefv*p.u).toPrecision(8);p.fdp={name:String(o.name||'Field development'),mefv:+o.mefv,breakeven:o.breakeven,utc:o.utc,capex:o.capex,npv:o.npv,reserves:o.reserves,price:o.price};return p}
+function clearFdp(p){delete p.fdp;p.mefv=null;return p}
 const playsOf=P=>{const m=new Map();for(const p of P){if(!m.has(p.play))m.set(p.play,[]);m.get(p.play).push(p)}return m};
 // play chance of each play: stored value, else the mean of the imported prospects' own play chances, else 0.5
 function playChances(m){const out={};for(const [k,l] of playsOf(m.prospects)){const s=(m.plays||{})[k];out[k]=s!=null?clamp(+s,0,1):(l.every(p=>p.pPlay!=null)?l.reduce((a,p)=>a+p.pPlay,0)/l.length:.5)}return out}
 // Monte Carlo: per trial each play succeeds with its chance, each prospect with its own chance if the play does; volumes lognormal with a Gaussian copula inside a play
-function simulate(m,opt={}){const n=clamp(Math.round(opt.n||m.n||20000),1000,500000),R=rng(opt.seed??m.seed??1),indep=!!opt.indep,rho=indep?0:clamp(+m.rho||0,0,1),pc=playChances(m),
+function simulate(m,opt={}){const n=clamp(Math.round(opt.n||m.n||20000),1000,500000),R=rng(opt.seed??m.seed??1),indep=!!opt.indep,rho=indep?0:clamp(+m.rho||0,0,1),rhoP=indep?0:clamp(+m.rhoPlay||0,0,1),kL=+m.learn>0?clamp(+m.learn,.05,50):1,pc=playChances(m),
   P=m.prospects.filter(p=>p.on!==false).map(p=>({p,f:figures(p,pc[p.play]),L:logn(p)})).filter(x=>x.L);
   const keys=[...new Set(P.map(x=>x.p.play))],ki=new Map(keys.map((k,i)=>[k,i])),npl=keys.length,np=P.length,npv=new Float64Array(n),nd=new Int32Array(n),ne=new Int32Array(n);let vol=0;
-  const sr=Math.sqrt(rho),si=Math.sqrt(1-rho),zp=new Float64Array(npl),up=new Float64Array(npl);
-  for(let t=0;t<n;t++){for(let k=0;k<npl;k++){zp[k]=normal(R);up[k]=R()}let v=0,d=0,e=0;
-    for(const x of P){const pl=ki.get(x.p.play),playOK=indep?R()<pc[x.p.play]:up[pl]<pc[x.p.play],z=sr*zp[pl]+si*normal(R),ok=playOK&&R()<clamp(+x.p.pPros,0,1);v-=x.f.D;
+  const sr=Math.sqrt(rho),si=Math.sqrt(1-rho),srp=Math.sqrt(rhoP),sip=Math.sqrt(1-rhoP),zp=new Float64Array(npl),up=new Float64Array(npl),mult=new Float64Array(npl),pw=new Float64Array(npl);let noPlay=0;
+  for(let t=0;t<n;t++){for(let k=0;k<npl;k++){zp[k]=normal(R);up[k]=R()}
+    // play correlation: Gaussian copula on the play uniforms, z = sqrt(r) z_common + sqrt(1-r) z_own, the play succeeds if Phi(z) < chance
+    if(rhoP>0){const zc=normal(R);for(let k=0;k<npl;k++)up[k]=Phi(srp*zc+sip*PhiInv(up[k]))}
+    if(!indep)for(let k=0;k<npl;k++)if(up[k]<pc[keys[k]])pw[k]++;
+    mult.fill(1);let v=0,d=0,e=0,anyPlay=false;
+    for(const x of P){const pl=ki.get(x.p.play),playOK=indep?R()<pc[x.p.play]:up[pl]<pc[x.p.play],z=sr*zp[pl]+si*normal(R);let pp=clamp(+x.p.pPros,0,1);
+      // learning inside a play: odds of the prospect chance times mult (x factor per earlier discovery, / factor per dry hole), drilling order = table order
+      if(kL!==1&&mult[pl]!==1&&pp>0&&pp<1){const od=pp/(1-pp)*mult[pl];pp=od/(1+od)}
+      const ok=playOK&&R()<pp;if(playOK)anyPlay=true;if(kL!==1&&playOK)mult[pl]*=ok?kL:1/kL;v-=x.f.D;
       if(ok){d++;const V=Math.exp(x.L.mu+x.L.sg*z);if(x.f.u>0&&V>x.f.mef){e++;v+=x.f.u*V-x.f.F;vol+=V}}}
-    npv[t]=v;nd[t]=d;ne[t]=e}
+    if(!anyPlay)noPlay++;npv[t]=v;nd[t]=d;ne[t]=e}
   const s=Float64Array.from(npv).sort(),mean=npv.reduce((a,b)=>a+b,0)/n,sd=Math.sqrt(npv.reduce((a,b)=>a+(b-mean)**2,0)/(n-1)),q=e=>s[clamp(Math.floor((1-e)*n),0,n-1)];
   const cnt=new Array(np+1).fill(0);for(const c of ne)cnt[c]++;
   let neg=0,none=0;for(let t=0;t<n;t++){if(npv[t]<0)neg++;if(ne[t]===0)none++}
-  return{n,np,mean,sd,p90:q(.9),p50:q(.5),p10:q(.1),pNeg:neg/n,pNone:none/n,meanEcon:ne.reduce((a,b)=>a+b,0)/n,meanDisc:nd.reduce((a,b)=>a+b,0)/n,meanVol:vol/n,countDist:cnt.map(c=>c/n),min:s[0],max:s[n-1],npv:s}}
+  return{n,np,mean,sd,p90:q(.9),p50:q(.5),p10:q(.1),pNeg:neg/n,pNone:none/n,meanEcon:ne.reduce((a,b)=>a+b,0)/n,meanDisc:nd.reduce((a,b)=>a+b,0)/n,meanVol:vol/n,pNoPlay:noPlay/n,playFreq:indep?null:Object.fromEntries(keys.map((k,i)=>[k,pw[i]/n])),learn:kL,rhoPlay:rhoP,countDist:cnt.map(c=>c/n),min:s[0],max:s[n-1],npv:s}}
 // exact selection within a budget: maximise the sum of EMV (dynamic programme on costs rounded to 0.1 $MM)
 function optimise(items,budget){const w=items.map(x=>Math.max(0,Math.round((+x.D||0)*10))),B=Math.floor(budget*10),n=items.length;if(!(B>=0)||!isFinite(B))return items.map((x,i)=>x.emv>0);
   const best=new Float64Array(B+1),take=Array.from({length:n},()=>new Uint8Array(B+1));
   for(let i=0;i<n;i++){const v=items[i].emv;if(!(v>0))continue;for(let b=B;b>=w[i];b--){const c=best[b-w[i]]+v;if(c>best[b]+1e-12){best[b]=c;take[i][b]=1}}}
   const sel=new Array(n).fill(false);let b=B;for(let i=n-1;i>=0;i--){if(take[i][b]){sel[i]=true;b-=w[i]}}return sel}
-const defaults=()=>({format:'portfolio-risk',version:1,name:'Portfolio',prospects:[],plays:{},rho:.3,budget:null,n:20000,seed:1});
+const defaults=()=>({format:'portfolio-risk',version:1,name:'Portfolio',prospects:[],plays:{},rho:.3,rhoPlay:0,learn:1,budget:null,n:20000,seed:1});
 const example=ind=>{const m=defaults();m.name=ind?'Six prospects, independent plays':'Six prospects, two plays';
   const mk=(name,play,pPlay,pPros,p90,p50,p10,u,F,D)=>({name,play:ind?name:play,pPlay,pPros,p90,p50,p10,u,F,D,mefv:null,on:true});
   m.prospects=[mk('North-1','Play A',.6,.5,12,35,110,6,180,40),mk('North-2','Play A',.6,.4,25,70,220,6,260,45),mk('North-3','Play A',.6,.55,6,18,55,6,160,35),mk('South-1','Play B',.45,.6,15,45,140,6,220,50),mk('South-2','Play B',.45,.35,40,120,380,6,420,60),mk('Wildcat','Play C',.3,.5,30,90,300,6,360,70)];
   if(ind)m.plays={};m.budget=200;return m};
-window.PF={Phi,PhiInv,rng,logn,figures,fromRisking,playChances,playsOf,simulate,optimise,defaults,example};
+// CSV of the drilled selection (the optimiser result), one row per prospect with drill = true, and the totals
+function selectionCsv(m){const pcs=playChances(m),q=x=>/[",\n]/.test(x)?'"'+String(x).replace(/"/g,'""')+'"':x,rows=['name,play,play_chance,prospect_chance,dry_hole_cost,gCOS,eCOS,EMV,PI'];let D=0,E=0;
+  for(const p of m.prospects){if(p.on===false)continue;const f=figures(p,pcs[p.play]);if(f.err)continue;D+=f.D;E+=f.emv;rows.push([q(p.name),q(p.play),pcs[p.play],p.pPros,f.D,f.gcos,f.ecos,f.emv,f.PI].join(','))}
+  rows.push('total,,,,'+D+',,,'+E+','+(D>0?E/D:0));return rows.join('\n')+'\n'}
+window.PF={applyFdp,clearFdp,selectionCsv,Phi,PhiInv,rng,logn,figures,fromRisking,playChances,playsOf,simulate,optimise,defaults,example};
 })();
 </script><script>
 const $=id=>document.getElementById(id),P=window.PF;
