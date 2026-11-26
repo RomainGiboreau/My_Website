@@ -1,4 +1,132 @@
-<!doctype html><html><body><script id="ga-core">
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grid attributes (surface roughness and curvature)</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/gridattr/">
+<meta name="description" content="Slope, aspect, curvature, Terrain Position Index, rugosity, roughness, multi-scale Mexican-hat wavelet response and local fractal dimension of a regular grid (structure maps, horizons, DEMs). ZMAP+, Surfer and Esri ASCII in and out. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<script id="ga-core">
 /* Grid attributes core: readers / writers and terrain-complexity attributes on a regular grid. No DOM; exposed as window.GA.
    Grid object: {nx, ny, dx, dy, x0, y1, z, name}. z is a Float64Array, row-major, row 0 = TOP row (y = y1), column 0 = left (x = x0);
    null nodes are NaN. Node (r, c) is at x = x0 + c*dx, y = y1 - r*dy. Planar grid assumed (no geodesic correction).
@@ -343,7 +471,7 @@ function looksLikeDegrees(g){const xr=Math.max(Math.abs(g.x0),Math.abs(g.x0+(g.n
 function rng(seed){let a=seed>>>0;return ()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function example(nx,ny,seed){nx=nx||200;ny=ny||150;const dx=25,dy=25,x0=450000,y1=6784000,R=rng(seed||7),z=new Float64Array(nx*ny),gauss=()=>{let u=0;do{u=R()}while(!u);return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*R())};
   for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const u=c/(nx-1),v=1-r/(ny-1);
-    let h=2000+90*Math.exp(-((u-.32)**2/.018+(v-.55)**2/.04))+60*Math.exp(-((u-.72)**2/.01+(v-.38)**2/.012))-70*u+18*Math.sin(14*u+3*v)*Math.exp(-v)+gauss()*1.2;
+    let h=2000+90*Math.exp(-((u-.32)**2/.018+(v-.55)**2/.04))+60*Math.exp(-((u-.72)**2/.01+(v-.38)**2/.012))-70*u+18*Math.sin(14*u+3*v)*Math.exp(-v)+gauss()*0.5;
     const fault=v-(0.25+0.55*u);   // fault trace: a line across the map, throw 35 m on its south-east side
     if(fault<0)h-=35;
     const hole=Math.hypot((u-.55)*1.33,(v-.8))<.06;
@@ -352,4 +480,378 @@ function example(nx,ny,seed){nx=nx||200;ny=ny||150;const dx=25,dy=25,x0=450000,y
 
 W.GA={makeGrid,parseGrid,parseZmap,parseSurfer,parseEsri,parseXYZ,writeZmap,writeSurfer,writeEsri,gradient,slope,aspect,curvatures,tpi,roughness,cellAreas,rugosity,cwt,cwtBest,fractal,windowSums,ATTRS,compute,stats,quantiles,summary,parseList,looksLikeDegrees,example,validRange,NUM};
 })(window);
-</script></body></html>
+</script>
+<style>
+/* Grid attributes page */
+.layout{grid-template-columns:310px minmax(0,1fr)}
+main{min-width:0}
+.side .drop{display:block;position:static;pointer-events:auto;margin-top:2px;border:2px dashed var(--line);border-radius:8px;padding:12px 10px;text-align:center;color:var(--mut);font-size:.8rem}
+body.dragging .side .drop{border-color:var(--acc);background:rgba(74,90,78,.08)}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:5px 8px;align-items:center;font-size:.82rem;margin:6px 0}.pg input,.pg select{width:100%;min-width:0}
+.pg2{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:5px 8px;align-items:center;font-size:.82rem;margin:6px 0}.pg2 input{width:100%;min-width:0}
+.info{font-size:.78rem;color:var(--mut);line-height:1.45;margin-top:6px;font-variant-numeric:tabular-nums}
+.info b{color:var(--fg);font-weight:600}
+.warn{font-size:.78rem;color:#8a4e2c;background:rgba(168,98,58,.12);border:1px solid rgba(168,98,58,.35);border-radius:6px;padding:5px 8px;margin-top:6px}
+.maps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 small{font:400 .74rem Inter,sans-serif;color:var(--mut)}
+.card canvas{display:block;width:100%}
+canvas.m{height:400px;cursor:crosshair}
+canvas.c{height:250px}
+.ro{position:static;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:3px 10px;margin:8px 0 12px;font-size:.8rem;color:var(--mut);min-height:1.9em;font-variant-numeric:tabular-nums}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.tw{max-height:420px}
+th.l,td.l{text-align:left}
+tr.grp td{background:var(--alt);font-weight:600;text-align:left;cursor:default}
+.hint b{font-weight:600}
+@media (max-width:1100px){.maps,.two{grid-template-columns:1fr}}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+</style>
+<div class="top"><h1>Grid attributes</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <select id="expWhat" title="Which grid to export"><option value="attr">selected attribute</option><option value="input">input grid (as scaled)</option></select>
+  <button id="bZmap" class="pri" disabled title="ZMAP+ grid, null 1.0E+30">ZMAP+</button>
+  <button id="bGrd" disabled title="Surfer ASCII grid (DSAA), null 1.70141e38">Surfer .grd</button>
+  <button id="bAsc" disabled title="Esri ASCII grid, null -9999">Esri .asc</button>
+  <button id="bPng" disabled title="The attribute map with its legend">PNG</button>
+  <button id="bCsv" disabled title="Mean and standard deviation of every attribute at every scale">Summary CSV</button><span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs in your browser; the file is read in memory and never uploaded. Terrain attributes of a regular grid, computed for structure maps and horizons as much as for DEMs: slope and aspect (Horn), curvatures (Zevenbergen and Thorne), Terrain Position Index, rugosity (Jenness), roughness, a Mexican-hat wavelet response at several scales and a local fractal dimension. Scales are in cells. The grid is treated as planar: no geodesic correction and no unit conversion, so use a projected coordinate system (metres), not degrees.">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Grid<span class="tt" tabindex="0" data-tip="Regular grid as ZMAP+, Surfer ASCII (.grd, DSAA), Esri ASCII (.asc) or x y z text on a regular lattice (comma, space, tab or semicolon; missing nodes are null). Null values: the ZMAP null (1.0E+30), 1.70141E+38 (Surfer), the NODATA value (Esri), any non-numeric value. The cell size is read from the file and can be overridden. The Z factor multiplies the values (use -1 for depth positive down, 0.3048 for feet).">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="drop">Drop a grid here or anywhere on the page</div>
+  <input type="file" id="file" accept=".zmap,.zmp,.dat,.grd,.asc,.txt,.xyz,.csv,text/*" hidden>
+  <div class="row"><button class="pri" id="bOpen">Open a grid…</button><button id="bExample">Example</button></div>
+  <div class="pg2"><label for="pdx">dx</label><input type="number" id="pdx" step="any" min="0"><label for="pdy">dy</label><input type="number" id="pdy" step="any" min="0"></div>
+  <div class="pg"><label for="pzf">Z factor</label><input type="number" id="pzf" step="any" value="1"></div>
+  <div class="info" id="ginfo">No grid loaded.</div><div id="gwarn"></div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Attribute<span class="tt" tabindex="0" data-tip="Scales are in cells: the half-width of the window for TPI, roughness, rugosity and fractal dimension, the standard deviation sigma of the Mexican hat for the wavelet response. Slope, aspect and curvatures use the 3 x 3 neighbourhood and have no scale. The summary table covers every scale of the list.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><label for="attr">Attribute</label><select id="attr"></select>
+   <label for="scales">Scales (cells)</label><input type="text" id="scales" value="2, 4, 8, 16">
+   <label for="scale">Shown scale</label><select id="scale"></select></div>
+  <div class="pg"><label for="shape">Window</label><select id="shape"><option value="square">square</option><option value="disc">disc</option><option value="annulus">annulus</option></select>
+   <label for="rin">Inner radius</label><input type="number" id="rin" value="1" min="0" step="1">
+   <label for="lags">Lags (cells)</label><input type="text" id="lags" value="2, 4, 8"></div>
+  <div class="msg" id="amsg"></div></div></section>
+ <section class="panel"><h2><span class="n">3</span>Display<span class="tt" tabindex="0" data-tip="The colour scale of the attribute map is clipped at the chosen percentiles of the values (diverging scales are symmetric about zero, using the larger clip). Viridis and cividis are colour-blind safe, as is the blue-orange diverging scale; the cyclic scale (for aspect) is not.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><label for="cmap">Colour scale</label><select id="cmap">
+   <option value="viridis">Viridis (colour-blind safe)</option><option value="cividis">Cividis (colour-blind safe)</option><option value="div">Diverging blue–orange (colour-blind safe)</option><option value="grey">Grey</option><option value="site">Site ramp</option><option value="cyc">Cyclic (aspect)</option></select></div>
+  <div class="pg2"><label for="clo">Clip low %</label><input type="number" id="clo" value="2" min="0" max="49" step="1"><label for="chi">high %</label><input type="number" id="chi" value="98" min="51" max="100" step="1"></div>
+  <div class="row"><button id="bLine" title="Click two points on a map">Draw profile line</button><button id="bClr">Clear line</button></div>
+  <div class="note">Profile: click two points on either map.</div></div></section>
+</aside>
+<main>
+ <div class="maps">
+  <div class="card"><h3>Input grid <small id="inSub"></small></h3><canvas class="m" id="cvIn"></canvas></div>
+  <div class="card"><h3><span id="atName">Attribute</span> <small id="atSub"></small></h3><canvas class="m" id="cvAt"></canvas></div>
+ </div>
+ <div class="ro" id="ro">Move over a map to read the values; click two points to draw a profile.</div>
+ <div class="two">
+  <div class="card"><h3>Histogram of the attribute <small>bars inside the clip range</small></h3><canvas class="c" id="cvH"></canvas></div>
+  <div class="card"><h3>Profile along the line <small id="pSub"></small></h3><canvas class="c" id="cvP"></canvas></div>
+ </div>
+ <div class="card"><h3>Multi-scale summary <small>mean and standard deviation of each attribute at each scale (valid cells)</small>
+  <button id="bSum" style="margin-left:auto">Compute</button></h3><div class="msg" id="smsg"></div><div class="tw" id="sumTw"></div></div>
+</main></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';b.setAttribute('role','status');document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+function download(name,data,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+const fmt=v=>v==null||!isFinite(v)?'—':(v!==0&&(Math.abs(v)<1e-3||Math.abs(v)>=1e7)?v.toExponential(3):String(+v.toPrecision(6)));
+
+// ---- colour scales
+const STOPS={
+ viridis:['#440154','#482878','#3e4989','#31688e','#26828e','#1f9e89','#35b779','#6ece58','#b5de2b','#fde725'],
+ cividis:['#00204d','#233a6d','#475577','#6b7075','#8f8d76','#b5ad6e','#dccb55','#ffea46'],
+ div:['#7f3b08','#b35806','#e08214','#fdb863','#fee0b6','#f7f7f7','#d1e5f0','#92c5de','#4393c3','#2166ac','#08306b'],   // low = orange-brown, high = blue
+ grey:['#111111','#f2f2f2'],
+ site:['#223952','#2e677a','#499286','#8bb278','#d6c470','#c47948','#8c3a2e']};
+const LUT={};
+function lutOf(name){if(LUT[name])return LUT[name];const L=new Uint8Array(256*3);
+  if(name==='cyc'){for(let i=0;i<256;i++){const h=i/256*360,s=.62,l=.52,a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,9-k,1))};L[i*3]=f(0)*255;L[i*3+1]=f(8)*255;L[i*3+2]=f(4)*255}}
+  else{const st=STOPS[name].map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+    for(let i=0;i<256;i++){const t=i/255*(st.length-1),k=Math.min(st.length-2,Math.floor(t)),f=t-k;for(let j=0;j<3;j++)L[i*3+j]=st[k][j]+(st[k+1][j]-st[k][j])*f}}
+  return LUT[name]=L}
+// the diverging scale is drawn with positive values in orange: reverse the stops so high = orange (crest, positive)
+STOPS.div.reverse();
+
+// ---- state
+const S={g0:null,g:null,gen:0,cache:new Map(),arr:null,at:null,line:null,pick:false,lineDraft:null,sum:null,sumKey:'',imgs:{}};
+const A=GA.ATTRS;
+$('attr').innerHTML=A.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+const attrDef=()=>A.find(a=>a.id===$('attr').value);
+const scalesList=()=>{const l=GA.parseList($('scales').value,1);return l.length?l:[2,4,8,16]};
+const optsNow=()=>({shape:$('shape').value,rin:+$('rin').value||0,lags:GA.parseList($('lags').value,1).filter(Number.isInteger),scales:scalesList()});
+const cellTxt=s=>S.g?`${s} cells (${fmt(s*S.g.dx)} map units)`:s+' cells';
+
+function loadText(text,name){
+  let g;try{g=GA.parseGrid(text,name)}catch(e){banner(`${name}: ${e.message}`,true);return}
+  if(g.nx*g.ny>4e6){banner(`${name}: ${g.nx} × ${g.ny} nodes is too large for the browser (limit 4 million).`,true);return}
+  S.g0=g;$('pdx').value=+g.dx.toPrecision(10);$('pdy').value=+g.dy.toPrecision(10);$('pzf').value=1;
+  S.line=null;S.lineDraft=null;S.sum=null;applyParams();
+  if(g.note)banner(g.note)}
+function applyParams(){
+  const g0=S.g0;if(!g0)return;
+  const dx=+$('pdx').value,dy=+$('pdy').value,zf=+$('pzf').value||1;
+  if(!(dx>0&&dy>0)){$('gwarn').innerHTML='<div class="warn">Cell size must be positive.</div>';return}
+  let z=g0.z;if(zf!==1){z=new Float64Array(g0.z.length);for(let i=0;i<z.length;i++)z[i]=g0.z[i]*zf}
+  S.g=GA.makeGrid(g0.nx,g0.ny,dx,dy,g0.x0,g0.y1,z,g0.name);S.gen++;S.cache.clear();S.sum=null;S.imgs={};
+  const st=GA.stats(S.g.z),nn=S.g.z.length-st.n,[mn,mx]=GA.validRange(S.g);
+  $('ginfo').innerHTML=`<b>${esc(g0.name)}</b><br>${g0.nx} × ${g0.ny} nodes, ${Math.round(100*nn/S.g.z.length)} % null<br>x ${fmt(g0.x0)} to ${fmt(g0.x0+(g0.nx-1)*dx)}<br>y ${fmt(g0.y1-(g0.ny-1)*dy)} to ${fmt(g0.y1)}<br>z ${fmt(mn)} to ${fmt(mx)}`;
+  let w='';if(GA.looksLikeDegrees(S.g))w+='<div class="warn">The cell size and extent look like degrees. Slope, curvature and rugosity need the same unit in x, y and z: reproject to metres first, or enter the cell size in metres above.</div>';
+  if(Math.abs(dx-dy)>0.01*Math.max(dx,dy))w+='<div class="warn">Cells are not square (dx ≠ dy). Window radii are in cells; the Mexican hat is stretched to keep the same ground distance.</div>';
+  if(S.g.z.length>2.5e6)w+='<div class="warn">Large grid: some attributes (plane roughness, fractal dimension) take several seconds.</div>';
+  $('gwarn').innerHTML=w;
+  ['bZmap','bGrd','bAsc','bPng','bCsv'].forEach(id=>$(id).disabled=false);
+  refreshScales();recompute()}
+function refreshScales(){const sc=scalesList(),d=attrDef(),prev=$('scale').value;
+  $('scale').innerHTML=sc.map(s=>`<option value="${s}">${esc(cellTxt(s))}</option>`).join('');
+  if(sc.includes(+prev))$('scale').value=prev;else $('scale').value=String(sc[Math.min(1,sc.length-1)]);
+  $('scale').disabled=!d.scaled||d.scaled==='all';
+  $('shape').disabled=!['tpi','rstd','rplane','rug'].includes(d.id);
+  $('rin').disabled=$('shape').disabled||$('shape').value!=='annulus';
+  $('lags').disabled=d.id!=='fractal';
+  $('amsg').textContent={tpi:'Cell minus the mean of the other cells of the window; positive = higher than the surroundings.',rstd:'Standard deviation of z in the window.',rplane:'Standard deviation of the residuals after removing the plane fitted in the window.',rug:'Surface area over planar area (Jenness 2004), summed over the window; 1 = flat.',cwt:'Scale-normalised Mexican hat, sigma = scale; positive over crests.',cwtbest:'Scale of the list with the largest positive wavelet response.',fractal:'D = 3 − H, H from the log-log slope of the semivariance over the lags; 2 = smooth, 3 = very rough. Window radius = max(scale, 2 × largest lag).',slope:'Horn 3 × 3 gradient.',aspect:'Dip azimuth, clockwise from north; flat cells are null.',cprofile:'Positive = convex-up (crest); 1/length.',cplan:'Positive = convex-up (crest); 1/length.',cmean:'Positive = convex-up (crest); 1/length.',cgauss:'Positive = dome or bowl, negative = saddle; 1/length².'}[d.id]||''}
+function keyOf(){const d=attrDef(),o=optsNow(),sc=d.scaled===true?$('scale').value:'';
+  return [S.gen,d.id,sc,o.shape,o.rin,o.lags.join(),d.scaled==='all'?o.scales.join():''].join('|')}
+function recompute(){
+  if(!S.g)return;const d=attrDef(),o=optsNow(),key=keyOf();let t=0;
+  if(!S.cache.has(key)){const t0=performance.now();
+    try{const sc=d.scaled===true?+$('scale').value:null;S.cache.set(key,A.find(a=>a.id===d.id).f(S.g,sc,o))}catch(e){banner(e.message,true);return}
+    t=performance.now()-t0;if(S.cache.size>6)S.cache.delete(S.cache.keys().next().value)}
+  S.arr=S.cache.get(key);S.at=d;S.t=t;S.imgs.at=null;render()}
+let busy=false;
+function schedule(){if(busy)return;busy=true;$('amsg').textContent='Computing…';setTimeout(()=>{busy=false;refreshScales();recompute()},15)}
+
+// ---- display range
+function range(arr,d){
+  const cyc=d.kind==='circ',lo=Math.max(0,Math.min(49,+$('clo').value||0))/100,hi=Math.max(51,Math.min(100,+$('chi').value||100))/100;
+  const [a,b]=GA.quantiles(arr,[lo,hi]);let mn=Infinity,mx=-Infinity;for(let i=0;i<arr.length;i++){const v=arr[i];if(v===v){if(v<mn)mn=v;if(v>mx)mx=v}}
+  if(cyc)return {lo:0,hi:360,mn,mx};
+  if(d.kind==='div'){const m=Math.max(Math.abs(a),Math.abs(b))||1;return {lo:-m,hi:m,mn,mx}}
+  return {lo:a,hi:b>a?b:a+1,mn,mx}}
+function cmapFor(d){return $('cmap').value}
+
+// ---- maps
+function fieldImage(arr,nx,ny,lut,lo,hi){const cv=document.createElement('canvas');cv.width=nx;cv.height=ny;const ctx=cv.getContext('2d'),img=ctx.createImageData(nx,ny),dd=img.data,k=255/((hi-lo)||1);
+  for(let i=0;i<arr.length;i++){const v=arr[i],o=i*4;if(v!==v)continue;let t=((v-lo)*k+.5)|0;if(t<0)t=0;else if(t>255)t=255;dd[o]=lut[t*3];dd[o+1]=lut[t*3+1];dd[o+2]=lut[t*3+2];dd[o+3]=255}
+  ctx.putImageData(img,0,0);return cv}
+function drawMap(cv,arr,cm,lo,hi,mn,mx,unit,key){
+  const g=S.g,r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;cv.width=Math.max(10,r.width*dpr);cv.height=Math.max(10,r.height*dpr);
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,r.width,r.height);x.font='11px Inter,system-ui,sans-serif';
+  const lut=lutOf(cm);if(!S.imgs[key]||S.imgs[key].sig!==`${cm}|${lo}|${hi}`)S.imgs[key]={sig:`${cm}|${lo}|${hi}`,cv:fieldImage(arr,g.nx,g.ny,lut,lo,hi)};
+  const L=52,R=74,T=8,B=26,aw=r.width-L-R,ah=r.height-T-B,ex=g.nx*g.dx,ey=g.ny*g.dy,s=Math.min(aw/ex,ah/ey),w=ex*s,h=ey*s,x0=L+(aw-w)/2,y0=T+(ah-h)/2;
+  x.imageSmoothing=false;x.imageSmoothingEnabled=false;x.drawImage(S.imgs[key].cv,x0,y0,w,h);x.strokeStyle='#5c5a52';x.strokeRect(x0+.5,y0+.5,w,h);
+  x.fillStyle='#5c5a52';x.textAlign='center';const xl=g.x0-g.dx/2,yt=g.y1+g.dy/2;
+  for(let k=0;k<=3;k++){x.fillText(fmt(+(xl+ex*k/3).toPrecision(7)),x0+w*k/3,y0+h+17)}
+  x.textAlign='right';for(let k=0;k<=3;k++){x.fillText(fmt(+(yt-ey*k/3).toPrecision(7)),x0-5,y0+h*k/3+(k===0?9:k===3?-3:4))}
+  // legend
+  const bx=r.width-R+14,bh=Math.min(200,h-24),by=y0+4;
+  for(let i=0;i<bh;i++){const t=Math.round((1-i/(bh-1))*255);x.fillStyle=`rgb(${lut[t*3]},${lut[t*3+1]},${lut[t*3+2]})`;x.fillRect(bx,by+i,12,1.5)}
+  x.strokeStyle='#c9c4b6';x.strokeRect(bx+.5,by+.5,12,bh);x.fillStyle='#232220';x.textAlign='left';
+  x.fillText(fmt(+hi.toPrecision(4)),bx+16,by+8);x.fillText(fmt(+((lo+hi)/2).toPrecision(4)),bx+16,by+bh/2+4);x.fillText(fmt(+lo.toPrecision(4)),bx+16,by+bh);
+  x.fillStyle='#5c5a52';x.font='10px Inter,system-ui,sans-serif';x.fillText('min '+fmt(+mn.toPrecision(4)),bx,by+bh+16);x.fillText('max '+fmt(+mx.toPrecision(4)),bx,by+bh+28);if(unit)x.fillText(unit,bx,by+bh+40);
+  cv._tf={x0,y0,w,h};drawLineOn(cv,x)}
+function drawLineOn(cv,x){const tf=cv._tf,g=S.g,l=S.line,dr=S.lineDraft;if(!tf)return;
+  const P=(fc,fr)=>[tf.x0+(fc+.5)/g.nx*tf.w,tf.y0+(fr+.5)/g.ny*tf.h];
+  x.save();x.lineWidth=2;x.strokeStyle='#fff';x.fillStyle='#a8623a';
+  const pts=l||(dr?[dr]:null);
+  if(l){const a=P(l[0][0],l[0][1]),b=P(l[1][0],l[1][1]);x.beginPath();x.moveTo(a[0],a[1]);x.lineTo(b[0],b[1]);x.stroke();x.strokeStyle='#a8623a';x.lineWidth=1;x.stroke();
+    x.font='bold 11px Inter,sans-serif';x.fillStyle='#a8623a';x.fillText('A',a[0]+5,a[1]-5);x.fillText('B',b[0]+5,b[1]-5)}
+  if(pts)for(const p of pts){const q=P(p[0],p[1]);x.beginPath();x.arc(q[0],q[1],4,0,7);x.fillStyle='#a8623a';x.fill();x.strokeStyle='#fff';x.lineWidth=1.5;x.stroke()}
+  x.restore()}
+function render(){
+  const g=S.g;if(!g||!S.arr)return;const d=S.at;
+  const ri=range(g.z,{kind:'seq'});
+  drawMap($('cvIn'),g.z,'viridis',ri.mn,ri.mx>ri.mn?ri.mx:ri.mn+1,ri.mn,ri.mx,'z','in');
+  $('inSub').textContent=`${g.nx} × ${g.ny}, dx ${fmt(g.dx)}, dy ${fmt(g.dy)}`;
+  const rg=range(S.arr,d);S.rg=rg;const cm=cmapFor(d);
+  if(!isFinite(rg.mn)){const x=$('cvAt').getContext('2d');x.clearRect(0,0,9999,9999);banner('No valid value for this attribute (grid too small or too many nulls for the chosen scale).',true)}
+  else drawMap($('cvAt'),S.arr,cm,rg.lo,rg.hi,rg.mn,rg.mx,d.unit,'at');
+  const sc=d.scaled===true?', scale '+cellTxt(+$('scale').value):'';
+  $('atName').textContent=d.name;$('atSub').textContent=(sc?sc.slice(2):'3 × 3 window')+(S.t?`, computed in ${Math.round(S.t)} ms`:'');
+  drawHist();drawProfile()}
+
+// ---- histogram
+function drawHist(){const cv=$('cvH'),r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;cv.width=r.width*dpr;cv.height=r.height*dpr;const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,r.width,r.height);x.font='11px Inter,system-ui,sans-serif';
+  const rg=S.rg;if(!rg||!isFinite(rg.mn))return;const a=S.arr,nb=50,cnt=new Float64Array(nb),k=nb/((rg.hi-rg.lo)||1);let tot=0;
+  for(let i=0;i<a.length;i++){const v=a[i];if(v!==v)continue;tot++;if(v<rg.lo||v>rg.hi)continue;let b=Math.floor((v-rg.lo)*k);if(b>=nb)b=nb-1;cnt[b]++}
+  const L=46,R=10,T=8,B=28,w=r.width-L-R,h=r.height-T-B,mx=Math.max(...cnt)||1,lut=lutOf(cmapFor(S.at));
+  for(let b=0;b<nb;b++){const bh=cnt[b]/mx*h,t=Math.round((b+.5)/nb*255);x.fillStyle=`rgb(${lut[t*3]},${lut[t*3+1]},${lut[t*3+2]})`;x.fillRect(L+b*w/nb+.5,T+h-bh,w/nb-1,bh)}
+  x.strokeStyle='#5c5a52';x.beginPath();x.moveTo(L,T);x.lineTo(L,T+h);x.lineTo(L+w,T+h);x.stroke();x.fillStyle='#5c5a52';x.textAlign='center';
+  for(let q=0;q<=4;q++){x.textAlign=q===4?'right':q===0?'left':'center';x.fillText(fmt(+(rg.lo+(rg.hi-rg.lo)*q/4).toPrecision(4)),L+w*q/4,T+h+16)}x.textAlign='center';
+  x.textAlign='right';x.fillText(String(Math.round(mx)),L-4,T+9);x.fillText('0',L-4,T+h);
+  if(S.at.kind==='div'){x.strokeStyle='#232220';x.setLineDash([4,3]);const z=L+w*(0-rg.lo)/(rg.hi-rg.lo);x.beginPath();x.moveTo(z,T);x.lineTo(z,T+h);x.stroke();x.setLineDash([])}
+  x.save();x.translate(11,T+h/2);x.rotate(-Math.PI/2);x.textAlign='center';x.fillText('cells ('+tot+' valid)',0,0);x.restore()}
+
+// ---- profile
+function bil(a,g,fc,fr){if(fc<0||fr<0||fc>g.nx-1||fr>g.ny-1)return NaN;const c0=Math.min(g.nx-2,Math.floor(fc)),r0=Math.min(g.ny-2,Math.floor(fr)),u=fc-c0,v=fr-r0,i=r0*g.nx+c0,
+  a1=a[i],a2=a[i+1],a3=a[i+g.nx],a4=a[i+g.nx+1];return (a1+a2+a3+a4)===(a1+a2+a3+a4)?a1*(1-u)*(1-v)+a2*u*(1-v)+a3*(1-u)*v+a4*u*v:NaN}
+function profileData(){const g=S.g,l=S.line;if(!l||!S.arr)return null;
+  const dc=l[1][0]-l[0][0],dr=l[1][1]-l[0][1],len=Math.hypot(dc*g.dx,dr*g.dy),n=Math.min(1200,Math.max(2,Math.ceil(Math.max(Math.abs(dc),Math.abs(dr))*2)));
+  const xs=[],zs=[],as=[];for(let i=0;i<=n;i++){const t=i/n,fc=l[0][0]+dc*t,fr=l[0][1]+dr*t;xs.push(len*t);zs.push(bil(g.z,g,fc,fr));as.push(bil(S.arr,g,fc,fr))}
+  return {xs,zs,as,len}}
+function drawProfile(){const cv=$('cvP'),r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;cv.width=r.width*dpr;cv.height=r.height*dpr;const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,r.width,r.height);x.font='11px Inter,system-ui,sans-serif';
+  const p=profileData();if(!p){x.fillStyle='#5c5a52';x.textAlign='left';x.fillText('Click two points on a map to draw a profile.',14,28);$('pSub').textContent='';return}
+  $('pSub').textContent=`length ${fmt(+p.len.toPrecision(6))} map units`;
+  const L=54,R=58,T=10,B=28,w=r.width-L-R,h=r.height-T-B;
+  const ext=a=>{let lo=Infinity,hi=-Infinity;for(const v of a)if(v===v){if(v<lo)lo=v;if(v>hi)hi=v}if(!isFinite(lo)){lo=0;hi=1}if(hi===lo){lo-=1;hi+=1}const pd=(hi-lo)*.06;return [lo-pd,hi+pd]};
+  const ez=ext(p.zs),ea=ext(p.as),X=v=>L+w*v/(p.len||1),Yz=v=>T+h*(1-(v-ez[0])/(ez[1]-ez[0])),Ya=v=>T+h*(1-(v-ea[0])/(ea[1]-ea[0]));
+  x.strokeStyle='#c9c4b6';x.strokeRect(L+.5,T+.5,w,h);
+  const line=(ys,Y,col)=>{x.strokeStyle=col;x.lineWidth=1.6;x.beginPath();let pen=false;for(let i=0;i<ys.length;i++){const v=ys[i];if(v!==v){pen=false;continue}const px=X(p.xs[i]);if(pen)x.lineTo(px,Y(v));else{x.moveTo(px,Y(v));pen=true}}x.stroke()};
+  line(p.zs,Yz,'#4a5a4e');line(p.as,Ya,'#a8623a');
+  x.fillStyle='#4a5a4e';x.textAlign='right';for(let k=0;k<=3;k++){const v=ez[0]+(ez[1]-ez[0])*k/3;x.fillText(fmt(+v.toPrecision(5)),L-5,Yz(v)+4)}
+  x.fillStyle='#a8623a';x.textAlign='left';for(let k=0;k<=3;k++){const v=ea[0]+(ea[1]-ea[0])*k/3;x.fillText(fmt(+v.toPrecision(4)),L+w+5,Ya(v)+4)}
+  x.fillStyle='#5c5a52';x.textAlign='center';for(let k=0;k<=4;k++)x.fillText(fmt(+(p.len*k/4).toPrecision(5)),L+w*k/4,T+h+16);
+  x.textAlign='left';x.fillStyle='#4a5a4e';x.fillText('— z (left)',L+6,T+14);x.fillStyle='#a8623a';x.fillText('— '+S.at.name+' (right)',L+70,T+14)}
+
+// ---- interaction
+function pickAt(cv,e){const tf=cv._tf,g=S.g;if(!tf||!g)return null;const q=cv.getBoundingClientRect(),px=e.clientX-q.left,py=e.clientY-q.top,fc=(px-tf.x0)/tf.w*g.nx-.5,fr=(py-tf.y0)/tf.h*g.ny-.5;
+  if(fc<-.5||fr<-.5||fc>g.nx-.5||fr>g.ny-.5)return null;return [fc,fr]}
+for(const id of ['cvIn','cvAt']){const cv=$(id);
+  cv.onmousemove=e=>{const p=pickAt(cv,e);if(!p||!S.arr){$('ro').textContent='Move over a map to read the values; click two points to draw a profile.';return}
+    const g=S.g,c=Math.min(g.nx-1,Math.round(p[0])),r=Math.min(g.ny-1,Math.round(p[1])),i=r*g.nx+c,zv=g.z[i],av=S.arr[i];
+    $('ro').textContent=`x ${fmt(+(g.x0+c*g.dx).toPrecision(9))}   y ${fmt(+(g.y1-r*g.dy).toPrecision(9))}  |  row ${r+1}, column ${c+1}  |  z ${zv===zv?fmt(+zv.toPrecision(7)):'null'}  |  ${S.at.name}: ${av===av?fmt(+av.toPrecision(6))+' '+S.at.unit.replace('z','z units'):'null'}`};
+  cv.onmouseleave=()=>{$('ro').textContent='Move over a map to read the values; click two points to draw a profile.'};
+  cv.onclick=e=>{const p=pickAt(cv,e);if(!p)return;
+    if(S.lineDraft){S.line=[S.lineDraft,p];S.lineDraft=null}else{S.line=null;S.lineDraft=p}
+    redrawOverlays()}}
+function redrawOverlays(){if(!S.g||!S.arr)return;render()}
+$('bLine').onclick=()=>{S.line=null;S.lineDraft=null;banner('Click the start and the end of the profile on a map.');render()};
+$('bClr').onclick=()=>{S.line=null;S.lineDraft=null;render()};
+$('bOpen').onclick=()=>$('file').click();
+$('file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadText(await f.text(),f.name)};
+addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('dragging')});
+addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging')});
+addEventListener('drop',async e=>{e.preventDefault();document.body.classList.remove('dragging');const f=e.dataTransfer.files[0];if(f)loadText(await f.text(),f.name)});
+$('bExample').onclick=()=>{const g=GA.example(200,150,7);loadText(GA.writeZmap(g,{label:'SYNTHETIC_STRUCTURE'}),'synthetic structure (fictitious).zmap')};
+for(const id of ['pdx','pdy','pzf'])$(id).onchange=applyParams;
+$('attr').onchange=()=>{const d=attrDef();$('cmap').value=d.kind==='div'?'div':d.kind==='circ'?'cyc':'viridis';schedule()};
+for(const id of ['shape','rin','lags','scale'])$(id).onchange=schedule;
+$('scales').onchange=()=>{S.sum=null;schedule()};
+for(const id of ['cmap','clo','chi'])$(id).onchange=()=>{S.imgs.at=null;render()};
+addEventListener('resize',()=>{if(S.g)render()});
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+
+// ---- multi-scale summary table
+async function computeSummary(){
+  if(!S.g)return null;const o=optsNow(),sc=scalesList(),key=[S.gen,sc.join(),o.shape,o.rin,o.lags.join()].join('|');
+  if(S.sum&&S.sumKey===key)return S.sum;
+  const tasks=[];for(const a of A){if(a.scaled===true)for(const s of sc)tasks.push([a,s]);else tasks.push([a,null])}
+  const rows=[];let k=0;$('bSum').disabled=true;
+  for(const [a,s] of tasks){$('smsg').textContent=`Computing ${++k} / ${tasks.length}: ${a.name}${s?', scale '+s:''}…`;await new Promise(r=>setTimeout(r,8));
+    const st=GA.stats(a.f(S.g,s,o),a.kind==='circ');rows.push({id:a.id,name:a.name,unit:a.unit,scale:s,circ:a.kind==='circ',n:st.n,mean:st.mean,std:st.std})}
+  $('bSum').disabled=false;$('smsg').textContent=`${rows.length} rows; scales ${sc.join(', ')} cells (${sc.map(s=>fmt(s*S.g.dx)).join(', ')} map units); aspect: circular mean and circular standard deviation.`;
+  S.sum=rows;S.sumKey=key;drawSummary();return rows}
+function drawSummary(){const R=S.sum;if(!R){$('sumTw').innerHTML='';return}
+  $('sumTw').innerHTML='<table><thead><tr><th class="l">Attribute</th><th>Scale (cells)</th><th>Scale (map units)</th><th>Mean</th><th>Std</th><th>Valid cells</th></tr></thead><tbody>'+R.map(r=>`<tr data-a="${r.id}" data-s="${r.scale==null?'':r.scale}"><td class="l">${esc(r.name)}${r.unit&&r.unit!=='-'?' <span style="color:var(--mut)">('+esc(r.unit)+')</span>':''}</td><td>${r.scale==null?'3 × 3':r.scale}</td><td>${r.scale==null?'—':fmt(+(r.scale*S.g.dx).toPrecision(6))}</td><td>${fmt(+r.mean.toPrecision(6))}</td><td>${fmt(+r.std.toPrecision(6))}</td><td>${r.n}</td></tr>`).join('')+'</tbody></table>';
+  $('sumTw').querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{$('attr').value=tr.dataset.a;if(tr.dataset.s)$('scale').value=tr.dataset.s;const d=attrDef();$('cmap').value=d.kind==='div'?'div':d.kind==='circ'?'cyc':'viridis';schedule()})}
+$('bSum').onclick=()=>computeSummary();
+
+// ---- exports
+const base=()=>(S.g0?S.g0.name:'grid').replace(/\.\w+$/,'').replace(/[^\w.-]+/g,'_');
+function exportGrid(){const g=S.g;if(!g)return null;
+  if($('expWhat').value==='input')return {g,tag:'input'};
+  const d=S.at,sc=d.scaled===true?'_s'+$('scale').value:'';
+  return {g:GA.makeGrid(g.nx,g.ny,g.dx,g.dy,g.x0,g.y1,S.arr,base()+'_'+d.id+sc),tag:d.id+sc}}
+function saveGrid(kind){const e=exportGrid();if(!e)return;let txt,ext;
+  if(kind==='zmap'){txt=GA.writeZmap(e.g,{label:(base()+'_'+e.tag).toUpperCase().replace(/[^A-Z0-9_]/g,'_')});ext='zmap'}else if(kind==='grd'){txt=GA.writeSurfer(e.g);ext='grd'}else{txt=GA.writeEsri(e.g);ext='asc'}
+  const n=`${base()}_${e.tag}.${ext}`;download(n,txt,'text/plain');$('exportMsg').textContent='Saved '+n}
+$('bZmap').onclick=()=>saveGrid('zmap');$('bGrd').onclick=()=>saveGrid('grd');$('bAsc').onclick=()=>saveGrid('asc');
+$('bPng').onclick=()=>{const cv=$('cvAt');cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`${base()}_${S.at.id}.png`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);$('exportMsg').textContent='Saved '+a.download})};
+$('bCsv').onclick=async()=>{const R=await computeSummary();if(!R)return;
+  const q=s=>{s=String(s==null?'':s);return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const L=['attribute,unit,scale_cells,scale_map_units,mean,std,valid_cells'];
+  for(const r of R)L.push([r.name,r.unit,r.scale==null?'':r.scale,r.scale==null?'':+(r.scale*S.g.dx).toPrecision(8),r.mean,r.std,r.n].map(q).join(','));
+  download(base()+'_summary.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved '+base()+'_summary.csv'};
+
+$('attr').value='slope';
+$('bExample').click();
+window.GAPAGE={S,loadText};
+</script>
+
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap'],['Grid attributes','gridattr']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp'],['Contact and well POS','contact'],['Distribution fitting','distfit']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: the grid is read in memory and never uploaded. Terrain and surface-complexity attributes of a regular grid, computed for structure maps and horizons as much as for DEMs: slope and aspect, curvatures, Terrain Position Index, rugosity, roughness, a multi-scale Mexican-hat wavelet response and a local fractal dimension. The grid and the selected attribute are shown side by side with a clipped colour scale, a histogram, a profile along a line you draw and a table of the mean and standard deviation of every attribute at every scale. The attribute grids can be exported as ZMAP+, Surfer ASCII or Esri ASCII.","method":["Grid: row 0 is the top (north) row; node (r, c) is at x = x0 + c·dx, y = ymax − r·dy. ZMAP+ is read column by column from the upper-left node; Surfer ASCII (DSAA) rows start at the bottom; Esri ASCII uses lower-left corner coordinates (shifted by half a cell to node centres). x y z text must lie on a regular lattice (missing nodes become null). Null values are masked, never replaced, except inside the wavelet transform (see below).","Slope and aspect: Horn 3 × 3 gradient, with z1…z9 = NW N NE / W C E / SW S SE: dz/dx = ((z3 + 2·z6 + z9) − (z1 + 2·z4 + z7)) / (8·dx), dz/dy = ((z1 + 2·z2 + z3) − (z7 + 2·z8 + z9)) / (8·dy), x east, y north. Slope = atan(√((dz/dx)² + (dz/dy)²)). Aspect is the dip azimuth, the direction of steepest descent, clockwise from north: atan2(−dz/dx, −dz/dy); flat cells have no aspect. At edges and next to nulls a pair with a missing end is dropped (the window shrinks); the cell is null only if its own value is.","Curvatures: Zevenbergen and Thorne 3 × 3 polynomial, D = ((z4 + z6)/2 − z5)/dx², E = ((z2 + z8)/2 − z5)/dy², F = (−z1 + z3 + z7 − z9)/(4·dx·dy), G = (z6 − z4)/(2·dx), H = (z2 − z8)/(2·dy). Sign convention here: positive = convex-up (crest, dome). Profile = −2(D·G² + E·H² + F·G·H)/(G² + H²), plan = −2(D·H² + E·G² − F·G·H)/(G² + H²), mean = −(D + E), Gaussian = (4·D·E − F²)/(1 + G² + H²)². Units 1/length (1/length² for Gaussian). The 3 × 3 window must be complete: the outer ring of nodes and the neighbours of a null are null. For a depth map (positive down) the signs are inverted; use a Z factor of −1.","Terrain Position Index: value minus the mean of the other valid cells of the window, for a square, a disc or an annulus; scales (half-widths in cells) are chosen by the user, several at once. Window sums come from summed-area tables (square) or row prefix sums (disc, annulus). Near the grid edge the window shrinks, so the TPI of a plane is exactly 0 away from the edge only.","Rugosity (Jenness 2004): the surface area of a cell is the sum of the 8 triangles joining the centre to each pair of adjacent neighbours, taken at half size (the part inside the cell), area = |u × v|/8 with u, v the 3D vectors centre → neighbour; planar area dx·dy. The window index is Σ surface area / Σ planar area over its cells: 1 for a flat surface, 1/cos(slope) for a tilted plane. A triangle with a null vertex is dropped from both sums.","Roughness: local standard deviation of z (n − 1), or of the residuals after removing the plane fitted by least squares in the window (n − 3), in the units of z.","Mexican-hat wavelet: ψ_s = −s²·∇²G_s with G_s the unit-integral Gaussian of standard deviation s (in cells); response W = ψ_s * z, computed exactly as two separable passes of a Gaussian and its second derivative (kernels truncated at 4 s, second derivative forced to zero mean and unit second moment). The s² factor makes the response scale-normalised: a Gaussian bump of amplitude A and standard deviation b responds 2·A·s²·b²/(s² + b²)² at its centre, maximum A/2 at s = b, so the scale of maximum response (map “Scale of maximum wavelet response”) estimates the size of a feature. Positive over crests. Nulls are filled by normalised Gaussian averaging before the transform and masked again afterwards, borders are reflected; cost O(n·s) per scale.","Local fractal dimension: for the lags h (default 2, 4, 8 cells) the semivariance γ(h) = ½·mean[(z(p + h) − z(p))²] is taken over the x and y pairs inside a square window; for a self-affine surface γ(h) ∝ h^(2H), so the least-squares slope of ln γ against ln h is 2H, and D = 3 − H with H limited to [0, 1] (2 ≤ D ≤ 3; a plane gives 2; a flat window gives 2 by convention). Assumptions: stationary increments, the same roughness in x and y (the two directions are pooled), a power law over the lag range, no noise floor. Complexity O(n) per lag with summed-area tables; the window radius is raised to twice the largest lag, at least 8 pairs per lag are required.","Multi-scale summary: each attribute at each scale of the list (window half-width, or sigma for the wavelet, in cells; the same list for all), mean and standard deviation of the valid cells (aspect: circular mean and circular standard deviation)."],"sources":[["Slope and aspect from the weighted 3 × 3 gradient","B. K. P. Horn, 1981, Hill shading and the reflectance map, Proceedings of the IEEE 69(1)","classical (not re-read)"],["Curvatures from the 3 × 3 polynomial","L. W. Zevenbergen and C. R. Thorne, 1987, Quantitative analysis of land surface topography, Earth Surface Processes and Landforms 12","classical (not re-read)"],["Terrain Position Index","A. Weiss, 2001, Topographic position and landforms analysis, poster, ESRI International User Conference","classical (not re-read)"],["Rugosity as surface area over planar area, triangles of the 3 × 3 cells","S. Jenness, 2004, Calculating landscape surface area from digital elevation models, Wildlife Society Bulletin 32(3)","classical (not re-read)"],["Mexican-hat (Ricker) continuous wavelet transform","Standard Laplacian-of-Gaussian / scale-space result","classical (not re-read)"],["Fractal dimension from the variogram slope, D = 3 − H","Self-affine surface model (Mandelbrot); variogram power law","classical (not re-read)"],["Formulas as implemented, sign conventions, normalisation of the wavelet","Own derivation, checked by the test script (exact plane, paraboloid, flat surface, Gaussian bump, fractional Brownian surface, round trips)","derived"],["Idea of four complementary complexity measures on a grid (no code read or reused)","README of the pyTopoComplexity project, github.com/GeoLarryLai/pyTopoComplexity","concept: README read"],["Description of the methods by their authors","Lai et al., 2025, Earth Surface Dynamics (cited by the README; the paper was not read)","authors' description, not read"],["ZMAP+, Surfer ASCII (DSAA) and Esri ASCII layouts","Same ZMAP+ conventions as the ZMAP checker page of this site; Surfer and Esri layouts as commonly documented","derived"]],"validation":["Self-check script (scripts/gridattr_test.mjs): slope and aspect of tilted planes (anisotropic cells, edges included); curvatures of a paraboloid z = k(x² + y²) (mean −2k, profile and plan −2k, Gaussian 4k² at the apex) and of a saddle; TPI of a plane (0) and of a spike (> 0) for square, disc and annulus windows; rugosity 1 on a flat surface and 1/cos(slope) on a tilted plane, with windows and non-square cells; Mexican-hat response of a Gaussian bump peaking at the matching scale (tolerance: one step of the scale list; amplitude A/2 within 5 %); fractal dimension 2 for a plane and within 0.12 of 3 − H (windows of 33 × 33 cells, lags 2, 4, 8, H = 0.3, 0.5, 0.8) for seeded spectral fractional Brownian surfaces; a null node blanks only its own window; ZMAP+ round trip read back by the ZMAP checker reader with no finding; Surfer, Esri and x y z round trips; timing on a 1000 × 1000 grid."],"limits":["The grid is assumed planar and regularly spaced: no geodesic correction and no unit conversion between metres and degrees. A warning appears when the cell size looks like degrees. x, y and z must share the same unit for slope, curvature and rugosity (use the Z factor for feet or depth positive down).","Scales are in cells, for both axes. With non-square cells the Mexican hat is stretched to keep the same ground distance; windows of the other attributes are not.","Fractal dimension: the estimate is biased by noise (D rises) and by the band-limited sampling at lag 1 (D about 0.1 low on spectral surfaces, hence the default lags 2, 4, 8); it is a relative index for comparing areas more than an absolute dimension. Windows of 33 × 33 cells and more are recommended.","Edges: slope, TPI, roughness, rugosity and fractal use shrunken windows at the grid edge (values there are less reliable); curvatures are null on the outer ring. The wavelet response near nulls depends on the filled values.","Plane roughness takes about 2 s and fractal dimension about 2 s on a 1000 × 1000 grid; the other attributes under a second. Grids above 4 million nodes are refused.","x y z text must be on a regular lattice; scattered points should be gridded first (see the Map interpolation tool). ZMAP+ is written with 20-character fields and enough decimals for about 10 significant digits."],"date":"26 November 2026"});
+</script>
