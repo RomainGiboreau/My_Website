@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Petroleum system events chart</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/psec/">
+<meta name="description" content="Petroleum system events chart: source, reservoir, seal and overburden rocks, trap formation, generation-migration-accumulation and preservation on the ICS time scale, with uncertainty ranges, a critical moment marker and a timing-risk probability against the charge. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.grid2{display:grid;grid-template-columns:auto 1fr 90px;gap:4px 8px;align-items:center;font-size:.82rem}
+.grid2 input{width:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.ok{background:var(--acc)}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(430px,64vh);touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+tbody tr{cursor:pointer}tbody tr.sel{background:rgba(74,90,78,.16)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:10px}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.stage{position:relative;height:max(520px,76vh)}
+.banner{pointer-events:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:80%;z-index:3;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.banner.err{background:var(--acc2)}
+.panel h2{cursor:pointer;user-select:none;margin-bottom:0}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+/* tooltip near the left edge (two-column layout): open to the right instead */
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%}
+canvas.v{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+table.cvt{width:100%;font-size:.76rem;margin-top:6px}table.cvt th,table.cvt td{padding:2px 5px;text-align:right}table.cvt th:first-child,table.cvt td:first-child{text-align:left}
+table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .err{color:var(--acc2);text-align:left}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{padding:.35rem .9rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.card canvas{width:100%;height:340px;display:block}
+.card.wide{grid-column:1/-1}.card.wide canvas{height:460px}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.8rem;margin:0 0 10px;color:var(--mut)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #232220;vertical-align:-1px;margin-right:4px}
+.legend i.x{border:none;background:none;width:auto;height:auto;font-style:normal;color:#9a968a;font-weight:700;margin-right:3px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;line-height:1.35;display:none;max-width:300px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:start;font-size:.8rem}
+.rules .r{display:contents}.rules input[type=number]{width:62px;padding:.1rem .3rem}.rules select{padding:.1rem .2rem;font-size:.76rem}
+.rules .act{display:block;margin-top:2px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.8rem}.sum b{font:700 1.2rem "Space Grotesk",Inter,sans-serif;display:block}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.pane{display:none}.pane.on{display:block}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
+main{min-width:0}
+table.el td,table.el th{padding:2px 2px;text-align:left;white-space:nowrap}
+table.el input[type=number]{width:54px;padding:.1rem .3rem}
+table.el input[type=text]{width:104px;padding:.1rem .3rem}
+table.el select{padding:.1rem .2rem;font-size:.76rem}
+table.tri td,table.tri th{padding:2px 4px;text-align:center}table.tri th:first-child,table.tri td:first-child{text-align:left}
+table.tri input{width:62px;padding:.1rem .3rem}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tile small{display:block;color:var(--mut);font-size:.74rem}
+.tile b{font:700 1.5rem "Space Grotesk",Inter,sans-serif;font-variant-numeric:tabular-nums}
+.tile.key{border-left:6px solid var(--acc)}
+.tile.key2{border-left:6px solid var(--acc2)}
+.bars{display:grid;grid-template-columns:minmax(120px,190px) 1fr 52px;gap:4px 10px;align-items:center;font-size:.82rem;padding:6px 8px}
+.bars .t{background:var(--alt);border-radius:3px;height:14px;position:relative;overflow:hidden}
+.bars .t i{position:absolute;left:0;top:0;bottom:0;background:#8a9a8c}
+.bars .t.cum i{background:var(--acc)}
+.bars .t.eco i{background:var(--acc2)}
+.bars .v{text-align:right;font-variant-numeric:tabular-nums}
+.bars .sep{grid-column:1/-1;border-top:1px dashed var(--line);margin:2px 0}
+.bars .grp{grid-column:1/-1;font:600 .7rem Inter,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.card canvas{height:380px}
+.two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:12px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+.warn{color:var(--acc2)}
+
+.stage{position:relative;height:auto;overflow-x:auto;overflow-y:hidden;touch-action:auto;border:1px solid var(--line);border-radius:6px}
+.stage canvas#cv{position:static;inset:auto;display:block;width:auto;height:auto}
+.legend{margin:8px 0 0}.legend span{display:inline-flex;align-items:center}.legend i{border-radius:3px;border:1px solid #232220;width:14px;height:10px}
+.legend i.ln{border:none;background:#a8623a;width:3px;height:14px;border-radius:0}
+table.evt td,table.evt th{padding:2px 3px;font-size:.78rem}table.evt th{text-align:center}
+table.evt input[type=number]{width:52px}table.evt input[type=text]{width:150px!important}table.evt select[data-k=cat]{width:128px}table.evt select[data-k=dist]{width:84px}table.evt input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);background:none}
+table.evt td button{padding:.05rem .35rem}table.evt tbody tr{cursor:default}table.evt tr.bad td{background:rgba(168,98,58,.14)}
+.card h3 button{padding:.15rem .5rem;font-size:.76rem}.card h3 .sp{flex:1}
+table.cvt td select{font-size:.76rem;padding:.05rem .2rem}table.cvt td:nth-child(2),table.cvt td:nth-child(3),table.cvt td:nth-child(6),table.cvt td:nth-child(8){text-align:left}
+.side{overflow-x:hidden}.card{overflow:visible}.tw.tall{max-height:46vh}
+.tiles{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.tile b{font-size:1.35rem}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Petroleum system events chart</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">File</span>
+  <button class="pri" id="bSave" title="Events, critical moment and settings in one JSON file">Save</button>
+  <button id="bLoad">Open</button><input type="file" id="jfile" accept=".json,application/json" hidden>
+  <button id="bCsv" title="One event per line: name, category, start, end, uncertainty ranges, distribution, colour">Events CSV</button>
+  <button id="bCsvIn" title="Replace the events by those of a CSV file (same columns as the export)">Import CSV</button><input type="file" id="cfile" accept=".csv,text/csv,text/plain" hidden>
+  <button id="bPng">PNG</button><button id="bSvg">SVG</button>
+  <select id="exSel" aria-label="Example"><option value="">Example…</option><option value="A">A: favourable timing (fictitious)</option><option value="B">B: late trap (fictitious)</option></select>
+  <span class="msg" id="msg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. A petroleum system events chart places on one geological time scale the deposition of the source, reservoir, seal and overburden rocks, the formation of the trap, the generation-migration-accumulation and the preservation. Bars are the nominal start and end ages, faded ends the uncertainty range. The timing risk is the probability that a trap or seal exists before the charge.">?</span>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Time axis and critical moment<span class="tt tt-r" tabindex="0" data-tip="Ages in Ma, oldest on the left. Automatic: the range of the events plus their uncertainty, rounded to a tick step. The ICS bands (era, period, epoch) are drawn behind the bars and in the header. The critical moment is the time that best represents the generation-migration-accumulation: by default the middle of the first event of that category, or type your own age.">?</span><i class="chev"></i></h2>
+  <div class="body"><label class="inl"><input type="checkbox" id="axAuto">Automatic range</label>
+  <div class="pg"><span>Oldest, Ma</span><input type="number" id="axFrom" step="any" min="0" max="538.8"><span>Youngest, Ma</span><input type="number" id="axTo" step="any" min="0" max="538.8"></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="bEra">Eras</label><label class="inl"><input type="checkbox" id="bPer">Periods</label><label class="inl"><input type="checkbox" id="bEpo">Epochs</label></div>
+  <label class="inl" style="margin-top:6px"><input type="checkbox" id="cmAuto">Critical moment: middle of the first generation-migration event</label>
+  <div class="pg"><span>Critical moment, Ma</span><input type="number" id="cmVal" step="any" min="0"><span>Label</span><input type="text" id="cmLabel"></div>
+  <div class="msg" id="axMsg"></div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Timing risk<span class="tt tt-r" tabindex="0" data-tip="Pick the charge event and the anchor time (its start, its midpoint or its end). For every other event the probability that its reference time (start, midpoint or end, chosen in the table) is older than or equal to the anchor, so that the trap or the seal exists before charge. Two uniform (or certain) times: closed form. Triangular times, or a midpoint with uncertain ends: seeded Monte Carlo. The overall number is the product of the probabilities of the included events, which assumes that they are independent; the joint probability from the same draws is shown next to it because every event shares the same anchor.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Charge event</span><select id="rCharge"></select><span>Anchor</span><select id="rAnchor"><option value="start">start of charge</option><option value="mid">midpoint of charge</option><option value="end">end of charge</option></select>
+  <span>Flag below</span><input type="number" id="rThr" step="0.05" min="0" max="1"><span>Samples</span><input type="number" id="rN" step="10000" min="1000" max="2000000"><span>Seed</span><input type="number" id="rSeed" step="1"></div>
+  <div class="hint">A probability below the threshold is flagged. Tick “in product” in the table to choose which events enter the overall number.</div></div></section>
+</aside>
+<main>
+ <div class="tiles" id="tiles"></div>
+ <div class="card" style="margin-bottom:12px"><h3>Events chart<span class="tt" tabindex="0" data-tip="Time runs from oldest (left) to youngest (right). Solid bar: nominal start to end. Faded ends: the start and end uncertainty ranges (a ramp for a triangular distribution, flat for a uniform one). Orange vertical line: the critical moment. Dashed line: the charge anchor of the timing risk. The figures on the right are the probabilities that each included event is in place before the anchor.">?</span></h3>
+  <div class="stage" id="stage"><canvas id="cv"></canvas></div><div class="legend" id="legend"></div></div>
+ <div class="card" style="margin-bottom:12px"><h3>Events<span class="tt" tabindex="0" data-tip="One row per event: category, nominal start and end (Ma, start older than end), optional uncertainty ranges (min = youngest possible, max = oldest possible; leave blank for a certain age), the distribution inside the range (triangular peaking at the nominal age, or uniform) and a colour. Rows are drawn in this order; ↑ ↓ reorder, Sort groups them by category.">?</span><span class="sp"></span><button id="bAdd">+ Add event</button><button id="bSort">Sort by category</button></h3>
+  <div class="tw tall"><table class="el evt"><thead><tr><th></th><th>Event</th><th>Category</th><th title="Nominal start (older), Ma">Start</th><th title="Start: youngest possible age">min</th><th title="Start: oldest possible age">max</th><th title="Nominal end (younger), Ma">End</th><th title="End: youngest possible age">min</th><th title="End: oldest possible age">max</th><th>Distribution</th><th>Colour</th><th></th></tr></thead><tbody id="evT"></tbody></table></div>
+  <div class="msg" id="evMsg" style="margin-top:6px"></div></div>
+ <div class="card"><h3>Timing risk table<span class="tt" tabindex="0" data-tip="P(in time) = probability that the reference time of the event is older than or equal to the charge anchor. Reference time: for a trap or a seal usually its end (the trap is complete, the seal is in place). Monte Carlo values have a standard error of about sqrt(p(1-p)/n).">?</span></h3>
+  <div class="tw"><table class="cvt" id="riskT"></table></div><div class="note" id="riskNote"></div></div>
+</main></div>
+<div id="tip"></div>
+<script id="pe-core">
+/* Petroleum system events chart core: ICS time scale, events, CSV / JSON, timing probabilities. Pure logic, no DOM; window.PE. Tested by scripts/psec_test.mjs. */
+(function(){
+// ---- ICS Chronostratigraphic Chart v2024/12 (stratigraphy.org): boundary ages in Ma read from the text of the PDF, colours from its CMYK fills (RGB approximated).
+const U=a=>a.map(([name,short,top,base,color])=>({name,short,top,base,color}));
+const eras=U([['Cenozoic','Cz',0,66.0,'#f2ef1d'],['Mesozoic','Mz',66.0,251.902,'#66cdec'],['Paleozoic','Pz',251.902,538.8,'#9ac79c']]);
+const periods=U([['Quaternary','Q',0,2.58,'#fff880'],['Neogene','N',2.58,23.04,'#fddd1c'],['Paleogene','Pg',23.04,66.0,'#f89b5c'],['Cretaceous','K',66.0,143.1,'#80ce5c'],['Jurassic','J',143.1,201.4,'#33bde9'],['Triassic','Tr',201.4,251.902,'#8a3ea4'],
+ ['Permian','P',251.902,298.9,'#e74d40'],['Carboniferous','C',298.9,358.86,'#69b2b0'],['Devonian','D',358.86,419.62,'#ca9547'],['Silurian','S',419.62,443.1,'#b3e4c2'],['Ordovician','O',443.1,486.85,'#00a990'],['Cambrian','Cm',486.85,538.8,'#83ad6a']]);
+const epochs=U([['Holocene','Ho',0,0.0117,'#fde4c4'],['Pleistocene','Pl',0.0117,2.58,'#feee96'],['Pliocene','Plio',2.58,5.333,'#fffa99'],['Miocene','Mio',5.333,23.04,'#fff200'],['Oligocene','Oli',23.04,33.9,'#fabe80'],['Eocene','Eoc',33.9,56.0,'#f9b274'],['Paleocene','Pal',56.0,66.0,'#f9a668'],
+ ['Late Cretaceous','L Cret',66.0,100.5,'#a6da53'],['Early Cretaceous','E Cret',100.5,143.1,'#8cd364'],['Late Jurassic','L Jur',143.1,161.5,'#b3e6fa'],['Middle Jurassic','M Jur',161.5,174.7,'#80d5ed'],['Early Jurassic','E Jur',174.7,201.4,'#41baee'],
+ ['Late Triassic','L Tri',201.4,237.0,'#be92cf'],['Middle Triassic','M Tri',237.0,246.7,'#b370bf'],['Early Triassic','E Tri',246.7,251.902,'#9e46a9'],['Lopingian','Lop',251.902,259.51,'#f8a69a'],['Guadalupian','Gua',259.51,274.4,'#f5786a'],['Cisuralian','Cis',274.4,298.9,'#e96157'],
+ ['Pennsylvanian','Penn',298.9,323.4,'#81c2c5'],['Mississippian','Miss',323.4,358.86,'#6ca07d'],['Late Devonian','L Dev',358.86,382.31,'#f1dfa0'],['Middle Devonian','M Dev',382.31,393.47,'#efc76e'],['Early Devonian','E Dev',393.47,419.62,'#e2ae58'],
+ ['Pridoli','Pri',419.62,422.7,'#e6f6e5'],['Ludlow','Lud',422.7,426.7,'#bfe9d8'],['Wenlock','Wen',426.7,432.9,'#b3e4cd'],['Llandovery','Lla',432.9,443.1,'#99dcc2'],['Late Ordovician','L Ord',443.1,458.2,'#80d2a4'],['Middle Ordovician','M Ord',458.2,471.3,'#4dc196'],['Early Ordovician','E Ord',471.3,486.85,'#1ab18b'],
+ ['Furongian','Fur',486.85,497.0,'#b3e2a0'],['Miaolingian','Mia',497.0,506.5,'#a6d493'],['Cambrian Series 2','S2',506.5,521.0,'#9ac688'],['Terreneuvian','Ter',521.0,538.8,'#8eb97d']]);
+const ICS={eras,periods,epochs,span:[0,538.8],version:'v2024/12'};
+const unitAt=(level,age)=>{const L=ICS[level];for(const u of L)if(age>=u.top&&age<u.base)return u;const l=L[L.length-1];return age===l.base?l:null};
+
+// ---- categories
+const CATS=[['source','Source rock','#8a5a3c'],['reservoir','Reservoir rock','#d1a23f'],['seal','Seal rock','#6b7a8f'],['overburden','Overburden rock','#a89f8a'],['trap','Trap formation','#a8623a'],['generation-migration','Generation-migration-accumulation','#4a5a4e'],['preservation','Preservation','#5c7a6a'],['other','Other','#8a8a8a']].map(([id,label,color])=>({id,label,color}));
+const catOf=id=>CATS.find(c=>c.id===id);
+const DEFAULT_REF={trap:'end',seal:'end',reservoir:'end',overburden:'end',source:'end'};
+
+// ---- events. Ages in Ma, start older than end (start >= end). Min / Max bound the uncertainty of the start and of the end (null = certain).
+const num=v=>(v===null||v===undefined||v===''||!isFinite(+v))?null:+v;
+function normEvent(e){e=e||{};const cat=catOf(e.cat)?e.cat:'other';
+  return{name:String(e.name==null?'Event':e.name),cat,start:num(e.start),end:num(e.end),startMin:num(e.startMin),startMax:num(e.startMax),endMin:num(e.endMin),endMax:num(e.endMax),dist:e.dist==='uni'?'uni':'tri',
+   color:/^#[0-9a-f]{6}$/i.test(e.color||'')?e.color:catOf(cat).color,ref:['start','mid','end'].includes(e.ref)?e.ref:(DEFAULT_REF[cat]||'end'),inc:e.inc==null?(cat==='trap'||cat==='seal'):!!e.inc}}
+function validateEvent(e){
+  if(e.start==null||e.end==null)return 'start and end are required';if(e.start<0||e.end<0)return 'ages must be ≥ 0 Ma';if(e.start<e.end)return 'start must be older than (or equal to) end';
+  for(const k of['start','end']){const lo=e[k+'Min'],hi=e[k+'Max'],n=e[k];if(lo!=null&&lo>n)return k+' min is above the nominal age';if(hi!=null&&hi<n)return k+' max is below the nominal age';if(lo!=null&&lo<0)return k+' min must be ≥ 0'}
+  return null}
+const criticalDefault=ev=>{const g=ev.find(e=>e.cat==='generation-migration'&&!validateEvent(e));return g?(g.start+g.end)/2:null};
+
+// ---- random numbers and uncertain times
+function rng(seed){let a=(seed>>>0)||1;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+// variable {kind:'point'|'uni'|'tri', lo, hi, mode}
+function varOf(e,which){const n=e[which],lo=e[which+'Min']==null?n:e[which+'Min'],hi=e[which+'Max']==null?n:e[which+'Max'];if(!(hi>lo))return{kind:'point',lo:n,hi:n,mode:n};return e.dist==='uni'?{kind:'uni',lo,hi,mode:n}:{kind:'tri',lo,hi,mode:n}}
+function sampleVar(v,u){if(v.kind==='point')return v.lo;if(v.kind==='uni')return v.lo+u*(v.hi-v.lo);const F=(v.mode-v.lo)/(v.hi-v.lo);return u<F?v.lo+Math.sqrt(u*(v.hi-v.lo)*(v.mode-v.lo)):v.hi-Math.sqrt((1-u)*(v.hi-v.lo)*(v.hi-v.mode))}
+function cdfVar(v,x){if(v.kind==='point')return x>=v.lo?1:0;if(x<=v.lo)return 0;if(x>=v.hi)return 1;if(v.kind==='uni')return(x-v.lo)/(v.hi-v.lo);
+  return x<=v.mode?(x-v.lo)*(x-v.lo)/((v.hi-v.lo)*(v.mode-v.lo)):1-(v.hi-x)*(v.hi-x)/((v.hi-v.lo)*(v.hi-v.mode))}
+const meanVar=v=>v.kind==='uni'?(v.lo+v.hi)/2:v.kind==='tri'?(v.lo+v.mode+v.hi)/3:v.lo;
+// time of an event: its start, its end or its midpoint (a spec = list of 1 or 2 variables, averaged)
+const timeSpec=(e,ref)=>ref==='mid'?{vars:[varOf(e,'start'),varOf(e,'end')]}:{vars:[varOf(e,ref==='start'?'start':'end')]};
+const nominal=(e,ref)=>ref==='mid'?(e.start+e.end)/2:e[ref==='start'?'start':'end'];
+const sampleSpec=(s,r)=>s.vars.length===1?sampleVar(s.vars[0],r()):(sampleVar(s.vars[0],r())+sampleVar(s.vars[1],r()))/2;
+// analytic P(A >= B) when both times are certain or uniform; null otherwise
+function uniOf(s){if(s.vars.length===1){const v=s.vars[0];return v.kind==='tri'?null:{lo:v.lo,hi:v.hi}}
+  if(s.vars.every(v=>v.kind==='point'))return{lo:(s.vars[0].lo+s.vars[1].lo)/2,hi:(s.vars[0].lo+s.vars[1].lo)/2};return null}
+function pUniform(A,B){const a1=A.lo,a2=A.hi,b1=B.lo,b2=B.hi;
+  if(a2===a1&&b2===b1)return a1>=b1?1:0;
+  if(a2===a1)return a1<=b1?0:a1>=b2?1:(a1-b1)/(b2-b1);
+  if(b2===b1)return b1<=a1?1:b1>=a2?0:(a2-b1)/(a2-a1);
+  const G=x=>x<=b1?0:x<=b2?(x-b1)*(x-b1)/(2*(b2-b1)):x-(b1+b2)/2;return(G(a2)-G(a1))/(a2-a1)}
+
+// ---- timing risk: probability that each event's time T_X is older than (or equal to) the charge anchor T_C, so that it exists before charge
+function timing(events,o){o=Object.assign({charge:0,anchor:'start',n:100000,seed:1,threshold:.5},o||{});
+  const C=events[o.charge];if(!C)return{err:'No charge event selected.'};const ce=validateEvent(C);if(ce)return{err:'Charge event: '+ce+'.'};
+  const aS=timeSpec(C,o.anchor),n=Math.max(1000,Math.min(2000000,Math.round(o.n)||100000)),rows=[];
+  events.forEach((e,i)=>{if(i===o.charge)return;const err=validateEvent(e);if(err){rows.push({i,name:e.name,cat:e.cat,ref:e.ref,inc:e.inc,err});return}
+    const s=timeSpec(e,e.ref),ua=uniOf(s),ub=uniOf(aS);rows.push({i,name:e.name,cat:e.cat,ref:e.ref,inc:e.inc,spec:s,age:nominal(e,e.ref),pA:ua&&ub?pUniform(ua,ub):null,hit:0})});
+  const r=rng(o.seed),ok=rows.filter(x=>!x.err);let joint=0,nInc=ok.filter(x=>x.inc).length;
+  for(let k=0;k<n;k++){const T=sampleSpec(aS,r);let all=true;for(const x of ok){const t=sampleSpec(x.spec,r);if(t>=T)x.hit++;else if(x.inc)all=false}if(all&&nInc)joint++}
+  let prod=null;for(const x of ok){x.pMC=x.hit/n;x.p=x.pA!=null?x.pA:x.pMC;x.method=x.pA!=null?'analytic':'Monte Carlo';x.flag=x.p<o.threshold;if(x.inc)prod=(prod==null?1:prod)*x.p;delete x.spec;delete x.hit}
+  return{rows,n,seed:o.seed,anchor:nominal(C,o.anchor),anchorRef:o.anchor,product:prod,joint:nInc?joint/n:null,nInc,threshold:o.threshold,flagged:ok.filter(x=>x.inc&&x.flag).length}}
+
+// ---- axis helpers
+function niceStep(span,target){const raw=span/(target||8),p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p;return(f<1.5?1:f<3.5?2:f<7.5?5:10)*p}
+function ticks(from,to,target){const st=niceStep(from-to,target),out=[];for(let a=Math.ceil(to/st-1e-9)*st;a<=from+1e-9;a+=st)out.push(+a.toFixed(6));return out}
+function autoRange(events,critical){let mx=0,mn=Infinity;for(const e of events){if(validateEvent(e))continue;mx=Math.max(mx,e.start,e.startMax==null?0:e.startMax);mn=Math.min(mn,e.end,e.endMin==null?Infinity:e.endMin)}
+  if(critical!=null){mx=Math.max(mx,critical);mn=Math.min(mn,critical)}if(!isFinite(mn)||mx<=0)return{from:200,to:0};const st=niceStep(mx*1.08-mn,8);return{from:Math.min(ICS.span[1],Math.ceil(mx*1.04/st)*st),to:Math.max(0,Math.floor(mn/st)*st)}}
+
+// ---- CSV (one event per line) and JSON
+const COLS=['name','category','start','end','start_min','start_max','end_min','end_max','distribution','color','reference','include'];
+const q=s=>/[",;\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+function toCSV(events){return[COLS.join(',')].concat(events.map(e=>[q(e.name),e.cat,e.start,e.end,e.startMin??'',e.startMax??'',e.endMin??'',e.endMax??'',e.dist==='uni'?'uniform':'triangular',e.color,e.ref,e.inc?1:0].join(','))).join('\n')+'\n'}
+function splitCSV(text,d){const rows=[];let row=[],cur='',inq=false;for(let i=0;i<text.length;i++){const c=text[i];if(inq){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++}else inq=false}else cur+=c}else if(c==='"')inq=true;else if(c===d){row.push(cur);cur=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cur);rows.push(row);row=[];cur=''}else cur+=c}
+  if(cur!==''||row.length){row.push(cur);rows.push(row)}return rows.filter(r=>r.some(x=>x.trim()!==''))}
+function parseCSV(text){text=text.replace(/^﻿/,'');const first=text.split(/\r?\n/)[0]||'',d=[',',';','\t'].map(c=>[c,first.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0],rows=splitCSV(text,d);
+  if(rows.length<2)throw new Error('no data rows');const head=rows[0].map(h=>h.trim().toLowerCase().replace(/[\s-]+/g,'_')),idx=k=>head.indexOf(k);
+  for(const k of['name','start','end'])if(idx(k)<0)throw new Error('missing column "'+k+'"');const get=(r,k)=>idx(k)<0?'':(r[idx(k)]||'').trim(),events=[],warn=[];
+  rows.slice(1).forEach((r,j)=>{const cat=get(r,'category').toLowerCase(),inc=get(r,'include');const e=normEvent({name:get(r,'name'),cat:catOf(cat)?cat:'other',start:get(r,'start'),end:get(r,'end'),startMin:get(r,'start_min'),startMax:get(r,'start_max'),endMin:get(r,'end_min'),endMax:get(r,'end_max'),
+    dist:/^u/i.test(get(r,'distribution'))?'uni':'tri',color:get(r,'color'),ref:get(r,'reference').toLowerCase(),inc:inc===''?null:!(inc==='0'||/^(no|false)$/i.test(inc))});
+    if(cat&&!catOf(cat))warn.push('line '+(j+2)+': unknown category "'+cat+'" set to other');const err=validateEvent(e);if(err)warn.push('line '+(j+2)+' ('+e.name+'): '+err);events.push(e)});
+  return{events,warn}}
+
+// ---- model
+const defaults=()=>({format:'psec',version:1,events:[],critical:null,criticalLabel:'Critical moment',axis:{auto:true,from:200,to:0},bands:{eras:true,periods:true,epochs:true},risk:{charge:0,anchor:'start',threshold:.5,n:100000,seed:1}});
+function example(k){const M=defaults(),E=(name,cat,start,end,o)=>Object.assign(normEvent({name,cat,start,end}),o||{});
+  if(k==='B'){M.name='Example B (late trap, fictitious)';M.events=[E('Source rock (Lower Toarcian shale)','source',185,178,{startMin:183,startMax:188,endMin:176,endMax:180}),E('Reservoir rock (deltaic sandstone)','reservoir',140,125,{startMin:136,startMax:145}),E('Seal rock (marine shale)','seal',118,105,{startMin:112,startMax:122,endMin:100,endMax:108}),
+    E('Overburden rock','overburden',105,0),E('Trap formation (inversion anticline)','trap',45,22,{startMin:38,startMax:52,endMin:15,endMax:30}),E('Generation-migration-accumulation','generation-migration',50,25,{startMin:44,startMax:58,endMin:20,endMax:30}),E('Preservation','preservation',25,0)];
+    M.risk.charge=5;return M}
+  M.name='Example A (favourable timing, fictitious)';M.events=[E('Source rock (Upper Jurassic marl)','source',160,150,{startMin:158,startMax:163,endMin:148,endMax:152}),E('Reservoir rock (Lower Cretaceous sandstone)','reservoir',125,110,{startMin:120,startMax:130,endMin:106,endMax:114}),E('Seal rock (Upper Cretaceous shale)','seal',105,95,{startMin:100,startMax:108,endMin:92,endMax:98}),
+    E('Overburden rock','overburden',105,0),E('Trap formation (fold)','trap',75,55,{startMin:70,startMax:80,endMin:50,endMax:62}),E('Generation-migration-accumulation','generation-migration',50,25,{startMin:44,startMax:56,endMin:20,endMax:30}),E('Preservation','preservation',25,0)];
+  M.risk.charge=5;return M}
+function fromJSON(o){if(!o||o.format!=='psec')throw new Error('not a petroleum system events file');const M=Object.assign(defaults(),o);M.events=(o.events||[]).map(normEvent);M.axis=Object.assign(defaults().axis,o.axis);M.bands=Object.assign(defaults().bands,o.bands);M.risk=Object.assign(defaults().risk,o.risk);M.critical=num(o.critical);if(M.risk.charge>=M.events.length||M.risk.charge<0)M.risk.charge=Math.max(0,M.events.findIndex(e=>e.cat==='generation-migration'));return M}
+
+window.PE={ICS,unitAt,CATS,catOf,normEvent,validateEvent,criticalDefault,rng,varOf,sampleVar,cdfVar,meanVar,timeSpec,pUniform,timing,niceStep,ticks,autoRange,COLS,toCSV,parseCSV,defaults,example,fromJSON};
+})();
+</script><script>
+const $=id=>document.getElementById(id),P=window.PE;
+let M=P.example('A'),res=null,hits=[],last=null;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fa=x=>x==null||!isFinite(x)?'—':(Math.round(x*100)/100).toString(),pr=p=>p==null?'—':p.toFixed(p<.1&&p>0?3:2);
+function say(t,err){const m=$('msg');m.textContent=t;m.style.opacity=err?1:.9;setTimeout(()=>{if(m.textContent===t)m.textContent=''},4000)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(text instanceof Blob?text:new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+const fname=()=>(M.name||'petroleum_system').replace(/[^\w.-]+/g,'_');
+const crit=()=>M.critical!=null?M.critical:P.criticalDefault(M.events);
+const range=()=>M.axis.auto?P.autoRange(M.events,crit()):{from:Math.max(M.axis.from,M.axis.to+1),to:M.axis.to};
+// ---- inputs
+const NUMK=['start','startMin','startMax','end','endMin','endMax'];
+function renderEvents(){$('evT').innerHTML=M.events.map((e,i)=>{const err=P.validateEvent(e);
+  return `<tr class="${err?'bad':''}" data-i="${i}"><td style="white-space:nowrap"><button data-mv="-1" title="Move up">↑</button><button data-mv="1" title="Move down">↓</button></td><td><input type="text" data-k="name" value="${esc(e.name)}" style="width:190px"></td>`+
+  `<td><select data-k="cat">${P.CATS.map(c=>`<option value="${c.id}"${c.id===e.cat?' selected':''}>${c.label}</option>`).join('')}</select></td>`+
+  NUMK.map(k=>`<td><input type="number" step="any" data-k="${k}" value="${e[k]==null?'':e[k]}"${k=='start'||k=='end'?'':' placeholder="–"'}></td>`).join('')+
+  `<td><select data-k="dist"><option value="tri"${e.dist==='tri'?' selected':''}>triangular</option><option value="uni"${e.dist==='uni'?' selected':''}>uniform</option></select></td><td><input type="color" data-k="color" value="${e.color}"></td><td><button data-del title="Remove">✕</button></td></tr>`}).join('');
+  renderRiskSel()}
+function renderRiskSel(){const s=$('rCharge');s.innerHTML=M.events.map((e,i)=>`<option value="${i}">${i+1}. ${esc(e.name)}</option>`).join('');s.value=M.risk.charge}
+$('evT').addEventListener('input',ev=>{const t=ev.target,tr=t.closest('tr');if(!tr||!t.dataset.k)return;const i=+tr.dataset.i,k=t.dataset.k,e=M.events[i];
+  if(NUMK.includes(k))e[k]=t.value===''?null:+t.value;else if(k==='cat'){e.cat=t.value;e.color=P.catOf(t.value).color;e.inc=t.value==='trap'||t.value==='seal'?true:e.inc;e.ref='end';renderEvents();update();return}else e[k]=t.value;
+  if(k==='name'){const o=$('rCharge').options[i];if(o)o.textContent=(i+1)+'. '+e.name}update();tr.classList.toggle('bad',!!P.validateEvent(e))});
+$('evT').addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b)return;const i=+b.closest('tr').dataset.i;
+  if(b.dataset.del!=null){M.events.splice(i,1);const c=M.risk.charge;M.risk.charge=i===c?Math.max(0,M.events.findIndex(e=>e.cat==='generation-migration')):(i<c?c-1:c)}
+  else if(b.dataset.mv){const j=i+ +b.dataset.mv;if(j<0||j>=M.events.length)return;const [e]=M.events.splice(i,1);M.events.splice(j,0,e);const c=M.risk.charge;if(c===i)M.risk.charge=j;else if(c===j)M.risk.charge=i}
+  else return;renderEvents();update()});
+$('bAdd').onclick=()=>{M.events.push(P.normEvent({name:'New event',cat:'other',start:60,end:40}));renderEvents();update()};
+$('bSort').onclick=()=>{const order=P.CATS.map(c=>c.id),ch=M.events[M.risk.charge];M.events.sort((a,b)=>order.indexOf(a.cat)-order.indexOf(b.cat));M.risk.charge=Math.max(0,M.events.indexOf(ch));renderEvents();update()};
+function syncInputs(){$('axAuto').checked=M.axis.auto;$('axFrom').value=M.axis.from;$('axTo').value=M.axis.to;$('axFrom').disabled=$('axTo').disabled=M.axis.auto;$('bEra').checked=M.bands.eras;$('bPer').checked=M.bands.periods;$('bEpo').checked=M.bands.epochs;
+  $('cmAuto').checked=M.critical==null;$('cmVal').value=M.critical==null?(P.criticalDefault(M.events)??''):M.critical;$('cmVal').disabled=M.critical==null;$('cmLabel').value=M.criticalLabel;
+  $('rAnchor').value=M.risk.anchor;$('rThr').value=M.risk.threshold;$('rN').value=M.risk.n;$('rSeed').value=M.risk.seed;renderEvents()}
+$('axAuto').onchange=()=>{M.axis.auto=$('axAuto').checked;if(!M.axis.auto){const r=P.autoRange(M.events,crit());M.axis.from=r.from;M.axis.to=r.to}syncInputs();update()};
+$('axFrom').oninput=()=>{M.axis.from=+$('axFrom').value;update()};$('axTo').oninput=()=>{M.axis.to=+$('axTo').value;update()};
+$('bEra').onchange=()=>{M.bands.eras=$('bEra').checked;update()};$('bPer').onchange=()=>{M.bands.periods=$('bPer').checked;update()};$('bEpo').onchange=()=>{M.bands.epochs=$('bEpo').checked;update()};
+$('cmAuto').onchange=()=>{M.critical=$('cmAuto').checked?null:(P.criticalDefault(M.events)??50);syncInputs();update()};
+$('cmVal').oninput=()=>{M.critical=$('cmVal').value===''?null:+$('cmVal').value;update()};$('cmLabel').oninput=()=>{M.criticalLabel=$('cmLabel').value;update()};
+$('rCharge').onchange=()=>{M.risk.charge=+$('rCharge').value;update()};$('rAnchor').onchange=()=>{M.risk.anchor=$('rAnchor').value;update()};
+$('rThr').oninput=()=>{M.risk.threshold=+$('rThr').value;update()};$('rN').oninput=()=>{M.risk.n=+$('rN').value;update()};$('rSeed').oninput=()=>{M.risk.seed=+$('rSeed').value;update()};
+$('riskT').addEventListener('change',ev=>{const t=ev.target,i=+t.dataset.i;if(t.dataset.k==='inc')M.events[i].inc=t.checked;else if(t.dataset.k==='ref')M.events[i].ref=t.value;else return;update()});
+// ---- outputs
+function update(){const cs=P.criticalDefault(M.events);if(M.critical==null)$('cmVal').value=cs==null?'':fa(cs);
+  const bad=M.events.map((e,i)=>[i,P.validateEvent(e)]).filter(x=>x[1]);$('evMsg').innerHTML=bad.length?'<span class="warn">'+bad.map(([i,m])=>`Row ${i+1} (${esc(M.events[i].name)}): ${m}`).join(' · ')+'. Invalid rows are not drawn.</span>':'';
+  res=P.timing(M.events,M.risk);const T=$('tiles'),c=crit();
+  const tiles=[];
+  if(res.err)tiles.push(['Timing risk',`<span class="warn" style="font-size:.95rem">${esc(res.err)}</span>`,'','']);
+  else{tiles.push(['Timing chance (product)',res.product==null?'—':pr(res.product),'key',res.nInc?`product of ${res.nInc} event${res.nInc>1?'s':''}, assumed independent`:'tick events “in product”']);
+   tiles.push(['Timing risk, 1 − chance',res.product==null?'—':pr(1-res.product),'key2',res.joint==null?'':`joint chance from the same draws ${pr(res.joint)}`]);
+   tiles.push(['Charge anchor',fa(res.anchor)+' Ma','',`${{start:'start',mid:'midpoint',end:'end'}[res.anchorRef]} of “${esc(M.events[M.risk.charge].name)}”`]);
+   tiles.push(['Flagged events',String(res.flagged),res.flagged?'key2':'',`included events below ${M.risk.threshold}`])}
+  tiles.push(['Critical moment',c==null?'—':fa(c)+' Ma','',M.critical==null?'middle of the first generation-migration event':'typed']);
+  T.innerHTML=tiles.map(([a,b,k,s])=>`<div class="tile ${k}"><small>${a}</small><b>${b}</b><small>${s}</small></div>`).join('');
+  $('axMsg').textContent=M.axis.auto?'':(M.axis.from<=M.axis.to?'Oldest age must exceed the youngest.':'');
+  $('legend').innerHTML=P.CATS.filter(k=>M.events.some(e=>e.cat===k.id)).map(k=>`<span><i style="background:${k.color}"></i>${k.label}</span>`).join('')+'<span><i class="ln"></i>Critical moment</span>';
+  renderRisk();draw()}
+function renderRisk(){const t=$('riskT');if(!res||res.err){t.innerHTML='';$('riskNote').textContent='';return}
+  const opt=(v,r)=>['start','mid','end'].map(x=>`<option value="${x}"${x===r?' selected':''}>${x}</option>`).join('');
+  t.innerHTML='<thead><tr><th>Event</th><th>Category</th><th>Reference time</th><th>Age, Ma</th><th>P(in time)</th><th>Method</th><th>MC check</th><th>Flag</th><th>In product</th></tr></thead><tbody>'+res.rows.map(r=>r.err?`<tr><td>${esc(r.name)}</td><td class="err" colspan="8">${r.err}</td></tr>`:
+   `<tr class="${r.inc&&r.flag?'best':''}"><td>${esc(r.name)}</td><td>${P.catOf(r.cat).label}</td><td><select data-i="${r.i}" data-k="ref">${opt(0,r.ref)}</select></td><td>${fa(r.age)}</td><td><b>${pr(r.p)}</b></td><td>${r.method}</td><td>${pr(r.pMC)}</td><td>${r.flag?'<span class="chip warn">below '+M.risk.threshold+'</span>':'<span class="chip ok">ok</span>'}</td><td><input type="checkbox" data-i="${r.i}" data-k="inc"${r.inc?' checked':''}></td></tr>`).join('')+'</tbody>';
+  $('riskNote').innerHTML=`Overall timing chance = product of the included probabilities (independence assumed): ${res.product==null?'none included':pr(res.product)}${res.joint==null?'':'; joint chance that all included events are in time in the same Monte Carlo draws: '+pr(res.joint)}. ${res.n.toLocaleString('en')} draws, seed ${res.seed}; the Monte Carlo standard error is at most ${(0.5/Math.sqrt(res.n)).toFixed(4)}.`}
+// ---- chart scene: a list of primitives painted on canvas or serialised to SVG
+const mc=document.createElement('canvas').getContext('2d'),FONT='Inter,system-ui,sans-serif';
+const tw=(s,fs,fw)=>{mc.font=`${fw||400} ${fs}px ${FONT}`;return mc.measureText(s).width};
+function fit(s,fs,fw,maxw){if(tw(s,fs,fw)<=maxw)return s;let a=s;while(a.length>1&&tw(a+'…',fs,fw)>maxw)a=a.slice(0,-1);return a.length>1?a+'…':''}
+function scene(W){const L=178,Rm=70,pw=Math.max(200,W-L-Rm),rg=range(),span=Math.max(1e-6,rg.from-rg.to),X=a=>L+(rg.from-a)/span*pw,pr_=[];
+  const R=(x,y,w,h,f,a,s)=>pr_.push({t:'r',x,y,w,h,f,a:a==null?1:a,s}),Ln=(x1,y1,x2,y2,s,w,d)=>pr_.push({t:'l',x1,y1,x2,y2,s,w:w||1,d}),T=(x,y,s,o)=>pr_.push(Object.assign({t:'t',x,y,s,fs:11,fw:400,c:'#232220',al:'left'},o));
+  const strips=[['eras',16],['periods',16],['epochs',16]].filter(([k])=>M.bands[k]),headH=strips.length*16,tickH=20,markH=20,rowH=32,top=headH+tickH+markH,n=M.events.length,H=top+n*rowH+34,hit=[];
+  const ev=M.events.map((e,i)=>({e,i,err:P.validateEvent(e)})),aT=res&&!res.err?res.anchor:null,cm=crit();
+  R(0,0,W,H,'#ffffff');
+  // ICS tint behind the rows, then the period borders
+  for(const u of P.ICS.periods){if(u.base<=rg.to||u.top>=rg.from)continue;const a=Math.max(u.top,rg.to),b=Math.min(u.base,rg.from);R(X(b),top,X(a)-X(b),n*rowH,u.color,.13)}
+  ev.forEach((o,i)=>{if(i%2===0)R(0,top+i*rowH,W,rowH,'#232220',.035)});
+  // header strips
+  strips.forEach(([k],si)=>{const y=si*16;for(const u of P.ICS[k]){if(u.base<=rg.to||u.top>=rg.from)continue;const a=Math.max(u.top,rg.to),b=Math.min(u.base,rg.from),x0=X(b),w=X(a)-x0;R(x0,y,w,16,u.color);Ln(x0,y,x0,y+16,'#ffffff',.8);
+    const lab=[u.name,u.short].find(s=>tw(s,10,500)<=w-4);if(lab)T(x0+w/2,y+8.5,lab,{fs:10,fw:500,al:'center',bl:'middle'})}});
+  // ticks and grid
+  const tk=P.ticks(rg.from,rg.to,Math.max(4,Math.round(pw/80)));for(const a of tk){Ln(X(a),headH+tickH-4,X(a),top+n*rowH,'#c9c4b6',.6,a===0?null:'2 3');T(X(a),headH+tickH-7,String(a),{fs:10,al:'center',c:'#5c5a52'})}
+  T(10,headH+tickH-7,'Age, Ma',{fs:10,c:'#5c5a52'});
+  // rows
+  ev.forEach((o,i)=>{const e=o.e,y=top+i*rowH,cy=y+rowH/2,rr=res&&!res.err?res.rows.find(r=>r.i===i):null;
+    T(10,y+13,fit(e.name,11.5,600,L-18),{fs:11.5,fw:600});T(10,y+25,P.catOf(e.cat).label,{fs:9.5,c:'#5c5a52'});
+    if(o.err){T(L+8,cy,'invalid: '+o.err,{fs:10.5,c:'#a8623a',bl:'middle'});return}
+    const col=e.color,sx=X(e.start),ex=X(e.end),bh=rowH-12,by=y+6,sv=P.varOf(e,'start'),evr=P.varOf(e,'end');
+    const fade=(v,x0,x1)=>{if(v.kind==='point')return;const N=14;for(let k=0;k<N;k++){const a=x0+(x1-x0)*k/N,b=x0+(x1-x0)*(k+1)/N,m=(a+b)/2,age=rg.from-(m-L)/pw*span;let al;
+      if(v.kind==='uni')al=.3;else{const h=1e-4,d=(P.cdfVar(v,age+h*span)-P.cdfVar(v,age-h*span))/(2*h*span),pk=2/(v.hi-v.lo);al=.1+.5*Math.min(1,d/pk)}R(Math.min(a,b),by,Math.abs(b-a)+.5,bh,col,al)}};
+    fade(sv,X(sv.hi),sx);fade(evr,ex,X(evr.lo));
+    const bw=Math.max(2,ex-sx);R(sx,by,bw,bh,col,.95);Ln(sx,by,sx+bw,by,'#232220',.8);Ln(sx,by+bh,sx+bw,by+bh,'#232220',.8);
+    const light=(()=>{const h=col.slice(1),v=[0,2,4].map(j=>parseInt(h.substr(j,2),16));return .3*v[0]+.59*v[1]+.11*v[2]>150})(),full=tw(e.name,10.5,500);
+    if(full<=bw-8)T(sx+bw/2,cy,e.name,{fs:10.5,fw:500,al:'center',bl:'middle',c:light?'#232220':'#ffffff'});
+    else{const rx=Math.max(ex,X(evr.lo))+6,lx=Math.min(sx,X(sv.hi))-6,room=W-Rm-rx;if(room>=Math.min(full,160)||room>=lx-L)T(rx,cy,fit(e.name,10.5,500,room),{fs:10.5,fw:500,bl:'middle'});else T(lx,cy,fit(e.name,10.5,500,lx-L-2),{fs:10.5,fw:500,bl:'middle',al:'right'})}
+    const xl=Math.min(X(sv.hi),sx),xr=Math.max(X(evr.lo),ex);
+    if(rr&&rr.inc&&!rr.err){const ok=!rr.flag;T(W-Rm+8,cy,'P '+pr(rr.p),{fs:11,fw:700,bl:'middle',c:ok?'#3a4a3e':'#a8623a'})}
+    hit.push({x:Math.min(xl,xr),y:by,w:Math.abs(xr-xl),h:bh,i,rr})});
+  // anchor and critical moment
+  const by0=top+n*rowH;
+  if(aT!=null&&aT<=rg.from&&aT>=rg.to){Ln(X(aT),headH+tickH,X(aT),by0,'#232220',1.2,'5 4');T(X(aT),by0+12,'charge anchor '+fa(aT)+' Ma',{fs:10,al:'center'})}
+  if(cm!=null&&cm<=rg.from&&cm>=rg.to){const x=X(cm),y0=headH+tickH+2;Ln(x,y0+9,x,by0,'#a8623a',2);pr_.push({t:'p',pts:[[x-6,y0],[x+6,y0],[x,y0+10]],f:'#a8623a'});
+    const lab=`${M.criticalLabel||'Critical moment'} ${fa(cm)} Ma`,w=tw(lab,10.5,700),right=x+10+w<W-6;T(right?x+10:x-10,y0+5,lab,{fs:10.5,fw:700,c:'#a8623a',bl:'middle',al:right?'left':'right'})}
+  T(L+pw/2,H-8,'Age, Ma (older to younger)',{fs:11,al:'center',c:'#5c5a52'});
+  if(res&&!res.err&&res.rows.some(r=>r.inc&&!r.err))T(W-Rm+8,headH+tickH+10,'P in time',{fs:9.5,c:'#5c5a52'});
+  return{H,prims:pr_,hit}}
+function paint(c,prims){for(const p of prims){c.globalAlpha=p.a==null?1:p.a;
+  if(p.t==='r'){if(p.w<=0||p.h<=0)continue;c.fillStyle=p.f;c.fillRect(p.x,p.y,p.w,p.h)}
+  else if(p.t==='l'){c.beginPath();c.moveTo(p.x1,p.y1);c.lineTo(p.x2,p.y2);c.strokeStyle=p.s;c.lineWidth=p.w;c.setLineDash(p.d?p.d.split(' ').map(Number):[]);c.stroke();c.setLineDash([])}
+  else if(p.t==='p'){c.beginPath();p.pts.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();c.fillStyle=p.f;c.fill()}
+  else{c.font=`${p.fw} ${p.fs}px ${FONT}`;c.fillStyle=p.c;c.textAlign=p.al;c.textBaseline=p.bl==='middle'?'middle':'alphabetic';c.fillText(p.s,p.x,p.y)}}c.globalAlpha=1}
+function toSVG(W,H,prims){const f=v=>Math.round(v*100)/100;let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Inter,Arial,sans-serif">\n`;
+  for(const p of prims){const o=p.a!=null&&p.a!==1?` opacity="${f(p.a)}"`:'';
+   if(p.t==='r'){if(p.w<=0||p.h<=0)continue;s+=`<rect x="${f(p.x)}" y="${f(p.y)}" width="${f(p.w)}" height="${f(p.h)}" fill="${p.f}"${o}/>\n`}
+   else if(p.t==='l')s+=`<line x1="${f(p.x1)}" y1="${f(p.y1)}" x2="${f(p.x2)}" y2="${f(p.y2)}" stroke="${p.s}" stroke-width="${p.w}"${p.d?` stroke-dasharray="${p.d}"`:''}${o}/>\n`;
+   else if(p.t==='p')s+=`<polygon points="${p.pts.map(q=>f(q[0])+','+f(q[1])).join(' ')}" fill="${p.f}"/>\n`;
+   else s+=`<text x="${f(p.x)}" y="${f(p.y)}" font-size="${p.fs}" font-weight="${p.fw}" fill="${p.c}" text-anchor="${{left:'start',center:'middle',right:'end'}[p.al]}"${p.bl==='middle'?' dominant-baseline="central"':''}>${esc(p.s)}</text>\n`}
+  return s+'</svg>\n'}
+function draw(){const cv=$('cv'),st=$('stage'),W=Math.max(760,Math.floor(st.clientWidth)),d=devicePixelRatio||1;last=scene(W);hits=last.hit;
+  cv.width=Math.round(W*d);cv.height=Math.round(last.H*d);cv.style.width=W+'px';cv.style.height=last.H+'px';const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);paint(c,last.prims)}
+window.addEventListener('resize',draw);
+// hover
+const tip=$('tip');
+$('cv').addEventListener('mousemove',ev=>{const r=$('cv').getBoundingClientRect(),x=ev.clientX-r.left,y=ev.clientY-r.top,h=hits.find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);
+  if(!h){tip.style.display='none';return}const e=M.events[h.i],rng=(k)=>{const lo=e[k+'Min'],hi=e[k+'Max'];return lo==null&&hi==null?'':` (${fa(lo==null?e[k]:lo)} to ${fa(hi==null?e[k]:hi)})`};
+  tip.innerHTML=`<b>${esc(e.name)}</b><br>${P.catOf(e.cat).label}<br>Start ${fa(e.start)} Ma${rng('start')}<br>End ${fa(e.end)} Ma${rng('end')}<br>Duration ${fa(e.start-e.end)} Myr, ${e.dist==='uni'?'uniform':'triangular'}`+(h.rr&&!h.rr.err?`<br>P(in time) = ${pr(h.rr.p)} (${h.rr.method})`:'');
+  tip.style.display='block';tip.style.left=Math.min(innerWidth-230,ev.clientX+14)+'px';tip.style.top=(ev.clientY+14)+'px'});
+$('cv').addEventListener('mouseleave',()=>{tip.style.display='none'});
+// ---- files
+$('bSave').onclick=()=>{download(fname()+'.json',JSON.stringify(M,null,1),'application/json');say('Saved.')};
+$('bLoad').onclick=()=>$('jfile').click();
+$('jfile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{M=P.fromJSON(JSON.parse(t));syncInputs();update();say('Opened.')}catch(err){say('Cannot open: '+err.message,true)}});e.target.value=''};
+$('bCsv').onclick=()=>{download(fname()+'_events.csv',P.toCSV(M.events));say('CSV saved.')};
+$('bCsvIn').onclick=()=>$('cfile').click();
+$('cfile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const r=P.parseCSV(t);if(!r.events.length)throw new Error('no events');M.events=r.events;M.risk.charge=Math.max(0,M.events.findIndex(x=>x.cat==='generation-migration'));syncInputs();update();say(r.events.length+' events imported'+(r.warn.length?'. '+r.warn.join('; '):'.'),r.warn.length>0)}catch(err){say('Cannot import: '+err.message,true)}});e.target.value=''};
+$('bSvg').onclick=()=>{const W=Math.max(760,Math.floor($('stage').clientWidth)),s=scene(W);download(fname()+'.svg',toSVG(W,s.H,s.prims),'image/svg+xml');say('SVG saved.')};
+$('bPng').onclick=()=>{const W=Math.max(760,Math.floor($('stage').clientWidth)),s=scene(W),k=2,c=document.createElement('canvas');c.width=W*k;c.height=s.H*k;const g=c.getContext('2d');g.setTransform(k,0,0,k,0,0);paint(g,s.prims);c.toBlob(b=>{download(fname()+'.png',b);say('PNG saved.')},'image/png')};
+$('exSel').onchange=()=>{const k=$('exSel').value;if(k){M=P.example(k);syncInputs();update()}$('exSel').value=''};
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+syncInputs();update();
+</script>
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you enter leaves your machine. A petroleum system events chart (PSEC): the deposition of the source, reservoir, seal and overburden rocks, the formation of the trap, the generation-migration-accumulation and the preservation, each as a bar with a nominal start and end age (Ma) and optional uncertainty ranges, drawn on the ICS geological time scale with a critical moment marker. A timing-risk table gives the probability that the trap, the seal and the other events exist before the charge.","method":["<b>Chart.</b> Time axis in Ma, oldest on the left. The bands are the eras, periods and epochs of the ICS chart (table in the page, see below), drawn in the header and as a light tint behind the rows. Each event is a bar from its nominal start to its nominal end; the ends fade over the uncertainty range, as a ramp for a triangular distribution (density, peaking at the nominal age) and flat for a uniform one. The critical moment is the time that best represents the generation-migration-accumulation: by default the middle of the first event of that category (nominal ages), or an age you type. It is a judgement, not a computed value.","<b>Uncertainty of an age.</b> Each of the start and the end has an optional range [min, max] around the nominal age (min = youngest possible, max = oldest possible; blank = certain). Inside the range the age is triangular with its mode at the nominal age, or uniform (the nominal age is then only the drawn bar). The start and the end are drawn independently; a draw where a start falls below its end is not rejected.","<b>Timing risk.</b> You choose the charge event and the anchor: its start, its midpoint or its end. For every other event X a reference time T<sub>X</sub> is chosen (start, midpoint or end; by default the end, i.e. the trap is completed or the seal is in place). The timing probability is P(T<sub>X</sub> ≥ T<sub>anchor</sub>), the chance that X is older than (or as old as) the anchor, in Ma. If the two times are each certain or uniform, the probability is the closed form: for A ~ U[a<sub>1</sub>, a<sub>2</sub>] and B ~ U[b<sub>1</sub>, b<sub>2</sub>], P(A ≥ B) = (G(a<sub>2</sub>) − G(a<sub>1</sub>)) / (a<sub>2</sub> − a<sub>1</sub>) with G(x) = ∫ F<sub>B</sub> = 0 below b<sub>1</sub>, (x − b<sub>1</sub>)² / (2 (b<sub>2</sub> − b<sub>1</sub>)) between b<sub>1</sub> and b<sub>2</sub>, x − (b<sub>1</sub> + b<sub>2</sub>) / 2 above (degenerate cases handled). Otherwise (triangular, or a midpoint with an uncertain end) it is a seeded Monte Carlo with inverse-CDF sampling (mulberry32 generator). The Monte Carlo estimate is always shown beside the analytic one as a check.","<b>Overall number.</b> The timing chance is the product of the probabilities of the events ticked “in product”, which assumes that they are independent; the timing risk shown is 1 minus that chance. They are not independent, since all of them are compared with the same uncertain anchor (a late charge helps every event at once), so the joint probability that all ticked events are in time in the same Monte Carlo draws is given as well. The product is usually the more pessimistic of the two for positively linked events.","<b>Files.</b> JSON keeps the events, the critical moment, the axis and the risk settings. CSV has one event per line (name, category, start, end, start_min, start_max, end_min, end_max, distribution, color, reference, include); “,” “;” or tab are accepted on import. PNG is the canvas at twice the screen resolution, SVG is the same drawing as vector primitives."],"sources":[["Boundary ages (Ma) of the 3 eras, 12 periods and 34 epochs","International Chronostratigraphic Chart v2024/12, ICS (Cohen, Finney, Gibbard &amp; Fan 2013, updated), <code>stratigraphy.org/ICSchart/ChronostratChart2024-12.pdf</code>, downloaded and read on 26 November 2026 (the ages in the text of the PDF; epoch boundaries as read from the stage ages: for example the base of the Middle Triassic at 246.7 Ma, the Late / Middle Triassic limit at ~237 Ma, and the Cambrian series limits at ~497.0, ~506.5 and ~521.0 Ma are marked “~” (approximate) in the chart because they have no ratified GSSP). Base of the Phanerozoic 538.8 Ma. Epochs of the Carboniferous are given as its two sub-periods, Pennsylvanian and Mississippian, as on the chart; the Permian and the Cambrian use their series. Stages are not included.","published"],["Colours of the units","The same chart, coloured after the Commission for the Geological Map of the World (CGMW). Colours are the CMYK fills of the PDF, converted to RGB by rendering the page with poppler (72 dpi) and sampling each unit. The official ICS RGB codes were not read, so the hexadecimal values are close to, and may differ by a few units from, the published RGB table.","published (CMYK fills read; RGB approximated)"],["Petroleum system and its events chart","Magoon, L.B. &amp; Dow, W.G. (eds.) (1994), The Petroleum System: from Source to Trap, AAPG Memoir 60. The events chart (source, reservoir, seal and overburden rocks, trap formation, generation-migration-accumulation, preservation time and critical moment) is the classical presentation of that work; the page was made from the idea, not from the book.","classical (not re-read)"],["P(A ≥ B) for uniform ranges; Monte Carlo with triangular and uniform sampling","Elementary probability: integral of the CDF of one variable against the density of the other; inverse-CDF sampling of the triangular distribution. Closed form and Monte Carlo checked against each other and against a numerical integration in the test of the page.","derived"],["Product of probabilities as overall timing risk","Independence assumption stated in the task and on the page; the joint probability from the same draws is the alternative that keeps the dependence through the shared anchor.","derived"],["Example events, ages and uncertainty ranges; default reference times and the 0.5 threshold","Fictitious, for illustration only; the defaults (end of the trap and of the seal as the reference time, flag below 0.5) are editable on the page.","on the page"]],"validation":["Tests of the page (<code>node scripts/psec_test.mjs</code>): the three levels of the time scale are contiguous, ordered, start at 0 Ma and their durations add up to the total span (538.8 Ma), every era and period boundary is an epoch boundary, spot values equal the chart; certain timings give exactly 0 or 1 for every anchor and reference time; two uniform ranges give the closed form (hand value 1/8 for U[0,2] against U[1,3], and a numerical double integral on 30 random cases); the seeded Monte Carlo agrees with the analytic value within four standard errors and with a quadrature of the triangular CDFs; moving the trap later never raises the probability, and a later charge never lowers it; the product equals the product of the included rows and the joint probability stays within the Fréchet bounds; the CSV and JSON round trips return the same events."],"limits":["The probabilities depend on the ages and ranges you enter, which are judgements; a narrow range is a strong claim. Ages are on the ICS numerical scale as of the 2024/12 chart, which is revised from time to time, and approximate (~) boundaries carry an uncertainty that is not propagated.","Timing only: the page does not model burial, thermal history, generation kinetics, seal capacity, charge volumes or migration (see Thermal maturity, Source rock potential and Prospect risking for those). The anchor can be set at the start, midpoint or end of the charge but not at a threshold such as 0.5 % Ro.","The timing chance multiplies probabilities as if independent, which ignores the shared anchor; the joint probability is a Monte Carlo estimate, and the Monte Carlo values carry a sampling error of about sqrt(p (1 − p) / n) (shown on the page). Start and end of an event are sampled independently, without enforcing that the start is older than the end.","Time scale to the Phanerozoic only (no Precambrian), no stage level, no regional scales; the colours are an approximation of the CGMW RGB codes. Only one critical moment and one charge anchor at a time."],"date":"26 November 2026"});
+</script>
+</body></html>
