@@ -22,6 +22,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [QGIS MCP](https://github.com/nkarasiak/qgis-mcp) — MCP connector between QGIS and AI agents (Claude, etc.) — layer management, editing, processing
 - [SeismicFlow](https://seismicflow.github.io/) — open-source Python GUI, integrated geoscience workflows · free, Windows only, *Geophysics* paper announced "in press" (not verified)
 - [Danomics](https://www.danomics.com/) — commercial SaaS platform (Devon, TGS, Coterra, OXY, Hilcorp) · structural/stratigraphic framework, petrophysics, 3D models at the scale of thousands of wells
+- [Source Rock Energy Partners — Free Engineering Tools](https://sourcerockenergy.com/tools.html) — free browser-based reserves, decline curve and artificial lift tools
 - [Scrapling](https://github.com/d4vinci/Scrapling) — adaptive web scraping framework, anti-bot bypass (Cloudflare), MCP server included · 77k stars · planned use: automating collection of NOC/IOC press pages and the public data portals listed on this site
 - [FracSTAT](https://sachi5908.github.io/FracSTAT_Presentation/#home) — fracture/fault network analysis: geometry, mechanical response (slip tendency, Mohr/stereonet), uncertainty (MCS/LHS, SRC/PRCC) · academic platform (WIHG-Dehradun, Univ. of Palermo, CSIR-NGRI)
 
@@ -65,6 +66,7 @@ Tools, libraries, references and sites used across this site — kept here rathe
 - [Petrolib](https://petrolibs.com/documentation/docPages/overview.html) — formation evaluation · Python (`pip install petrolib`) · Vsh, porosity, Sw (Archie/Simandoux), pay summary, Pickett/N-D crossplots
 - [OpenPetro — Tools](https://openpetro.ai/tools/) — free in-browser petrophysics calculators (Vsh, Archie sensitivity, Passey ΔlogR TOC, MICP saturation-height, AVO, flow units) · OpenPetro LLC
 - [PredictLog](https://predictlog.streamlit.app/) — Streamlit
+- [Petrophysics.io](https://petrophysics.io/) — online LAS viewer, crossplot, histogram and Python tools · petrophysics examples · independent research (Danila Karnaukh)
 - [welleng](https://github.com/jonnymaserati/welleng) — well/drilling engineering tools · Python
 - [segy-qc-toolkit](https://github.com/RahatNaqvi/segy-qc-toolkit) — SEG-Y file QC
 - [SEG-Y geometry-application](https://github.com/RahatNaqvi/geometry-application) — geometry application for SEG-Y seismic data
