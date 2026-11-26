@@ -87,17 +87,96 @@ const up=s=>String(s||'').toUpperCase();
 function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
 function gauss(r){let u=0;while(u===0)u=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*r())}
 
+// ---------------- numbers: contract A (decoding) and contract C (null sentinels)
+const DEFAULT_NULLS=[-999,-999.25,-9999,9999,1e30,1.70141e38];
+const MISSING=/^(|-|--|---|n\.?\s?d\.?|nd|na|n\/a|nan|null|none|\.)$/i;
+// parseNumber(text, o) -> {value, kind, ambiguous?, limit?}; kind: ok | missing | below | text.
+// o.comma: true when the file/column uses a decimal comma elsewhere (resolves "1,234" as 1.234); false/undefined: "1,234" is 1234.
+function parseNumber(text,o){
+  o=o||{};let s=String(text==null?'':text).trim().replace(/\u2212|\u2013/g,'-').replace(/^"(.*)"$/,'$1').replace(/\u00a0|\u202f/g,' ').trim();
+  if(MISSING.test(s))return {value:null,kind:'missing'};
+  const lt=/^<\s*(.*)$/.exec(s);
+  if(lt){const r=parseNumber(lt[1],o);return {value:null,kind:'below',limit:r.kind==='ok'?r.value:null}}
+  let amb=false,t=s;
+  if(/^[-+]?\d{1,3}( \d{3})+([.,]\d+)?$/.test(t))t=t.replace(/ /g,'');            // 1 234.5 and 1 234,5
+  if(/ /.test(t))return {value:null,kind:'text'};
+  const hasC=t.indexOf(',')>=0,hasD=t.indexOf('.')>=0;
+  if(hasC&&hasD){
+    if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(t))t=t.replace(/\./g,'').replace(',','.');   // 1.234,5
+    else if(/^[-+]?\d{1,3}(,\d{3})+\.\d+$/.test(t))t=t.replace(/,/g,'');                 // 1,234.5
+    else return {value:null,kind:'text'};
+  }else if(hasC){
+    if(/^[-+]?\d{1,3}(,\d{3}){2,}$/.test(t))t=t.replace(/,/g,'');                        // 1,234,567
+    else if(/^[-+]?[1-9]\d{0,2},\d{3}$/.test(t)){amb=true;t=o.comma?t.replace(',','.'):t.replace(',','')} // 1,234 : ambiguous
+    else if(/^[-+]?\d*,\d+([eE][-+]?\d+)?$/.test(t))t=t.replace(',','.');                // 1,5  0,55  0,500
+    else return {value:null,kind:'text'};
+  }else if(/^[-+]?\d{1,3}(\.\d{3}){2,}$/.test(t))t=t.replace(/\./g,'');                  // 1.234.567
+  if(!NUM.test(t))return {value:null,kind:'text'};
+  const v=+t;if(!isFinite(v))return {value:null,kind:'text'};
+  return amb?{value:v,kind:'ok',ambiguous:true}:{value:v,kind:'ok'};
+}
+const decimalCommaToken=t=>/^[-+]?\d*,\d+$/.test(t)&&!/^[-+]?[1-9]\d{0,2},\d{3}$/.test(t);
+function splitWith(line,d){return d==='ws'?line.trim().split(/\s+/):line.split(d).map(x=>x.trim())}
+// detectDelimiter(lines) -> {delim:'\t'|';'|'ws'|',', fields}; delim null when no delimiter gives >= 2 fields on most lines
+function detectDelimiter(lines){
+  const L=lines.filter(s=>s.trim()),n=L.length;if(!n)return {delim:null,fields:0};
+  const score=d=>{const cnt=new Map();for(const l of L){const k=splitWith(l,d).length;cnt.set(k,(cnt.get(k)||0)+1)}
+    let bk=0,bc=0;for(const [k,c] of cnt)if(c>bc||(c===bc&&k>bk)){bk=k;bc=c}return {k:bk,share:bc/n}};
+  const ok=d=>{const r=score(d);return r.k>=2&&r.share>=0.8?r:null};
+  const dc=L.some(l=>l.trim().split(/[\s;\t]+/).some(decimalCommaToken));
+  for(const d of ['\t',';','ws']){const r=ok(d);if(r)return {delim:d,fields:r.k,decimalComma:dc||d===';'}}
+  const r=ok(',');if(r)return {delim:',',fields:r.k,decimalComma:false};
+  return {delim:null,fields:0};
+}
+// Shared reading of a block of rows: tokens[i] = array of strings. Returns the report and numeric columns (NaN = missing).
+function newReport(){return {read:0,skipped:0,reasons:{},firstLines:{},cells:{missing:0,below:0,text:0,sentinel:0},sentinelCounts:{},candidates:[],ambiguity:false,delimiter:'',decimal:'point',notes:[]}}
+function skipRow(rep,why,line){rep.skipped++;rep.reasons[why]=(rep.reasons[why]||0)+1;(rep.firstLines[why]=rep.firstLines[why]||[]).length<5&&rep.firstLines[why].push(line)}
+function findCandidates(cols,nulls,rep){
+  for(const c of cols){const cnt=new Map();for(let i=0;i<c.length;i++){const v=c[i];if(isFinite(v)&&(/^-?9{3,}(\.\d+)?$/.test(String(v))||Math.abs(v)>=1e20||/^-?9{2,}\.25$/.test(String(v))))cnt.set(v,(cnt.get(v)||0)+1)}
+    for(const [v,k] of cnt)if(k>=3&&k>=0.01*c.length&&nulls.indexOf(v)<0&&!rep.candidates.some(x=>x.v===v))rep.candidates.push({v,k})}
+}
+function numberColumns(rows,nc,lineNo,o,rep,nullsExtra){
+  const nulls=(o.nulls||[]).concat(nullsExtra||[]);const dec=o.comma;
+  const cols=Array.from({length:nc},()=>new Float64Array(rows.length).fill(NaN));const keep=[];
+  rows.forEach((r,i)=>{
+    const d=parseNumber(r[0],{comma:dec});
+    if(d.kind!=='ok'){skipRow(rep,d.kind==='missing'?'missing depth':d.kind==='below'?'depth below detection':'non-numeric depth',lineNo[i]);return}
+    if(nulls.indexOf(d.value)>=0){skipRow(rep,'depth equal to a null value',lineNo[i]);return}
+    if(d.ambiguous)rep.ambiguity=true;
+    keep.push(i);cols[0][i]=d.value;
+    for(let j=1;j<nc;j++){const x=r[j]==null?{value:null,kind:'missing'}:parseNumber(r[j],{comma:dec});
+      if(x.kind==='ok'){if(x.ambiguous)rep.ambiguity=true;if(nulls.indexOf(x.value)>=0){rep.cells.sentinel++;rep.sentinelCounts[x.value]=(rep.sentinelCounts[x.value]||0)+1}else cols[j][i]=x.value}
+      else rep.cells[x.kind==='below'?'below':x.kind==='missing'?'missing':'text']++}
+  });
+  const out=cols.map(c=>{const a=new Float64Array(keep.length);keep.forEach((i,k)=>a[k]=c[i]);return a});
+  rep.read=rows.length;findCandidates(out.slice(1),nulls,rep);
+  return out;
+}
+// Human text for a report
+function describeReport(rep){
+  const p=[];p.push(`${rep.read} rows read, ${rep.skipped} skipped`);
+  const why=Object.keys(rep.reasons).map(k=>`${rep.reasons[k]} ${k} (line${rep.firstLines[k].length>1?'s':''} ${rep.firstLines[k].join(', ')}${rep.reasons[k]>rep.firstLines[k].length?'…':''})`);
+  if(why.length)p.push('skipped: '+why.join('; '));
+  const c=rep.cells,cs=[];if(c.missing)cs.push(`${c.missing} missing values`);if(c.below)cs.push(`${c.below} values below detection (set missing)`);if(c.text)cs.push(`${c.text} non-numeric values (set missing)`);
+  if(cs.length)p.push(cs.join(', '));
+  for(const k of Object.keys(rep.sentinelCounts))p.push(`${rep.sentinelCounts[k]} values equal to the null value ${k} were excluded`);
+  for(const x of rep.candidates)p.push(`warning: ${x.v} appears ${x.k} times and may be an undeclared null value (not excluded: add it to the null values to exclude it)`);
+  if(rep.delimiter)p.push(`delimiter: ${rep.delimiter}, decimal mark: ${rep.decimal==='comma'?'comma':'point'}`);
+  if(rep.ambiguity)p.push(rep.decimal==='comma'?'note: a value like 1,234 was read as a decimal comma (1.234) because this file uses decimal commas elsewhere':'note: a value like 1,234 was read as a thousands separator (1234); it is ambiguous');
+  return p.join('. ')+'.';
+}
 // ---------------- input: LAS 2.0 (unwrapped) and delimited text
-// A log = {name, depthName, depthUnit, depth:Float64Array, curves:[{mnem,unit,v:Float64Array}]}; missing values are NaN.
-function parseLAS(text,name){
+// A log = {name, depthName, depthUnit, depth:Float64Array, curves:[{mnem,unit,v:Float64Array}], report}; missing values are NaN.
+function parseLAS(text,name,o){
+  o=o||{};
   const lines=String(text).replace(/^\uFEFF/,'').split(/\r\n|\n|\r/);
-  let sec='',well={},curves=[],data=[],wrap=false;
-  for(const raw of lines){
-    const t=raw.trim();if(!t||t[0]==='#')continue;
-    if(t[0]==='~'){sec=up(t[1]||'');continue}
-    if(sec==='A'){data.push(t.split(/[\s,;]+/).filter(Boolean));continue}
-    if(sec!=='V'&&sec!=='W'&&sec!=='C')continue;
-    const d=t.indexOf('.');if(d<0)continue;
+  let sec='',well={},curves=[],data=[],dline=[],wrap=false;
+  lines.forEach((raw,li)=>{
+    const t=raw.trim();if(!t||t[0]==='#')return;
+    if(t[0]==='~'){sec=up(t[1]||'');return}
+    if(sec==='A'){data.push(t.split(/[\s,;]+/).filter(Boolean));dline.push(li+1);return}
+    if(sec!=='V'&&sec!=='W'&&sec!=='C')return;
+    const d=t.indexOf('.');if(d<0)return;
     const mnem=t.slice(0,d).trim();let rest=t.slice(d+1),unit='';
     const sp=rest.search(/\s/);if(sp<0){unit=rest;rest=''}else{unit=rest.slice(0,sp);rest=rest.slice(sp)}
     let ci=rest.search(/\s:/);if(ci>=0)ci++;else ci=rest.lastIndexOf(':');
@@ -105,32 +184,54 @@ function parseLAS(text,name){
     if(sec==='V'){if(up(mnem)==='WRAP'&&up(value)==='YES')wrap=true}
     else if(sec==='W')well[up(mnem)]={unit,value};
     else curves.push({mnem,unit,desc});
-  }
+  });
   if(wrap)throw new Error('Wrapped LAS (WRAP YES) is not supported: unwrap the file first (the LAS checker can do it).');
   if(curves.length<2)throw new Error('No curve found in the ~C section (a depth and at least one curve are needed).');
-  const nc=curves.length,nul=well.NULL&&NUM.test(well.NULL.value)?+well.NULL.value:-999.25;
-  const rows=data.filter(r=>r.length>=nc);
+  const nc=curves.length,rep=newReport();rep.delimiter='blanks (LAS)';
+  const fileNul=well.NULL&&NUM.test(well.NULL.value)?+well.NULL.value:-999.25;
+  data.forEach((r,i)=>{if(r.length<nc)skipRow(rep,'incomplete row',dline[i])});
+  const rows=[],ln=[];data.forEach((r,i)=>{if(r.length>=nc){rows.push(r);ln.push(dline[i])}});
   if(rows.length<2)throw new Error('The ~A section holds fewer than 2 complete rows.');
-  const cols=curves.map(()=>new Float64Array(rows.length));
-  rows.forEach((r,i)=>{for(let j=0;j<nc;j++){const x=NUM.test(r[j])?+r[j]:NaN;cols[j][i]=(x===nul||!isFinite(x))?NaN:x}});
+  const cols=numberColumns(rows,nc,ln,{nulls:o.nulls||DEFAULT_NULLS,comma:false},rep,[fileNul]);
+  rep.read=data.length;
+  if(cols[0].length<2)throw new Error('Fewer than 2 usable depth rows. '+describeReport(rep));
   return {name:name||(well.WELL&&well.WELL.value)||'log',depthName:curves[0].mnem,depthUnit:curves[0].unit||(well.STRT&&well.STRT.unit)||'',depth:cols[0],
-    curves:curves.slice(1).map((c,k)=>({mnem:c.mnem,unit:c.unit,v:cols[k+1]}))};
+    curves:curves.slice(1).map((c,k)=>({mnem:c.mnem,unit:c.unit,v:cols[k+1]})),report:rep};
 }
-// Delimited text: comma, semicolon, tab or blanks; optional header line; first column = depth.
-function parseTable(text,name){
-  const L=String(text).replace(/^\uFEFF/,'').split(/\r\n|\n|\r/).map(s=>s.trim()).filter(s=>s&&s[0]!=='#');
+// Delimited text: tab, semicolon, blanks or comma (decimal comma recognised); optional header line; first column = depth.
+function parseTable(text,name,o){
+  o=o||{};
+  const raw=String(text).replace(/^\uFEFF/,'').split(/\r\n|\n|\r/),L=[],ln=[];
+  raw.forEach((s,i)=>{const t=s.trim();if(t&&t[0]!=='#'){L.push(t);ln.push(i+1)}});
   if(L.length<3)throw new Error('Fewer than 3 usable lines.');
-  const delim=/[;\t]/.test(L[0])?/[;\t]/:(/,/.test(L[0])?/,/:/\s+/);
-  const tk=s=>delim.source==='\\s+'?s.split(/\s+/):s.split(delim).map(x=>x.trim());
-  let first=tk(L[0]),hdr=first.some(x=>x!==''&&!NUM.test(x));
-  const body=L.slice(hdr?1:0).map(tk);
-  const nc=Math.max(...body.map(r=>r.length));if(nc<2)throw new Error('At least two columns (depth, value) are needed.');
+  const dd=detectDelimiter(L);if(!dd.delim)throw new Error('No delimiter found: at least two columns (depth, value) separated by a tab, a semicolon, blanks or a comma are needed.');
+  const tk=s=>splitWith(s,dd.delim),first=tk(L[0]);
+  // a header has a non-numeric field that is not a missing-value token
+  const hdr=first.some(x=>parseNumber(x,{comma:dd.decimalComma}).kind==='text');
+  const rows=L.slice(hdr?1:0).map(tk),lno=ln.slice(hdr?1:0);
+  const nc=Math.max(...rows.map(r=>r.length));if(nc<2)throw new Error('At least two columns (depth, value) are needed.');
+  const rep=newReport();rep.delimiter=dd.delim==='\t'?'tab':dd.delim==='ws'?'blanks':dd.delim==';'?'semicolon':'comma';
+  rep.decimal=dd.decimalComma?'comma':'point';
   const names=hdr?first:Array.from({length:nc},(_,i)=>i?'value'+(nc>2?i:''):'depth');
-  const cols=Array.from({length:nc},()=>new Float64Array(body.length));
-  body.forEach((r,i)=>{for(let j=0;j<nc;j++){const x=r[j]!=null&&NUM.test(r[j])?+r[j]:NaN;cols[j][i]=x}});
-  return {name:name||'log',depthName:names[0]||'depth',depthUnit:'',depth:cols[0],curves:cols.slice(1).map((v,k)=>({mnem:names[k+1]||('c'+(k+1)),unit:'',v}))};
+  const cols=numberColumns(rows,nc,lno,{nulls:o.nulls||DEFAULT_NULLS,comma:dd.decimalComma},rep);
+  if(cols[0].length<2)throw new Error('Fewer than 2 usable depth rows. '+describeReport(rep));
+  // depth-unit hint in the header, e.g. "DEPTH (ft)" or "depth_m"
+  const um=/\b(ft|feet|foot|m|metres?|meters?)\b|\((ft|m)\)|_(ft|m)\b/i.exec(names[0]||'');
+  return {name:name||'log',depthName:names[0]||'depth',depthUnit:um?(um[1]||um[2]||um[3]):'',depth:cols[0],curves:cols.slice(1).map((v,k)=>({mnem:names[k+1]||('c'+(k+1)),unit:'',v})),report:rep};
 }
-const parseAny=(text,name)=>/^\s*~\s*[Vv]/m.test(text)?parseLAS(text,name):parseTable(text,name);
+const parseAny=(text,name,o)=>/^\s*~\s*[Vv]/m.test(text)?parseLAS(text,name,o):parseTable(text,name,o);
+// depth unit: 'm', 'ft' or '' (unknown)
+function unitKind(u){u=String(u||'').trim().toLowerCase();return /^(m|meters?|metres?)$/.test(u)?'m':/^(f|ft|feet|foot)$/.test(u)?'ft':''}
+// plausibility of the depth unit from the depth range and step: list of warnings
+function unitWarnings(lg,kind){
+  const w=[],z=Array.from(lg.depth).filter(isFinite).sort((a,b)=>a-b);if(z.length<3)return w;
+  const d=[];for(let i=1;i<z.length;i++)if(z[i]>z[i-1])d.push(z[i]-z[i-1]);d.sort((a,b)=>a-b);const step=d.length?d[d.length>>1]:0;
+  const nearv=(x,t)=>Math.abs(x-t)<=0.01*t;
+  if(kind==='m'&&[0.1524,0.3048,0.6096,1.524].some(t=>nearv(step,t)))w.push(`depth step ${+step.toPrecision(5)} looks like feet (0.1524, 0.3048 or 0.6096) but the unit is m`);
+  if(kind==='m'&&z[z.length-1]>9000)w.push(`depths down to ${z[z.length-1]} with unit m: deeper than almost any well, the unit may be feet`);
+  if(kind==='ft'&&[0.1,0.2,0.5].some(t=>nearv(step,t)))w.push(`depth step ${+step.toPrecision(5)} looks like metres (0.1, 0.2 or 0.5) but the unit is ft`);
+  return w;
+}
 
 // LAS 2.0 writer; NaN written as the null value
 function writeLAS(o){
@@ -270,27 +371,83 @@ function metrics(A,B,res,o){
     straightness:m>1?Math.max(0,1-dev/(m-1)):1,oneToManyA:ma/n,oneToManyB:mb/m,maxSlope:maxS};
 }
 
-// ---------------- null hypothesis: synthetic versions of B with the same statistics
-function blockShuffle(B,L,r){
-  const m=B[0].length;L=Math.max(1,Math.min(m,Math.round(L)));const nb=Math.ceil(m/L),ord=Array.from({length:nb},(_,i)=>i);
-  for(let i=nb-1;i>0;i--){const j=Math.floor(r()*(i+1));[ord[i],ord[j]]=[ord[j],ord[i]]}
-  return B.map(x=>{const o=new Float64Array(m);let p=0;for(const b of ord){const s=b*L,e=Math.min(m,s+L);for(let i=s;i<e;i++)o[p++]=x[i]}return o});
+// ---------------- null hypothesis: surrogate versions of B that keep its amplitude spectrum (autocorrelation) but not its phases
+// Why not block shuffling: the shuffled blocks are joined with jumps, so their DTW cost is always higher than that of a smooth
+// B, and p then measures smoothness, not correspondence (false-positive rate of 75 % on unrelated AR(1) logs, measured).
+// Phase randomisation (Theiler et al. 1992): the Fourier amplitudes of B are kept, the phases are drawn at random (the same
+// phases for every curve of B, which keeps the cross-spectrum of the curves). IAAFT adds the exact value distribution of B.
+function fftPow2(re,im){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+  for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang);
+    for(let i=0;i<n;i+=len){let cr=1,ci=0;for(let k=0;k<len/2;k++){const a=i+k,b=a+len/2,xr=re[b]*cr-im[b]*ci,xi=re[b]*ci+im[b]*cr;
+      re[b]=re[a]-xr;im[b]=im[a]-xi;re[a]+=xr;im[a]+=xi;const t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t}}}
 }
-function ar1Fit(x){const n=x.length,s=stats(x);let a=0,b=0;for(let i=1;i<n;i++){a+=(x[i]-s.mean)*(x[i-1]-s.mean)}for(let i=0;i<n;i++)b+=(x[i]-s.mean)*(x[i]-s.mean);
-  const phi=b>0?Math.max(-0.99,Math.min(0.995,a/b)):0;return {mean:s.mean,sd:s.sd,phi}}
-function ar1Sim(B,r){ // independent AR(1) per curve, same mean, sd and lag-1 autocorrelation as the real curve
-  return B.map(x=>{const f=ar1Fit(x),m=x.length,o=new Float64Array(m),se=f.sd*Math.sqrt(1-f.phi*f.phi);
-    o[0]=f.mean+f.sd*gauss(r);for(let i=1;i<m;i++)o[i]=f.mean+f.phi*(o[i-1]-f.mean)+se*gauss(r);return o});
+// forward DFT (sign -1) of any length (Bluestein); inv = true gives the inverse (scaled by 1/n)
+function dft(xr,xi,inv){
+  const n=xr.length;let re=Float64Array.from(xr),im=Float64Array.from(xi);
+  if(inv)for(let i=0;i<n;i++)im[i]=-im[i];
+  let R,I;
+  if((n&(n-1))===0){fftPow2(re,im);R=re;I=im}
+  else{
+    let m=1;while(m<2*n-1)m<<=1;
+    const wr=new Float64Array(n),wi=new Float64Array(n);
+    for(let k=0;k<n;k++){const a=Math.PI*((k*k)%(2*n))/n;wr[k]=Math.cos(a);wi[k]=-Math.sin(a)}
+    const ar=new Float64Array(m),ai=new Float64Array(m),br=new Float64Array(m),bi=new Float64Array(m);
+    for(let k=0;k<n;k++){ar[k]=re[k]*wr[k]-im[k]*wi[k];ai[k]=re[k]*wi[k]+im[k]*wr[k];br[k]=wr[k];bi[k]=-wi[k];if(k)br[m-k]=wr[k],bi[m-k]=-wi[k]}
+    fftPow2(ar,ai);fftPow2(br,bi);
+    for(let k=0;k<m;k++){const x=ar[k]*br[k]-ai[k]*bi[k],y=ar[k]*bi[k]+ai[k]*br[k];ar[k]=x;ai[k]=-y} // conjugate for the inverse transform
+    fftPow2(ar,ai);R=new Float64Array(n);I=new Float64Array(n);
+    for(let k=0;k<n;k++){const cr=ar[k]/m,ci=-ai[k]/m;R[k]=cr*wr[k]-ci*wi[k];I[k]=cr*wi[k]+ci*wr[k]}
+  }
+  if(inv){for(let i=0;i<n;i++){R[i]/=n;I[i]=-I[i]/n}}
+  return {re:R,im:I};
 }
-function nullSample(B,type,L,r){return type==='ar1'?ar1Sim(B,r):blockShuffle(B,L,r)}
+// surrogator(B, type) -> function(r) giving one surrogate of the curve set B (array of Float64Array); type 'phase' or 'iaaft'
+function surrogator(B,type,iter){
+  const n=B[0].length,zero=new Float64Array(n),spec=B.map(x=>dft(x,zero,false)),half=Math.floor((n-1)/2);
+  const sorted=B.map(x=>Float64Array.from(x).sort()),amp=spec.map(S=>S.re.map((a,k)=>Math.hypot(a,S.im[k])));
+  iter=iter==null?20:iter;
+  return r=>{
+    const th=new Float64Array(n);for(let k=1;k<=half;k++)th[k]=2*Math.PI*r();
+    const out=spec.map(S=>{const re=new Float64Array(n),im=new Float64Array(n);
+      for(let k=0;k<n;k++){
+        if(k===0||(n%2===0&&k===n/2)){re[k]=S.re[k];im[k]=S.im[k];continue}
+        const t=k<=half?th[k]:-th[n-k],c=Math.cos(t),s=Math.sin(t);re[k]=S.re[k]*c-S.im[k]*s;im[k]=S.re[k]*s+S.im[k]*c}
+      return dft(re,im,true).re});
+    if(type!=='iaaft')return out;
+    return out.map((x,c)=>{ // iterative amplitude adjusted Fourier transform (Schreiber and Schmitz 1996)
+      const remap=y=>{const ix=Array.from({length:n},(_,i)=>i).sort((a,b)=>y[a]-y[b]),o=new Float64Array(n);ix.forEach((i,rk)=>o[i]=sorted[c][rk]);return o};
+      let y=remap(x);
+      for(let it=0;it<iter;it++){const S=dft(y,zero,false),re=new Float64Array(n),im=new Float64Array(n);
+        for(let k=0;k<n;k++){const a=Math.hypot(S.re[k],S.im[k])||1;re[k]=S.re[k]/a*amp[c][k];im[k]=S.im[k]/a*amp[c][k]}
+        y=remap(dft(re,im,true).re)}
+      return y});
+  };
+}
+// Pearson correlation along a DTW path, weighted mean over the curve pairs
+function pathCorr(A,B,res,w){
+  const K=A.length,L=res.pi.length;let cw=0,cs=0;
+  for(let k=0;k<K;k++){const x=new Float64Array(L),y=new Float64Array(L);for(let t=0;t<L;t++){x[t]=A[k][res.pi[t]];y[t]=B[k][res.pj[t]]}
+    const c=pearson(x,y),wk=w&&w.length===K?w[k]:1;if(isFinite(c)){cw+=wk;cs+=wk*c}}
+  return cw?cs/cw:NaN;
+}
 // real = normalised cost of the unconstrained DTW; p = (1 + #{null <= real}) / (nsim + 1)  (one-sided: lower cost = better match)
 function pValue(real,nulls){let c=0;for(const x of nulls)if(x<=real)c++;return (1+c)/(nulls.length+1)}
-function nullTest(A,B,o){
-  o=o||{};const nsim=o.nsim||100,r=rng(o.seed==null?1:o.seed),dopt={pattern:o.pattern,band:o.band,weights:o.weights};
-  const real=dtw(A,B,dopt).norm,nulls=new Float64Array(nsim);
-  for(let s=0;s<nsim;s++){const res=dtw(A,nullSample(B,o.type||'block',o.blockLen||10,r),dopt);nulls[s]=res?res.norm:NaN}
-  const ok=Array.from(nulls).filter(isFinite),st=stats(Float64Array.from(ok));
-  return {real,nulls,p:pValue(real,ok),mean:st.mean,sd:st.sd,z:st.sd>0?(real-st.mean)/st.sd:NaN};
+const nullType=t=>t==='iaaft'?'iaaft':'phase'; // old session files may carry 'block' or 'ar1': these were removed (invalid null)
+// nullStart(A,B,o) -> {nsim, step(), finish()}: step() runs one surrogate (so a page can run them in chunks); finish() gives the result
+function nullStart(A,B,o){
+  o=o||{};const nsim=o.nsim||100,r=rng(o.seed==null?1:o.seed),dopt={pattern:o.pattern,band:o.band,weights:o.weights},type=nullType(o.type),gen=surrogator(B,type,o.iter);
+  const rr=dtw(A,B,dopt),real=rr.norm,corrReal=pathCorr(A,B,rr,o.weights),nulls=[],cn=[];
+  return {nsim,type,step(){const s=gen(r),res=dtw(A,s,dopt);if(res){nulls.push(res.norm);cn.push(pathCorr(A,s,res,o.weights))}},
+    finish(){const f=nullFinish(real,Float64Array.from(nulls),corrReal,Float64Array.from(cn));f.type=type;f.nsim=nsim;return f}};
+}
+function nullTest(A,B,o){const h=nullStart(A,B,o);for(let s=0;s<h.nsim;s++)h.step();return h.finish()}
+function nullFinish(real,nulls,corrReal,cn){
+  const ok=Array.from(nulls).filter(isFinite),st=stats(Float64Array.from(ok)),cok=Array.from(cn).filter(isFinite);
+  let ge=0;for(const x of cok)if(x>=corrReal)ge++;
+  const cs=stats(Float64Array.from(cok.length?cok:[NaN]));
+  return {real,nulls,p:pValue(real,ok),mean:st.mean,sd:st.sd,z:st.sd>0?(real-st.mean)/st.sd:NaN,corrReal,corrNulls:cn,corrMean:cs.mean,pCorr:(1+ge)/(cok.length+1)};
 }
 
 // ---------------- synthetic example: a pair of clearly fictitious logs
@@ -311,7 +468,7 @@ function exampleLogs(seed,step){
 }
 
 W.LC={rng,gauss,parseLAS,parseTable,parseAny,writeLAS,gridN,resample,fillNaN,smooth,normalise,prepare,stats,mkDist,dtw,pathCost,dtwSegments,mapAtoB,warpValues,pearson,metrics,
-  blockShuffle,ar1Fit,ar1Sim,nullSample,pValue,nullTest,exampleLogs,mapAB,mapBA,EX_NODES};
+  parseNumber,detectDelimiter,describeReport,unitKind,unitWarnings,DEFAULT_NULLS,dft,surrogator,pathCorr,pValue,nullStart,nullTest,exampleLogs,mapAB,mapBA,EX_NODES};
 })(typeof window!=='undefined'?window:globalThis);
 
 </script>
@@ -333,6 +490,7 @@ W.LC={rng,gauss,parseLAS,parseTable,parseAny,writeLAS,gridN,resample,fillNaN,smo
   <div class="body"><div class="pg"><span>Depth step</span><input type="number" id="step" value="0.5" min="0.001" step="any">
    <span>Smoothing</span><input type="number" id="smooth" value="3" min="1" step="2" title="Moving-average window, in samples (1 = none)">
    <span>Standardise</span><select id="norm"><option value="zscore">z-score (mean 0, sd 1)</option><option value="minmax">min-max (0 to 1)</option><option value="none">none (raw values)</option></select></div>
+   <div class="pg"><span>Null values</span><input type="text" id="nulls" value="-999, -999.25, -9999, 9999, 1e30, 1.70141e38" title="Values equal to one of these are excluded (treated as missing) and counted when a log is loaded. Empty the field to keep every value. A repeated value that looks like a null (for example -99999) but is not in the list only produces a warning."></div>
    <div class="hint">Curve pairs matched by DTW (each pair: one curve of A against one of B; weights are relative):</div>
    <div class="prs" id="pairs"></div></div></section>
  <section class="panel"><h2><span class="n">4</span>DTW<span class="tt" tabindex="0" data-tip="symmetric2: diagonal step counts twice (the path cost is normalised by n+m, so costs of different lengths compare). symmetric1: all steps count once (normalised by the path length). The band keeps the path within a corridor around the straight line between the two corners: a narrower band forbids large shifts and extreme stretching. Datums are depth pairs that must be matched exactly: DTW is solved between consecutive datums and joined.">?</span><i class="chev"></i></h2>
@@ -344,10 +502,9 @@ W.LC={rng,gauss,parseLAS,parseTable,parseAny,writeLAS,gridN,resample,fillNaN,smo
   <div class="body"><div class="g3"><span>Depth A</span><input type="number" id="dA" step="any"><span>Depth B</span><input type="number" id="dB" step="any"></div>
    <div class="row"><button id="dAdd">Add datum</button><button id="dPick">Pick on the logs</button><button id="dClear">Clear</button></div>
    <div class="msg" id="dMsg"></div><div class="tw" id="dTab" style="max-height:150px"></div></div></section>
- <section class="panel collapsed"><h2><span class="n">6</span>Null hypothesis test<span class="tt" tabindex="0" data-tip="The real normalised DTW cost is compared with the cost obtained against synthetic versions of log B that keep its value distribution (block shuffle) or its mean, spread and lag-1 autocorrelation (AR(1)) but not its sequence of features. p = share of synthetic logs that match A at least as well. It answers 'is this fit better than DTW achieves on featureless look-alikes?', not 'is the correlation geologically right'. Both costs are computed without datums.">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="pg"><span>Synthetic logs</span><select id="nType"><option value="block">block-shuffled B</option><option value="ar1">AR(1) fitted to B</option></select>
+ <section class="panel collapsed"><h2><span class="n">6</span>Null hypothesis test<span class="tt" tabindex="0" data-tip="The real normalised DTW cost is compared with the cost obtained against surrogate versions of log B: same amplitude spectrum (so the same smoothness and autocorrelation) but random phases, hence no relation to A. IAAFT also keeps the exact value distribution. p = share of surrogates that match A at least as well. On independent autocorrelated logs the false-positive rate was measured near the nominal 5 % (see Method and sources). It answers 'is this fit better than DTW achieves on look-alikes of B that are unrelated to A?', not 'is the correlation geologically right'. Both costs are computed without datums.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Synthetic logs</span><select id="nType"><option value="phase">phase-randomised B</option><option value="iaaft">IAAFT surrogates of B</option></select>
    <span>Number</span><input type="number" id="nSim" value="100" min="10" max="2000">
-   <span>Block length</span><input type="number" id="nBlk" value="5" min="0.001" step="any" title="Depth units (block shuffle only)">
    <span>Seed</span><input type="number" id="nSeed" value="1"></div>
    <div class="row"><button class="pri" id="bNull">Run test</button><span class="msg" id="nMsg"></span></div></div></section>
 </aside>
@@ -363,7 +520,7 @@ function download(name,data,mime){const a=document.createElement('a');a.href=URL
 const fmt=(v,d)=>isFinite(v)?(+v).toFixed(d==null?3:d):'—';
 const csvq=s=>{s=String(s==null?'':s);if(/^[=+\-@\t\r]/.test(s)&&isNaN(+s))s="'"+s;return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
 
-const S={A:null,B:null,datums:[],R:null,pick:false,pend:{a:null,b:null},nullR:null,pairs:[{on:true,a:0,b:0,w:1},{on:false,a:1,b:1,w:1},{on:false,a:0,b:0,w:1}]};
+const S={src:{A:null,B:null},A:null,B:null,datums:[],R:null,pick:false,pend:{a:null,b:null},nullR:null,pairs:[{on:true,a:0,b:0,w:1},{on:false,a:1,b:1,w:1},{on:false,a:0,b:0,w:1}]};
 
 // ---- input panels (same layout for A and B)
 function buildInput(side){
@@ -371,8 +528,9 @@ function buildInput(side){
   <div class="row"><button class="pri" id="bF${side}">Choose file…</button><input type="file" id="f${side}" accept=".las,.LAS,.csv,.txt,.tsv,text/*" hidden><button id="bEx${side}" class="exbtn">Example pair</button></div>
   <textarea id="t${side}" placeholder="depth value[ value2…]  (header line optional; comma, tab, semicolon or blank separated)" spellcheck="false"></textarea>
   <div class="row"><button id="bP${side}">Use pasted text</button><span class="msg" id="m${side}"></span></div>
-  <div class="small" id="info${side}"></div>
-  <div class="g3" style="margin-top:6px"><span>From</span><input type="number" id="z0${side}" step="any"><span>to</span><input type="number" id="z1${side}" step="any"></div>`;
+  <div class="small" id="info${side}"></div><div class="small" id="rep${side}"></div>
+  <div class="g3" style="margin-top:6px"><span>From</span><input type="number" id="z0${side}" step="any"><span>to</span><input type="number" id="z1${side}" step="any"></div>
+  <div class="g3" style="margin-top:6px"><span>Depth unit</span><select id="u${side}" title="Unit of the depth column of this log. If A and B differ, B is converted to the unit of A before the matching."><option value="">unknown</option><option value="m">m</option><option value="ft">ft</option></select></div>`;
   $('bF'+side).onclick=()=>$('f'+side).click();
   $('f'+side).onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadText(side,await f.text(),f.name)};
   $('bP'+side).onclick=()=>loadText(side,$('t'+side).value,'pasted '+side);
@@ -381,22 +539,42 @@ function buildInput(side){
   ['dragover','dragenter'].forEach(ev=>d.parentElement.addEventListener(ev,e=>{e.preventDefault();d.style.borderColor='var(--acc)'}));
   d.parentElement.addEventListener('drop',async e=>{e.preventDefault();e.stopPropagation();const f=e.dataTransfer.files[0];if(f)loadText(side,await f.text(),f.name)});
   ['z0','z1'].forEach(k=>$(k+side).onchange=()=>{if(S.A&&S.B)run()});
+  $('u'+side).onchange=()=>{if(S[side])unitInfo(side);if(S.A&&S.B)run()};
 }
 buildInput('A');buildInput('B');
 addEventListener('dragover',e=>e.preventDefault());addEventListener('drop',e=>e.preventDefault());
 
-function loadText(side,text,name){
-  try{const lg=LC.parseAny(text,name.replace(/\.[^.]+$/,''));
-    if(lg.depth.length<10)throw new Error('Fewer than 10 samples.');
-    setLog(side,lg);$('m'+side).textContent='';$('m'+side).className='msg';
-    if(S.A&&S.B)run();else drawMain()}
-  catch(e){$('m'+side).textContent=e.message;$('m'+side).className='msg err'}
+// null values (contract C): list typed by the user, editable, can be emptied
+function nullList(){const t=$('nulls').value;return t.split(/[\s;]+|,(?=\s)/).map(x=>x.trim()).filter(Boolean).map(x=>LC.parseNumber(x,{})).filter(r=>r.kind==='ok').map(r=>r.value)}
+// contract B: a failed load clears the previous log of this side, the results and the charts
+function clearSide(side,msg){
+  S[side]=null;S.src[side]=null;S.R=null;S.nullR=null;$('info'+side).textContent='';$('rep'+side).textContent='';$('rep'+side).className='small';
+  $('z0'+side).value='';$('z1'+side).value='';$('m'+side).textContent=msg;$('m'+side).className='msg err';drawPairs();drawMain();syncExport();
 }
-function setLog(side,lg){
-  S[side]=lg;const z=Array.from(lg.depth).filter(isFinite);let lo=Infinity,hi=-Infinity;for(const v of z){if(v<lo)lo=v;if(v>hi)hi=v}
+function loadText(side,text,name,keepUnit){
+  try{const lg=LC.parseAny(text,name.replace(/\.[^.]+$/,''),{nulls:nullList()});
+    if(lg.depth.length<10)throw new Error('Fewer than 10 samples. '+LC.describeReport(lg.report));
+    S.src[side]={text,name};
+    setLog(side,lg,keepUnit);$('m'+side).textContent='';$('m'+side).className='msg';
+    if(S.A&&S.B)run();else drawMain()}
+  catch(e){clearSide(side,e.message)}
+}
+function reloadAll(){['A','B'].forEach(s=>{if(S.src[s])loadText(s,S.src[s].text,S.src[s].name,true)})}
+function unitInfo(side){
+  const lg=S[side],k=$('u'+side).value,w=lg?LC.unitWarnings(lg,k):[],o=other(side);
+  if(S.A&&S.B){const ka=$('uA').value,kb=$('uB').value;
+    if(ka&&kb&&ka!==kb)w.push('B is converted to the unit of A ('+ka+') before the matching');
+    else if(!ka||!kb)w.push('depth unit unknown for '+(!ka&&!kb?'A and B':!ka?'A':'B')+': the same unit is assumed for both logs');
+    else{const mid=s=>{const z=Array.from(S[s].depth).filter(isFinite).sort((x,y)=>x-y);return z[z.length>>1]},r=mid('A')/mid('B');
+      if((r>3&&r<3.6)||(r>1/3.6&&r<1/3))w.push('the median depths of A and B differ by a factor near 3.28: one log may be in feet and the other in metres')}}
+  $('rep'+side).innerHTML=(S.src[side]&&S[side]?esc(LC.describeReport(S[side].report)):'')+(w.length?'<div class="msg err">'+w.map(esc).join('<br>')+'</div>':'');
+}
+const other=s=>s==='A'?'B':'A';
+function setLog(side,lg,keepUnit){
+  S[side]=lg;if(!keepUnit||!$('u'+side).value)$('u'+side).value=LC.unitKind(lg.depthUnit);const z=Array.from(lg.depth).filter(isFinite);let lo=Infinity,hi=-Infinity;for(const v of z){if(v<lo)lo=v;if(v>hi)hi=v}
   lg.zmin=lo;lg.zmax=hi;$('z0'+side).value=+lo.toPrecision(8);$('z1'+side).value=+hi.toPrecision(8);
   $('info'+side).textContent=`${lg.name}: ${lg.depth.length} samples, ${lo} to ${hi} ${lg.depthUnit||''}; curves: ${lg.curves.map(c=>c.mnem+(c.unit?' ('+c.unit+')':'')).join(', ')}`;
-  drawPairs();
+  drawPairs();unitInfo(side);
 }
 function drawPairs(){
   const optsOf=lg=>lg?lg.curves.map((c,i)=>`<option value="${i}">${esc(c.mnem)}</option>`).join(''):'';
@@ -409,31 +587,35 @@ function drawPairs(){
 // ---- preparation + run
 function opts(){return {step:Math.max(1e-6,+$('step').value||0.5),smooth:Math.max(1,+$('smooth').value||1),norm:$('norm').value}}
 function prepareAll(){
-  const o=opts(),pr=S.pairs.filter(p=>p.on);if(!pr.length)throw new Error('Tick at least one curve pair.');
-  const r=(side)=>{const lg=S[side],z0=+$('z0'+side).value,z1=+$('z1'+side).value;if(!(z1>z0))throw new Error(`Log ${side}: the depth range is empty.`);
+  const o=opts(),pr=S.pairs.filter(p=>p.on).map(p=>({...p,a:Math.min(p.a,S.A.curves.length-1),b:Math.min(p.b,S.B.curves.length-1)}));if(!pr.length)throw new Error('Tick at least one curve pair.');
+  const ka=$('uA').value,kb=$('uB').value,fB=(ka&&kb&&ka!==kb)?(kb==='ft'?0.3048:1/0.3048):1;
+  const r=(side)=>{const f=side==='B'?fB:1,z0=+$('z0'+side).value*f,z1=+$('z1'+side).value*f;if(!(z1>z0))throw new Error(`Log ${side}: the depth range is empty (check the From and To fields).`);
+    const lg=f===1?S[side]:{...S[side],depth:Float64Array.from(S[side].depth,x=>x*f)};
     return LC.prepare(lg,pr.map(p=>side==='A'?p.a:p.b),{...o,z0,z1})};
-  return {pa:r('A'),pb:r('B'),pr,o};
+  return {pa:r('A'),pb:r('B'),pr,o,fB};
 }
 function run(){
   const t0=performance.now();$('runMsg').textContent='';S.nullR=null;
   try{
-    const {pa,pb,pr,o}=prepareAll();
+    const {pa,pb,pr,o,fB}=prepareAll();
     if(pa.n*pb.n>36e6)throw new Error(`${pa.n} x ${pb.n} samples is too large (limit 36 million cells): increase the depth step or narrow the range.`);
     const w=pr.map(p=>p.w),pat=$('pattern').value,bandD=+$('band').value||0,dopt={pattern:pat,band:bandD/o.step,weights:w};
     const dat=S.datums.map(d=>({a:(d.za-pa.z0)/o.step,b:(d.zb-pb.z0)/o.step})).filter(d=>d.a>=-0.5&&d.a<=pa.n-0.5&&d.b>=-0.5&&d.b<=pb.n-0.5);
     const res=dat.length?LC.dtwSegments(pa.norm,pb.norm,dat,dopt):LC.dtw(pa.norm,pb.norm,dopt);
     if(!res)throw new Error('No path inside the band: widen it.');
     const mt=LC.metrics(pa.norm,pb.norm,res,{weights:w,maxSlope:+$('maxS').value||2});
-    S.R={pa,pb,pr,o,res,mt,dopt,dat,ms:performance.now()-t0,w};
+    S.R={pa,pb,pr,o,res,mt,dopt,dat,ms:performance.now()-t0,w,fB};
     $('runMsg').textContent=`${pa.n} x ${pb.n} samples, ${Math.round(S.R.ms)} ms`+(res.rEff?`, band ${(res.rEff*o.step).toPrecision(3)}`:'');
-    ['bCorr','bWarpLas','bWarpCsv'].forEach(i=>$(i).disabled=false);
-  }catch(e){S.R=null;$('runMsg').textContent=e.message;$('runMsg').className='msg err';drawMain();return}
+    syncExport();
+  }catch(e){S.R=null;syncExport();$('runMsg').textContent=e.message;$('runMsg').className='msg err';drawMain();return}
   $('runMsg').className='msg';drawMain();
 }
 $('bRun').onclick=()=>{if(!S.A||!S.B){banner('Load log A and log B first (or try the example).',true);return}run()};
 ['step','smooth','norm','pattern','band','maxS'].forEach(i=>$(i).onchange=()=>{if(S.A&&S.B)run()});
+$('nulls').onchange=reloadAll;
 
 // ---- datums
+function syncExport(){['bCorr','bWarpLas','bWarpCsv'].forEach(i=>$(i).disabled=!S.R)}
 function drawDatums(){
   $('dTab').innerHTML=S.datums.length?'<table><thead><tr><th>Depth A</th><th>Depth B</th><th></th></tr></thead><tbody>'+S.datums.map((d,i)=>`<tr><td>${+d.za.toPrecision(8)}</td><td>${+d.zb.toPrecision(8)}</td><td><button data-rm="${i}" aria-label="remove datum">✕</button></td></tr>`).join('')+'</tbody></table>':'<div class="small" style="padding:6px 8px">No datum: the whole logs are matched in one piece.</div>';
   $('dTab').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{S.datums.splice(+b.dataset.rm,1);drawDatums();if(S.A&&S.B)run()});
@@ -452,13 +634,11 @@ $('dPick').onclick=()=>{S.pick=!S.pick;S.pend={a:null,b:null};$('dPick').classLi
 // ---- null test (chunked so the page stays responsive)
 $('bNull').onclick=async()=>{
   if(!S.R){banner('Run DTW first.',true);return}
-  const R=S.R,nsim=Math.min(2000,Math.max(10,+$('nSim').value||100)),type=$('nType').value,seed=+$('nSeed').value||1,L=Math.max(1,Math.round((+$('nBlk').value||5)/R.o.step));
-  const dopt={pattern:R.dopt.pattern,band:R.dopt.band,weights:R.dopt.weights},r=LC.rng(seed);
-  $('bNull').disabled=true;const real=LC.dtw(R.pa.norm,R.pb.norm,dopt).norm,nulls=[];
-  for(let s=0;s<nsim;s++){const res=LC.dtw(R.pa.norm,LC.nullSample(R.pb.norm,type,L,r),dopt);if(res)nulls.push(res.norm);
-    if(s%4===3){$('nMsg').textContent=`${s+1} / ${nsim}`;await new Promise(z=>setTimeout(z))}}
-  const st=LC.stats(Float64Array.from(nulls));
-  S.nullR={real,nulls,p:LC.pValue(real,nulls),mean:st.mean,sd:st.sd,type,nsim,seed,L};
+  const R=S.R,nsim=Math.min(2000,Math.max(10,+$('nSim').value||100)),type=LC.nullStart?($('nType').value==='iaaft'?'iaaft':'phase'):'phase',seed=+$('nSeed').value||1;
+  const dopt={pattern:R.dopt.pattern,band:R.dopt.band,weights:R.dopt.weights};
+  $('bNull').disabled=true;const h=LC.nullStart(R.pa.norm,R.pb.norm,{...dopt,nsim,seed,type});
+  for(let s=0;s<nsim;s++){h.step();if(s%4===3){$('nMsg').textContent=`${s+1} / ${nsim}`;await new Promise(z=>setTimeout(z))}}
+  S.nullR={...h.finish(),type,nsim,seed};
   $('nMsg').textContent=`p = ${S.nullR.p.toFixed(3)}`;$('bNull').disabled=false;drawMain();
 };
 
@@ -475,12 +655,13 @@ function drawMain(){
   const nz=Math.min(R.pa.n,R.pb.n);
   $('main').innerHTML=`<div class="tiles">
    ${tile('Normalised DTW cost',fmt(mt.norm,3),'per path step (standardised units)')}
-   ${tile('Correlation along the path',fmt(mt.corrMean,3),mt.corr.length>1?'per curve: '+mt.corr.map(c=>fmt(c,2)).join(' / '):'Pearson, warped A vs B',mt.corrMean<0.5)}
+   ${tile('Pearson r along the path (descriptive only)',fmt(mt.corrMean,3),(mt.corr.length>1?'per curve: '+mt.corr.map(c=>fmt(c,2)).join(' / ')+'. ':'')+'NOT evidence of correlation: high for unrelated smooth logs. Use the null test.',mt.corrMean<0.5)}
    ${tile('Extreme stretching',(mt.extremeShare*100).toFixed(0)+' %','path with slope > '+mt.maxSlope+' or < 1/'+mt.maxSlope,mt.extremeShare>0.3)}
    ${tile('Path straightness',fmt(mt.straightness,3),'1 = straight line corner to corner')}
    ${tile('Matched one-to-many',(mt.oneToManyA*100).toFixed(0)+' / '+(mt.oneToManyB*100).toFixed(0)+' %','A / B samples with several partners',Math.max(mt.oneToManyA,mt.oneToManyB)>0.5)}
    ${tile('Median slope',fmt(mt.slopeMedian,2),'10–90 %: '+fmt(mt.slopeP10,2)+' – '+fmt(mt.slopeP90,2))}
-   ${nr?tile('Null test p-value',nr.p<0.001?'< 0.001':nr.p.toFixed(3),`${nr.nsim} ${nr.type==='ar1'?'AR(1)':'block-shuffled'} logs`,nr.p>0.05):tile('Null test','not run','panel 6 on the left')}</div>
+   ${nr?tile('Null test p-value',nr.p<0.001?'< 0.001':nr.p.toFixed(3),`${nr.nsim} ${nr.type==='iaaft'?'IAAFT':'phase-randomised'} surrogates of B`,nr.p>0.05):tile('Null test','not run','panel 6 on the left')}
+   ${nr?tile('Correlation vs surrogates',nr.pCorr<0.001?'p < 0.001':'p = '+nr.pCorr.toFixed(3),`r = ${fmt(nr.corrReal,2)} against ${fmt(nr.corrMean,2)} on average for unrelated look-alikes`,nr.pCorr>0.05):''}</div>
   <div class="cards">
    <div class="card wide"><h3>Logs and tie lines<span class="small sp">${S.pick?'picking: click a depth in A, then in B':'tie lines: every '+Math.max(1,Math.round(mt.pathLen/50))+'th path point; orange = datums'}</span></h3><canvas id="cLogs" class="${S.pick?'chart-pick':''}" data-h="560"></canvas></div>
    <div class="card"><h3>Warping path on the local cost matrix</h3><canvas id="cMat" data-h="420"></canvas><div class="cap">Dark = small difference. Horizontal: A, vertical: B (downsampled for display).</div></div>
@@ -507,7 +688,7 @@ function drawLogs(){
   g.strokeStyle=COL.grid;g.lineWidth=1;for(const z of niceTicks(za0,za1,8)){const y=YA(z);g.beginPath();g.moveTo(xa,y);g.lineTo(xa+tw,y);g.stroke()}for(const z of niceTicks(zb0,zb1,8)){const y=YB(z);g.beginPath();g.moveTo(xb,y);g.lineTo(xb+tw,y);g.stroke()}
   axisY(g,xa,y0,y1,za0,za1,'l',8);axisY(g,xb+tw,y0,y1,zb0,zb1,'r',8);
   g.strokeStyle='#c9c4b6';g.strokeRect(xa+.5,y0+.5,tw-1,y1-y0);g.strokeRect(xb+.5,y0+.5,tw-1,y1-y0);
-  const pn=S.pairs.filter(p=>p.on)[0],nameA=S.A.curves[pn.a].mnem,nameB=S.B.curves[pn.b].mnem;
+  const pn=R.pr[0],nameA=S.A.curves[pn.a].mnem,nameB=S.B.curves[pn.b].mnem;
   g.fillStyle='#232220';g.font='600 12px Inter,system-ui,sans-serif';g.textAlign='center';g.fillText('A: '+nameA+' ('+S.A.name+')',xa+tw/2,16);g.fillText('B: '+nameB+' ('+S.B.name+')',xb+tw/2,16);g.font='11px Inter,system-ui,sans-serif';
   g.save();g.translate(12,(y0+y1)/2);g.rotate(-Math.PI/2);g.textAlign='center';g.fillStyle=COL.txt;g.fillText('depth A '+(S.A.depthUnit||''),0,0);g.restore();
   g.save();g.translate(w-10,(y0+y1)/2);g.rotate(Math.PI/2);g.textAlign='center';g.fillStyle=COL.txt;g.fillText('depth B '+(S.B.depthUnit||''),0,0);g.restore();
@@ -589,7 +770,7 @@ function drawNull(){
   g.fillStyle=COL.b;g.textAlign=X(nr.real)>w*0.6?'right':'left';g.fillText('real '+nr.real.toFixed(3),X(nr.real)+(X(nr.real)>w*0.6?-5:5),mt0+8);
   g.fillStyle=COL.txt;g.textAlign='center';for(let q=0;q<=5;q++){const t=lo+(hi-lo)*q/5;g.fillText(t.toFixed(2),X(t),h-14)}g.fillText('normalised DTW cost of synthetic logs',ml+pw/2,h-1);
   g.textAlign='right';g.fillText('count',ml-4,mt0+4);g.strokeStyle='#9a968a';g.lineWidth=1;g.strokeRect(ml,mt0,pw,ph);
-  $('nullCap').textContent=`${nr.nsim} ${nr.type==='ar1'?'AR(1) logs fitted to B':'block-shuffled copies of B (blocks of '+nr.L+' samples)'}, seed ${nr.seed}. Null mean ${nr.mean.toFixed(3)}, sd ${nr.sd.toFixed(3)}; the real cost is ${((nr.mean-nr.real)/(nr.sd||1)).toFixed(1)} sd below it. Empirical p = (1 + count(null ≤ real)) / (N + 1) = ${nr.p.toFixed(3)}.`;
+  $('nullCap').textContent=`${nr.nsim} ${nr.type==='iaaft'?'IAAFT surrogates (same amplitude spectrum and values as B)':'phase-randomised copies of B (same amplitude spectrum)'}, seed ${nr.seed}. Null mean ${nr.mean.toFixed(3)}, sd ${nr.sd.toFixed(3)}; the real cost is ${((nr.mean-nr.real)/(nr.sd||1)).toFixed(1)} sd below it. Empirical p = (1 + count(null ≤ real)) / (N + 1) = ${nr.p.toFixed(3)}. Pearson r along the path of the real match ${fmt(nr.corrReal,2)}, of surrogates ${fmt(nr.corrMean,2)} on average (a high r alone means little); share of surrogates with r at least as high: ${nr.pCorr.toFixed(3)}.`;
 }
 function pairNames(){const pr=S.R.pr;return {a:pr.map(p=>S.A.curves[p.a].mnem),b:pr.map(p=>S.B.curves[p.b].mnem)}}
 function drawCorrTable(){
@@ -603,7 +784,7 @@ addEventListener('resize',()=>{if(S.R){drawLogs();drawMat();drawWarp();drawShift
 
 // ---- exports
 const base=()=>(S.A?S.A.name:'A').replace(/\W+/g,'_')+'_vs_'+(S.B?S.B.name:'B').replace(/\W+/g,'_');
-$('bCorr').onclick=()=>{const R=S.R;if(!R)return;const nm=pairNames(),st=R.o.step,L=['depth_A,depth_B,shift,'+nm.a.map(x=>'A_'+x).concat(nm.b.map(x=>'B_'+x)).map(csvq).join(',')];
+$('bCorr').onclick=()=>{const R=S.R;if(!R)return;const nm=pairNames(),st=R.o.step,L=['depth_A,depth_B'+(R.fB!==1?'_in_unit_of_A':'')+',shift,'+nm.a.map(x=>'A_'+x).concat(nm.b.map(x=>'B_'+x)).map(csvq).join(',')];
   for(let t=0;t<R.res.pi.length;t++){const i=R.res.pi[t],j=R.res.pj[t],za=R.pa.z0+i*st,zb=R.pb.z0+j*st;
     L.push([+za.toFixed(6),+zb.toFixed(6),+(zb-za).toFixed(6),...R.pa.raw.map(v=>+v[i].toFixed(6)),...R.pb.raw.map(v=>+v[j].toFixed(6))].join(','))}
   download(base()+'_correspondence.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved the correspondence table'};
@@ -614,7 +795,7 @@ $('bWarpCsv').onclick=()=>{if(!S.R)return;const w=warped(),L=['depth_A,'+w.curve
   for(let i=0;i<w.z.length;i++)L.push([+w.z[i].toFixed(6),...w.curves.map(c=>isFinite(c.v[i])?+c.v[i].toFixed(6):'')].join(','));
   download(base()+'_B_warped.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved the warped log (CSV)'};
 $('bDatCsv').onclick=()=>{download(base()+'_datums.csv','depth_A,depth_B\r\n'+S.datums.map(d=>d.za+','+d.zb).join('\r\n'),'text/csv')};
-const UI=['step','smooth','norm','pattern','band','maxS','nType','nSim','nBlk','nSeed','z0A','z1A','z0B','z1B'];
+const UI=['step','smooth','norm','pattern','band','maxS','nType','nSim','nSeed','z0A','z1A','z0B','z1B','uA','uB','nulls'];
 const pack=lg=>lg?{name:lg.name,depthName:lg.depthName,depthUnit:lg.depthUnit,depth:Array.from(lg.depth),curves:lg.curves.map(c=>({mnem:c.mnem,unit:c.unit,v:Array.from(c.v)}))}:null;
 const unpack=o=>o?{name:o.name,depthName:o.depthName,depthUnit:o.depthUnit,depth:Float64Array.from(o.depth,x=>x==null?NaN:x),curves:o.curves.map(c=>({mnem:c.mnem,unit:c.unit,v:Float64Array.from(c.v,x=>x==null?NaN:x)}))}:null;
 $('bSave').onclick=()=>{const ui={};UI.forEach(k=>ui[k]=$(k).value);
@@ -622,14 +803,14 @@ $('bSave').onclick=()=>{const ui={};UI.forEach(k=>ui[k]=$(k).value);
 $('bOpenJson').onclick=()=>$('fJson').click();
 $('fJson').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const o=JSON.parse(await f.text());if(o.app!=='logcorr')throw new Error('Not a log correlation file.');
-    S.A=null;S.B=null;if(o.A)setLog('A',unpack(o.A));if(o.B)setLog('B',unpack(o.B));S.pairs=o.pairs||S.pairs;S.datums=o.datums||[];drawPairs();drawDatums();
-    Object.entries(o.ui||{}).forEach(([k,v])=>{if($(k))$(k).value=v});if(S.A&&S.B)run();else drawMain();$('exportMsg').textContent='Session opened'}
+    S.A=null;S.B=null;S.src={A:null,B:null};if(o.A)setLog('A',unpack(o.A));if(o.B)setLog('B',unpack(o.B));S.pairs=o.pairs||S.pairs;S.datums=o.datums||[];drawPairs();drawDatums();
+    Object.entries(o.ui||{}).forEach(([k,v])=>{if($(k))$(k).value=v});if(!$('nType').value)$('nType').value='phase';['A','B'].forEach(s=>S[s]&&unitInfo(s));if(S.A&&S.B)run();else drawMain();$('exportMsg').textContent='Session opened'}
   catch(err){banner(err.message,true)}};
 
 // ---- example: fictitious synthetic wells
 function example(){
-  const ex=LC.exampleLogs(7,0.5);S.datums=[];S.pairs[0]={on:true,a:0,b:0,w:1};S.pairs[1]={on:true,a:1,b:1,w:1};
-  $('step').value=0.5;$('smooth').value=3;$('norm').value='zscore';$('band').value=0;$('nBlk').value=5;
+  const ex=LC.exampleLogs(7,0.5);S.src={A:null,B:null};S.datums=[];S.pairs[0]={on:true,a:0,b:0,w:1};S.pairs[1]={on:true,a:1,b:1,w:1};
+  $('step').value=0.5;$('smooth').value=3;$('norm').value='zscore';$('band').value=0;
   setLog('A',ex.A);setLog('B',ex.B);drawPairs();drawDatums();run();
   banner('Example: two fictitious logs; B is a noisy, rescaled copy of A with a piecewise stretch (A 2000–2150 m, B 2030–2190 m).');
 }
@@ -718,6 +899,6 @@ window.DG={S,run,example};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: the logs are read in memory and never uploaded. Correlates two logs depth-for-depth (well to well, core log to well log, core to core) with dynamic time warping (DTW): it finds the monotonic correspondence between the depth axes (a depth is never matched to a shallower one after a deeper one, i.e. superposition is respected) that makes log B follow log A. Datums chosen by the user are matched exactly, the quality of the match is quantified, and a null-hypothesis test compares the fit with synthetic look-alike logs.","method":["Preparation: each curve is interpolated linearly onto a regular depth step common to A and B; missing samples are filled by linear interpolation (nearest value at the ends); an optional moving average smooths; each curve is standardised (z-score or min-max) so that gain and offset differences do not count. Several curve pairs (curve k of A against curve k of B) can be used with relative weights.","DTW: local cost = weighted Euclidean distance between the standardised curve vectors at the two samples. Step patterns: <b>symmetric2</b> D(i,j) = min(D(i-1,j)+d, D(i,j-1)+d, D(i-1,j-1)+2d), normalised by n+m; <b>symmetric1</b> all steps weigh d, normalised by the path length. The path always runs from the first to the last sample of both logs (global alignment). The cost matrix is held in one Float64Array (O(n m)); 2000 x 2000 samples take about a second.","Band: optional Sakoe-Chiba corridor of a given half-width (depth units) around the straight line joining the two corners. It is widened automatically when the logs differ so much in length that no path would exist (the width used is reported).","Datums (segment mode): each datum pairs a depth in A with a depth in B and must lie on the path. DTW is solved independently between consecutive datums (the ends of the logs act as the first and last datum) and the paths are concatenated; datums must not cross. A datum can therefore force a match; the tool does not judge whether it is geologically sound.","Quality metrics: normalised cost (cost per weighted path step, in standardised units); Pearson correlation of the two curves along the path (per curve, and weighted mean); local slope of the path (matched depth in B per depth in A, over a window of about 6 % of the path), with the share of the path steeper than the chosen slope or flatter than its inverse (extreme stretching or compression); straightness = 1 minus the mean distance of the path to the straight corner-to-corner line, relative to the length of B; share of samples of A (and of B) matched to several samples of the other log.","Warped log: for each sample of A the matched samples of B are averaged (depth and value); the result is B expressed on the depth axis of A, and the depth shift is matched depth in B minus depth in A.","Null test: the unconstrained DTW cost of A against B is compared with the cost of A against N synthetic versions of B (default 100, seeded): <b>block shuffle</b> (B cut into blocks of a given length, the blocks permuted: same values, local texture kept, sequence of features destroyed) or <b>AR(1)</b> (an independent first-order autoregressive series per curve with the mean, standard deviation and lag-1 autocorrelation of the real curve; cross-curve relations are not kept). Empirical one-sided p = (1 + number of synthetic costs not larger than the real one) / (N + 1). This null asks whether the match is better than what DTW finds on featureless look-alikes of B; it does not test the geological validity of the correlation."],"sources":[["Dynamic time warping with monotonic path and band constraint (Sakoe-Chiba); symmetric step patterns","Sakoe, H. and Chiba, S. (1978), Dynamic programming algorithm optimization for spoken word recognition, IEEE Transactions on Acoustics, Speech and Signal Processing 26(1), 43–49, doi 10.1109/TASSP.1978.1163055 (citation checked in Crossref; paper not re-read)","published (metadata verified)"],["DTW applied to time series","Berndt, D. J. and Clifford, J. (1994), Using dynamic time warping to find patterns in time series, in KDD Workshop on Knowledge Discovery in Databases (AAAI Technical Report WS-94-03). Not found in Crossref or OpenAlex queries; volume and pages not verified","to verify (workshop paper not retrieved in Crossref/OpenAlex; pages to add)"],["Dynamic programming for stratigraphic correlation of logs and sections","Smith, T. F. and Waterman, M. S. (1980), New stratigraphic correlation techniques, The Journal of Geology 88(4), 451–457, doi 10.1086/628528; Waterman, M. S. and Raymond, R. Jr (1987), The match game: new stratigraphic correlation algorithms, Mathematical Geology 19(2), 109–127, doi 10.1007/BF00898191; Lisiecki, L. E. and Lisiecki, P. A. (2002), Application of dynamic programming to the correlation of paleoclimate records, Paleoceanography 17(4), 1049, doi 10.1029/2001PA000733 (the three checked in Crossref; not re-read)","published (metadata verified)"],["Concept of segment-based correlation between logs or cores, quality metrics (normalised DTW cost, Pearson correlation) and a statistical test against a background of look-alike sequences","Lai, L. S.-H., Sylvester, Z., Covault, J. A., Gomberg, J. S. and Nieminski, N. M. (2026), Reproducible event-bed correlation with uncertainty: pyCoreRelator, Sedimentology, doi 10.1111/sed.70163 (checked in Crossref and OpenAlex; volume and pages not yet assigned). Only the abstract was read: it describes DTW with normalised cost and Pearson r, correlation within defined units, and a significance test against stochastic baselines generated by Markov-chain Monte Carlo stratigraphic simulations. The null models of this page (block shuffle, AR(1)) are simpler and are the site author's; the implementation of this page was written independently and no code of that package was read or reused","published (abstract read)"],["Implementation of DTW, segment solving with datums, metrics (slope, straightness, many-to-one share), block-shuffle and AR(1) nulls","Written for this page from the definitions above","derived"],["Surrogate (look-alike) series as a null hypothesis","Theiler, J., Eubank, S., Longtin, A., Galdrikian, B. and Farmer, J. D. (1992), Testing for nonlinearity in time series: the method of surrogate data, Physica D 58(1–4), 77–94, doi 10.1016/0167-2789(92)90102-S (checked in Crossref; not re-read)","published (metadata verified)"],["Block shuffle of a series (blocks permuted to keep local texture)","Künsch, H. R. (1989), The jackknife and the bootstrap for general stationary observations, The Annals of Statistics 17(3), 1217–1241, doi 10.1214/aos/1176347265 (checked in Crossref; the page permutes blocks without overlap, a simplification of the block bootstrap; not re-read)","published (metadata verified)"],["Empirical one-sided p = (1 + k)/(N + 1)","Phipson, B. and Smyth, G. K. (2010), Permutation P-values should never be zero: calculating exact P-values when permutations are randomly drawn, Statistical Applications in Genetics and Molecular Biology 9(1), article 39, doi 10.2202/1544-6115.1585 (checked in Crossref; not re-read)","published (metadata verified)"],["Step pattern, band, extreme-slope threshold, slope window, block length, number of synthetic logs; standardisation (z-score, min-max); AR(1) fit","Defaults and choices of the author of the page, editable in the tool; elementary statistics","on the page (no publication)"],["Example logs","Fictitious, generated by the page (not real wells)","derived"]],"validation":["Self-check script (scripts/logcorr_test.mjs): DTW of a signal with itself (diagonal path, zero cost); cost equal to a brute-force enumeration of all monotone paths on tiny inputs (both step patterns); recovery of a known stretched and compressed depth mapping and of the mapping of the noisy two-curve example; monotonic path in every case; datums met exactly and the path kept inside each datum rectangle; band respected; weights; resampling, gap filling, smoothing, standardisation; null test with a fixed seed (p below 0.05 for a real match, no systematic small p for independent AR(1) series, reproducible); AR(1) fit; LAS write and read round trip; timing of a 2000 x 2000 alignment."],"limits":["DTW matches signal shapes, not geology. Two unrelated logs can nearly always be warped to look similar; a low cost or a high correlation along the path is not proof of a correlation, and the null test only partly guards against it.","The alignment is global: both logs are assumed to cover the same interval, from first to last sample. An interval present in one log and absent from the other is not modelled; the path will squeeze it into a plateau (many-to-one match). Pinchouts and missing sections are handled only through the datums you place.","DTW can force a match: with large stretching the path becomes steep or flat. Watch the extreme-stretching share, the straightness and the depth-shift curve, and use a band or datums when you know the plausible range.","The null test uses the unconstrained DTW (no datums) for both the real and the synthetic costs. The block-shuffle and AR(1) nulls are simple models: they do not represent facies successions, cyclicity or the cross-correlation between curves.","No age constraints, no ensemble of alternative paths, no depth conversion beyond the depth axes you supply; depth units of A and B are assumed identical.","Inputs: LAS 2.0 unwrapped files (WRAP YES is refused) and delimited text; curves are used as supplied (no unit conversion, no despiking)."],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: the logs are read in memory and never uploaded. Correlates two logs depth-for-depth (well to well, core log to well log, core to core) with dynamic time warping (DTW): it finds the monotonic correspondence between the depth axes (a depth is never matched to a shallower one after a deeper one, i.e. superposition is respected) that makes log B follow log A. Datums chosen by the user are matched exactly, the quality of the match is quantified, and a null-hypothesis test compares the fit with surrogate logs that have the same autocorrelation as B but no relation to A.","method":["Null values: values equal to one of the list in panel 3 (default -999, -999.25, -9999, 9999, 1e30, 1.70141e38, editable, can be emptied; the NULL of a LAS header is always used) are excluded from the data and counted. A repeated value that looks like an undeclared null (for example -99999) only produces a warning. Depth unit: each log has a unit (m, ft or unknown, taken from the file when it says so); when A and B differ, B is converted to the unit of A (0.3048 m per ft) before the matching and the correspondence export says so; warnings are shown when the depth step or the depth range suggests feet declared as metres or the reverse (steps 0.1524, 0.3048, 0.6096 or depths beyond 9000 m declared in m; steps 0.1, 0.2, 0.5 declared in ft; median depths of A and B differing by a factor of about 3.28).","Reading numbers (all inputs): a value is read with a decimal point or a decimal comma (<code>1234.5</code>, <code>1,234.5</code>, <code>1 234.5</code>, <code>1.234,5</code>, <code>1,5</code>, <code>0,55</code>, <code>1e-3</code>, unicode minus). A single comma followed by exactly three digits (<code>1,234</code>) is ambiguous: it is read as a decimal comma only when the file uses decimal commas elsewhere (or is semicolon separated), otherwise as a thousands separator, and the ambiguity is reported. The delimiter (tab, semicolon, blanks, comma) is chosen from the lines of the file; a comma is a delimiter only when no value uses a decimal comma, so <code>100 0,55</code> is read as depth 100 and value 0.55. Empty, <code>-</code>, <code>n.d.</code>, <code>NA</code>, <code>NaN</code>, <code>null</code> are missing values; <code>&lt;0.1</code> is below detection (set missing). Every load shows how many rows were read and skipped, why, and the first line numbers; a failed load clears the previous log, the results and the charts instead of leaving them on screen.","Preparation: each curve is interpolated linearly onto a regular depth step common to A and B; missing samples are filled by linear interpolation (nearest value at the ends); an optional moving average smooths; each curve is standardised (z-score or min-max) so that gain and offset differences do not count. Several curve pairs (curve k of A against curve k of B) can be used with relative weights.","DTW: local cost = weighted Euclidean distance between the standardised curve vectors at the two samples. Step patterns: <b>symmetric2</b> D(i,j) = min(D(i-1,j)+d, D(i,j-1)+d, D(i-1,j-1)+2d), normalised by n+m; <b>symmetric1</b> all steps weigh d, normalised by the path length. The path always runs from the first to the last sample of both logs (global alignment). The cost matrix is held in one Float64Array (O(n m)); 2000 x 2000 samples take about a second.","Band: optional Sakoe-Chiba corridor of a given half-width (depth units) around the straight line joining the two corners. It is widened automatically when the logs differ so much in length that no path would exist (the width used is reported).","Datums (segment mode): each datum pairs a depth in A with a depth in B and must lie on the path. DTW is solved independently between consecutive datums (the ends of the logs act as the first and last datum) and the paths are concatenated; datums must not cross. A datum can therefore force a match; the tool does not judge whether it is geologically sound.","Quality metrics: normalised cost (cost per weighted path step, in standardised units); Pearson correlation of the two curves along the path (per curve, and weighted mean; descriptive only, it is high for unrelated smooth logs because the path is chosen to make the curves look alike: it is flagged as such in the tile and only the null-calibrated p of the same r should be read as evidence); local slope of the path (matched depth in B per depth in A, over a window of about 6 % of the path), with the share of the path steeper than the chosen slope or flatter than its inverse (extreme stretching or compression); straightness = 1 minus the mean distance of the path to the straight corner-to-corner line, relative to the length of B; share of samples of A (and of B) matched to several samples of the other log.","Warped log: for each sample of A the matched samples of B are averaged (depth and value); the result is B expressed on the depth axis of A, and the depth shift is matched depth in B minus depth in A.","Null test: the unconstrained DTW cost of A against B is compared with the cost of A against N surrogate versions of B (default 100, seeded). <b>Phase-randomised</b> surrogates (default) keep the Fourier amplitude spectrum of B (so its smoothness and autocorrelation) and draw random phases, the same phases for every curve of B so that the relation between its curves is kept; <b>IAAFT</b> surrogates also keep the exact value distribution of B. The surrogates have no relation to A by construction. Empirical one-sided p = (1 + number of surrogate costs not larger than the real one) / (N + 1). A second p-value is given for the Pearson r along the path: share of surrogates whose r is at least as high as the real r (the calibrated score). This null asks whether the match is better than what DTW finds on look-alikes of B that are unrelated to A; it does not test the geological validity of the correlation. The earlier block-shuffle and AR(1) nulls were removed (see validation)."],"sources":[["Dynamic time warping with monotonic path and band constraint (Sakoe-Chiba); symmetric step patterns","Sakoe, H. and Chiba, S. (1978), Dynamic programming algorithm optimization for spoken word recognition, IEEE Transactions on Acoustics, Speech and Signal Processing 26(1), 43–49, doi 10.1109/TASSP.1978.1163055 (citation checked in Crossref; paper not re-read)","published (metadata verified)"],["DTW applied to time series","Berndt, D. J. and Clifford, J. (1994), Using dynamic time warping to find patterns in time series, in KDD Workshop on Knowledge Discovery in Databases (AAAI Technical Report WS-94-03). Not found in Crossref or OpenAlex queries; volume and pages not verified","to verify (workshop paper not retrieved in Crossref/OpenAlex; pages to add)"],["Dynamic programming for stratigraphic correlation of logs and sections","Smith, T. F. and Waterman, M. S. (1980), New stratigraphic correlation techniques, The Journal of Geology 88(4), 451–457, doi 10.1086/628528; Waterman, M. S. and Raymond, R. Jr (1987), The match game: new stratigraphic correlation algorithms, Mathematical Geology 19(2), 109–127, doi 10.1007/BF00898191; Lisiecki, L. E. and Lisiecki, P. A. (2002), Application of dynamic programming to the correlation of paleoclimate records, Paleoceanography 17(4), 1049, doi 10.1029/2001PA000733 (the three checked in Crossref; not re-read)","published (metadata verified)"],["Concept of segment-based correlation between logs or cores, quality metrics (normalised DTW cost, Pearson correlation) and a statistical test against a background of look-alike sequences","Lai, L. S.-H., Sylvester, Z., Covault, J. A., Gomberg, J. S. and Nieminski, N. M. (2026), Reproducible event-bed correlation with uncertainty: pyCoreRelator, Sedimentology, doi 10.1111/sed.70163 (checked in Crossref and OpenAlex; volume and pages not yet assigned). Only the abstract was read: it describes DTW with normalised cost and Pearson r, correlation within defined units, and a significance test against stochastic baselines generated by Markov-chain Monte Carlo stratigraphic simulations. The null models of this page (phase-randomised and IAAFT surrogates of B) are simpler and are the site author's choice; the implementation of this page was written independently and no code of that package was read or reused","published (abstract read)"],["Implementation of DTW, segment solving with datums, metrics (slope, straightness, many-to-one share), surrogate nulls, number and table decoding","Written for this page from the definitions above","derived"],["Surrogate (look-alike) series as a null hypothesis: phase randomisation; several simultaneously measured variables; IAAFT","Theiler, J., Eubank, S., Longtin, A., Galdrikian, B. and Farmer, J. D. (1992), Testing for nonlinearity in time series: the method of surrogate data, Physica D 58(1–4), 77–94, doi 10.1016/0167-2789(92)90102-S; Prichard, D. and Theiler, J. (1994), Generating surrogate data for time series with several simultaneously measured variables, Physical Review Letters 73(7), 951–954, doi 10.1103/PhysRevLett.73.951; Schreiber, T. and Schmitz, A. (1996), Improved surrogate data for nonlinearity tests, Physical Review Letters 77(4), 635–638, doi 10.1103/PhysRevLett.77.635 (the three checked in Crossref; not re-read). The Fourier transform of any length is computed with Bluestein's chirp algorithm written for this page","published (metadata verified)"],["Empirical one-sided p = (1 + k)/(N + 1)","Phipson, B. and Smyth, G. K. (2010), Permutation P-values should never be zero: calculating exact P-values when permutations are randomly drawn, Statistical Applications in Genetics and Molecular Biology 9(1), article 39, doi 10.2202/1544-6115.1585 (checked in Crossref; not re-read)","published (metadata verified)"],["Step pattern, band, extreme-slope threshold, slope window, block length, number of synthetic logs; standardisation (z-score, min-max); AR(1) fit","Defaults and choices of the author of the page, editable in the tool; elementary statistics","on the page (no publication)"],["Example logs","Fictitious, generated by the page (not real wells)","derived"]],"validation":["Self-check script (scripts/logcorr_test.mjs): DTW of a signal with itself (diagonal path, zero cost); cost equal to a brute-force enumeration of all monotone paths on tiny inputs (both step patterns); recovery of a known stretched and compressed depth mapping and of the mapping of the noisy two-curve example; monotonic path in every case; datums met exactly and the path kept inside each datum rectangle; band respected; weights; resampling, gap filling, smoothing, standardisation; LAS write and read round trip; timing of a 2000 x 2000 alignment.","<b>Null test calibrated (26 November 2026 review fix).</b> The previous block-shuffle null was invalid: shuffled blocks are joined with jumps, so their DTW cost is always higher than that of a smooth B and p measured smoothness, not correspondence. An external review measured p &lt; 0.05 for 18 of 24 and 19 of 24 pairs of independent AR(1) logs (phi 0.9 and 0.98); the AR(1) null was also anticonservative (21 % at phi 0.98). Both were replaced. Measured with the test script on <b>independent AR(1) logs</b> (100 trials per case, 39 surrogates, 100 samples, alpha 0.05, seeded): phase-randomised surrogates reject <b>0 % (phi 0.9) and 6 % (phi 0.98)</b> of the pairs on the cost; the calibrated r test rejects 2 % and 8 %; in a longer run (150 samples, 99 surrogates, 100 trials) 2 % and 7 % (cost), 4 % and 9 % (r); IAAFT 3 % (cost) and 5 % (r) at phi 0.9 (60 trials). A real stretched, noisy copy gives p about 0.02 (the smallest possible p with 59 surrogates is 1/60). These rates come from synthetic stationary Gaussian series; real logs with trends, cycles or non-stationary variance may behave differently.","Pearson r along the DTW path of two <b>unrelated</b> AR(1) logs averages 0.83 (phi 0.9) and 0.75 (phi 0.98) in the same runs: it describes how well the warping made the curves look alike, not whether they are related. The tile says so, and the same r is compared with the surrogates (p of r).","Reading numbers: tests of every format listed in Method (thousands and decimal separators, decimal comma, <code>100 0,55</code>, semicolon files, ambiguous <code>1,234</code>), missing and below-detection tokens, row and cell counts with line numbers, null values excluded and counted, undeclared null candidates warned, unit plausibility warnings, and an exact comparison of the transform used for the surrogates with the direct Fourier sum (lengths 8, 12, 31, 50) and of its amplitude spectrum, mean and cross-curve phases after randomisation."],"limits":["DTW matches signal shapes, not geology. Two unrelated logs can nearly always be warped to look similar (Pearson r along the path of 0.75 to 0.83 on independent AR(1) logs); a low cost or a high correlation along the path is not proof of a correlation, and only the surrogate-based p-values guard against it, with the limits stated below.","The alignment is global: both logs are assumed to cover the same interval, from first to last sample. An interval present in one log and absent from the other is not modelled; the path will squeeze it into a plateau (many-to-one match). Pinchouts and missing sections are handled only through the datums you place.","DTW can force a match: with large stretching the path becomes steep or flat. Watch the extreme-stretching share, the straightness and the depth-shift curve, and use a band or datums when you know the plausible range.","The null test uses the unconstrained DTW (no datums) for both the real and the synthetic costs. Surrogates are conditional on the spectrum of B: they do not represent facies successions, cyclicity, trends or non-stationary variance, and the circular nature of the Fourier transform is not corrected (end effects were small in the calibration runs). The false-positive rates quoted in the validation are for synthetic AR(1) logs. A significant p says the match is better than for unrelated look-alikes of B; it does not make the correlation geologically right.","No age constraints, no ensemble of alternative paths, no depth conversion beyond the depth axes you supply; depth units of A and B are assumed identical.","Inputs: LAS 2.0 unwrapped files (WRAP YES is refused) and delimited text. Curves are used as supplied (no unit conversion of curve values, no despiking); only the depth axis is converted (ft to m) when the two logs differ. With blank-delimited files a thousands separator written as a space (<code>1 234,5</code>) is not supported (use a semicolon or tab). Depth units other than m and ft are treated as unknown."],"date":"26 November 2026"});
 </script>
 </body></html>

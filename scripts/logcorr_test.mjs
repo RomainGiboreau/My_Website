@@ -165,38 +165,132 @@ T('resampling, gap filling, smoothing, standardisation', () => {
   const rr = LC.resample(F([3, 2, 1, 0]), F([3, 2, 1, 0]), 0, 1, 4); near(rr[2], 2, 1e-12);
 });
 
-T('null test: small p-value for a real match, large for unrelated noise (seeded)', () => {
-  // real match: smooth signal vs its stretched, noisy copy
+T('null test (phase-randomised and IAAFT surrogates): small p for a real match, reproducible (seeded)', () => {
   const f = signal(0, 8), n = 160, r0 = LC.rng(21);
   const a = F(Array.from({ length: n }, (_, i) => f(i * 0.5)));
   const b = F(Array.from({ length: n }, (_, j) => f(0.5 * (j + 6 * Math.sin(j / 25))) + 0.1 * LC.gauss(r0)));
   const A = LC.normalise(a, 'zscore'), B = LC.normalise(b, 'zscore');
-  const real = LC.nullTest([A], [B], { nsim: 60, seed: 42, type: 'block', blockLen: 10, band: 0 });
-  const arr = LC.nullTest([A], [B], { nsim: 60, seed: 42, type: 'ar1', band: 0 });
-  console.log(`      match: p(block)=${real.p.toFixed(3)} p(AR1)=${arr.p.toFixed(3)}  real cost ${real.real.toFixed(3)} vs null mean ${real.mean.toFixed(3)}`);
-  assert.ok(real.p <= 0.05, 'block p ' + real.p);
-  assert.ok(arr.p <= 0.05, 'ar1 p ' + arr.p);
-  assert.equal(real.nulls.length, 60);
-  // unrelated: two independent AR(1) series, many replications: p must not be systematically small
-  const mk = seed => { const r = LC.rng(seed), x = new Float64Array(n); let p = 0; for (let i = 0; i < n; i++) { p = 0.9 * p + 0.4 * LC.gauss(r); x[i] = p; } return LC.normalise(x, 'zscore'); };
-  const ps = []; for (let s = 0; s < 8; s++) ps.push(LC.nullTest([mk(100 + s)], [mk(200 + s)], { nsim: 40, seed: 7 + s, type: 'ar1', band: 0 }).p);
-  const mean = ps.reduce((x, y) => x + y, 0) / ps.length;
-  console.log(`      unrelated AR(1) pairs: p = ${ps.map(p => p.toFixed(2)).join(' ')} (mean ${mean.toFixed(2)})`);
-  assert.ok(mean > 0.25, 'unrelated mean p ' + mean);
-  assert.ok(ps.filter(p => p < 0.05).length <= 1, 'false positives');
-  // same seed, same answer
-  const again = LC.nullTest([A], [B], { nsim: 60, seed: 42, type: 'block', blockLen: 10 });
-  assert.equal(again.p, real.p);
+  for (const type of ['phase', 'iaaft']) {
+    const real = LC.nullTest([A], [B], { nsim: 59, seed: 42, type, band: 0 });
+    console.log(`      ${type}: p=${real.p.toFixed(3)} real cost ${real.real.toFixed(3)} vs null mean ${real.mean.toFixed(3)}; r along path ${real.corrReal.toFixed(2)} (surrogates ${real.corrMean.toFixed(2)}), p(r)=${real.pCorr.toFixed(3)}`);
+    assert.ok(real.p <= 0.05, type + ' p ' + real.p);
+    assert.ok(real.pCorr <= 0.05, type + ' p(r) ' + real.pCorr);
+    assert.equal(real.nulls.length, 59);
+    assert.equal(LC.nullTest([A], [B], { nsim: 59, seed: 42, type }).p, real.p);
+  }
   assert.equal(LC.pValue(1, [2, 3, 4]), 0.25); // (1+0)/(3+1)
-  // block shuffle keeps the multiset of values
-  const bs = LC.blockShuffle([B], 10, LC.rng(1))[0];
-  assert.deepEqual(Array.from(bs).sort(), Array.from(B).sort());
+  // the removed null models are mapped to the valid one (old session files)
+  assert.equal(LC.nullTest([A], [B], { nsim: 19, seed: 3, type: 'block' }).p, LC.nullTest([A], [B], { nsim: 19, seed: 3, type: 'phase' }).p);
 });
 
-T('AR(1) simulation reproduces mean, sd and lag-1 autocorrelation', () => {
-  const r = LC.rng(3), x = new Float64Array(4000); let p = 0; for (let i = 0; i < 4000; i++) { p = 0.8 * p + 0.5 * LC.gauss(r); x[i] = 10 + p; }
-  const f = LC.ar1Fit(x), s = LC.ar1Sim([x], LC.rng(9))[0], g = LC.ar1Fit(s);
-  near(f.phi, 0.8, 0.05); near(g.phi, f.phi, 0.06); near(g.mean, f.mean, 0.15); near(g.sd, f.sd, 0.12);
+T('DFT (any length) equals the direct sum; surrogates keep amplitude spectrum, mean, values (IAAFT) and cross-curve phases', () => {
+  for (const n of [8, 12, 31, 50]) {
+    const r = LC.rng(n), x = F(Array.from({ length: n }, () => r() - 0.5)), z = new Float64Array(n), S = LC.dft(x, z, false);
+    for (let k = 0; k < n; k++) {
+      let re = 0, im = 0; for (let t = 0; t < n; t++) { re += x[t] * Math.cos(2 * Math.PI * k * t / n); im -= x[t] * Math.sin(2 * Math.PI * k * t / n); }
+      near(S.re[k], re, 1e-9, `re n=${n} k=${k}`); near(S.im[k], im, 1e-9, `im n=${n} k=${k}`);
+    }
+    const back = LC.dft(S.re, S.im, true).re; for (let t = 0; t < n; t++) near(back[t], x[t], 1e-10, 'round trip');
+  }
+  const n = 101, r = LC.rng(4), mk = () => { const x = new Float64Array(n); let p = 0; for (let i = 0; i < n; i++) { p = 0.9 * p + LC.gauss(r); x[i] = p; } return x; };
+  const x1 = mk(), x2 = F(Array.from(x1, v => 2 * v + 1));                  // second curve is an exact affine copy of the first
+  const amp = v => { const S = LC.dft(v, new Float64Array(n), false); return Array.from(S.re, (a, k) => Math.hypot(a, S.im[k])); };
+  const ph = LC.surrogator([x1, x2], 'phase')(LC.rng(9));
+  const a0 = amp(x1), a1 = amp(ph[0]);
+  for (let k = 0; k < n; k++) near(a1[k], a0[k], 1e-8, 'amplitude ' + k);
+  near(LC.stats(ph[0]).mean, LC.stats(x1).mean, 1e-9);
+  assert.ok(Math.abs(LC.pearson(ph[0], x1)) < 0.9, 'phases changed');
+  near(LC.pearson(ph[0], ph[1]), 1, 1e-9, 'cross-curve relation kept');
+  const ia = LC.surrogator([x1], 'iaaft')(LC.rng(9))[0];
+  assert.deepEqual(Array.from(ia).sort((p, q) => p - q), Array.from(x1).sort((p, q) => p - q));
+});
+
+T('false-positive rate on UNCORRELATED strongly autocorrelated logs (AR(1)) is near the nominal 5 % (the old block-shuffle null gave 75 %)', () => {
+  const n = 100, trials = 100, nsim = 39;
+  const mk = (seed, phi) => { const r = LC.rng(seed), x = new Float64Array(n); let p = 0; for (let i = 0; i < 100; i++) p = phi * p + LC.gauss(r); for (let i = 0; i < n; i++) { p = phi * p + LC.gauss(r); x[i] = p; } return LC.normalise(x, 'zscore'); };
+  for (const phi of [0.9, 0.98]) {
+    let rej = 0, rejr = 0, rsum = 0;
+    for (let t = 0; t < trials; t++) {
+      const res = LC.nullTest([mk(1000 + t, phi)], [mk(5000 + t, phi)], { nsim, seed: 11 + t, type: 'phase' });
+      if (res.p < 0.05) rej++; if (res.pCorr < 0.05) rejr++; rsum += res.corrReal;
+    }
+    console.log(`      phi ${phi}: ${trials} trials of ${nsim} surrogates: cost test rejects ${(rej / trials * 100).toFixed(0)} %, calibrated r test ${(rejr / trials * 100).toFixed(0)} % (nominal 5 %); raw Pearson r along the path of unrelated logs ${(rsum / trials).toFixed(2)} on average`);
+    assert.ok(rej / trials <= 0.10, `cost test false-positive rate ${rej / trials} at phi ${phi}`);
+    assert.ok(rejr / trials <= 0.12, `r test false-positive rate ${rejr / trials} at phi ${phi}`);
+    assert.ok(rsum / trials > 0.5, 'unrelated smooth logs have a high Pearson r along the DTW path (so it is not evidence)');
+  }
+});
+
+T('parseNumber: thousands and decimal separators, missing, below detection, unicode minus (contract A)', () => {
+  const v = (s, o) => LC.parseNumber(s, o);
+  const ok = (s, x, o) => { const r = v(s, o); assert.equal(r.kind, 'ok', s); near(r.value, x, 1e-12, s); };
+  ok('1234.5', 1234.5); ok('1,234.5', 1234.5); ok('1 234.5', 1234.5); ok('1.234,5', 1234.5); ok('1 234,5', 1234.5);
+  ok('1,5', 1.5); ok('0,55', 0.55); ok('0,500', 0.5); ok('1e-3', 0.001); ok('1E+30', 1e30); ok('−3.5', -3.5); ok('+4', 4); ok('1,234,567', 1234567); ok('1.234.567', 1234567);
+  ok('1,234', 1234); ok('1,234', 1.234, { comma: true });
+  assert.equal(v('1,234').ambiguous, true);
+  for (const s of ['', '-', 'n.d.', 'nd', 'NA', 'NaN', 'null']) assert.equal(v(s).kind, 'missing', s);
+  const b = v('<0,1'); assert.equal(b.kind, 'below'); assert.equal(b.value, null); near(b.limit, 0.1, 0);
+  assert.equal(v('<0.1').kind, 'below');
+  assert.equal(v('abc').kind, 'text'); assert.equal(v('1,2,3').kind, 'text'); assert.equal(v('12 5').kind, 'text');
+});
+
+T('detectDelimiter and decimal-comma tables (contract A): `100 0,55`, comma-only column, semicolon', () => {
+  assert.equal(LC.detectDelimiter(['100 0,55', '110 0,50', '120 0,48']).delim, 'ws');
+  assert.equal(LC.detectDelimiter(['depth,gr', '1,10', '2,20', '3,30']).delim, ',');
+  assert.equal(LC.detectDelimiter(['1000,5;55,2', '1001;56,1', '1002;57']).delim, ';');
+  assert.equal(LC.detectDelimiter(['1\t2\t3', '4\t5\t6']).delim, '\t');
+  // the reported bug: decimal comma values were turned into NaN ("depth range is empty")
+  const t = LC.parseAny('depth;gr\n1000,5;55,2\n1001,0;56,1\n1001,5;57,9\n1002,0;58,0');
+  near(t.depth[0], 1000.5, 0); near(t.curves[0].v[1], 56.1, 0); assert.equal(t.depth.length, 4);
+  const u = LC.parseAny('100 0,55\n110 0,50\n120 0,48\n');
+  assert.equal(u.curves.length, 1); near(u.depth[2], 120, 0); near(u.curves[0].v[0], 0.55, 0);
+  const w = LC.parseAny('1000,5 55,2\n1001,0 56,1\n1001,5 57,9\n');
+  near(w.depth[0], 1000.5, 0); near(w.curves[0].v[2], 57.9, 0);
+  const th = LC.parseAny('depth;gr\n1 000,5;1 234,5\n1 001,0;56,1\n1 001,5;57,9\n');
+  near(th.depth[0], 1000.5, 0); near(th.curves[0].v[0], 1234.5, 0);
+  // ambiguity 1,234: thousands if the file has no decimal comma elsewhere, decimal comma if it does
+  const a2 = LC.parseAny('depth;gr\n1;1,234\n2;1,5\n3;1,75\n');
+  near(a2.curves[0].v[0], 1.234, 0);
+  const a3 = LC.parseAny('depth;gr\n1;1,234\n2;1,235\n3;1,236\n');
+  assert.equal(a3.report.decimal, 'comma'); assert.equal(a3.report.ambiguity, true);
+  const a4 = LC.parseAny('depth\tgr\n1\t1,234\n2\t1,235\n3\t1,236\n');
+  near(a4.curves[0].v[0], 1234, 0); assert.equal(a4.report.ambiguity, true);
+});
+
+T('load report: rows read / skipped with reasons and line numbers, never a silent drop (contract A)', () => {
+  const txt = 'depth,gr\n1000,50\n1001,abc\nxx,12\n1002,<5\n1003,n.d.\n1004,60\n1005,61\n';
+  const t = LC.parseAny(txt), r = t.report;
+  assert.equal(r.read, 7); assert.equal(r.skipped, 1); assert.equal(t.depth.length, 6);
+  assert.deepEqual(Array.from(r.firstLines['non-numeric depth']), [4]);
+  assert.equal(r.cells.text, 1); assert.equal(r.cells.below, 1); assert.equal(r.cells.missing, 1);
+  const d = LC.describeReport(r); assert.ok(/7 rows read, 1 skipped/.test(d) && /line 4/.test(d), d);
+  // a table with no usable depth: an explicit error that says why
+  assert.throws(() => LC.parseAny('a,b\nx,1\ny,2\nz,3'), /Fewer than 2 usable depth rows.*non-numeric depth/);
+});
+
+T('null sentinels excluded and counted (contract C); undeclared candidates only warned', () => {
+  const lines = ['depth gr']; for (let i = 0; i < 20; i++) lines.push(`${1000 + i} ${i % 5 === 0 ? -999.25 : 50 + i}`);
+  for (let i = 0; i < 6; i++) lines[2 + i] = `${1001 + i} -99999`;
+  const t = LC.parseAny(lines.join('\n'));
+  assert.equal(t.report.sentinelCounts['-999.25'], 3); // i = 0 is the header row shift: rows 1005, 1010, 1015
+  assert.ok(t.curves[0].v.every(x => x !== -999.25));
+  assert.ok(Array.from(t.curves[0].v).includes(-99999), 'candidate is kept, not excluded');
+  assert.ok(t.report.candidates.some(c => c.v === -99999 && c.k >= 5));
+  assert.ok(/-99999 appears 6 times/.test(LC.describeReport(t.report)));
+  assert.ok(/values equal to the null value -999.25 were excluded/.test(LC.describeReport(t.report)));
+  // emptying the list keeps -999.25 as data; adding -99999 excludes it
+  const t2 = LC.parseAny(lines.join('\n'), 'x', { nulls: [] }); assert.ok(Array.from(t2.curves[0].v).includes(-999.25));
+  const t3 = LC.parseAny(lines.join('\n'), 'x', { nulls: [-99999, -999.25] }); assert.ok(!Array.from(t3.curves[0].v).includes(-99999));
+});
+
+T('depth unit: kind and ft/m plausibility warnings', () => {
+  assert.equal(LC.unitKind('M'), 'm'); assert.equal(LC.unitKind('FT'), 'ft'); assert.equal(LC.unitKind('feet'), 'ft'); assert.equal(LC.unitKind(''), '');
+  const mk = (z0, step, n) => ({ depth: F(Array.from({ length: n }, (_, i) => z0 + i * step)) });
+  assert.ok(LC.unitWarnings(mk(1000, 0.1524, 50), 'm').some(w => /feet/.test(w)));
+  assert.ok(LC.unitWarnings(mk(8000, 0.5, 50), 'm').length === 0);
+  assert.ok(LC.unitWarnings(mk(12000, 0.5, 50), 'm').some(w => /deeper/.test(w)));
+  assert.ok(LC.unitWarnings(mk(1000, 0.5, 50), 'ft').some(w => /metres/.test(w)));
+  assert.equal(LC.unitWarnings(mk(1000, 0.5, 50), 'm').length, 0);
 });
 
 T('LAS parse / write round trip; table parsing', () => {
