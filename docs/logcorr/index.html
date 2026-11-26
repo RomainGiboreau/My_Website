@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Log correlation (DTW)</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/logcorr/">
+<meta name="description" content="Correlate two well logs, or a core log and a well log, with dynamic time warping: monotonic depth matching, user datums as hard constraints, quality metrics, a null-hypothesis test on synthetic logs, correspondence table and warped log export. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2,h3{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0;position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+main{min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem;flex:none}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}.panel.collapsed .body{display:none}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre;height:54px}
+.pg{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem;margin:4px 0}.pg input,.pg select{width:100%;min-width:0}
+.g3{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:4px 8px;align-items:center;font-size:.82rem}.g3 input{width:100%;min-width:0}
+.prs{display:grid;grid-template-columns:auto 1fr 1fr 54px;gap:4px 6px;align-items:center;font-size:.8rem}.prs select{width:100%;min-width:0;padding:.2rem .3rem}.prs input[type=number]{width:100%;padding:.2rem .3rem}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}.msg.err{color:var(--acc2)}
+.small{font-size:.76rem;color:var(--mut)}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 12px}
+.tile small{display:block;color:var(--mut);font-size:.72rem;line-height:1.25}
+.tile b{font:700 1.3rem "Space Grotesk",Inter,sans-serif;display:block}
+.tile em{font-style:normal;font-size:.72rem;color:var(--mut)}
+.tile.warn b{color:var(--acc2)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 4px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card canvas{width:100%;display:block}
+.card.wide{grid-column:1/-1}
+.card .cap{font-size:.74rem;color:var(--mut);margin:2px 4px 0}
+.tw{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.78rem;font-variant-numeric:tabular-nums}
+th,td{padding:2px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+td button{padding:0 .35rem;font-size:.72rem;border-color:transparent;background:transparent;color:var(--mut)}
+.empty{padding:34px 18px;text-align:center;color:var(--mut)}
+.intro{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px 28px;max-width:880px}
+.intro h2{font:700 1.6rem/1.2 "Space Grotesk",Inter,sans-serif;margin:0 0 8px}
+.intro p{color:var(--mut);max-width:64ch;margin:0 0 14px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:#f5f3ed;border-radius:6px;padding:5px 9px;font-size:.76rem;display:none}
+.chart-pick{cursor:crosshair}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}.cards{grid-template-columns:1fr}}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<script id="lc-core">
+/* Log correlation core: parsing, resampling, DTW, segment DTW, metrics, null test. No DOM; exposed as window.LC. */
+(function(W){
+const NUM=/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+const up=s=>String(s||'').toUpperCase();
+
+// ---------------- seeded random numbers
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function gauss(r){let u=0;while(u===0)u=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*r())}
+
+// ---------------- input: LAS 2.0 (unwrapped) and delimited text
+// A log = {name, depthName, depthUnit, depth:Float64Array, curves:[{mnem,unit,v:Float64Array}]}; missing values are NaN.
+function parseLAS(text,name){
+  const lines=String(text).replace(/^\uFEFF/,'').split(/\r\n|\n|\r/);
+  let sec='',well={},curves=[],data=[],wrap=false;
+  for(const raw of lines){
+    const t=raw.trim();if(!t||t[0]==='#')continue;
+    if(t[0]==='~'){sec=up(t[1]||'');continue}
+    if(sec==='A'){data.push(t.split(/[\s,;]+/).filter(Boolean));continue}
+    if(sec!=='V'&&sec!=='W'&&sec!=='C')continue;
+    const d=t.indexOf('.');if(d<0)continue;
+    const mnem=t.slice(0,d).trim();let rest=t.slice(d+1),unit='';
+    const sp=rest.search(/\s/);if(sp<0){unit=rest;rest=''}else{unit=rest.slice(0,sp);rest=rest.slice(sp)}
+    let ci=rest.search(/\s:/);if(ci>=0)ci++;else ci=rest.lastIndexOf(':');
+    const value=(ci<0?rest:rest.slice(0,ci)).trim(),desc=ci<0?'':rest.slice(ci+1).trim();
+    if(sec==='V'){if(up(mnem)==='WRAP'&&up(value)==='YES')wrap=true}
+    else if(sec==='W')well[up(mnem)]={unit,value};
+    else curves.push({mnem,unit,desc});
+  }
+  if(wrap)throw new Error('Wrapped LAS (WRAP YES) is not supported: unwrap the file first (the LAS checker can do it).');
+  if(curves.length<2)throw new Error('No curve found in the ~C section (a depth and at least one curve are needed).');
+  const nc=curves.length,nul=well.NULL&&NUM.test(well.NULL.value)?+well.NULL.value:-999.25;
+  const rows=data.filter(r=>r.length>=nc);
+  if(rows.length<2)throw new Error('The ~A section holds fewer than 2 complete rows.');
+  const cols=curves.map(()=>new Float64Array(rows.length));
+  rows.forEach((r,i)=>{for(let j=0;j<nc;j++){const x=NUM.test(r[j])?+r[j]:NaN;cols[j][i]=(x===nul||!isFinite(x))?NaN:x}});
+  return {name:name||(well.WELL&&well.WELL.value)||'log',depthName:curves[0].mnem,depthUnit:curves[0].unit||(well.STRT&&well.STRT.unit)||'',depth:cols[0],
+    curves:curves.slice(1).map((c,k)=>({mnem:c.mnem,unit:c.unit,v:cols[k+1]}))};
+}
+// Delimited text: comma, semicolon, tab or blanks; optional header line; first column = depth.
+function parseTable(text,name){
+  const L=String(text).replace(/^\uFEFF/,'').split(/\r\n|\n|\r/).map(s=>s.trim()).filter(s=>s&&s[0]!=='#');
+  if(L.length<3)throw new Error('Fewer than 3 usable lines.');
+  const delim=/[;\t]/.test(L[0])?/[;\t]/:(/,/.test(L[0])?/,/:/\s+/);
+  const tk=s=>delim.source==='\\s+'?s.split(/\s+/):s.split(delim).map(x=>x.trim());
+  let first=tk(L[0]),hdr=first.some(x=>x!==''&&!NUM.test(x));
+  const body=L.slice(hdr?1:0).map(tk);
+  const nc=Math.max(...body.map(r=>r.length));if(nc<2)throw new Error('At least two columns (depth, value) are needed.');
+  const names=hdr?first:Array.from({length:nc},(_,i)=>i?'value'+(nc>2?i:''):'depth');
+  const cols=Array.from({length:nc},()=>new Float64Array(body.length));
+  body.forEach((r,i)=>{for(let j=0;j<nc;j++){const x=r[j]!=null&&NUM.test(r[j])?+r[j]:NaN;cols[j][i]=x}});
+  return {name:name||'log',depthName:names[0]||'depth',depthUnit:'',depth:cols[0],curves:cols.slice(1).map((v,k)=>({mnem:names[k+1]||('c'+(k+1)),unit:'',v}))};
+}
+const parseAny=(text,name)=>/^\s*~\s*[Vv]/m.test(text)?parseLAS(text,name):parseTable(text,name);
+
+// LAS 2.0 writer; NaN written as the null value
+function writeLAS(o){
+  const nul=o.nullv==null?-999.25:o.nullv,z=o.depth,n=z.length,u=o.depthUnit||'M';
+  const step=n>1?(z[n-1]-z[0])/(n-1):0,f=(v,d)=>(isFinite(v)?v:nul).toFixed(d).padStart(12);
+  let s=`~Version Information\n VERS.   2.0 : CWLS LOG ASCII STANDARD - VERSION 2.0\n WRAP.   NO : ONE LINE PER DEPTH STEP\n~Well Information\n STRT.${u}   ${z[0]} : START DEPTH\n STOP.${u}   ${z[n-1]} : STOP DEPTH\n STEP.${u}   ${+step.toPrecision(10)} : STEP\n NULL.   ${nul} : NULL VALUE\n WELL.   ${o.well||'LOGCORR'} : WELL\n`;
+  s+=`~Curve Information\n DEPT.${u}   : DEPTH\n`+o.curves.map(c=>` ${c.mnem}.${c.unit||''}   : ${c.desc||c.mnem}`).join('\n')+'\n~A  DEPT'+o.curves.map(c=>c.mnem.padStart(12)).join('')+'\n';
+  for(let i=0;i<n;i++)s+=f(z[i],4)+o.curves.map(c=>f(c.v[i],4)).join('')+'\n';
+  return s;
+}
+
+// ---------------- preparation: regular grid, gap filling, smoothing, standardisation
+const gridN=(z0,z1,step)=>Math.max(2,Math.floor((z1-z0)/step+1e-9)+1);
+function resample(z,v,z0,step,n){
+  const ix=[];for(let i=0;i<z.length;i++)if(isFinite(z[i])&&isFinite(v[i]))ix.push(i);
+  ix.sort((a,b)=>z[a]-z[b]);
+  const zs=ix.map(i=>z[i]),vs=ix.map(i=>v[i]),out=new Float64Array(n).fill(NaN);
+  if(zs.length<2)return out;
+  let p=0;
+  for(let k=0;k<n;k++){const t=z0+k*step;
+    if(t<zs[0]-1e-9||t>zs[zs.length-1]+1e-9)continue;
+    while(p<zs.length-2&&zs[p+1]<t)p++;
+    const dz=zs[p+1]-zs[p];out[k]=dz>0?vs[p]+(vs[p+1]-vs[p])*Math.min(1,Math.max(0,(t-zs[p])/dz)):vs[p];}
+  return out;
+}
+function fillNaN(a){ // linear inside, nearest value at the ends; returns the number of filled samples
+  const n=a.length;let f=-1,l=-1;for(let i=0;i<n;i++)if(isFinite(a[i])){if(f<0)f=i;l=i}
+  if(f<0){a.fill(0);return n}
+  let c=0;for(let i=0;i<f;i++){a[i]=a[f];c++}for(let i=l+1;i<n;i++){a[i]=a[l];c++}
+  let i=f;while(i<l){if(isFinite(a[i])){i++;continue}let j=i;while(!isFinite(a[j]))j++;
+    for(let k=i;k<j;k++){a[k]=a[i-1]+(a[j]-a[i-1])*(k-i+1)/(j-i+1);c++}i=j}
+  return c;
+}
+function smooth(a,w){ // centred moving average, odd window, shrinking at the ends
+  w=Math.max(1,Math.round(w||1));if(w%2===0)w++;if(w<=1)return a;
+  const n=a.length,h=(w-1)/2,pre=new Float64Array(n+1);for(let i=0;i<n;i++)pre[i+1]=pre[i]+a[i];
+  const o=new Float64Array(n);for(let i=0;i<n;i++){const lo=Math.max(0,i-h),hi=Math.min(n-1,i+h);o[i]=(pre[hi+1]-pre[lo])/(hi-lo+1)}
+  return o;
+}
+function stats(a){let s=0,n=a.length;for(let i=0;i<n;i++)s+=a[i];const m=s/n;let q=0,mn=Infinity,mx=-Infinity;for(let i=0;i<n;i++){q+=(a[i]-m)*(a[i]-m);if(a[i]<mn)mn=a[i];if(a[i]>mx)mx=a[i]}return {mean:m,sd:Math.sqrt(q/Math.max(1,n-1)),min:mn,max:mx}}
+function normalise(a,mode){
+  if(mode!=='zscore'&&mode!=='minmax')return Float64Array.from(a);
+  const s=stats(a),o=new Float64Array(a.length);
+  if(mode==='zscore'){const d=s.sd||1;for(let i=0;i<a.length;i++)o[i]=(a[i]-s.mean)/d}
+  else{const d=(s.max-s.min)||1;for(let i=0;i<a.length;i++)o[i]=(a[i]-s.min)/d}
+  return o;
+}
+// log + curve indices -> {z0,step,n,raw:[...],norm:[...],filled}
+function prepare(log,idx,o){
+  const step=o.step,z0=o.z0,n=gridN(z0,o.z1,step),raw=[],norm=[];let filled=0;
+  for(const k of idx){let v=resample(log.depth,log.curves[k].v,z0,step,n);filled+=fillNaN(v);v=smooth(v,o.smooth);raw.push(v);norm.push(normalise(v,o.norm))}
+  return {z0,step,n,raw,norm,filled};
+}
+
+// ---------------- DTW
+// Local cost: weighted Euclidean distance between the curve vectors. Step patterns:
+//  sym2: D(i,j)=min(D(i-1,j)+d, D(i,j-1)+d, D(i-1,j-1)+2d), D(0,0)=2d  -> the weights of any path sum to n+m
+//  sym1: D(i,j)=min(D(i-1,j), D(i,j-1), D(i-1,j-1)) + d, D(0,0)=d       -> normalised by the path length
+// band: Sakoe-Chiba half-width in samples around the scaled diagonal (0/undefined = no band)
+function mkDist(A,B,w){
+  const K=A.length,sw=w&&w.length===K?w.reduce((s,x)=>s+Math.max(0,x),0):K,ww=A.map((_,k)=>(w&&w.length===K?Math.max(0,w[k]):1)/(sw||1));
+  if(K===1)return (i,j)=>Math.abs(A[0][i]-B[0][j]);
+  return (i,j)=>{let s=0;for(let k=0;k<K;k++){const d=A[k][i]-B[k][j];s+=ww[k]*d*d}return Math.sqrt(s)};
+}
+function dtw(A,B,o){
+  o=o||{};const pat=o.pattern==='sym1'?1:2,n=A[0].length,m=B[0].length,dist=mkDist(A,B,o.weights);
+  const D=new Float64Array(n*m).fill(Infinity),sc=n>1?(m-1)/(n-1):1;
+  let r=+o.band||0,useBand=r>0&&n>1&&m>1;
+  if(useBand)r=Math.max(r,Math.ceil(Math.max(sc,1/sc))+1); // below this the band cannot be crossed
+  for(let i=0;i<n;i++){
+    let lo=0,hi=m-1;if(useBand){const c=i*sc;lo=Math.max(0,Math.ceil(c-r));hi=Math.min(m-1,Math.floor(c+r))}
+    for(let j=lo;j<=hi;j++){
+      const d=dist(i,j);let v;
+      if(i===0&&j===0)v=pat===2?2*d:d;
+      else{v=Infinity;
+        if(i>0&&j>0){const x=D[(i-1)*m+j-1]+(pat===2?2*d:d);if(x<v)v=x}
+        if(i>0){const x=D[(i-1)*m+j]+d;if(x<v)v=x}
+        if(j>0){const x=D[i*m+j-1]+d;if(x<v)v=x}}
+      D[i*m+j]=v}}
+  const cost=D[n*m-1];if(!isFinite(cost))return null;
+  // backtrack: at each cell take the predecessor that gives D (ties prefer the diagonal)
+  const pi=[n-1],pj=[m-1];let i=n-1,j=m-1;
+  while(i>0||j>0){
+    const d=dist(i,j);let bi=i,bj=j,bv=Infinity;const tol=1e-12*Math.abs(D[i*m+j]);
+    if(i>0&&j>0){const x=D[(i-1)*m+j-1]+(pat===2?2*d:d);if(x<bv){bv=x;bi=i-1;bj=j-1}}
+    if(i>0){const x=D[(i-1)*m+j]+d;if(x<bv-tol){bv=x;bi=i-1;bj=j}}
+    if(j>0){const x=D[i*m+j-1]+d;if(x<bv-tol){bv=x;bi=i;bj=j-1}}
+    i=bi;j=bj;pi.push(i);pj.push(j)}
+  pi.reverse();pj.reverse();
+  return {pi:Int32Array.from(pi),pj:Int32Array.from(pj),cost,norm:pat===2?cost/(n+m):cost/pi.length,rEff:useBand?r:0,n,m,D:o.keepD?D:null};
+}
+// cost of a given path with the same definition as dtw()
+function pathCost(A,B,pi,pj,o){
+  o=o||{};const pat=o.pattern==='sym1'?1:2,dist=mkDist(A,B,o.weights);let c=0;
+  for(let k=0;k<pi.length;k++){const d=dist(pi[k],pj[k]);
+    if(k===0)c+=pat===2?2*d:d;else{const di=pi[k]-pi[k-1],dj=pj[k]-pj[k-1];c+=(pat===2&&di===1&&dj===1)?2*d:d}}
+  return {cost:c,norm:pat===2?c/(A[0].length+B[0].length):c/pi.length};
+}
+// Segment mode: datums = [{a,b}] (sample indices) are matched exactly; each interval between consecutive
+// anchors (including the two ends) is solved independently and the paths are concatenated.
+function dtwSegments(A,B,datums,o){
+  const n=A[0].length,m=B[0].length;
+  const an=[{a:0,b:0}].concat((datums||[]).map(d=>({a:Math.max(0,Math.min(n-1,Math.round(d.a))),b:Math.max(0,Math.min(m-1,Math.round(d.b)))})).sort((x,y)=>x.a-y.a||x.b-y.b),[{a:n-1,b:m-1}]);
+  const q=[an[0]];for(let k=1;k<an.length;k++){const p=q[q.length-1],c=an[k];
+    if(c.b<p.b)throw new Error(`Datums cross: depth A ${c.a} after ${p.a} but depth B goes back (${c.b} < ${p.b}).`);
+    if(c.a===p.a&&c.b===p.b)continue;q.push(c)}
+  if(q.length<2)return dtw(A,B,o);
+  const pi=[],pj=[];let rEff=0;
+  for(let k=0;k+1<q.length;k++){
+    const p=q[k],c=q[k+1],sa=A.map(x=>x.subarray(p.a,c.a+1)),sb=B.map(x=>x.subarray(p.b,c.b+1)),r=dtw(sa,sb,o);
+    if(!r)throw new Error('A segment between two datums cannot be aligned with this band; widen the band.');
+    rEff=Math.max(rEff,r.rEff);
+    for(let t=(k?1:0);t<r.pi.length;t++){pi.push(r.pi[t]+p.a);pj.push(r.pj[t]+p.b)}}
+  const pc=pathCost(A,B,pi,pj,o);
+  return {pi:Int32Array.from(pi),pj:Int32Array.from(pj),cost:pc.cost,norm:pc.norm,rEff,n,m,anchors:q};
+}
+// For every sample of A: the matched samples of B. meanJ (fractional) and warped values of a B curve.
+function mapAtoB(pi,pj,n){const s=new Float64Array(n),c=new Int32Array(n);for(let k=0;k<pi.length;k++){s[pi[k]]+=pj[k];c[pi[k]]++}for(let i=0;i<n;i++)s[i]=c[i]?s[i]/c[i]:NaN;return s}
+function warpValues(v,pi,pj,n){const s=new Float64Array(n),c=new Int32Array(n);for(let k=0;k<pi.length;k++){s[pi[k]]+=v[pj[k]];c[pi[k]]++}for(let i=0;i<n;i++)s[i]=c[i]?s[i]/c[i]:NaN;return s}
+
+// ---------------- quality metrics
+function pearson(x,y){const n=x.length;let mx=0,my=0;for(let i=0;i<n;i++){mx+=x[i];my+=y[i]}mx/=n;my/=n;let sxy=0,sxx=0,syy=0;for(let i=0;i<n;i++){const a=x[i]-mx,b=y[i]-my;sxy+=a*b;sxx+=a*a;syy+=b*b}return sxx>0&&syy>0?sxy/Math.sqrt(sxx*syy):NaN}
+const pct=(s,p)=>{if(!s.length)return NaN;const a=Float64Array.from(s).sort(),k=(a.length-1)*p,f=Math.floor(k);return a[f]+(a[Math.min(a.length-1,f+1)]-a[f])*(k-f)}
+function metrics(A,B,res,o){
+  o=o||{};const {pi,pj}=res,L=pi.length,n=A[0].length,m=B[0].length,maxS=o.maxSlope||2,K=A.length;
+  const corr=[];for(let k=0;k<K;k++){const x=new Float64Array(L),y=new Float64Array(L);for(let t=0;t<L;t++){x[t]=A[k][pi[t]];y[t]=B[k][pj[t]]}corr.push(pearson(x,y))}
+  const w=o.weights&&o.weights.length===K?o.weights:A.map(()=>1);let cw=0,cs=0;corr.forEach((c,k)=>{if(isFinite(c)){cw+=w[k];cs+=w[k]*c}});
+  // local stretch: slope dj/di over a window of +-h path steps (slope 1 = depth preserved)
+  const h=Math.max(2,Math.round(L*0.03)),slopes=[];let ext=0;
+  for(let t=0;t<L;t++){const a=Math.max(0,t-h),b=Math.min(L-1,t+h),di=pi[b]-pi[a],dj=pj[b]-pj[a],s=di>0?dj/di:(dj>0?Infinity:1);slopes.push(s);if(s>maxS||s<1/maxS)ext++}
+  const fin=slopes.filter(isFinite);
+  const sc=n>1?(m-1)/(n-1):1;let dev=0;for(let t=0;t<L;t++)dev+=Math.abs(pj[t]-pi[t]*sc);dev/=L;
+  const ca=new Int32Array(n),cb=new Int32Array(m),seenA=new Map();
+  for(let t=0;t<L;t++){ca[pi[t]]++;cb[pj[t]]++}
+  let ma=0,mb=0;for(let i=0;i<n;i++)if(ca[i]>1)ma++;for(let j=0;j<m;j++)if(cb[j]>1)mb++;
+  return {norm:res.norm,corr,corrMean:cw?cs/cw:NaN,pathLen:L,extremeShare:ext/L,slopeMedian:pct(fin,0.5),slopeP10:pct(fin,0.1),slopeP90:pct(fin,0.9),
+    straightness:m>1?Math.max(0,1-dev/(m-1)):1,oneToManyA:ma/n,oneToManyB:mb/m,maxSlope:maxS};
+}
+
+// ---------------- null hypothesis: synthetic versions of B with the same statistics
+function blockShuffle(B,L,r){
+  const m=B[0].length;L=Math.max(1,Math.min(m,Math.round(L)));const nb=Math.ceil(m/L),ord=Array.from({length:nb},(_,i)=>i);
+  for(let i=nb-1;i>0;i--){const j=Math.floor(r()*(i+1));[ord[i],ord[j]]=[ord[j],ord[i]]}
+  return B.map(x=>{const o=new Float64Array(m);let p=0;for(const b of ord){const s=b*L,e=Math.min(m,s+L);for(let i=s;i<e;i++)o[p++]=x[i]}return o});
+}
+function ar1Fit(x){const n=x.length,s=stats(x);let a=0,b=0;for(let i=1;i<n;i++){a+=(x[i]-s.mean)*(x[i-1]-s.mean)}for(let i=0;i<n;i++)b+=(x[i]-s.mean)*(x[i]-s.mean);
+  const phi=b>0?Math.max(-0.99,Math.min(0.995,a/b)):0;return {mean:s.mean,sd:s.sd,phi}}
+function ar1Sim(B,r){ // independent AR(1) per curve, same mean, sd and lag-1 autocorrelation as the real curve
+  return B.map(x=>{const f=ar1Fit(x),m=x.length,o=new Float64Array(m),se=f.sd*Math.sqrt(1-f.phi*f.phi);
+    o[0]=f.mean+f.sd*gauss(r);for(let i=1;i<m;i++)o[i]=f.mean+f.phi*(o[i-1]-f.mean)+se*gauss(r);return o});
+}
+function nullSample(B,type,L,r){return type==='ar1'?ar1Sim(B,r):blockShuffle(B,L,r)}
+// real = normalised cost of the unconstrained DTW; p = (1 + #{null <= real}) / (nsim + 1)  (one-sided: lower cost = better match)
+function pValue(real,nulls){let c=0;for(const x of nulls)if(x<=real)c++;return (1+c)/(nulls.length+1)}
+function nullTest(A,B,o){
+  o=o||{};const nsim=o.nsim||100,r=rng(o.seed==null?1:o.seed),dopt={pattern:o.pattern,band:o.band,weights:o.weights};
+  const real=dtw(A,B,dopt).norm,nulls=new Float64Array(nsim);
+  for(let s=0;s<nsim;s++){const res=dtw(A,nullSample(B,o.type||'block',o.blockLen||10,r),dopt);nulls[s]=res?res.norm:NaN}
+  const ok=Array.from(nulls).filter(isFinite),st=stats(Float64Array.from(ok));
+  return {real,nulls,p:pValue(real,ok),mean:st.mean,sd:st.sd,z:st.sd>0?(real-st.mean)/st.sd:NaN};
+}
+
+// ---------------- synthetic example: a pair of clearly fictitious logs
+// Well A on [2000,2150] m; well B is the same succession with a piecewise-linear depth mapping, noise and a different gain/offset.
+const EX_NODES=[[2000,2030],[2040,2060],[2090,2150],[2150,2190]]; // [depth A, depth B]
+const mapAB=z=>{const N=EX_NODES;for(let k=0;k+1<N.length;k++)if(z<=N[k+1][0]||k+2===N.length)return N[k][1]+(z-N[k][0])*(N[k+1][1]-N[k][1])/(N[k+1][0]-N[k][0]);return NaN};
+const mapBA=z=>{const N=EX_NODES;for(let k=0;k+1<N.length;k++)if(z<=N[k+1][1]||k+2===N.length)return N[k][0]+(z-N[k][1])*(N[k+1][0]-N[k][0])/(N[k+1][1]-N[k][1]);return NaN};
+function exampleLogs(seed,step){
+  seed=seed==null?7:seed;step=step||0.5;const r=rng(seed),comp=[];
+  for(let k=0;k<7;k++)comp.push({lam:6+r()*40,ph:r()*6.283,a:0.5+r()});
+  const lith=z=>{let s=0;for(const c of comp)s+=c.a*Math.sin(2*Math.PI*z/c.lam+c.ph);return 0.5+0.5*Math.tanh(1.3*s/Math.sqrt(comp.length))};
+  const mk=(z0,z1,f,noise,gain,off,sd)=>{const n=Math.floor((z1-z0)/step+1e-9)+1,z=new Float64Array(n),gr=new Float64Array(n),rh=new Float64Array(n),rr=rng(sd);
+    for(let i=0;i<n;i++){z[i]=z0+i*step;const s=lith(f(z[i]));gr[i]=gain*(25+105*s)+off+noise*12*gauss(rr);rh[i]=2.68-0.42*s+noise*0.05*gauss(rr)}
+    return {depth:z,gr,rh}};
+  const a=mk(2000,2150,z=>z,0.25,1,0,seed+1),b=mk(2030,2190,mapBA,0.6,0.85,12,seed+2);
+  const L=(nm,x)=>({name:nm,depthName:'DEPT',depthUnit:'M',depth:x.depth,curves:[{mnem:'GR',unit:'GAPI',v:x.gr},{mnem:'RHOB',unit:'G/C3',v:x.rh}]});
+  return {A:L('Synthetic well A',a),B:L('Synthetic well B (stretched, noisy copy)',b)};
+}
+
+W.LC={rng,gauss,parseLAS,parseTable,parseAny,writeLAS,gridN,resample,fillNaN,smooth,normalise,prepare,stats,mkDist,dtw,pathCost,dtwSegments,mapAtoB,warpValues,pearson,metrics,
+  blockShuffle,ar1Fit,ar1Sim,nullSample,pValue,nullTest,exampleLogs,mapAB,mapBA,EX_NODES};
+})(typeof window!=='undefined'?window:globalThis);
+
+</script>
+<div class="top"><h1>Log correlation (DTW)</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button id="bCorr" disabled title="Depth A, depth B and the values along the warping path">Correspondence (CSV)</button>
+  <button id="bWarpLas" disabled title="Log B stretched onto the depth axis of log A, as LAS 2.0">Warped B (LAS)</button>
+  <button id="bWarpCsv" disabled title="Log B stretched onto the depth axis of log A, as CSV">Warped B (CSV)</button>
+  <button id="bDatCsv" disabled>Datums (CSV)</button>
+  <button id="bSave">Save (JSON)</button><button id="bOpenJson">Open (JSON)</button><input type="file" id="fJson" accept=".json,application/json" hidden>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs in your browser; nothing is uploaded. Dynamic time warping stretches and compresses the depth axis of log B, never reversing it, so that its shape follows log A as closely as possible. It matches signal shapes, not geology: check the result against what you know.">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Log A (reference)<i class="chev"></i></h2><div class="body" id="inA"></div></section>
+ <section class="panel"><h2><span class="n">2</span>Log B (to be warped)<i class="chev"></i></h2><div class="body" id="inB"></div></section>
+ <section class="panel"><h2><span class="n">3</span>Preparation<span class="tt" tabindex="0" data-tip="Both logs are put on the same regular depth step. Gaps are filled by linear interpolation (ends: nearest value) because DTW cannot handle missing values. Standardising each curve (z-score) removes differences of gain and offset between the two logs.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Depth step</span><input type="number" id="step" value="0.5" min="0.001" step="any">
+   <span>Smoothing</span><input type="number" id="smooth" value="3" min="1" step="2" title="Moving-average window, in samples (1 = none)">
+   <span>Standardise</span><select id="norm"><option value="zscore">z-score (mean 0, sd 1)</option><option value="minmax">min-max (0 to 1)</option><option value="none">none (raw values)</option></select></div>
+   <div class="hint">Curve pairs matched by DTW (each pair: one curve of A against one of B; weights are relative):</div>
+   <div class="prs" id="pairs"></div></div></section>
+ <section class="panel"><h2><span class="n">4</span>DTW<span class="tt" tabindex="0" data-tip="symmetric2: diagonal step counts twice (the path cost is normalised by n+m, so costs of different lengths compare). symmetric1: all steps count once (normalised by the path length). The band keeps the path within a corridor around the straight line between the two corners: a narrower band forbids large shifts and extreme stretching. Datums are depth pairs that must be matched exactly: DTW is solved between consecutive datums and joined.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Step pattern</span><select id="pattern"><option value="sym2">symmetric2</option><option value="sym1">symmetric1</option></select>
+   <span>Band half-width</span><input type="number" id="band" value="0" min="0" step="any" title="Depth units; 0 = no band">
+   <span>Extreme slope</span><input type="number" id="maxS" value="2" min="1.1" step="0.1" title="A path section is extreme when its slope is above this value or below its inverse"></div>
+   <div class="row"><button class="pri" id="bRun">Run DTW</button><span class="msg" id="runMsg"></span></div></div></section>
+ <section class="panel"><h2><span class="n">5</span>Datums (hard constraints)<span class="tt" tabindex="0" data-tip="A datum pairs a depth in A with a depth in B (a marker, a pinchout, a core top). The path goes exactly through it. Datums must not cross: if depth A increases, depth B must not decrease. Click 'Pick on the logs', then click a depth in the left track (A) and one in the right track (B) of the first chart.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="g3"><span>Depth A</span><input type="number" id="dA" step="any"><span>Depth B</span><input type="number" id="dB" step="any"></div>
+   <div class="row"><button id="dAdd">Add datum</button><button id="dPick">Pick on the logs</button><button id="dClear">Clear</button></div>
+   <div class="msg" id="dMsg"></div><div class="tw" id="dTab" style="max-height:150px"></div></div></section>
+ <section class="panel collapsed"><h2><span class="n">6</span>Null hypothesis test<span class="tt" tabindex="0" data-tip="The real normalised DTW cost is compared with the cost obtained against synthetic versions of log B that keep its value distribution (block shuffle) or its mean, spread and lag-1 autocorrelation (AR(1)) but not its sequence of features. p = share of synthetic logs that match A at least as well. It answers 'is this fit better than DTW achieves on featureless look-alikes?', not 'is the correlation geologically right'. Both costs are computed without datums.">?</span><i class="chev"></i></h2>
+  <div class="body"><div class="pg"><span>Synthetic logs</span><select id="nType"><option value="block">block-shuffled B</option><option value="ar1">AR(1) fitted to B</option></select>
+   <span>Number</span><input type="number" id="nSim" value="100" min="10" max="2000">
+   <span>Block length</span><input type="number" id="nBlk" value="5" min="0.001" step="any" title="Depth units (block shuffle only)">
+   <span>Seed</span><input type="number" id="nSeed" value="1"></div>
+   <div class="row"><button class="pri" id="bNull">Run test</button><span class="msg" id="nMsg"></span></div></div></section>
+</aside>
+<main id="main"></main></div>
+<div id="tip"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';b.setAttribute('role','status');document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+function download(name,data,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+const fmt=(v,d)=>isFinite(v)?(+v).toFixed(d==null?3:d):'—';
+const csvq=s=>{s=String(s==null?'':s);if(/^[=+\-@\t\r]/.test(s)&&isNaN(+s))s="'"+s;return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+
+const S={A:null,B:null,datums:[],R:null,pick:false,pend:{a:null,b:null},nullR:null,pairs:[{on:true,a:0,b:0,w:1},{on:false,a:1,b:1,w:1},{on:false,a:0,b:0,w:1}]};
+
+// ---- input panels (same layout for A and B)
+function buildInput(side){
+  $('in'+side).innerHTML=`<div class="drop small" id="drop${side}">Drop a LAS 2.0 or CSV / text file on this panel, choose a file, or paste depth / value columns.</div>
+  <div class="row"><button class="pri" id="bF${side}">Choose file…</button><input type="file" id="f${side}" accept=".las,.LAS,.csv,.txt,.tsv,text/*" hidden><button id="bEx${side}" class="exbtn">Example pair</button></div>
+  <textarea id="t${side}" placeholder="depth value[ value2…]  (header line optional; comma, tab, semicolon or blank separated)" spellcheck="false"></textarea>
+  <div class="row"><button id="bP${side}">Use pasted text</button><span class="msg" id="m${side}"></span></div>
+  <div class="small" id="info${side}"></div>
+  <div class="g3" style="margin-top:6px"><span>From</span><input type="number" id="z0${side}" step="any"><span>to</span><input type="number" id="z1${side}" step="any"></div>`;
+  $('bF'+side).onclick=()=>$('f'+side).click();
+  $('f'+side).onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)loadText(side,await f.text(),f.name)};
+  $('bP'+side).onclick=()=>loadText(side,$('t'+side).value,'pasted '+side);
+  $('bEx'+side).onclick=example;
+  const d=$('drop'+side);
+  ['dragover','dragenter'].forEach(ev=>d.parentElement.addEventListener(ev,e=>{e.preventDefault();d.style.borderColor='var(--acc)'}));
+  d.parentElement.addEventListener('drop',async e=>{e.preventDefault();e.stopPropagation();const f=e.dataTransfer.files[0];if(f)loadText(side,await f.text(),f.name)});
+  ['z0','z1'].forEach(k=>$(k+side).onchange=()=>{if(S.A&&S.B)run()});
+}
+buildInput('A');buildInput('B');
+addEventListener('dragover',e=>e.preventDefault());addEventListener('drop',e=>e.preventDefault());
+
+function loadText(side,text,name){
+  try{const lg=LC.parseAny(text,name.replace(/\.[^.]+$/,''));
+    if(lg.depth.length<10)throw new Error('Fewer than 10 samples.');
+    setLog(side,lg);$('m'+side).textContent='';$('m'+side).className='msg';
+    if(S.A&&S.B)run();else drawMain()}
+  catch(e){$('m'+side).textContent=e.message;$('m'+side).className='msg err'}
+}
+function setLog(side,lg){
+  S[side]=lg;const z=Array.from(lg.depth).filter(isFinite);let lo=Infinity,hi=-Infinity;for(const v of z){if(v<lo)lo=v;if(v>hi)hi=v}
+  lg.zmin=lo;lg.zmax=hi;$('z0'+side).value=+lo.toPrecision(8);$('z1'+side).value=+hi.toPrecision(8);
+  $('info'+side).textContent=`${lg.name}: ${lg.depth.length} samples, ${lo} to ${hi} ${lg.depthUnit||''}; curves: ${lg.curves.map(c=>c.mnem+(c.unit?' ('+c.unit+')':'')).join(', ')}`;
+  drawPairs();
+}
+function drawPairs(){
+  const optsOf=lg=>lg?lg.curves.map((c,i)=>`<option value="${i}">${esc(c.mnem)}</option>`).join(''):'';
+  $('pairs').innerHTML=S.pairs.map((p,k)=>`<input type="checkbox" data-k="${k}" data-f="on" ${p.on?'checked':''} aria-label="use pair ${k+1}"><select data-k="${k}" data-f="a">${optsOf(S.A)}</select><select data-k="${k}" data-f="b">${optsOf(S.B)}</select><input type="number" data-k="${k}" data-f="w" value="${p.w}" min="0" step="any" title="weight">`).join('');
+  $('pairs').querySelectorAll('[data-k]').forEach(e=>{const p=S.pairs[+e.dataset.k],f=e.dataset.f;
+    if(f==='a'||f==='b'){const max=(f==='a'?S.A:S.B);e.value=Math.min(p[f],max?max.curves.length-1:0)}
+    e.onchange=()=>{p[f]=f==='on'?e.checked:+e.value;if(S.A&&S.B)run()}});
+}
+
+// ---- preparation + run
+function opts(){return {step:Math.max(1e-6,+$('step').value||0.5),smooth:Math.max(1,+$('smooth').value||1),norm:$('norm').value}}
+function prepareAll(){
+  const o=opts(),pr=S.pairs.filter(p=>p.on);if(!pr.length)throw new Error('Tick at least one curve pair.');
+  const r=(side)=>{const lg=S[side],z0=+$('z0'+side).value,z1=+$('z1'+side).value;if(!(z1>z0))throw new Error(`Log ${side}: the depth range is empty.`);
+    return LC.prepare(lg,pr.map(p=>side==='A'?p.a:p.b),{...o,z0,z1})};
+  return {pa:r('A'),pb:r('B'),pr,o};
+}
+function run(){
+  const t0=performance.now();$('runMsg').textContent='';S.nullR=null;
+  try{
+    const {pa,pb,pr,o}=prepareAll();
+    if(pa.n*pb.n>36e6)throw new Error(`${pa.n} x ${pb.n} samples is too large (limit 36 million cells): increase the depth step or narrow the range.`);
+    const w=pr.map(p=>p.w),pat=$('pattern').value,bandD=+$('band').value||0,dopt={pattern:pat,band:bandD/o.step,weights:w};
+    const dat=S.datums.map(d=>({a:(d.za-pa.z0)/o.step,b:(d.zb-pb.z0)/o.step})).filter(d=>d.a>=-0.5&&d.a<=pa.n-0.5&&d.b>=-0.5&&d.b<=pb.n-0.5);
+    const res=dat.length?LC.dtwSegments(pa.norm,pb.norm,dat,dopt):LC.dtw(pa.norm,pb.norm,dopt);
+    if(!res)throw new Error('No path inside the band: widen it.');
+    const mt=LC.metrics(pa.norm,pb.norm,res,{weights:w,maxSlope:+$('maxS').value||2});
+    S.R={pa,pb,pr,o,res,mt,dopt,dat,ms:performance.now()-t0,w};
+    $('runMsg').textContent=`${pa.n} x ${pb.n} samples, ${Math.round(S.R.ms)} ms`+(res.rEff?`, band ${(res.rEff*o.step).toPrecision(3)}`:'');
+    ['bCorr','bWarpLas','bWarpCsv'].forEach(i=>$(i).disabled=false);
+  }catch(e){S.R=null;$('runMsg').textContent=e.message;$('runMsg').className='msg err';drawMain();return}
+  $('runMsg').className='msg';drawMain();
+}
+$('bRun').onclick=()=>{if(!S.A||!S.B){banner('Load log A and log B first (or try the example).',true);return}run()};
+['step','smooth','norm','pattern','band','maxS'].forEach(i=>$(i).onchange=()=>{if(S.A&&S.B)run()});
+
+// ---- datums
+function drawDatums(){
+  $('dTab').innerHTML=S.datums.length?'<table><thead><tr><th>Depth A</th><th>Depth B</th><th></th></tr></thead><tbody>'+S.datums.map((d,i)=>`<tr><td>${+d.za.toPrecision(8)}</td><td>${+d.zb.toPrecision(8)}</td><td><button data-rm="${i}" aria-label="remove datum">✕</button></td></tr>`).join('')+'</tbody></table>':'<div class="small" style="padding:6px 8px">No datum: the whole logs are matched in one piece.</div>';
+  $('dTab').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{S.datums.splice(+b.dataset.rm,1);drawDatums();if(S.A&&S.B)run()});
+  $('bDatCsv').disabled=!S.datums.length;
+}
+function checkDatums(list){const s=[...list].sort((x,y)=>x.za-y.za);for(let i=1;i<s.length;i++)if(s[i].zb<s[i-1].zb)return `Datums cross: A ${s[i-1].za}→B ${s[i-1].zb} and A ${s[i].za}→B ${s[i].zb}.`;return ''}
+function addDatum(za,zb){
+  if(!isFinite(za)||!isFinite(zb)){$('dMsg').textContent='Enter both depths.';$('dMsg').className='msg err';return}
+  const nl=[...S.datums,{za,zb}],bad=checkDatums(nl);
+  if(bad){$('dMsg').textContent=bad;$('dMsg').className='msg err';return}
+  S.datums=nl.sort((x,y)=>x.za-y.za);$('dMsg').textContent='';$('dMsg').className='msg';drawDatums();if(S.A&&S.B)run()}
+$('dAdd').onclick=()=>addDatum(parseFloat($('dA').value),parseFloat($('dB').value));
+$('dClear').onclick=()=>{S.datums=[];drawDatums();if(S.A&&S.B)run()};
+$('dPick').onclick=()=>{S.pick=!S.pick;S.pend={a:null,b:null};$('dPick').classList.toggle('on',S.pick);$('dMsg').textContent=S.pick?'Click a depth on the left track (A), then one on the right track (B).':'';$('dMsg').className='msg';drawLogs()};
+
+// ---- null test (chunked so the page stays responsive)
+$('bNull').onclick=async()=>{
+  if(!S.R){banner('Run DTW first.',true);return}
+  const R=S.R,nsim=Math.min(2000,Math.max(10,+$('nSim').value||100)),type=$('nType').value,seed=+$('nSeed').value||1,L=Math.max(1,Math.round((+$('nBlk').value||5)/R.o.step));
+  const dopt={pattern:R.dopt.pattern,band:R.dopt.band,weights:R.dopt.weights},r=LC.rng(seed);
+  $('bNull').disabled=true;const real=LC.dtw(R.pa.norm,R.pb.norm,dopt).norm,nulls=[];
+  for(let s=0;s<nsim;s++){const res=LC.dtw(R.pa.norm,LC.nullSample(R.pb.norm,type,L,r),dopt);if(res)nulls.push(res.norm);
+    if(s%4===3){$('nMsg').textContent=`${s+1} / ${nsim}`;await new Promise(z=>setTimeout(z))}}
+  const st=LC.stats(Float64Array.from(nulls));
+  S.nullR={real,nulls,p:LC.pValue(real,nulls),mean:st.mean,sd:st.sd,type,nsim,seed,L};
+  $('nMsg').textContent=`p = ${S.nullR.p.toFixed(3)}`;$('bNull').disabled=false;drawMain();
+};
+
+// ---- main column
+function drawMain(){
+  const R=S.R;
+  if(!R){$('main').innerHTML=`<section class="intro"><h2>Match two logs depth-for-depth</h2>
+    <p>Load two logs (LAS 2.0, or two-column text), or try the example: a log and a stretched, noisy, rescaled copy of it. DTW finds the monotonic depth-to-depth correspondence that makes log B follow log A, with optional datums that must be matched exactly, quality metrics, and a test against synthetic look-alike logs.</p>
+    <div class="row"><button class="pri" id="bEx0">Try the example</button></div>
+    <p style="margin-top:12px">${S.A&&S.B?'':'Needs both log A and log B.'}</p><div class="msg err">${esc($('runMsg').textContent)}</div></section>`;
+    if($('bEx0'))$('bEx0').onclick=example;return}
+  const mt=R.mt,st=R.o.step,nr=S.nullR;
+  const tile=(l,v,sub,w)=>`<div class="tile ${w?'warn':''}"><small>${l}</small><b>${v}</b><em>${sub||'&nbsp;'}</em></div>`;
+  const nz=Math.min(R.pa.n,R.pb.n);
+  $('main').innerHTML=`<div class="tiles">
+   ${tile('Normalised DTW cost',fmt(mt.norm,3),'per path step (standardised units)')}
+   ${tile('Correlation along the path',fmt(mt.corrMean,3),mt.corr.length>1?'per curve: '+mt.corr.map(c=>fmt(c,2)).join(' / '):'Pearson, warped A vs B',mt.corrMean<0.5)}
+   ${tile('Extreme stretching',(mt.extremeShare*100).toFixed(0)+' %','path with slope > '+mt.maxSlope+' or < 1/'+mt.maxSlope,mt.extremeShare>0.3)}
+   ${tile('Path straightness',fmt(mt.straightness,3),'1 = straight line corner to corner')}
+   ${tile('Matched one-to-many',(mt.oneToManyA*100).toFixed(0)+' / '+(mt.oneToManyB*100).toFixed(0)+' %','A / B samples with several partners',Math.max(mt.oneToManyA,mt.oneToManyB)>0.5)}
+   ${tile('Median slope',fmt(mt.slopeMedian,2),'10–90 %: '+fmt(mt.slopeP10,2)+' – '+fmt(mt.slopeP90,2))}
+   ${nr?tile('Null test p-value',nr.p<0.001?'< 0.001':nr.p.toFixed(3),`${nr.nsim} ${nr.type==='ar1'?'AR(1)':'block-shuffled'} logs`,nr.p>0.05):tile('Null test','not run','panel 6 on the left')}</div>
+  <div class="cards">
+   <div class="card wide"><h3>Logs and tie lines<span class="small sp">${S.pick?'picking: click a depth in A, then in B':'tie lines: every '+Math.max(1,Math.round(mt.pathLen/50))+'th path point; orange = datums'}</span></h3><canvas id="cLogs" class="${S.pick?'chart-pick':''}" data-h="560"></canvas></div>
+   <div class="card"><h3>Warping path on the local cost matrix</h3><canvas id="cMat" data-h="420"></canvas><div class="cap">Dark = small difference. Horizontal: A, vertical: B (downsampled for display).</div></div>
+   <div class="card"><h3>B warped onto the depth of A</h3><canvas id="cWarp" data-h="420"></canvas><div class="cap">First curve pair, standardised values. B (orange) is shown at the depth of the A sample it is matched to.</div></div>
+   <div class="card"><h3>Depth shift</h3><canvas id="cShift" data-h="340"></canvas><div class="cap">Matched depth in B minus depth in A, against depth in A. A flat line = no shift; a slope = stretching.</div></div>
+   <div class="card"><h3>Null distribution</h3><canvas id="cNull" data-h="340"></canvas><div class="cap" id="nullCap"></div></div>
+   <div class="card wide"><h3>Correspondence (first rows)<span class="small sp">${R.res.pi.length} path points</span></h3><div class="tw" id="cTab"></div></div></div>`;
+  drawLogs();drawMat();drawWarp();drawShift();drawNull();drawCorrTable();
+}
+// canvas helper
+function cv(id){const c=$(id);if(!c)return null;const w=Math.max(260,c.parentElement.clientWidth-16),h=+c.dataset.h||360,d=devicePixelRatio||1;
+  c.style.height=h+'px';c.width=w*d;c.height=h*d;const g=c.getContext('2d');g.setTransform(d,0,0,d,0,0);g.clearRect(0,0,w,h);g.font='11px Inter,system-ui,sans-serif';return {c,g,w,h}}
+const COL={a:'#4a5a4e',b:'#a8623a',grid:'#e6e2d6',txt:'#5c5a52',dat:'#c2924a'};
+function niceTicks(a,b,n){const r=(b-a)/n||1,p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p,s=(f<1.5?1:f<3.5?2:f<7.5?5:10)*p,o=[];for(let v=Math.ceil(a/s-1e-9)*s;v<=b+1e-9;v+=s)o.push(+v.toPrecision(12));return o}
+function axisY(g,x,y0,y1,z0,z1,side,n){g.fillStyle=COL.txt;g.textAlign=side==='l'?'right':'left';
+  for(const z of niceTicks(z0,z1,n)){const y=y0+(z-z0)/(z1-z0||1)*(y1-y0);g.fillText(z,x+(side==='l'?-5:5),y+4)}}
+function trackScale(v,w,x0){let lo=Infinity,hi=-Infinity;for(const t of v){if(t<lo)lo=t;if(t>hi)hi=t}const d=(hi-lo)||1;return t=>x0+3+(t-lo)/d*(w-6)}
+
+function drawLogs(){
+  const R=S.R,k=cv('cLogs');if(!R||!k)return;const {g,w,h}=k,mt=R.mt;
+  const ml=62,mr=62,top=34,bot=14,tw=Math.min(190,(w-ml-mr)*0.26),xa=ml,xb=w-mr-tw,y0=top,y1=h-bot;
+  const za0=R.pa.z0,za1=za0+(R.pa.n-1)*R.o.step,zb0=R.pb.z0,zb1=zb0+(R.pb.n-1)*R.o.step;
+  const YA=z=>y0+(z-za0)/(za1-za0||1)*(y1-y0),YB=z=>y0+(z-zb0)/(zb1-zb0||1)*(y1-y0);
+  g.strokeStyle=COL.grid;g.lineWidth=1;for(const z of niceTicks(za0,za1,8)){const y=YA(z);g.beginPath();g.moveTo(xa,y);g.lineTo(xa+tw,y);g.stroke()}for(const z of niceTicks(zb0,zb1,8)){const y=YB(z);g.beginPath();g.moveTo(xb,y);g.lineTo(xb+tw,y);g.stroke()}
+  axisY(g,xa,y0,y1,za0,za1,'l',8);axisY(g,xb+tw,y0,y1,zb0,zb1,'r',8);
+  g.strokeStyle='#c9c4b6';g.strokeRect(xa+.5,y0+.5,tw-1,y1-y0);g.strokeRect(xb+.5,y0+.5,tw-1,y1-y0);
+  const pn=S.pairs.filter(p=>p.on)[0],nameA=S.A.curves[pn.a].mnem,nameB=S.B.curves[pn.b].mnem;
+  g.fillStyle='#232220';g.font='600 12px Inter,system-ui,sans-serif';g.textAlign='center';g.fillText('A: '+nameA+' ('+S.A.name+')',xa+tw/2,16);g.fillText('B: '+nameB+' ('+S.B.name+')',xb+tw/2,16);g.font='11px Inter,system-ui,sans-serif';
+  g.save();g.translate(12,(y0+y1)/2);g.rotate(-Math.PI/2);g.textAlign='center';g.fillStyle=COL.txt;g.fillText('depth A '+(S.A.depthUnit||''),0,0);g.restore();
+  g.save();g.translate(w-10,(y0+y1)/2);g.rotate(Math.PI/2);g.textAlign='center';g.fillStyle=COL.txt;g.fillText('depth B '+(S.B.depthUnit||''),0,0);g.restore();
+  // tie lines first (under the curves)
+  const L=R.res.pi.length,every=Math.max(1,Math.round(L/50));
+  g.lineWidth=1;g.strokeStyle='rgba(74,90,78,.38)';g.beginPath();
+  for(let t=0;t<L;t+=every){const i=R.res.pi[t],j=R.res.pj[t];g.moveTo(xa+tw,YA(za0+i*R.o.step));g.lineTo(xb,YB(zb0+j*R.o.step))}g.stroke();
+  const anchors=R.res.anchors||[];g.strokeStyle=COL.dat;g.lineWidth=2;g.beginPath();
+  for(const d of R.dat){g.moveTo(xa,YA(za0+d.a*R.o.step));g.lineTo(xb+tw,YB(zb0+d.b*R.o.step))}g.stroke();
+  // curves
+  const draw=(v,x0,Y,z0,col)=>{const sx=trackScale(v,tw,x0);g.strokeStyle=col;g.lineWidth=1.2;g.beginPath();for(let i=0;i<v.length;i++){const x=sx(v[i]),y=Y(z0+i*R.o.step);i?g.lineTo(x,y):g.moveTo(x,y)}g.stroke()};
+  draw(R.pa.norm[0],xa,YA,za0,COL.a);draw(R.pb.norm[0],xb,YB,zb0,COL.b);
+  // pending pick
+  g.setLineDash([5,4]);g.lineWidth=1.5;g.strokeStyle=COL.dat;
+  if(S.pend.a!=null){const y=YA(S.pend.a);g.beginPath();g.moveTo(xa,y);g.lineTo(xa+tw,y);g.stroke()}
+  if(S.pend.b!=null){const y=YB(S.pend.b);g.beginPath();g.moveTo(xb,y);g.lineTo(xb+tw,y);g.stroke()}g.setLineDash([]);
+  const c=k.c;c.onclick=e=>{if(!S.pick)return;const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(y<y0||y>y1)return;
+    const f=(y-y0)/(y1-y0);
+    if(x<xa+tw+(xb-xa-tw)/2){S.pend.a=+(za0+f*(za1-za0)).toFixed(3);$('dA').value=S.pend.a}else{S.pend.b=+(zb0+f*(zb1-zb0)).toFixed(3);$('dB').value=S.pend.b}
+    if(S.pend.a!=null&&S.pend.b!=null){const a=S.pend.a,b=S.pend.b;S.pend={a:null,b:null};addDatum(a,b)}else drawLogs()};
+}
+function ramp(t){ // dark green (similar) -> pale -> orange (different)
+  const st=[[38,52,44],[74,90,78],[200,196,178],[238,222,190],[168,98,58]],x=Math.min(1,Math.max(0,t))*(st.length-1),i=Math.min(st.length-2,Math.floor(x)),f=x-i;
+  return st[i].map((c,k)=>Math.round(c+(st[i+1][k]-c)*f))}
+function drawMat(){
+  const R=S.R,k=cv('cMat');if(!R||!k)return;const {g,w,h}=k,n=R.pa.n,m=R.pb.n,ml=52,mb=26,mt0=10,mr=10;
+  const pw=w-ml-mr,ph=h-mb-mt0,sx=Math.max(1,Math.ceil(n/320)),sy=Math.max(1,Math.ceil(m/320)),W=Math.ceil(n/sx),H=Math.ceil(m/sy);
+  const dist=LC.mkDist(R.pa.norm,R.pb.norm,R.w),vals=new Float32Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)vals[y*W+x]=dist(Math.min(n-1,x*sx),Math.min(m-1,y*sy));
+  const srt=Float32Array.from(vals).sort(),hi=srt[Math.floor(srt.length*0.95)]||1,off=document.createElement('canvas');off.width=W;off.height=H;
+  const im=off.getContext('2d').createImageData(W,H);
+  for(let q=0;q<vals.length;q++){const c=ramp(vals[q]/hi);im.data[q*4]=c[0];im.data[q*4+1]=c[1];im.data[q*4+2]=c[2];im.data[q*4+3]=255}
+  off.getContext('2d').putImageData(im,0,0);g.imageSmoothingEnabled=false;g.drawImage(off,ml,mt0,pw,ph);
+  const X=i=>ml+i/(n-1||1)*pw,Y=j=>mt0+j/(m-1||1)*ph;
+  if(R.res.rEff){g.strokeStyle='rgba(255,255,255,.7)';g.setLineDash([4,3]);g.lineWidth=1;const r=R.res.rEff,sc=(m-1)/(n-1||1);
+    for(const sg of [-1,1]){g.beginPath();for(let i=0;i<n;i+=Math.max(1,n>>6)){const j=Math.min(m-1,Math.max(0,i*sc+sg*r));i?g.lineTo(X(i),Y(j)):g.moveTo(X(i),Y(j))}g.stroke()}g.setLineDash([])}
+  g.strokeStyle='#fff';g.lineWidth=3;g.beginPath();for(let t=0;t<R.res.pi.length;t++){const x=X(R.res.pi[t]),y=Y(R.res.pj[t]);t?g.lineTo(x,y):g.moveTo(x,y)}g.stroke();
+  g.strokeStyle='#232220';g.lineWidth=1.2;g.stroke();
+  g.fillStyle=COL.dat;for(const d of R.dat){g.beginPath();g.arc(X(d.a),Y(d.b),4,0,6.3);g.fill();g.strokeStyle='#232220';g.lineWidth=1;g.stroke()}
+  g.fillStyle=COL.txt;g.textAlign='right';const za0=R.pa.z0,zb0=R.pb.z0,st=R.o.step;
+  for(let q=0;q<=4;q++){g.fillText(+(zb0+(m-1)*st*q/4).toPrecision(5),ml-4,mt0+ph*q/4+4)}
+  g.textAlign='center';for(let q=0;q<=4;q++)g.fillText(+(za0+(n-1)*st*q/4).toPrecision(5),ml+pw*q/4,h-10);
+  g.save();g.translate(11,mt0+ph/2);g.rotate(-Math.PI/2);g.fillText('depth B',0,0);g.restore();g.fillText('depth A',ml+pw/2,h-0);
+}
+function plotLines(k,series,xl,yl,o){ // generic x/y line chart
+  const {g,w,h}=k,ml=52,mb=30,mt0=10,mr=12,pw=w-ml-mr,ph=h-mb-mt0;let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const s of series)for(let i=0;i<s.x.length;i++){if(!isFinite(s.y[i]))continue;if(s.x[i]<x0)x0=s.x[i];if(s.x[i]>x1)x1=s.x[i];if(s.y[i]<y0)y0=s.y[i];if(s.y[i]>y1)y1=s.y[i]}
+  if(o&&o.y0!=null)y0=Math.min(y0,o.y0);if(!(y1>y0)){y0-=1;y1+=1}const pad=(y1-y0)*0.06;y0-=pad;y1+=pad;
+  const X=v=>ml+(v-x0)/(x1-x0||1)*pw,Y=v=>mt0+ph-(v-y0)/(y1-y0)*ph;
+  g.strokeStyle=COL.grid;g.fillStyle=COL.txt;g.lineWidth=1;g.textAlign='right';
+  for(let q=0;q<=5;q++){const v=y0+(y1-y0)*q/5,y=Y(v);g.beginPath();g.moveTo(ml,y);g.lineTo(ml+pw,y);g.stroke();g.fillText(+v.toPrecision(3),ml-4,y+4)}
+  g.textAlign='center';for(let q=0;q<=5;q++){const v=x0+(x1-x0)*q/5;g.fillText(+v.toPrecision(5),X(v),h-14)}
+  g.fillText(xl,ml+pw/2,h-1);g.save();g.translate(11,mt0+ph/2);g.rotate(-Math.PI/2);g.fillText(yl,0,0);g.restore();
+  if(o&&o.zero&&y0<0&&y1>0){g.strokeStyle='#9a968a';g.beginPath();g.moveTo(ml,Y(0));g.lineTo(ml+pw,Y(0));g.stroke()}
+  for(const s of series){g.strokeStyle=s.c;g.lineWidth=s.lw||1.4;g.beginPath();let pen=false;for(let i=0;i<s.x.length;i++){if(!isFinite(s.y[i])){pen=false;continue}pen?g.lineTo(X(s.x[i]),Y(s.y[i])):g.moveTo(X(s.x[i]),Y(s.y[i]));pen=true}g.stroke()}
+  return {X,Y,ml,pw,mt0,ph};
+}
+function drawWarp(){
+  const R=S.R,k=cv('cWarp');if(!R||!k)return;const n=R.pa.n,za=Array.from({length:n},(_,i)=>R.pa.z0+i*R.o.step);
+  const wv=LC.warpValues(R.pb.norm[0],R.res.pi,R.res.pj,n);
+  const p=plotLines(k,[{x:za,y:R.pa.norm[0],c:COL.a,lw:1.6},{x:za,y:wv,c:COL.b,lw:1.3}],'depth A','standardised value');
+  const g=k.g;g.textAlign='left';g.fillStyle=COL.a;g.fillText('— A',p.ml+8,p.mt0+12);g.fillStyle=COL.b;g.fillText('— B warped',p.ml+44,p.mt0+12);
+  g.strokeStyle=COL.dat;g.lineWidth=1.5;for(const d of R.dat){const x=p.X(R.pa.z0+d.a*R.o.step);g.beginPath();g.moveTo(x,p.mt0);g.lineTo(x,p.mt0+p.ph);g.stroke()}
+}
+function drawShift(){
+  const R=S.R,k=cv('cShift');if(!R||!k)return;const n=R.pa.n,za=[],sh=[],mj=LC.mapAtoB(R.res.pi,R.res.pj,n);
+  for(let i=0;i<n;i++){za.push(R.pa.z0+i*R.o.step);sh.push(R.pb.z0+mj[i]*R.o.step-za[i])}
+  const p=plotLines(k,[{x:za,y:sh,c:COL.b,lw:1.8}],'depth A','depth B − depth A',{zero:true});
+  const g=k.g;g.strokeStyle=COL.dat;g.lineWidth=1.5;for(const d of R.dat){const x=p.X(R.pa.z0+d.a*R.o.step);g.beginPath();g.moveTo(x,p.mt0);g.lineTo(x,p.mt0+p.ph);g.stroke()}
+}
+function drawNull(){
+  const R=S.R,k=cv('cNull'),nr=S.nullR;if(!k)return;const {g,w,h}=k;
+  if(!nr){g.fillStyle=COL.txt;g.font='13px Inter,system-ui,sans-serif';g.textAlign='center';g.fillText('Run the null hypothesis test (panel 6).',w/2,h/2);$('nullCap').textContent='';return}
+  const v=nr.nulls,lo0=Math.min(nr.real,...v),hi0=Math.max(nr.real,...v),pad=(hi0-lo0)*0.05||0.1,lo=lo0-pad,hi=hi0+pad,nb=24,cnt=new Array(nb).fill(0);
+  for(const x of v)cnt[Math.min(nb-1,Math.floor((x-lo)/(hi-lo)*nb))]++;
+  const ml=44,mb=30,mt0=14,mr=12,pw=w-ml-mr,ph=h-mb-mt0,mx=Math.max(...cnt,1),X=t=>ml+(t-lo)/(hi-lo)*pw;
+  g.fillStyle='#c9c4b6';for(let b=0;b<nb;b++){const bh=cnt[b]/mx*ph;g.fillRect(ml+b*pw/nb+1,mt0+ph-bh,pw/nb-2,bh)}
+  g.strokeStyle=COL.b;g.lineWidth=2.5;g.beginPath();g.moveTo(X(nr.real),mt0-4);g.lineTo(X(nr.real),mt0+ph);g.stroke();
+  g.fillStyle=COL.b;g.textAlign=X(nr.real)>w*0.6?'right':'left';g.fillText('real '+nr.real.toFixed(3),X(nr.real)+(X(nr.real)>w*0.6?-5:5),mt0+8);
+  g.fillStyle=COL.txt;g.textAlign='center';for(let q=0;q<=5;q++){const t=lo+(hi-lo)*q/5;g.fillText(t.toFixed(2),X(t),h-14)}g.fillText('normalised DTW cost of synthetic logs',ml+pw/2,h-1);
+  g.textAlign='right';g.fillText('count',ml-4,mt0+4);g.strokeStyle='#9a968a';g.lineWidth=1;g.strokeRect(ml,mt0,pw,ph);
+  $('nullCap').textContent=`${nr.nsim} ${nr.type==='ar1'?'AR(1) logs fitted to B':'block-shuffled copies of B (blocks of '+nr.L+' samples)'}, seed ${nr.seed}. Null mean ${nr.mean.toFixed(3)}, sd ${nr.sd.toFixed(3)}; the real cost is ${((nr.mean-nr.real)/(nr.sd||1)).toFixed(1)} sd below it. Empirical p = (1 + count(null ≤ real)) / (N + 1) = ${nr.p.toFixed(3)}.`;
+}
+function pairNames(){const pr=S.R.pr;return {a:pr.map(p=>S.A.curves[p.a].mnem),b:pr.map(p=>S.B.curves[p.b].mnem)}}
+function drawCorrTable(){
+  const R=S.R,el=$('cTab');if(!el)return;const nm=pairNames(),L=R.res.pi.length,lim=Math.min(L,300),st=R.o.step;
+  let h='<table><thead><tr><th>Depth A</th><th>Depth B</th><th>Shift</th>'+nm.a.map(x=>`<th>A ${esc(x)}</th>`).join('')+nm.b.map(x=>`<th>B ${esc(x)}</th>`).join('')+'</tr></thead><tbody>';
+  for(let t=0;t<lim;t++){const i=R.res.pi[t],j=R.res.pj[t],za=R.pa.z0+i*st,zb=R.pb.z0+j*st;
+    h+=`<tr><td>${+za.toFixed(4)}</td><td>${+zb.toFixed(4)}</td><td>${+(zb-za).toFixed(4)}</td>`+R.pa.raw.map(v=>`<td>${fmt(v[i],2)}</td>`).join('')+R.pb.raw.map(v=>`<td>${fmt(v[j],2)}</td>`).join('')+'</tr>'}
+  el.innerHTML=h+'</tbody></table>'+(L>lim?`<div class="small" style="padding:4px 8px">${L-lim} more rows in the CSV export.</div>`:'');
+}
+addEventListener('resize',()=>{if(S.R){drawLogs();drawMat();drawWarp();drawShift();drawNull()}});
+
+// ---- exports
+const base=()=>(S.A?S.A.name:'A').replace(/\W+/g,'_')+'_vs_'+(S.B?S.B.name:'B').replace(/\W+/g,'_');
+$('bCorr').onclick=()=>{const R=S.R;if(!R)return;const nm=pairNames(),st=R.o.step,L=['depth_A,depth_B,shift,'+nm.a.map(x=>'A_'+x).concat(nm.b.map(x=>'B_'+x)).map(csvq).join(',')];
+  for(let t=0;t<R.res.pi.length;t++){const i=R.res.pi[t],j=R.res.pj[t],za=R.pa.z0+i*st,zb=R.pb.z0+j*st;
+    L.push([+za.toFixed(6),+zb.toFixed(6),+(zb-za).toFixed(6),...R.pa.raw.map(v=>+v[i].toFixed(6)),...R.pb.raw.map(v=>+v[j].toFixed(6))].join(','))}
+  download(base()+'_correspondence.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved the correspondence table'};
+function warped(){const R=S.R,n=R.pa.n,z=Float64Array.from({length:n},(_,i)=>R.pa.z0+i*R.o.step),nm=pairNames().b;
+  return {z,curves:R.pb.raw.map((v,k)=>({mnem:nm[k],unit:S.B.curves[R.pr[k].b].unit,desc:'B warped onto depth A',v:LC.warpValues(v,R.res.pi,R.res.pj,n)}))}}
+$('bWarpLas').onclick=()=>{if(!S.R)return;const w=warped();download(base()+'_B_warped.las',LC.writeLAS({well:S.B.name+' (warped to A)',depth:w.z,depthUnit:S.A.depthUnit||'M',curves:w.curves}),'text/plain');$('exportMsg').textContent='Saved the warped log (LAS)'};
+$('bWarpCsv').onclick=()=>{if(!S.R)return;const w=warped(),L=['depth_A,'+w.curves.map(c=>csvq(c.mnem+'_B_warped')).join(',')];
+  for(let i=0;i<w.z.length;i++)L.push([+w.z[i].toFixed(6),...w.curves.map(c=>isFinite(c.v[i])?+c.v[i].toFixed(6):'')].join(','));
+  download(base()+'_B_warped.csv','﻿'+L.join('\r\n'),'text/csv;charset=utf-8');$('exportMsg').textContent='Saved the warped log (CSV)'};
+$('bDatCsv').onclick=()=>{download(base()+'_datums.csv','depth_A,depth_B\r\n'+S.datums.map(d=>d.za+','+d.zb).join('\r\n'),'text/csv')};
+const UI=['step','smooth','norm','pattern','band','maxS','nType','nSim','nBlk','nSeed','z0A','z1A','z0B','z1B'];
+const pack=lg=>lg?{name:lg.name,depthName:lg.depthName,depthUnit:lg.depthUnit,depth:Array.from(lg.depth),curves:lg.curves.map(c=>({mnem:c.mnem,unit:c.unit,v:Array.from(c.v)}))}:null;
+const unpack=o=>o?{name:o.name,depthName:o.depthName,depthUnit:o.depthUnit,depth:Float64Array.from(o.depth,x=>x==null?NaN:x),curves:o.curves.map(c=>({mnem:c.mnem,unit:c.unit,v:Float64Array.from(c.v,x=>x==null?NaN:x)}))}:null;
+$('bSave').onclick=()=>{const ui={};UI.forEach(k=>ui[k]=$(k).value);
+  download(base()+'.logcorr.json',JSON.stringify({app:'logcorr',v:1,A:pack(S.A),B:pack(S.B),pairs:S.pairs,datums:S.datums,ui}),'application/json');$('exportMsg').textContent='Saved the session'};
+$('bOpenJson').onclick=()=>$('fJson').click();
+$('fJson').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const o=JSON.parse(await f.text());if(o.app!=='logcorr')throw new Error('Not a log correlation file.');
+    S.A=null;S.B=null;if(o.A)setLog('A',unpack(o.A));if(o.B)setLog('B',unpack(o.B));S.pairs=o.pairs||S.pairs;S.datums=o.datums||[];drawPairs();drawDatums();
+    Object.entries(o.ui||{}).forEach(([k,v])=>{if($(k))$(k).value=v});if(S.A&&S.B)run();else drawMain();$('exportMsg').textContent='Session opened'}
+  catch(err){banner(err.message,true)}};
+
+// ---- example: fictitious synthetic wells
+function example(){
+  const ex=LC.exampleLogs(7,0.5);S.datums=[];S.pairs[0]={on:true,a:0,b:0,w:1};S.pairs[1]={on:true,a:1,b:1,w:1};
+  $('step').value=0.5;$('smooth').value=3;$('norm').value='zscore';$('band').value=0;$('nBlk').value=5;
+  setLog('A',ex.A);setLog('B',ex.B);drawPairs();drawDatums();run();
+  banner('Example: two fictitious logs; B is a noisy, rescaled copy of A with a piecewise stretch (A 2000–2150 m, B 2030–2190 m).');
+}
+$('dMsg').textContent='';
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+drawDatums();drawMain();
+if(location.hash==='#example')example();
+window.DG={S,run,example};
+</script>
+
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec'],['Log correlation (DTW)','logcorr']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp'],['Contact and well POS','contact'],['Distribution fitting','distfit']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: the logs are read in memory and never uploaded. Correlates two logs depth-for-depth (well to well, core log to well log, core to core) with dynamic time warping (DTW): it finds the monotonic correspondence between the depth axes (a depth is never matched to a shallower one after a deeper one, i.e. superposition is respected) that makes log B follow log A. Datums chosen by the user are matched exactly, the quality of the match is quantified, and a null-hypothesis test compares the fit with synthetic look-alike logs.","method":["Preparation: each curve is interpolated linearly onto a regular depth step common to A and B; missing samples are filled by linear interpolation (nearest value at the ends); an optional moving average smooths; each curve is standardised (z-score or min-max) so that gain and offset differences do not count. Several curve pairs (curve k of A against curve k of B) can be used with relative weights.","DTW: local cost = weighted Euclidean distance between the standardised curve vectors at the two samples. Step patterns: <b>symmetric2</b> D(i,j) = min(D(i-1,j)+d, D(i,j-1)+d, D(i-1,j-1)+2d), normalised by n+m; <b>symmetric1</b> all steps weigh d, normalised by the path length. The path always runs from the first to the last sample of both logs (global alignment). The cost matrix is held in one Float64Array (O(n m)); 2000 x 2000 samples take about a second.","Band: optional Sakoe-Chiba corridor of a given half-width (depth units) around the straight line joining the two corners. It is widened automatically when the logs differ so much in length that no path would exist (the width used is reported).","Datums (segment mode): each datum pairs a depth in A with a depth in B and must lie on the path. DTW is solved independently between consecutive datums (the ends of the logs act as the first and last datum) and the paths are concatenated; datums must not cross. A datum can therefore force a match; the tool does not judge whether it is geologically sound.","Quality metrics: normalised cost (cost per weighted path step, in standardised units); Pearson correlation of the two curves along the path (per curve, and weighted mean); local slope of the path (matched depth in B per depth in A, over a window of about 6 % of the path), with the share of the path steeper than the chosen slope or flatter than its inverse (extreme stretching or compression); straightness = 1 minus the mean distance of the path to the straight corner-to-corner line, relative to the length of B; share of samples of A (and of B) matched to several samples of the other log.","Warped log: for each sample of A the matched samples of B are averaged (depth and value); the result is B expressed on the depth axis of A, and the depth shift is matched depth in B minus depth in A.","Null test: the unconstrained DTW cost of A against B is compared with the cost of A against N synthetic versions of B (default 100, seeded): <b>block shuffle</b> (B cut into blocks of a given length, the blocks permuted: same values, local texture kept, sequence of features destroyed) or <b>AR(1)</b> (an independent first-order autoregressive series per curve with the mean, standard deviation and lag-1 autocorrelation of the real curve; cross-curve relations are not kept). Empirical one-sided p = (1 + number of synthetic costs not larger than the real one) / (N + 1). This null asks whether the match is better than what DTW finds on featureless look-alikes of B; it does not test the geological validity of the correlation."],"sources":[["Dynamic time warping with monotonic path and band constraint (Sakoe-Chiba)","Sakoe H. and Chiba S., 1978, Dynamic programming algorithm optimization for spoken word recognition, IEEE Trans. Acoustics, Speech and Signal Processing 26(1), 43-49","classical (not re-read)"],["DTW for time series, step patterns","Berndt D.J. and Clifford J., 1994, Using dynamic time warping to find patterns in time series, KDD workshop","classical (not re-read)"],["Idea of segment-based correlation with user datums / pinchouts as hard constraints, quality metrics and a null-hypothesis test on synthetic logs","pyCoreRelator project README (GitHub, GeoLarryLai); only the README concept was read, no code was read or reused. Lai et al., 2026, Sedimentology, is cited there as the authors' own published description","concept: README read, paper not read"],["Implementation of DTW, segment solving, metrics, block-shuffle and AR(1) nulls","Written for this page from the definitions above","derived"],["Step pattern, band, extreme-slope threshold, slope window, block length, number of synthetic logs","Defaults chosen by the author of the page and editable in the tool","on the page"],["Example logs","Fictitious, generated by the page (not real wells)","derived"]],"validation":["Self-check script (scripts/logcorr_test.mjs): DTW of a signal with itself (diagonal path, zero cost); cost equal to a brute-force enumeration of all monotone paths on tiny inputs (both step patterns); recovery of a known stretched and compressed depth mapping and of the mapping of the noisy two-curve example; monotonic path in every case; datums met exactly and the path kept inside each datum rectangle; band respected; weights; resampling, gap filling, smoothing, standardisation; null test with a fixed seed (p below 0.05 for a real match, no systematic small p for independent AR(1) series, reproducible); AR(1) fit; LAS write and read round trip; timing of a 2000 x 2000 alignment."],"limits":["DTW matches signal shapes, not geology. Two unrelated logs can nearly always be warped to look similar; a low cost or a high correlation along the path is not proof of a correlation, and the null test only partly guards against it.","The alignment is global: both logs are assumed to cover the same interval, from first to last sample. An interval present in one log and absent from the other is not modelled; the path will squeeze it into a plateau (many-to-one match). Pinchouts and missing sections are handled only through the datums you place.","DTW can force a match: with large stretching the path becomes steep or flat. Watch the extreme-stretching share, the straightness and the depth-shift curve, and use a band or datums when you know the plausible range.","The null test uses the unconstrained DTW (no datums) for both the real and the synthetic costs. The block-shuffle and AR(1) nulls are simple models: they do not represent facies successions, cyclicity or the cross-correlation between curves.","No age constraints, no ensemble of alternative paths, no depth conversion beyond the depth axes you supply; depth units of A and B are assumed identical.","Inputs: LAS 2.0 unwrapped files (WRAP YES is refused) and delimited text; curves are used as supplied (no unit conversion, no despiking)."],"date":"26 November 2026"});
+</script>
+</body></html>
