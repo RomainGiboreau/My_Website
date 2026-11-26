@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Well-log digitizer</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/logdigitizer/">
+<meta name="description" content="Turn a scanned well-log image into curves and a LAS 2.0 file: calibrate depth, define tracks and scales (linear or log), trace each curve by colour or by following the line, check the overlay, export LAS or CSV. Classical image processing, runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:320px minmax(0,1fr) 300px;gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0;position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;margin-bottom:0;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.panel h2 .tt{margin-left:auto}
+.panel h2 .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.panel.collapsed h2 .chev{transform:rotate(-90deg)}
+.panel .body{margin-top:6px}
+.panel.collapsed .body{display:none}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 6px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.82rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.25rem .5rem}
+input[type=number]{width:72px}
+.row select{min-width:0}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.8rem}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:max(520px,calc(100vh - 150px));touch-action:none}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tools{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:2}
+.tools button{background:rgba(245,243,237,.94)}
+#loupe{position:absolute;right:8px;top:8px;width:140px;height:140px;border:2px solid var(--acc);border-radius:6px;background:#fff;z-index:2;display:none;image-rendering:pixelated}
+.ro{position:absolute;left:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.78rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.drop{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);pointer-events:none;padding:24px}
+.drop b{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.1rem;color:var(--fg)}
+.msg{font-size:.78rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.tk{display:grid;grid-template-columns:1fr 1fr auto;gap:4px 6px;align-items:center;font-size:.8rem;margin:4px 0}
+.tk input{width:100%}
+.g2{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.8rem}
+.g2 input[type=text],.g2 select{width:100%}
+.tw{max-height:210px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card);margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:.76rem;font-variant-numeric:tabular-nums}
+th,td{padding:2px 6px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+.sw{display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid var(--line);vertical-align:middle;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/8px 8px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.sep{border-top:1px solid var(--line);margin:8px 0}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar select,.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin-top:8px}
+@media (max-width:1279px){.layout{grid-template-columns:320px minmax(0,1fr)}.layout main{grid-column:2;grid-row:1/span 2}.layout .side{grid-column:1;grid-row:1;position:static;max-height:none}.layout .side2{grid-row:2}}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.layout main,.layout .side,.layout .side2{grid-column:1;grid-row:auto}}
+[hidden]{display:none!important}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>Well-log digitizer</h1>
+ <div class="bar">
+  <button class="pri" id="bLas" title="Download the digitised curves as a LAS 2.0 file">Download LAS</button>
+  <button id="bCsv">CSV</button>
+  <button id="bSave" title="Save calibration, tracks, settings and traces as a JSON project (the image is not included)">Save project</button>
+  <button id="bOpenProj">Open project</button><input type="file" id="projFile" accept=".json,application/json" hidden>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the image is never uploaded. Workflow: load the image, straighten it if tilted, calibrate depth with two or more ticks, draw one rectangle per track and give its scale, pick the ink colour on each curve, trace, check the overlay, correct, export.">?</span>
+ </div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Image<span class="tt" tabindex="0" data-tip="Open a file, drop it on the canvas, or paste a screenshot with Ctrl+V. Straighten and crop first: rotating or cropping clears depth ticks, track rectangles and traces.">?</span><i class="chev"></i></h2>
+  <div class="body">
+  <div class="row"><button class="pri" id="bOpen">Open image…</button><button id="bExample">Example (fictitious)</button></div>
+  <input type="file" id="file" accept="image/*" hidden>
+  <div class="row"><button id="tSkew" title="Click two points on a vertical grid line, far apart">Deskew: 2 clicks</button>
+   <label class="inl">angle <input type="number" id="rotDeg" step="0.1" value="0">°</label><button id="bRot">Rotate</button></div>
+  <div class="row"><button id="tCrop" title="Drag a rectangle on the image">Crop: draw</button><button id="bCrop">Apply crop</button><button id="bReset" title="Back to the image as loaded">Original</button></div>
+  <div class="msg" id="msgImg"></div>
+  </div>
+ </section>
+ <section class="panel"><h2><span class="n">2</span>Depth axis<span class="tt" tabindex="0" data-tip="Click depth ticks or grid lines of known depth (at least two, far apart) and type their depths. Depth is linear in image y; more ticks give a least-squares fit and an error estimate. Grid-line detection proposes the spacing and can snap the ticks to the lines.">?</span><i class="chev"></i></h2>
+  <div class="body">
+  <div class="row"><label class="inl">Unit <select id="unit"><option value="m">m</option><option value="ft">ft</option></select></label><button id="tTick">Add tick (click)</button></div>
+  <div id="ticks"></div>
+  <div class="row"><button id="bGrid">Detect grid lines</button><button id="bSnap">Snap ticks</button></div>
+  <div class="msg" id="msgDepth"></div>
+  </div>
+ </section>
+ <section class="panel"><h2><span class="n">3</span>Tracks and curves<span class="tt" tabindex="0" data-tip="One rectangle per track (its x range, and the depth band to digitise). Give the scale at the left and right edges; tick Logarithmic for resistivity. The backup scale is read when a curve leaves the track on one side and re-enters on the other (wrap).">?</span><i class="chev"></i></h2>
+  <div class="body">
+  <div class="row"><select id="trSel" style="flex:1"></select><button id="trNew">New</button><button id="trDel">Delete</button></div>
+  <div class="g2">
+   <span>Name</span><input type="text" id="trName">
+   <span>Scale</span><span class="row" style="margin:0"><input type="number" id="trL" step="any" title="Value at the left edge"><input type="number" id="trR" step="any" title="Value at the right edge"><label class="inl"><input type="checkbox" id="trLog">log</label></span>
+   <span>Backup</span><span class="row" style="margin:0"><label class="inl"><input type="checkbox" id="trB2">on</label><input type="number" id="trL2" step="any" title="Backup scale, left"><input type="number" id="trR2" step="any" title="Backup scale, right"></span>
+   <span>x range</span><span class="row" style="margin:0"><input type="number" id="trX0" step="0.5"><input type="number" id="trX1" step="0.5"><span class="hint" style="margin:0">px</span></span>
+   <span>y band</span><span class="row" style="margin:0"><input type="number" id="yTop" step="0.5"><input type="number" id="yBot" step="0.5"><span class="hint" style="margin:0">px</span></span>
+  </div>
+  <div class="row"><button id="tRect">Draw track rectangle</button><button id="bProp" title="Dark vertical lines of the image become track borders">Propose from vertical lines</button></div>
+  <div class="msg" id="msgTrack"></div>
+  <div class="sep"></div>
+  <div class="row"><select id="cuSel" style="flex:1"></select><button id="cuNew">New</button><button id="cuDel">Delete</button></div>
+  <div class="g2">
+   <span>Mnemonic</span><input type="text" id="cuMn" list="mnList" style="text-transform:uppercase">
+   <span>Unit</span><input type="text" id="cuUn">
+   <span>Mode</span><select id="cuMode"><option value="color">Colour (ink picked on the curve)</option><option value="bw">Black and white (follow the line)</option></select>
+  </div>
+  <datalist id="mnList"><option>GR</option><option>RT</option><option>ILD</option><option>LLD</option><option>LLS</option><option>MSFL</option><option>RHOB</option><option>NPHI</option><option>DT</option><option>CALI</option><option>SP</option><option>PEF</option><option>DRHO</option><option>BS</option></datalist>
+  </div>
+ </section>
+</aside>
+<main>
+ <div class="stage" id="stage">
+  <div class="drop" id="drop"><div><b>Drop a scanned well log here</b><br>or use “Open image…”, paste with Ctrl+V, or try the fictitious example</div></div>
+  <canvas id="cv"></canvas>
+  <div class="tools"><button id="tPan" class="on" title="Drag to pan (Space or middle button also pans)">Pan</button><button id="zIn" title="Zoom in">+</button><button id="zOut" title="Zoom out">−</button><button id="zFit" title="Fit to window">Fit</button><button id="z11" title="Actual size">1:1</button></div>
+  <canvas id="loupe" width="140" height="140"></canvas>
+  <div class="ro" id="ro">Move over the image to read pixel, depth and track value</div>
+ </div>
+ <div class="note">Scanned logs are never as good as the original digital data: use this to recover a curve that exists nowhere else, and quality-control the result (for example with the <a href="../las-checker/">LAS checker</a>) before using it.</div>
+</main>
+<aside class="side side2">
+ <section class="panel"><h2><span class="n">4</span>Trace<span class="tt" tabindex="0" data-tip="Colour mode: pick the ink by clicking on the curve, raise the tolerance until the curve is covered but not the grid, then trace. Black-and-white mode: click a point on the curve (more clicks pin the path where it is ambiguous, e.g. crossings), then trace. Settings belong to the active curve.">?</span><i class="chev"></i></h2>
+  <div class="body">
+  <div class="row"><button id="tPick" title="Click on the curve">Pick ink on curve</button><span class="sw" id="sw"></span><span id="swTxt" class="hint" style="margin:0">no ink</span></div>
+  <div id="colOpts">
+   <label class="inl">Tolerance <input type="range" id="tol" min="5" max="120" value="30"><span id="tolV" style="width:28px;text-align:right">30</span></label>
+   <div class="row"><label class="inl">Distance <select id="metric"><option value="lab">Lab</option><option value="rgb">RGB</option></select></label>
+    <label class="inl" title="Light grey pixels (grid lines) are never part of the mask"><input type="checkbox" id="gridEx" checked>skip grid</label>
+    <label class="inl"><input type="checkbox" id="showMask" checked>show mask</label></div>
+   <div class="row"><label class="inl" title="Curve leaves the track on one side and returns on the other: counts the wraps and reads the backup scale"><input type="checkbox" id="wrap">wrap</label>
+    <label class="inl" title="Added to the wrap count: the lowest part of the trace is put on the primary scale, change this if the trace starts on the backup scale">wrap offset <input type="number" id="k0" step="1" value="0" style="width:52px"></label></div>
+  </div>
+  <div id="bwOpts" hidden>
+   <div class="row"><button id="tWp" title="Click points on the line; the path is forced through them">Add waypoint</button><button id="bWpClear">Clear waypoints</button><span class="hint" id="wpN" style="margin:0"></span></div>
+   <label class="inl">Ridge strength <input type="range" id="thr" min="15" max="200" value="45"><span id="thrV" style="width:28px;text-align:right">45</span></label>
+  </div>
+  <div class="row"><label class="inl" title="Largest sideways move of the curve between two depth rows">max jump <input type="number" id="maxJump" min="2" max="200" value="15">px</label>
+   <label class="inl" title="Gaps of at most this many rows are interpolated; longer gaps stay null">max gap <input type="number" id="maxGap" min="0" max="500" value="8">rows</label>
+   <label class="inl" title="Median filter on the trace, odd number of rows, 0 = off">smooth <input type="number" id="smooth" min="0" max="31" step="2" value="0"></label></div>
+  <div class="row"><button class="pri" id="bTrace">Trace this curve</button><button id="bTraceAll">Trace all</button><button id="bClearTrace">Clear</button></div>
+  <div class="msg" id="msgTrace"></div>
+  <div class="sep"></div>
+  <div class="hint" style="margin:0 0 4px">Manual correction: click points along the true curve (top to bottom), then apply: the stretch between the first and last point is replaced.</div>
+  <div class="row"><button id="tFix">Correct stretch</button><button id="bFixOk">Apply</button><button id="bFixNo">Cancel</button><button id="bUndo" title="Ctrl+Z">Undo</button></div>
+  <label class="inl"><input type="checkbox" id="showTr" checked>show traces on the image</label>
+  </div>
+ </section>
+ <section class="panel"><h2><span class="n">5</span>Output<span class="tt" tabindex="0" data-tip="Depths run from the top to the bottom of the y band at the chosen step, on multiples of the step. Rows where a curve was not traced are written as the null value. The header mnemonics come from the curve list.">?</span><i class="chev"></i></h2>
+  <div class="body">
+  <div class="g2">
+   <span>Step</span><span class="row" style="margin:0"><input type="number" id="step" step="any" min="0.001" value="0.2"><span id="stepU" class="hint" style="margin:0">m</span></span>
+   <span>Null</span><input type="text" id="nullV" value="-999.25">
+   <span>Well</span><input type="text" id="well" placeholder="WELL-1">
+   <span>Company</span><input type="text" id="comp" placeholder="optional">
+   <span>Field</span><input type="text" id="fld" placeholder="optional">
+  </div>
+  <div class="msg" id="msgOut"></div>
+  <div class="tw"><table><thead id="oh"></thead><tbody id="ob"></tbody></table></div>
+  </div>
+ </section>
+</aside>
+</div>
+<script id="ld-core">
+/* Well-log digitizer core: image processing, depth/track scales, curve tracing, LAS 2.0 / CSV writers. No DOM access; exposed as window.LD.
+   Images are {w,h,data:Uint8ClampedArray RGBA}. Coordinates are continuous image coordinates (pixel (i,j) has its centre at i+0.5, j+0.5).
+   A traced curve is a Float32Array u[row] = fraction of the track width (0 left edge, 1 right edge) + number of wraps k; NaN = no value. */
+(function(W){
+'use strict';
+const NULL=-999.25;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+const median=a=>{if(!a.length)return NaN;const s=Float64Array.from(a).sort(),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+
+/* ---------- colour ---------- */
+const LIN=new Float64Array(256);for(let i=0;i<256;i++){const c=i/255;LIN[i]=c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+function rgb2lab(r,g,b){
+  const R=LIN[r],G=LIN[g],B=LIN[b];
+  const x=(0.4124564*R+0.3575761*G+0.1804375*B)/0.95047,y=0.2126729*R+0.7151522*G+0.072175*B,z=(0.0193339*R+0.119192*G+0.9503041*B)/1.08883;
+  const f=t=>t>0.008856?Math.cbrt(t):7.787*t+16/116,fx=f(x),fy=f(y),fz=f(z);
+  return[116*fy-16,500*(fx-fy),200*(fy-fz)];
+}
+/* Mask of the pixels of rect {x0,y0,x1,y1} (integers, x1/y1 exclusive) whose colour is within tol of ink [r,g,b].
+   metric 'lab' (CIE76 distance, tol about 10-40) or 'rgb' (Euclidean, tol about 30-120).
+   grid (default true): when the ink is coloured, light grey pixels (typical grid lines) are never part of the mask. */
+function colourMask(img,rect,ink,tol,o){
+  o=o||{};const x0=rect.x0,y0=rect.y0,w=rect.x1-x0,h=rect.y1-y0,a=new Uint8Array(Math.max(0,w*h)),d=img.data,Wd=img.w;
+  const rgb=o.metric==='rgb',il=rgb2lab(ink[0],ink[1],ink[2]),skip=o.grid!==false&&Math.hypot(il[1],il[2])>=15;
+  let cache=new Map();
+  for(let j=0;j<h;j++)for(let i=0;i<w;i++){
+    const p=((y0+j)*Wd+x0+i)*4;if(d[p+3]<128)continue;
+    const key=(d[p]<<16)|(d[p+1]<<8)|d[p+2];let v=cache.get(key);
+    if(v===undefined){
+      if(rgb)v=Math.hypot(d[p]-ink[0],d[p+1]-ink[1],d[p+2]-ink[2])<=tol?1:0;
+      else{const l=rgb2lab(d[p],d[p+1],d[p+2]);v=Math.hypot(l[0]-il[0],l[1]-il[1],l[2]-il[2])<=tol?1:0}
+      if(v&&skip){const l=rgb2lab(d[p],d[p+1],d[p+2]);if(Math.hypot(l[1],l[2])<10&&l[0]>55)v=0}
+      if(cache.size>300000)cache=new Map();cache.set(key,v)}
+    a[j*w+i]=v}
+  return{a,w,h,x0,y0};
+}
+
+/* ---------- depth calibration ---------- */
+/* ticks [{y,depth}] (y in image pixels): least-squares line depth = a + b*y. */
+function fitDepth(ticks){
+  const t=(ticks||[]).filter(k=>isFinite(k.y)&&isFinite(k.depth));if(t.length<2)return null;
+  const n=t.length,my=t.reduce((s,k)=>s+k.y,0)/n,md=t.reduce((s,k)=>s+k.depth,0)/n;
+  let sxx=0,sxy=0;for(const k of t){sxx+=(k.y-my)*(k.y-my);sxy+=(k.y-my)*(k.depth-md)}
+  if(sxx<1e-9)return null;const b=sxy/sxx;if(Math.abs(b)<1e-12)return null;const a=md-b*my;
+  let ss=0;for(const k of t)ss+=(a+b*k.y-k.depth)**2;
+  return{a,b,n,rms:Math.sqrt(ss/n),dOf:y=>a+b*y,yOf:d=>(d-a)/b};
+}
+/* Horizontal grid lines from the row projection profile of rect. Returns {ys, spacing, majorYs, majorSpacing} (ys: line centres). */
+function detectHLines(img,rect){
+  const{x0,y0,x1,y1}=rect,w=x1-x0,h=y1-y0,P=new Float64Array(h);
+  for(let j=0;j<h;j++){let s=0;for(let i=x0;i<x1;i++){const p=((y0+j)*img.w+i)*4;s+=255-(0.299*img.data[p]+0.587*img.data[p+1]+0.114*img.data[p+2])}P[j]=s/w}
+  const R=new Float64Array(h),hw=8;
+  for(let j=0;j<h;j++){const seg=[];for(let k=Math.max(0,j-hw);k<=Math.min(h-1,j+hw);k++)seg.push(P[k]);R[j]=P[j]-median(seg)}
+  const noise=1.4826*median(Array.from(R,Math.abs))+1e-6,thr=Math.max(3*noise,4),pk=[];
+  for(let j=0;j<h;j++)if(R[j]>=thr&&R[j]>=(R[j-1]||0)&&R[j]>R[j+1]||0){
+    if(pk.length&&j-pk[pk.length-1].j<4){if(R[j]>pk[pk.length-1].r){pk[pk.length-1]={j,r:R[j]}}continue}
+    pk.push({j,r:R[j]})}
+  const pos=pk.map(q=>{const a=R[q.j-1]||0,b=R[q.j],c=R[q.j+1]||0,s=Math.max(0,a)+b+Math.max(0,c);return{y:y0+(s?(q.j-1)*Math.max(0,a)/s+q.j*b/s+(q.j+1)*Math.max(0,c)/s:q.j)+0.5,r:q.r}});
+  const spacing=a=>{const d=[];for(let i=1;i<a.length;i++)d.push(a[i]-a[i-1]);if(!d.length)return NaN;
+    const m=median(d),good=d.filter(x=>Math.abs(x-m)<=0.15*m);return median(good.length?good:d)};
+  const srt=pos.map(q=>q.r).sort((a,b)=>a-b),rmax=srt.length?srt[Math.min(srt.length-1,Math.floor(0.8*srt.length))]:0,maj=pos.filter(q=>q.r>=0.75*rmax);
+  const ys=pos.map(q=>q.y),majorYs=maj.map(q=>q.y);
+  return{ys,spacing:spacing(ys),majorYs,majorSpacing:spacing(majorYs)};
+}
+const snapTo=(arr,v,maxd)=>{let b=null,bd=maxd;for(const a of arr){const d=Math.abs(a-v);if(d<=bd){bd=d;b=a}}return b};
+
+/* ---------- tracks ---------- */
+/* Vertical dark lines (track borders) from the column projection of rect. Returns x centres. */
+function detectVLines(img,rect,o){
+  o=o||{};const{x0,y0,x1,y1}=rect,w=x1-x0,h=y1-y0,F=new Float64Array(w),lim=o.dark||110;
+  for(let i=0;i<w;i++){let c=0;for(let j=y0;j<y1;j++){const p=(j*img.w+x0+i)*4;if(0.299*img.data[p]+0.587*img.data[p+1]+0.114*img.data[p+2]<lim)c++}F[i]=c/h}
+  const fm=Math.max(0,...F),thr=Math.max(o.minFrac||0.35,0.6*fm),xs=[];let i=0;
+  if(fm<(o.minFrac||0.35))return xs;
+  while(i<w){if(F[i]<thr){i++;continue}let s=i,sw=0,sx=0;while(i<w&&F[i]>=thr){sw+=F[i];sx+=F[i]*(i+0.5);i++}xs.push(x0+sx/sw)}
+  return xs;
+}
+function proposeTracks(xs,minW){minW=minW||40;const t=[];for(let i=0;i+1<xs.length;i++)if(xs[i+1]-xs[i]>=minW)t.push({x0:xs[i],x1:xs[i+1]});return t}
+/* track: {x0,x1,left,right,log,scale2:{left,right,log}|null}. u = fraction + k (k = wraps). */
+function uToValue(tr,u){
+  const k=Math.floor(u+1e-12),f=u-k,sc=(k!==0&&tr.scale2)?tr.scale2:tr,lg=sc.log!==undefined?sc.log:tr.log;
+  const uu=(k!==0&&tr.scale2)?f:u;
+  return lg?sc.left*Math.pow(sc.right/sc.left,uu):sc.left+uu*(sc.right-sc.left);
+}
+function valueToU(tr,v){return tr.log?Math.log(v/tr.left)/Math.log(tr.right/tr.left):(v-tr.left)/(tr.right-tr.left)}
+const xToU=(tr,x)=>(x-tr.x0)/(tr.x1-tr.x0);
+const xToValue=(tr,x)=>uToValue(tr,xToU(tr,x));
+const validScale=tr=>tr&&isFinite(tr.left)&&isFinite(tr.right)&&tr.left!==tr.right&&(!tr.log||(tr.left>0&&tr.right>0));
+
+/* ---------- tracing ---------- */
+function candsRow(m,j,merge,wide){
+  const w=m.w,o=j*w,a=m.a,out=[];let i=0;
+  while(i<w){if(!a[o+i]){i++;continue}
+    const s=i;let e=i,ext=true;
+    while(ext){ext=false;for(let k=e+1;k<=e+1+merge&&k<w;k++)if(a[o+k]){e=k;ext=true;break}}
+    i=e+1;const xa=m.x0+s,xb=m.x0+e+1;
+    if(xb-xa<=wide)out.push((xa+xb)/2);else out.push(xa+1.5,xb-1.5)}
+  return out;
+}
+/* Colour tracer. m: mask from colourMask; tr: track; o: {H (image height), seed:[x,y]|null, maxJump (px), wrap, merge, wide}. Returns Float32Array(H) of u (NaN = none). */
+function traceColour(m,tr,o){
+  const H=o.H,u=new Float32Array(H).fill(NaN),wd=tr.x1-tr.x0,mj=o.maxJump||15,merge=o.merge==null?1:o.merge,wide=o.wide||14;
+  const cache=new Array(m.h),C=j=>cache[j]||(cache[j]=candsRow(m,j,merge,wide));
+  let j0=-1,x0=NaN;
+  if(o.seed){
+    const sj=clamp(Math.floor(o.seed[1])-m.y0,0,m.h-1);let best=1e9;
+    for(let dj=0;dj<=8;dj++)for(const j of dj?[sj-dj,sj+dj]:[sj]){if(j<0||j>=m.h)continue;for(const x of C(j)){const dd=Math.hypot(x-o.seed[0],(j-sj)*0.5);if(dd<best){best=dd;j0=j;x0=x}}}
+    if(best>Math.max(30,2*mj))j0=-1;
+  }
+  if(j0<0){ // no seed: row near the middle with a single candidate, else any
+    const mid=m.h>>1;let bestScore=1e9;
+    for(let j=0;j<m.h;j++){const c=C(j);if(!c.length)continue;const sc=Math.abs(j-mid)+(c.length===1?0:m.h);if(sc<bestScore){bestScore=sc;j0=j;x0=c[0]}}
+  }
+  if(j0<0)return u;
+  u[m.y0+j0]=(x0-tr.x0)/wd;
+  for(const dir of[1,-1]){
+    let px=x0,k=0,gap=0;
+    for(let j=j0+dir;j>=0&&j<m.h;j+=dir){
+      const c=C(j);if(!c.length){gap++;continue}
+      const tol=Math.min(mj+0.5*gap,wd);let best=NaN,bk=k,bd=1e9;
+      for(const x of c){
+        let d=Math.abs(x-px);if(d<=tol&&d<bd){bd=d;best=x;bk=k}
+        if(o.wrap){
+          d=Math.abs(x+wd-px);if(d<=tol&&d<bd){bd=d;best=x;bk=k+1}   // leaves on the right, returns on the left
+          d=Math.abs(x-wd-px);if(d<=tol&&d<bd){bd=d;best=x;bk=k-1}}}
+      if(best===best){px=best;k=bk;gap=0;u[m.y0+j]=(best-tr.x0)/wd+k}else gap++;
+    }
+  }
+  return u;
+}
+/* Black-and-white / grey tracker: follows the dark ridge from clicked waypoints [[x,y],...].
+   o: {H, wps, maxJump, thr (ridge strength 0-255), removeGrid (default true), wpWin, wpSigma}. */
+function traceBW(img,rect,tr,o){
+  const{x0,y0,x1,y1}=rect,w=x1-x0,h=y1-y0,H=o.H,u=new Float32Array(H).fill(NaN),wd=tr.x1-tr.x0,mj=o.maxJump||12,thr=o.thr||45;
+  const D=new Float32Array(w*h);
+  for(let j=0;j<h;j++)for(let i=0;i<w;i++){const p=((y0+j)*img.w+x0+i)*4;D[j*w+i]=255-(0.299*img.data[p]+0.587*img.data[p+1]+0.114*img.data[p+2])}
+  if(o.removeGrid!==false){
+    const cm=new Float32Array(w),rm=new Float32Array(h),col=new Float32Array(h),row=new Float32Array(w);
+    for(let i=0;i<w;i++){for(let j=0;j<h;j++)col[j]=D[j*w+i];cm[i]=col.slice().sort()[h>>1]}
+    for(let j=0;j<h;j++){for(let i=0;i<w;i++)row[i]=D[j*w+i];rm[j]=row.slice().sort()[w>>1]}
+    for(let j=0;j<h;j++)for(let i=0;i<w;i++)D[j*w+i]=Math.max(0,D[j*w+i]-Math.max(cm[i],rm[j],0));
+  }
+  // dynamic programming (Viterbi) over the rows: maximise the ridge strength minus a continuity penalty on the x jump between rows
+  const wps=(o.wps||[]).map(p=>[p[0]-x0,clamp(Math.floor(p[1])-y0,0,h-1)]).sort((a,b)=>a[1]-b[1]);
+  if(!wps.length)return u;
+  const lam=o.lambda==null?1:o.lambda,M=Math.max(2,Math.round(mj)),cons=new Map(wps.map(p=>[p[1],p[0]])),NEG=-1e18;
+  const em=(j,i)=>{const c=cons.get(j);if(c!==undefined&&Math.abs(i+0.5-c)>2)return NEG;return Math.min(1,D[j*w+i]/150)};
+  const bp=new Int8Array(w*h);let prev=new Float64Array(w),cur=new Float64Array(w);
+  for(let i=0;i<w;i++)prev[i]=em(0,i);
+  const pen=new Float64Array(2*M+1);for(let d=-M;d<=M;d++)pen[d+M]=lam*(d/M)*(d/M);
+  for(let j=1;j<h;j++){
+    for(let i=0;i<w;i++){const e=em(j,i);if(e<=NEG){cur[i]=NEG;continue}
+      let best=-Infinity,bd=0;const lo=Math.max(-M,-i),hi=Math.min(M,w-1-i);
+      for(let d=lo;d<=hi;d++){const v=prev[i+d]-pen[d+M];if(v>best){best=v;bd=d}}
+      cur[i]=best+e;bp[j*w+i]=bd}
+    const t=prev;prev=cur;cur=t}
+  let bi=0;for(let i=1;i<w;i++)if(prev[i]>prev[bi])bi=i;
+  const path=new Float64Array(h);
+  for(let j=h-1;j>=0;j--){path[j]=bi;if(j>0)bi+=bp[j*w+bi]}
+  const first=wps[0][1],last=wps[wps.length-1][1];
+  for(let j=0;j<h;j++){const c=Math.round(path[j]);let mx=0;for(let i=Math.max(0,c-1);i<=Math.min(w-1,c+1);i++)mx=Math.max(mx,D[j*w+i]);
+    if(mx<thr&&!cons.has(j))continue;
+    let sw=0,sx=0;for(let i=Math.max(0,c-3);i<=Math.min(w-1,c+3);i++){const q=Math.max(0,D[j*w+i]-thr*0.5);sw+=q;sx+=q*(i+0.5)}
+    u[y0+j]=(x0+(cons.has(j)?cons.get(j):sw?sx/sw:c+0.5)-tr.x0)/wd}
+  { // isolated spikes (specks of dirt next to the line) are dropped: a row far from the median of its neighbours is not a ridge
+    const lim=Math.max(2.5,0.25*mj)/wd,drop=[];
+    for(let j=0;j<h;j++){const v=u[y0+j];if(v!==v||cons.has(j))continue;const nb=[];for(let k=Math.max(0,j-4);k<=Math.min(h-1,j+4);k++)if(u[y0+k]===u[y0+k])nb.push(u[y0+k]);if(nb.length>=4&&Math.abs(v-median(nb))>lim)drop.push(j)}
+    for(const j of drop)u[y0+j]=NaN}
+  if(wps.length>1)for(let j=first;j<=last;j++)if(u[y0+j]!==u[y0+j]){ // between waypoints the operator vouches for the path: fill linearly
+    let a=j-1,b=j+1;while(u[y0+a]!==u[y0+a])a--;while(u[y0+b]!==u[y0+b])b++;u[y0+j]=u[y0+a]+(u[y0+b]-u[y0+a])*(j-a)/(b-a)}
+  return u;
+}
+/* Linear interpolation across runs of at most maxGap missing rows. */
+function interpGaps(u,maxGap){
+  const n=u.length;let i=0;
+  while(i<n){if(u[i]===u[i]){i++;continue}let s=i;while(i<n&&u[i]!==u[i])i++;
+    if(s>0&&i<n&&i-s<=maxGap){const a=u[s-1],b=u[i];for(let k=s;k<i;k++)u[k]=a+(b-a)*(k-s+1)/(i-s+1)}}
+  return u;
+}
+function medianSmooth(u,win){
+  if(!(win>=3))return u;const h=win>>1,o=u.slice();
+  for(let j=0;j<u.length;j++){if(u[j]!==u[j])continue;const v=[];for(let k=Math.max(0,j-h);k<=Math.min(u.length-1,j+h);k++)if(u[k]===u[k])v.push(u[k]);o[j]=median(v)}
+  return o;
+}
+/* One curve end to end. cfg: {mode:'color'|'bw', ink, tol, metric, grid, maxJump, maxGap, wrap, smooth, thr, wps}. band: {yTop,yBot}. */
+function digitise(img,band,tr,cfg){
+  const inset=cfg.inset==null?2:cfg.inset;
+  const rect={x0:Math.max(0,Math.ceil(tr.x0+inset)),x1:Math.min(img.w,Math.floor(tr.x1-inset)),y0:Math.max(0,Math.floor(band.yTop)),y1:Math.min(img.h,Math.ceil(band.yBot))};
+  if(rect.x1-rect.x0<3||rect.y1-rect.y0<3)return null;
+  let u;
+  if(cfg.mode==='bw')u=traceBW(img,rect,tr,{H:img.h,wps:cfg.wps||[],maxJump:cfg.maxJump,thr:cfg.thr,removeGrid:cfg.removeGrid});
+  else{if(!cfg.ink)return null;const m=colourMask(img,rect,cfg.ink,cfg.tol,{metric:cfg.metric,grid:cfg.grid});
+    u=traceColour(m,tr,{H:img.h,seed:(cfg.wps&&cfg.wps[0])||null,maxJump:cfg.maxJump,wrap:cfg.wrap})}
+  if(cfg.mode!=='bw'&&cfg.wrap){let mn=Infinity;for(let j=0;j<u.length;j++)if(u[j]<mn)mn=u[j];  // the start row has an unknown number of wraps: the lowest part of the trace is put on the primary scale
+    if(isFinite(mn)){const sh=-Math.floor(mn+1e-6)+(cfg.k0||0);for(let j=0;j<u.length;j++)u[j]+=sh}}
+  u=medianSmooth(u,cfg.smooth);
+  return interpGaps(u,cfg.maxGap==null?8:cfg.maxGap);
+}
+/* Manual correction: replace the rows between the first and last clicked point [[x,y],...] by the polyline through the points. */
+function replaceStretch(u,pts,tr){
+  if(!pts.length)return u;const p=pts.slice().sort((a,b)=>a[1]-b[1]),wd=tr.x1-tr.x0,ja=Math.floor(p[0][1]),jb=Math.floor(p[p.length-1][1]);
+  let k=0;for(let j=ja-1;j>=0&&j>ja-400;j--)if(u[j]===u[j]){k=Math.floor(u[j]+1e-12);break}
+  for(let j=ja;j<=jb;j++){const y=j+0.5;let x=p[0][0];
+    for(let q=0;q+1<p.length;q++)if(y>=p[q][1]&&y<=p[q+1][1]){const t=p[q+1][1]===p[q][1]?0:(y-p[q][1])/(p[q+1][1]-p[q][1]);x=p[q][0]+t*(p[q+1][0]-p[q][0])}
+    if(p.length===1)x=p[0][0];
+    u[j]=(x-tr.x0)/wd+k}
+  return u;
+}
+/* Resample a trace on a depth list: returns Float64Array of values (NULL where nothing was traced). */
+function sampleCurve(u,dc,tr,depths,band){
+  const out=new Float64Array(depths.length).fill(NULL);
+  for(let n=0;n<depths.length;n++){
+    const y=dc.yOf(depths[n]);if(y<band.yTop||y>band.yBot)continue;
+    const r=y-0.5,r0=Math.floor(r),f=r-r0,a=u[r0],b=u[r0+1];let v=NaN;
+    if(a===a&&b===b)v=a+(b-a)*f;else if(f<0.5&&a===a)v=a;else if(f>=0.5&&b===b)v=b;
+    if(v===v){const val=uToValue(tr,v);if(isFinite(val))out[n]=val}}
+  return out;
+}
+function makeDepths(d0,d1,step){const lo=Math.min(d0,d1),hi=Math.max(d0,d1),a=Math.ceil(lo/step-1e-9),b=Math.floor(hi/step+1e-9),o=[];for(let i=a;i<=b;i++)o.push(+(i*step).toFixed(6));return o}
+
+/* ---------- geometry of the image ---------- */
+function rotateImage(img,deg,fill){
+  fill=fill||[255,255,255];const{w,h,data}=img,out=new Uint8ClampedArray(w*h*4),f=deg*Math.PI/180,c=Math.cos(f),s=Math.sin(f),cx=w/2,cy=h/2;
+  for(let j=0;j<h;j++)for(let i=0;i<w;i++){
+    const dx=i+0.5-cx,dy=j+0.5-cy,sx=dx*c+dy*s+cx-0.5,sy=-dx*s+dy*c+cy-0.5,o=(j*w+i)*4;
+    const x0=Math.floor(sx),y0=Math.floor(sy);
+    if(x0<-1||y0<-1||x0>=w||y0>=h){out[o]=fill[0];out[o+1]=fill[1];out[o+2]=fill[2];out[o+3]=255;continue}
+    const fx=sx-x0,fy=sy-y0;
+    for(let ch=0;ch<3;ch++){const g=(x,y)=>(x<0||y<0||x>=w||y>=h)?fill[ch]:data[(y*w+x)*4+ch];
+      out[o+ch]=g(x0,y0)*(1-fx)*(1-fy)+g(x0+1,y0)*fx*(1-fy)+g(x0,y0+1)*(1-fx)*fy+g(x0+1,y0+1)*fx*fy}
+    out[o+3]=255}
+  return{w,h,data:out};
+}
+/* Angle (degrees, for rotateImage) that makes the line through two clicked points of a vertical grid line vertical. */
+function deskewDeg(p1,p2){let a=p1,b=p2;if(b[1]<a[1]){a=p2;b=p1}return Math.atan2(b[0]-a[0],b[1]-a[1])*180/Math.PI}
+function cropImage(img,x,y,w,h){
+  x=Math.max(0,Math.round(x));y=Math.max(0,Math.round(y));w=Math.min(img.w-x,Math.round(w));h=Math.min(img.h-y,Math.round(h));
+  const out=new Uint8ClampedArray(w*h*4);for(let j=0;j<h;j++)out.set(img.data.subarray(((y+j)*img.w+x)*4,((y+j)*img.w+x+w)*4),j*w*4);
+  return{w,h,data:out};
+}
+
+/* ---------- output ---------- */
+const f4=v=>(Math.abs(v)<5e-5?0:v).toFixed(4);
+/* o: {depthUnit 'M'|'FT', step, depths[], nullVal, well, comp, field, date, curves:[{mnem,unit,desc,values}]} -> LAS 2.0 text (CRLF, one line per depth). */
+function buildLAS(o){
+  const nv=o.nullVal==null?NULL:o.nullVal,du=o.depthUnit||'M',L=[],d=o.depths,item=(m,u,v,desc)=>(' '+m.padEnd(4)+'.'+u).padEnd(16)+' '+String(v).padEnd(24)+' : '+desc;
+  L.push('~VERSION INFORMATION',' VERS.                 2.0 : CWLS LOG ASCII STANDARD - VERSION 2.0',' WRAP.                  NO : ONE LINE PER DEPTH STEP');
+  L.push('~WELL INFORMATION','#MNEM.UNIT       DATA                    DESCRIPTION');
+  L.push(item('STRT',du,f4(d[0]),'START DEPTH'),item('STOP',du,f4(d[d.length-1]),'STOP DEPTH'),item('STEP',du,f4(o.step),'STEP'),item('NULL','',f4(nv),'NULL VALUE'));
+  L.push(item('COMP','',o.comp||'UNKNOWN','COMPANY'),item('WELL','',o.well||'UNKNOWN','WELL'),item('FLD','',o.field||'UNKNOWN','FIELD'),item('DATE','',o.date||new Date().toISOString().slice(0,10),'DATE OF DIGITISATION'));
+  L.push('~CURVE INFORMATION',item('DEPT',du,'','DEPTH'));
+  for(const c of o.curves)L.push(item(c.mnem,c.unit||'','',c.desc||c.mnem));
+  L.push('~PARAMETER INFORMATION',item('SRC','','SCANNED LOG','DIGITISED FROM A RASTER IMAGE; VALUES ARE APPROXIMATE'));
+  L.push('~OTHER INFORMATION','Digitised with the Well-log digitizer (image processing, operator checked). Quality-control before use.');
+  L.push('~A  '+['DEPT'].concat(o.curves.map(c=>c.mnem)).map(s=>s.padStart(12)).join(''));
+  for(let i=0;i<d.length;i++)L.push(f4(d[i]).padStart(12)+o.curves.map(c=>{const v=c.values[i];return(v===nv||!isFinite(v)?f4(nv):f4(v)).padStart(12)}).join(''));
+  return L.join('\r\n')+'\r\n';
+}
+function buildCSV(o){
+  const nv=o.nullVal==null?NULL:o.nullVal,r=['DEPT_'+(o.depthUnit||'M')+','+o.curves.map(c=>c.mnem+(c.unit?'_'+c.unit:'')).join(',')];
+  for(let i=0;i<o.depths.length;i++)r.push(o.depths[i]+','+o.curves.map(c=>{const v=c.values[i];return v===nv||!isFinite(v)?'':+v.toPrecision(7)}).join(','));
+  return r.join('\r\n')+'\r\n';
+}
+
+/* ---------- synthetic example log (fictitious) ---------- */
+const DEFAULT_SPEC=()=>({w:740,h:1120,ytop:60.5,depth0:1500,ppm:10,depth1:1600,seed:11,
+  tracks:[{x0:50,x1:250,left:0,right:150,log:false,name:'GR'},{x0:270,x1:470,left:0.2,right:2000,log:true,name:'RT'},{x0:490,x1:690,left:1.95,right:2.95,log:false,name:'RHOB / NPHI'}],
+  curves:[
+    {track:0,mnem:'GR',unit:'GAPI',color:[26,154,58],lw:2.2,fn:d=>70+42*Math.sin(d/6.3)+22*Math.sin(d/2.1+1)},
+    {track:1,mnem:'RT',unit:'OHMM',color:[208,32,32],lw:2.2,fn:d=>Math.pow(10,1.2+1.3*Math.sin(d/9.2)+0.5*Math.sin(d/3.1))},
+    {track:2,mnem:'RHOB',unit:'G/C3',color:[32,80,208],lw:2.2,fn:d=>2.45+0.3*Math.sin(d/7.1)+0.12*Math.sin(d/1.9)},
+    {track:2,mnem:'NPHI',unit:'V/V',color:[190,40,190],lw:2,dash:[12,7],left:0.45,right:-0.15,fn:d=>0.25+0.14*Math.sin(d/5.3+2)+0.05*Math.sin(d/1.7)}]});
+function renderLog(sp){
+  const Wd=sp.w,Ht=sp.h,data=new Uint8ClampedArray(Wd*Ht*4).fill(255),R=rng(sp.seed||1);
+  const yOf=d=>sp.ytop+(d-sp.depth0)*sp.ppm,dOf=y=>sp.depth0+(y-sp.ytop)/sp.ppm;
+  const rect=(xa,ya,xb,yb,c)=>{for(let j=Math.max(0,Math.floor(ya));j<Math.min(Ht,Math.ceil(yb));j++)for(let i=Math.max(0,Math.floor(xa));i<Math.min(Wd,Math.ceil(xb));i++){const p=(j*Wd+i)*4;data[p]=c[0];data[p+1]=c[1];data[p+2]=c[2]}};
+  const seg=(xa,ya,xb,yb,lw,c)=>{const pad=lw/2+1.5,dx=xb-xa,dy=yb-ya,L2=dx*dx+dy*dy||1;
+    for(let j=Math.max(0,Math.floor(Math.min(ya,yb)-pad));j<Math.min(Ht,Math.ceil(Math.max(ya,yb)+pad));j++)for(let i=Math.max(0,Math.floor(Math.min(xa,xb)-pad));i<Math.min(Wd,Math.ceil(Math.max(xa,xb)+pad));i++){
+      const cx=i+0.5,cy=j+0.5,t=clamp(((cx-xa)*dx+(cy-ya)*dy)/L2,0,1),dd=Math.hypot(cx-xa-t*dx,cy-ya-t*dy),cov=clamp(lw/2+0.5-dd,0,1);
+      if(cov>0){const p=(j*Wd+i)*4;for(let ch=0;ch<3;ch++)data[p+ch]=data[p+ch]*(1-cov)+c[ch]*cov}}};
+  const yA=yOf(sp.depth0),yB=yOf(sp.depth1),gm=sp.gridMinor||[210,210,210],gM=sp.gridMajor||[160,160,160];
+  for(let d=sp.depth0;d<=sp.depth1+1e-9;d+=5){const y=yOf(d);rect(sp.tracks[0].x0,y-0.5,sp.tracks[sp.tracks.length-1].x1,y+0.5,(Math.round(d-sp.depth0)%25===0)?gM:gm)}
+  for(const t of sp.tracks){
+    if(t.log){const dec=Math.log10(t.right/t.left);for(let e=Math.ceil(Math.log10(t.left)-1e-9);e<=Math.log10(t.right)+1e-9;e++)for(let m=1;m<10;m++){const v=m*Math.pow(10,e);if(v<t.left||v>t.right)continue;const x=t.x0+Math.log10(v/t.left)/dec*(t.x1-t.x0);rect(x-0.5,yA,x+0.5,yB,m===1?gM:gm)}}
+    else for(let k=1;k<10;k++){const x=t.x0+k/10*(t.x1-t.x0);rect(x-0.5,yA,x+0.5,yB,k===5?gM:gm)}}
+  for(const t of sp.tracks){const c=sp.border||[20,20,20];rect(t.x0-1,yA-1,t.x0+1,yB+1,c);rect(t.x1-1,yA-1,t.x1+1,yB+1,c);rect(t.x0-1,yA-1,t.x1+1,yA+1,c);rect(t.x0-1,yB-1,t.x1+1,yB+1,c)}
+  for(const cu of sp.curves){const t=sp.tracks[cu.track],sc={x0:t.x0,x1:t.x1,left:cu.left!=null?cu.left:t.left,right:cu.right!=null?cu.right:t.right,log:t.log};
+    const fr=d=>{const v=cu.fn(d);return sc.log?Math.log(v/sc.left)/Math.log(sc.right/sc.left):(v-sc.left)/(sc.right-sc.left)};
+    let prev=null,run=0;
+    for(let y=Math.ceil(yA);y<=Math.floor(yB);y++){const f=fr(dOf(y)),fw=cu.wrap?f-Math.floor(f):f,x=t.x0+fw*(t.x1-t.x0);
+      if(prev&&Math.abs(fw-prev.f)<0.5){const len=Math.hypot(x-prev.x,y-prev.y);
+        if(!cu.dash||(run%(cu.dash[0]+cu.dash[1]))<cu.dash[0])seg(prev.x,prev.y,x,y,cu.lw||2,cu.color);run+=len}
+      prev={x,y,f:fw}}}
+  if(sp.noise){const nR=rng((sp.seed||1)+99);for(let j=0;j<Ht;j++)for(let i=0;i<Wd;i++)if(nR()<sp.noise){const p=(j*Wd+i)*4,g=40+nR()*60;data[p]=data[p+1]=data[p+2]=g;
+    if(i+1<Wd){data[p+4]=data[p+5]=data[p+6]=g}}}
+  void R;
+  return{img:{w:Wd,h:Ht,data},truth:{yOf,dOf,spec:sp}};
+}
+const synthLog=()=>renderLog(DEFAULT_SPEC());
+
+W.LD={NULL,rng,median,rgb2lab,colourMask,fitDepth,detectHLines,snapTo,detectVLines,proposeTracks,uToValue,valueToU,xToU,xToValue,validScale,
+  candsRow,traceColour,traceBW,interpGaps,medianSmooth,digitise,replaceStretch,sampleCurve,makeDepths,rotateImage,deskewDeg,cropImage,buildLAS,buildCSV,renderLog,synthLog,DEFAULT_SPEC};
+})(typeof window!=='undefined'?window:globalThis);
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
+const PAL=['#e6007e','#0090d0','#e08a00','#7a3fd0','#00a070','#c03030'];
+const MN_UNIT={GR:'GAPI',RT:'OHMM',ILD:'OHMM',LLD:'OHMM',LLS:'OHMM',MSFL:'OHMM',RHOB:'G/C3',NPHI:'V/V',DT:'US/F',CALI:'IN',SP:'MV',PEF:'B/E',DRHO:'G/C3',BS:'IN'};
+const newCurve=n=>({mnem:'CURVE'+n,unit:'',mode:'color',ink:null,tol:30,metric:'lab',grid:true,maxJump:15,maxGap:8,wrap:false,k0:0,smooth:0,thr:45,wps:[],u:null});
+const newTrack=n=>({name:'Track '+n,x0:NaN,x1:NaN,left:0,right:100,log:false,b2:false,l2:100,r2:200,curves:[newCurve(1)]});
+const S={img:null,orig:null,off:null,s:1,tx:0,ty:0,tool:'pan',space:false,unit:'m',ticks:[],grid:null,tracks:[newTrack(1)],at:0,ac:0,yTop:NaN,yBot:NaN,undo:[],fix:[],skew:[],crop:null,mask:null,maskT:0,name:'',drag:null};
+const T=()=>S.tracks[S.at],C=()=>T().curves[S.ac];
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const num=v=>{const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:NaN};
+const trackOK=t=>isFinite(t.x0)&&isFinite(t.x1)&&t.x1>t.x0;
+const bandOK=()=>isFinite(S.yTop)&&isFinite(S.yBot)&&S.yBot>S.yTop;
+// the scale handed to the core: scale2 only when the backup scale is on
+const coreTrack=t=>({x0:t.x0,x1:t.x1,left:t.left,right:t.right,log:t.log,scale2:t.b2&&isFinite(t.l2)&&isFinite(t.r2)?{left:t.l2,right:t.r2,log:t.log}:null});
+const scaleOK=t=>LD.validScale(t)&&(!t.b2||LD.validScale({left:t.l2,right:t.r2,log:t.log}));
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+const setMsg=(id,t,err)=>{const e=$(id);e.textContent=t||'';e.className='msg'+(err?' err':'')};
+let toastT=null;const toast=m=>{const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},3500)};
+
+// ---------- image ----------
+function setImage(img,keepAll){
+  S.img=img;const c=document.createElement('canvas');c.width=img.w;c.height=img.h;c.getContext('2d').putImageData(new ImageData(img.data,img.w,img.h),0,0);S.off=c;
+  $('drop').style.display='none';S.mask=null;S.fix=[];S.skew=[];S.crop=null;
+  if(!keepAll){S.undo=[]}
+  fit();
+}
+function resetGeometry(){S.ticks=[];S.grid=null;S.yTop=S.yBot=NaN;S.tracks.forEach(t=>{t.x0=t.x1=NaN;t.curves.forEach(c=>{c.u=null;c.wps=[]})});S.undo=[];renderAll()}
+function loadFile(f){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();
+  i.onload=()=>{const c=document.createElement('canvas');c.width=i.naturalWidth;c.height=i.naturalHeight;const g=c.getContext('2d',{willReadFrequently:true});g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(i,0,0);
+    const d=g.getImageData(0,0,c.width,c.height);S.orig={w:d.width,h:d.height,data:new Uint8ClampedArray(d.data)};S.name=f.name||'pasted image';
+    setImage({w:d.width,h:d.height,data:d.data});resetGeometry();setMsg('msgImg',`${d.width} × ${d.height} px`);URL.revokeObjectURL(u)};i.src=u}
+$('bOpen').onclick=()=>$('file').click();$('file').onchange=e=>loadFile(e.target.files[0]);
+['dragover','dragenter'].forEach(ev=>$('stage').addEventListener(ev,e=>e.preventDefault()));
+$('stage').addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfer.files[0])});
+document.addEventListener('paste',e=>{if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type==='text')return;
+  for(const it of e.clipboardData.items)if(it.type.startsWith('image/')){loadFile(it.getAsFile());e.preventDefault();return}});
+$('bRot').onclick=()=>{if(!S.img)return;const d=num($('rotDeg').value);if(!isFinite(d)||d===0)return;
+  setImage(LD.rotateImage(S.img,d));resetGeometry();setMsg('msgImg',`Rotated by ${d.toFixed(2)}°. Depth ticks, tracks and traces were cleared.`)};
+$('bCrop').onclick=()=>{if(!S.img||!S.crop)return;const r=S.crop;setImage(LD.cropImage(S.img,r.x0,r.y0,r.x1-r.x0,r.y1-r.y0));resetGeometry();setMsg('msgImg',`Cropped to ${S.img.w} × ${S.img.h} px. Depth ticks, tracks and traces were cleared.`)};
+$('bReset').onclick=()=>{if(!S.orig)return;setImage({w:S.orig.w,h:S.orig.h,data:new Uint8ClampedArray(S.orig.data)});resetGeometry();setMsg('msgImg','Back to the image as loaded.')};
+
+// ---------- example ----------
+function example(){
+  const L=LD.synthLog(),sp=L.truth.spec,c=document.createElement('canvas');c.width=L.img.w;c.height=L.img.h;const g=c.getContext('2d');
+  g.putImageData(new ImageData(L.img.data,L.img.w,L.img.h),0,0);
+  g.fillStyle='#232220';g.font='600 13px Inter,Arial,sans-serif';g.fillText('SYNTHETIC EXAMPLE: fictitious data, not a real well',50,20);
+  g.font='11px Inter,Arial,sans-serif';
+  const ttl=[['GR 0 - 150 GAPI',0],['RT 0.2 - 2000 OHMM (log)',1],['RHOB 1.95 - 2.95 / NPHI 0.45 - -0.15',2]];
+  ttl.forEach(([t,i])=>{g.fillStyle='#232220';g.fillText(t,sp.tracks[i].x0,46)});
+  for(let d=1500;d<=1600;d+=25){g.fillStyle='#232220';g.fillText(String(d),8,L.truth.yOf(d)+4)}
+  const d=g.getImageData(0,0,c.width,c.height);S.orig={w:d.width,h:d.height,data:new Uint8ClampedArray(d.data)};S.name='synthetic example';
+  setImage({w:d.width,h:d.height,data:d.data});
+  S.unit='m';$('unit').value='m';S.ticks=[1500,1550,1600].map(x=>({y:L.truth.yOf(x),depth:x}));S.grid=null;
+  S.yTop=L.truth.yOf(1500);S.yBot=L.truth.yOf(1600);
+  S.tracks=sp.tracks.map((t,i)=>{const o=newTrack(i+1);Object.assign(o,{name:t.name,x0:t.x0,x1:t.x1,left:t.left,right:t.right,log:t.log});o.curves=[];return o});
+  sp.curves.forEach(cu=>{const k=newCurve(1);Object.assign(k,{mnem:cu.mnem,unit:cu.unit,ink:cu.color.slice(),tol:cu.dash?30:30});
+    S.tracks[cu.track].curves.push(k)});
+  // the dashed NPHI curve has its own (reversed) scale: it gets a track of its own, drawn over the same rectangle
+  const nph=S.tracks[2].curves.pop(),t4=newTrack(4);Object.assign(t4,{name:'NPHI (same rectangle)',x0:sp.tracks[2].x0,x1:sp.tracks[2].x1,left:0.45,right:-0.15});t4.curves=[nph];S.tracks.push(t4);
+  S.at=0;S.ac=0;S.undo=[];setStep();renderAll();fit();
+  traceAll(true);setMsg('msgImg','Fictitious example: depth, tracks and curves are already set up and traced. Compare the pink overlay with the curves.');
+}
+$('bExample').onclick=example;
+
+// ---------- view ----------
+function size(){const r=$('stage').getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);return{w:r.width,h:r.height,dpr}}
+function fit(){const{w,h}=size();if(!S.img)return;const top=42,bot=28;S.s=Math.min(w/S.img.w,(h-top-bot)/S.img.h);S.tx=(w-S.img.w*S.s)/2;S.ty=top+(h-top-bot-S.img.h*S.s)/2;draw()}
+function zoomAt(f,cx,cy){const{w,h}=size();cx=cx??w/2;cy=cy??h/2;const ns=Math.min(40,Math.max(.03,S.s*f));S.tx=cx-(cx-S.tx)*ns/S.s;S.ty=cy-(cy-S.ty)*ns/S.s;S.s=ns;draw()}
+$('zIn').onclick=()=>zoomAt(1.4);$('zOut').onclick=()=>zoomAt(1/1.4);$('zFit').onclick=fit;
+$('z11').onclick=()=>{if(!S.img)return;const{w,h}=size();S.s=1;S.tx=(w-S.img.w)/2;S.ty=42;draw()};
+window.addEventListener('resize',fit);
+const toImg=(sx,sy)=>[(sx-S.tx)/S.s,(sy-S.ty)/S.s],toScr=(x,y)=>[x*S.s+S.tx,y*S.s+S.ty];
+const evPos=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+
+// ---------- drawing ----------
+const inkCol=c=>c.ink?`rgb(${c.ink[0]},${c.ink[1]},${c.ink[2]})`:'#888';
+function traceLine(c,t,col,lw){
+  if(!c.u||!trackOK(t))return;const wd=t.x1-t.x0;
+  const run=()=>{ctx.beginPath();let pen=false,pf=0;
+    for(let j=0;j<c.u.length;j++){const v=c.u[j];if(v!==v){pen=false;continue}const f=v-Math.floor(v+1e-12),[sx,sy]=toScr(t.x0+f*wd,j+.5);
+      if(pen&&Math.abs(f-pf)<0.5)ctx.lineTo(sx,sy);else ctx.moveTo(sx,sy);pen=true;pf=f}ctx.stroke()};
+  ctx.lineJoin='round';ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=lw+2;run();ctx.strokeStyle=col;ctx.lineWidth=lw;run();
+}
+function draw(){
+  const dpr=window.devicePixelRatio||1,W=cv.width/dpr,H=cv.height/dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#f3f1ea';ctx.fillRect(0,0,W,H);
+  if(!S.img)return;
+  ctx.imageSmoothingEnabled=S.s<3;ctx.setTransform(dpr*S.s,0,0,dpr*S.s,dpr*S.tx,dpr*S.ty);ctx.drawImage(S.off,0,0);
+  if(S.mask&&$('showMask').checked){ctx.imageSmoothingEnabled=false;ctx.drawImage(S.mask.c,S.mask.x0,S.mask.y0)}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const gx0=toScr(0,0)[0],gx1=toScr(S.img.w,0)[0];
+  if(S.grid){ctx.strokeStyle='rgba(0,150,160,.55)';ctx.lineWidth=1;S.grid.ys.forEach(y=>{const sy=toScr(0,y)[1];ctx.beginPath();ctx.moveTo(gx0,sy);ctx.lineTo(gx1,sy);ctx.stroke()})}
+  if(bandOK()){const[,a]=toScr(0,S.yTop),[,b]=toScr(0,S.yBot);ctx.strokeStyle='rgba(168,98,58,.8)';ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(gx0,a);ctx.lineTo(gx1,a);ctx.moveTo(gx0,b);ctx.lineTo(gx1,b);ctx.stroke();ctx.setLineDash([])}
+  S.ticks.forEach(k=>{const sy=toScr(0,k.y)[1];ctx.strokeStyle='#1f5fbf';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(gx0,sy);ctx.lineTo(Math.min(gx1,gx0+60),sy);ctx.stroke();
+    ctx.fillStyle='#1f5fbf';ctx.font='600 11px Inter,sans-serif';ctx.fillText(isFinite(k.depth)?k.depth+' '+S.unit:'?',gx0+4,sy-3)});
+  S.tracks.forEach((t,ti)=>{if(!trackOK(t))return;const[a]=toScr(t.x0,0),[b]=toScr(t.x1,0),y0=bandOK()?toScr(0,S.yTop)[1]:0,y1=bandOK()?toScr(0,S.yBot)[1]:H;
+    ctx.strokeStyle=ti===S.at?'#a8623a':'rgba(74,90,78,.8)';ctx.lineWidth=ti===S.at?2:1.2;ctx.setLineDash([6,4]);ctx.strokeRect(a,y0,b-a,y1-y0);ctx.setLineDash([]);
+    ctx.fillStyle=ti===S.at?'#a8623a':'#4a5a4e';ctx.font='600 11px Inter,sans-serif';ctx.fillText(t.name,a+3,Math.max(12,y0-4))});
+  if($('showTr').checked)S.tracks.forEach((t,ti)=>t.curves.forEach((c,ci)=>traceLine(c,t,PAL[(ti*2+ci)%PAL.length],ti===S.at&&ci===S.ac?2:1.3)));
+  S.tracks.forEach((t,ti)=>t.curves.forEach((c,ci)=>{if(c.mode==='bw'&&c.wps.length&&ti===S.at)c.wps.forEach(p=>{const[x,y]=toScr(p[0],p[1]);ctx.fillStyle='#fff';ctx.strokeStyle='#e6007e';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.fill();ctx.stroke()})}));
+  if(S.tool==='pick'||C().mode==='color'){const c=C();if(c.wps[0]&&c.mode==='color'){const[x,y]=toScr(c.wps[0][0],c.wps[0][1]);ctx.strokeStyle='#e6007e';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-7,y);ctx.lineTo(x+7,y);ctx.moveTo(x,y-7);ctx.lineTo(x,y+7);ctx.stroke()}}
+  if(S.fix.length){ctx.strokeStyle='#e08a00';ctx.fillStyle='#e08a00';ctx.lineWidth=2;ctx.beginPath();S.fix.forEach((p,i)=>{const[x,y]=toScr(p[0],p[1]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();S.fix.forEach(p=>{const[x,y]=toScr(p[0],p[1]);ctx.beginPath();ctx.arc(x,y,3.5,0,7);ctx.fill()})}
+  S.skew.forEach(p=>{const[x,y]=toScr(p[0],p[1]);ctx.strokeStyle='#1f5fbf';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-8,y);ctx.lineTo(x+8,y);ctx.moveTo(x,y-8);ctx.lineTo(x,y+8);ctx.stroke()});
+  const rc=S.drag&&S.drag.k==='rect'?S.drag.r:S.crop;
+  if(rc){const[a,b]=toScr(rc.x0,rc.y0),[c2,d]=toScr(rc.x1,rc.y1);ctx.strokeStyle=S.tool==='crop'?'#1f5fbf':'#a8623a';ctx.lineWidth=1.5;ctx.setLineDash([5,3]);ctx.strokeRect(a,b,c2-a,d-b);ctx.setLineDash([])}
+}
+function drawLoupe(ix,iy){
+  if(!S.img){loupe.style.display='none';return}loupe.style.display='block';const R=14,N=loupe.width,k=N/(2*R);lg.imageSmoothingEnabled=false;lg.fillStyle='#fff';lg.fillRect(0,0,N,N);
+  const sx=Math.floor(ix)-R,sy=Math.floor(iy)-R,x0=Math.max(0,sx),y0=Math.max(0,sy),x1=Math.min(S.img.w,sx+2*R),y1=Math.min(S.img.h,sy+2*R);
+  if(x1>x0&&y1>y0)lg.drawImage(S.off,x0,y0,x1-x0,y1-y0,(x0-sx)*k,(y0-sy)*k,(x1-x0)*k,(y1-y0)*k);
+  const cx=(ix-Math.floor(ix)+R)*k,cy=(iy-Math.floor(iy)+R)*k;lg.strokeStyle='#a8623a';lg.lineWidth=1;lg.beginPath();lg.moveTo(cx,0);lg.lineTo(cx,N);lg.moveTo(0,cy);lg.lineTo(N,cy);lg.stroke();
+}
+
+// ---------- tools ----------
+const TOOLBTN={pan:'tPan',tick:'tTick',rect:'tRect',pick:'tPick',wp:'tWp',fix:'tFix',skew:'tSkew',crop:'tCrop'};
+function setTool(t){S.tool=t;for(const k in TOOLBTN)$(TOOLBTN[k]).classList.toggle('on',k===t);cv.style.cursor=t==='pan'?'grab':'crosshair';
+  if(t==='skew')S.skew=[];draw()}
+for(const k in TOOLBTN)$(TOOLBTN[k]).onclick=()=>{if(k!=='pan'&&!S.img)return;setTool(S.tool===k&&k!=='pan'?'pan':k)};
+function pixelAt(ix,iy){const x=Math.floor(ix),y=Math.floor(iy);if(x<0||y<0||x>=S.img.w||y>=S.img.h)return null;
+  const ch=[[],[],[]];for(let j=-2;j<=2;j++)for(let i=-2;i<=2;i++){const a=Math.min(S.img.w-1,Math.max(0,x+i)),b=Math.min(S.img.h-1,Math.max(0,y+j)),p=(b*S.img.w+a)*4;for(let k=0;k<3;k++)ch[k].push(S.img.data[p+k])}
+  // darkest-chroma-weighted choice: the median of the 5x5 block is the ink when the line is thick enough, otherwise the pixel itself is used
+  const med=ch.map(a=>a.sort((p,q)=>p-q)[12]),p0=(y*S.img.w+x)*4,own=[S.img.data[p0],S.img.data[p0+1],S.img.data[p0+2]];
+  const sat=v=>Math.max(...v)-Math.min(...v);return sat(own)>=sat(med)?own:med}
+cv.addEventListener('pointerdown',e=>{
+  if(!S.img)return;cv.setPointerCapture(e.pointerId);const[sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy);
+  if(e.button===1||S.space||S.tool==='pan'){S.drag={k:'pan',sx,sy,tx:S.tx,ty:S.ty};cv.style.cursor='grabbing';return}
+  if(e.button===2)return;
+  if(S.tool==='tick'){let y=iy;if(S.grid&&S.grid.ys.length){const s=LD.snapTo(S.grid.ys,iy,6/S.s);if(s!=null)y=s}S.ticks.push({y,depth:NaN});renderTicks();recalDepth();const ins=document.querySelectorAll('#ticks input');if(ins.length)ins[ins.length-1].focus();setTool('pan');return}
+  if(S.tool==='pick'){const p=pixelAt(ix,iy);if(!p)return;const c=C();c.ink=p;c.mode='color';c.wps=[[ix,iy]];renderCurve();updMask();setTool('pan');setMsg('msgTrace','Ink picked. Adjust the tolerance, then trace.');return}
+  if(S.tool==='wp'){const c=C();if(c.mode==='color')c.wps=[[ix,iy]];else{pushUndo();c.wps.push([ix,iy])}renderCurve();if(c.mode==='bw'&&canTrace(c,false))traceOne(S.at,S.ac,true);draw();return}
+  if(S.tool==='fix'){S.fix.push([ix,iy]);draw();return}
+  if(S.tool==='skew'){S.skew.push([ix,iy]);if(S.skew.length===2){const d=LD.deskewDeg(S.skew[0],S.skew[1]);$('rotDeg').value=d.toFixed(2);setMsg('msgImg',`The line is tilted by ${(-d).toFixed(2)}°: press Rotate to straighten.`);S.skew=[];setTool('pan')}draw();return}
+  if(S.tool==='rect'||S.tool==='crop'){S.drag={k:'rect',x:ix,y:iy,r:{x0:ix,y0:iy,x1:ix,y1:iy}}}
+});
+cv.addEventListener('pointermove',e=>{
+  if(!S.img)return;const[sx,sy]=evPos(e),[ix,iy]=toImg(sx,sy),d=S.drag;
+  if(d){if(d.k==='pan'){S.tx=d.tx+sx-d.sx;S.ty=d.ty+sy-d.sy}else if(d.k==='rect'){d.r={x0:Math.min(d.x,ix),y0:Math.min(d.y,iy),x1:Math.max(d.x,ix),y1:Math.max(d.y,iy)}}draw()}
+  readout(ix,iy);drawLoupe(ix,iy)});
+cv.addEventListener('pointerup',()=>{const d=S.drag;S.drag=null;
+  if(d&&d.k==='rect'){const r=d.r;
+    if(r.x1-r.x0>=6&&r.y1-r.y0>=6){
+      if(S.tool==='crop'){S.crop={x0:Math.round(r.x0),y0:Math.round(r.y0),x1:Math.round(r.x1),y1:Math.round(r.y1)};setMsg('msgImg','Crop rectangle set: press Apply crop.')}
+      else{const t=T();t.x0=Math.round(r.x0*2)/2;t.x1=Math.round(r.x1*2)/2;S.yTop=Math.round(r.y0*2)/2;S.yBot=Math.round(r.y1*2)/2;renderTrack();recalDepth();updMask()}
+      setTool('pan')}}
+  cv.style.cursor=S.tool==='pan'||S.space?'grab':'crosshair';draw()});
+cv.addEventListener('pointerleave',()=>{if(!S.drag)loupe.style.display='none'});
+cv.addEventListener('wheel',e=>{if(!S.img)return;e.preventDefault();const[sx,sy]=evPos(e);zoomAt(e.deltaY<0?1.2:1/1.2,sx,sy)},{passive:false});
+cv.addEventListener('contextmenu',e=>{e.preventDefault();if(S.tool==='fix'&&S.fix.length){S.fix.pop();draw()}else if(S.tool==='wp'&&C().wps.length){pushUndo();C().wps.pop();renderCurve();draw()}});
+function readout(ix,iy){let t=`px ${ix.toFixed(1)}, ${iy.toFixed(1)}`;
+  if(S.dc)t+=`  |  depth ${fmt(S.dc.dOf(iy))} ${S.unit}`;
+  const tr=S.tracks.find(t=>trackOK(t)&&ix>=t.x0&&ix<=t.x1&&scaleOK(t));if(tr)t+=`  |  ${tr.name}: ${fmt(LD.xToValue(coreTrack(tr),ix))}`;$('ro').textContent=t}
+const f4s=v=>isFinite(v)?String(+v.toPrecision(4)):'—';
+const fmt=v=>{if(!isFinite(v))return'—';const a=Math.abs(v);return String(a!==0&&(a<1e-3||a>=1e7)?v.toExponential(4):+v.toPrecision(7))};
+document.addEventListener('keydown',e=>{
+  const tag=document.activeElement.tagName;if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return;
+  if(e.code==='Space'){S.space=true;cv.style.cursor='grab';e.preventDefault();return}
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){doUndo();e.preventDefault();return}
+  if(e.key==='Enter'&&S.fix.length){applyFix();return}
+  if(e.key==='Escape'){S.fix=[];S.skew=[];setTool('pan')}});
+document.addEventListener('keyup',e=>{if(e.code==='Space'){S.space=false;cv.style.cursor=S.tool==='pan'?'grab':'crosshair'}});
+
+// ---------- depth ----------
+function recalDepth(){
+  S.dc=LD.fitDepth(S.ticks.map(k=>({y:k.y,depth:k.depth})));
+  const n=S.ticks.filter(k=>isFinite(k.depth)).length;let m='';
+  if(S.dc){m=`${f4s(Math.abs(1/S.dc.b))} px per ${S.unit}, fit error (RMS) ${f4s(S.dc.rms)} ${S.unit}${S.dc.n<3?' (2 ticks: no redundancy, add a third to check)':''}.`;
+    if(S.grid&&isFinite(S.grid.spacing))m+=` Grid lines every ${f4s(S.grid.spacing)} px = ${f4s(S.grid.spacing*Math.abs(S.dc.b))} ${S.unit}${isFinite(S.grid.majorSpacing)&&S.grid.majorSpacing!==S.grid.spacing?`, major every ${f4s(S.grid.majorSpacing*Math.abs(S.dc.b))} ${S.unit}`:''}.`}
+  else m=n<2?'Add at least two depth ticks and type their depths.':'The ticks must differ in depth and position.';
+  setMsg('msgDepth',m,!S.dc&&n>=2);renderOut();draw()}
+function renderTicks(){$('ticks').innerHTML=S.ticks.map((k,i)=>`<div class="tk"><span>y = ${k.y.toFixed(1)} px</span><input type="text" data-i="${i}" value="${isFinite(k.depth)?k.depth:''}" placeholder="depth (${S.unit})" aria-label="Depth of tick ${i+1}"><button data-d="${i}" title="Remove">×</button></div>`).join('')}
+$('ticks').addEventListener('input',e=>{const i=e.target.dataset.i;if(i==null)return;S.ticks[i].depth=num(e.target.value);recalDepth()});
+$('ticks').addEventListener('click',e=>{const i=e.target.dataset.d;if(i==null)return;S.ticks.splice(+i,1);renderTicks();recalDepth()});
+$('unit').onchange=e=>{const old=S.unit;S.unit=e.target.value;renderTicks();setStep(old);recalDepth()};
+function setStep(old){const def={m:0.2,ft:0.5},cur=num($('step').value);if(!S.stepUser||cur===def[old])$('step').value=def[S.unit];$('stepU').textContent=S.unit;renderOut()}
+$('step').oninput=()=>{S.stepUser=true;renderOut()};
+$('bGrid').onclick=()=>{if(!S.img)return;const xs=S.tracks.filter(trackOK),x0=xs.length?Math.max(0,Math.floor(Math.min(...xs.map(t=>t.x0))+2)):0,x1=xs.length?Math.min(S.img.w,Math.ceil(Math.max(...xs.map(t=>t.x1))-2)):S.img.w;
+  const y0=bandOK()?Math.max(0,Math.floor(S.yTop)-6):0,y1=bandOK()?Math.min(S.img.h,Math.ceil(S.yBot)+6):S.img.h;
+  S.grid=LD.detectHLines(S.img,{x0,x1,y0,y1});recalDepth();if(!S.grid.ys.length)setMsg('msgDepth','No horizontal grid lines found in this area.',true)};
+$('bSnap').onclick=()=>{if(!S.grid)return setMsg('msgDepth','Detect the grid lines first.',true);let n=0;S.ticks.forEach(k=>{const s=LD.snapTo(S.grid.ys,k.y,8);if(s!=null){k.y=s;n++}});renderTicks();recalDepth();toast(n+' tick(s) snapped to a grid line')};
+
+// ---------- tracks and curves ----------
+function renderTrack(){
+  $('trSel').innerHTML=S.tracks.map((t,i)=>`<option value="${i}"${i===S.at?' selected':''}>${esc(t.name)}</option>`).join('');
+  const t=T();$('trName').value=t.name;$('trL').value=t.left;$('trR').value=t.right;$('trLog').checked=t.log;$('trB2').checked=t.b2;$('trL2').value=t.l2;$('trR2').value=t.r2;
+  $('trL2').disabled=$('trR2').disabled=!t.b2;$('trX0').value=isFinite(t.x0)?t.x0:'';$('trX1').value=isFinite(t.x1)?t.x1:'';$('yTop').value=isFinite(S.yTop)?S.yTop:'';$('yBot').value=isFinite(S.yBot)?S.yBot:'';
+  setMsg('msgTrack',!scaleOK(t)?(t.log?'A logarithmic scale needs positive, different end values.':'The two scale values must differ.'):'',true);
+  renderCurve();draw()}
+function renderCurve(){
+  const t=T();if(S.ac>=t.curves.length)S.ac=t.curves.length-1;const c=C();
+  $('cuSel').innerHTML=t.curves.map((k,i)=>`<option value="${i}"${i===S.ac?' selected':''}>${esc(k.mnem)}${k.u?' ✓':''}</option>`).join('');
+  $('cuMn').value=c.mnem;$('cuUn').value=c.unit;$('cuMode').value=c.mode;
+  $('colOpts').hidden=c.mode!=='color';$('bwOpts').hidden=c.mode!=='bw';$('tPick').hidden=c.mode!=='color';
+  $('tol').value=c.tol;$('tolV').textContent=c.tol;$('metric').value=c.metric;$('gridEx').checked=c.grid;$('wrap').checked=c.wrap;$('k0').value=c.k0;
+  $('maxJump').value=c.maxJump;$('maxGap').value=c.maxGap;$('smooth').value=c.smooth;$('thr').value=c.thr;$('thrV').textContent=c.thr;
+  $('sw').style.background=c.ink?inkCol(c):'';$('swTxt').textContent=c.ink?`rgb(${c.ink.join(', ')})`:'no ink';$('wpN').textContent=c.mode==='bw'?c.wps.length+' waypoint(s)':'';
+  renderOut()}
+function renderAll(){renderTicks();renderTrack();recalDepth()}
+$('trSel').onchange=e=>{S.at=+e.target.value;S.ac=0;renderTrack();updMask()};
+$('trNew').onclick=()=>{S.tracks.push(newTrack(S.tracks.length+1));S.at=S.tracks.length-1;S.ac=0;renderTrack()};
+$('trDel').onclick=()=>{if(S.tracks.length>1){S.tracks.splice(S.at,1);S.at=0;S.ac=0}else S.tracks[0]=newTrack(1);renderTrack();updMask()};
+const bindT=(id,fn)=>$(id).addEventListener('input',e=>{fn(T(),e.target);const t=T();$('trL2').disabled=$('trR2').disabled=!t.b2;
+  setMsg('msgTrack',!scaleOK(t)?(t.log?'A logarithmic scale needs positive, different end values.':'The two scale values must differ.'):'',true);
+  if(id==='trName')$('trSel').options[S.at].textContent=t.name;renderOut();draw();updMask()});
+bindT('trName',(t,e)=>t.name=e.value||'Track');bindT('trL',(t,e)=>t.left=num(e.value));bindT('trR',(t,e)=>t.right=num(e.value));bindT('trLog',(t,e)=>t.log=e.checked);
+bindT('trB2',(t,e)=>t.b2=e.checked);bindT('trL2',(t,e)=>t.l2=num(e.value));bindT('trR2',(t,e)=>t.r2=num(e.value));bindT('trX0',(t,e)=>t.x0=num(e.value));bindT('trX1',(t,e)=>t.x1=num(e.value));
+$('yTop').oninput=e=>{S.yTop=num(e.target.value);recalDepth();updMask()};$('yBot').oninput=e=>{S.yBot=num(e.target.value);recalDepth();updMask()};
+$('bProp').onclick=()=>{if(!S.img)return;const r={x0:0,x1:S.img.w,y0:bandOK()?Math.floor(S.yTop):0,y1:bandOK()?Math.ceil(S.yBot):S.img.h};
+  const xs=LD.detectVLines(S.img,r),tr=LD.proposeTracks(xs,Math.max(30,S.img.w*0.04));
+  if(!tr.length)return setMsg('msgTrack','No track borders found: draw the rectangles by hand.',true);
+  let k=0;for(const p of tr){const q=S.tracks.find(t=>!trackOK(t))||null;let t;if(q)t=q;else{t=newTrack(S.tracks.length+1);S.tracks.push(t)}t.x0=Math.round(p.x0*2)/2;t.x1=Math.round(p.x1*2)/2;k++}
+  if(!bandOK()){S.yTop=0;S.yBot=S.img.h}renderTrack();recalDepth();setMsg('msgTrack',`${k} track(s) proposed from ${xs.length} vertical lines. Check them and set the y band and the scales.`)};
+const bindC=(id,fn,ev)=>$(id).addEventListener(ev||'input',e=>{fn(C(),e.target);renderOut();if(id==='cuMn'||id==='cuMode')renderCurve();updMask();draw()});
+bindC('cuMn',(c,e)=>{c.mnem=e.value.toUpperCase().replace(/[^A-Z0-9_]/g,'')||'CURVE';if(!c.unit&&MN_UNIT[c.mnem]){c.unit=MN_UNIT[c.mnem];$('cuUn').value=c.unit}$('cuSel').options[S.ac].textContent=c.mnem+(c.u?' ✓':'')});
+bindC('cuUn',(c,e)=>c.unit=e.value.toUpperCase());bindC('cuMode',(c,e)=>c.mode=e.value,'change');
+bindC('tol',(c,e)=>{c.tol=+e.value;$('tolV').textContent=e.value});bindC('metric',(c,e)=>c.metric=e.value,'change');bindC('gridEx',(c,e)=>c.grid=e.checked,'change');
+bindC('wrap',(c,e)=>c.wrap=e.checked,'change');bindC('k0',(c,e)=>c.k0=Math.round(num(e.value))||0);bindC('maxJump',(c,e)=>c.maxJump=Math.max(2,num(e.value)||15));
+bindC('maxGap',(c,e)=>c.maxGap=Math.max(0,Math.round(num(e.value))||0));bindC('smooth',(c,e)=>c.smooth=Math.max(0,Math.round(num(e.value))||0));bindC('thr',(c,e)=>{c.thr=+e.value;$('thrV').textContent=e.value});
+$('showMask').onchange=()=>{updMask()};$('showTr').onchange=draw;
+$('cuSel').onchange=e=>{S.ac=+e.target.value;renderCurve();updMask()};
+$('cuNew').onclick=()=>{const t=T();t.curves.push(newCurve(t.curves.length+1));S.ac=t.curves.length-1;renderCurve();updMask()};
+$('cuDel').onclick=()=>{const t=T();if(t.curves.length>1){t.curves.splice(S.ac,1);S.ac=0}else t.curves[0]=newCurve(1);renderCurve();draw()};
+
+// ---------- mask preview ----------
+function updMask(){clearTimeout(S.maskT);S.maskT=setTimeout(()=>{S.mask=null;const c=C(),t=T();
+  if(S.img&&$('showMask').checked&&c.mode==='color'&&c.ink&&trackOK(t)&&bandOK()){
+    const rect={x0:Math.max(0,Math.ceil(t.x0+2)),x1:Math.min(S.img.w,Math.floor(t.x1-2)),y0:Math.max(0,Math.floor(S.yTop)),y1:Math.min(S.img.h,Math.ceil(S.yBot))};
+    if(rect.x1-rect.x0>2&&rect.y1-rect.y0>2){const m=LD.colourMask(S.img,rect,c.ink,c.tol,{metric:c.metric,grid:c.grid}),cc=document.createElement('canvas');cc.width=m.w;cc.height=m.h;
+      const g=cc.getContext('2d'),id=g.createImageData(m.w,m.h);for(let i=0;i<m.a.length;i++)if(m.a[i]){id.data[i*4]=0;id.data[i*4+1]=210;id.data[i*4+2]=230;id.data[i*4+3]=200}
+      g.putImageData(id,0,0);S.mask={c:cc,x0:rect.x0,y0:rect.y0}}}
+  draw()},60)}
+
+// ---------- tracing ----------
+function pushUndo(){S.undo.push(S.tracks.map(t=>t.curves.map(c=>({u:c.u?c.u.slice():null,wps:c.wps.map(p=>p.slice())}))));if(S.undo.length>40)S.undo.shift()}
+function doUndo(){const s=S.undo.pop();if(!s)return;s.forEach((tc,i)=>tc.forEach((o,j)=>{const c=S.tracks[i]&&S.tracks[i].curves[j];if(c){c.u=o.u;c.wps=o.wps}}));renderCurve();draw()}
+$('bUndo').onclick=doUndo;
+function canTrace(c,say){const t=T(),why=!S.img?'Load an image first.':!trackOK(t)?'Draw the track rectangle first.':!scaleOK(t)?'Fix the track scale first.':!bandOK()?'Set the y band (draw the track rectangle).':
+  c.mode==='color'&&!c.ink?'Pick the ink on the curve first.':c.mode==='bw'&&!c.wps.length?'Click at least one waypoint on the curve.':'';
+  if(why&&say)setMsg('msgTrace',why,true);return!why}
+function cfgOf(c){return{mode:c.mode,ink:c.ink,tol:c.tol,metric:c.metric,grid:c.grid,maxJump:c.maxJump,maxGap:c.maxGap,wrap:c.wrap,k0:c.k0,smooth:c.smooth>=3?c.smooth|1:0,thr:c.thr,wps:c.wps}}
+function traceOne(ti,ci,quiet){const t=S.tracks[ti],c=t.curves[ci];
+  if(!quiet)pushUndo();const u=LD.digitise(S.img,{yTop:S.yTop,yBot:S.yBot},coreTrack(t),cfgOf(c));
+  if(!u){setMsg('msgTrace','Nothing traced (empty area).',true);return false}
+  c.u=u;let n=0,tot=0;for(let j=Math.max(0,Math.floor(S.yTop));j<Math.min(u.length,Math.ceil(S.yBot));j++){tot++;if(u[j]===u[j])n++}
+  setMsg('msgTrace',`${c.mnem}: ${n} of ${tot} rows traced (${(100*n/Math.max(1,tot)).toFixed(0)} %). ${n<0.5*tot?'Low coverage: raise the tolerance or add waypoints.':'Check the overlay.'}`,n<0.2*tot);
+  return true}
+$('bTrace').onclick=()=>{const c=C();if(!canTrace(c,true))return;traceOne(S.at,S.ac);renderCurve();renderOut();draw()};
+function traceAll(quiet){let k=0;pushUndo();S.tracks.forEach((t,ti)=>t.curves.forEach((c,ci)=>{const sa=S.at;S.at=ti;const ok=canTrace(c,false);S.at=sa;if(ok&&traceOne(ti,ci,true))k++}));
+  renderCurve();renderOut();draw();if(!quiet)setMsg('msgTrace',k+' curve(s) traced.')}
+$('bTraceAll').onclick=()=>traceAll(false);
+$('bClearTrace').onclick=()=>{pushUndo();C().u=null;if(C().mode==='bw')C().wps=[];renderCurve();renderOut();draw()};
+$('bWpClear').onclick=()=>{pushUndo();C().wps=[];renderCurve();draw()};
+function applyFix(){const c=C(),t=T();if(!S.fix.length)return;if(!c.u)return setMsg('msgTrace','Trace the curve first (or at least create a trace), then correct it.',true);
+  if(!trackOK(t))return;pushUndo();LD.replaceStretch(c.u,S.fix,coreTrack(t));S.fix=[];renderOut();draw();setMsg('msgTrace','Stretch replaced. Ctrl+Z undoes.')}
+$('bFixOk').onclick=applyFix;$('bFixNo').onclick=()=>{S.fix=[];setTool('pan')};
+
+// ---------- output ----------
+function outputData(){
+  if(!S.dc||!bandOK())return null;const step=num($('step').value);if(!(step>0))return null;
+  const d0=S.dc.dOf(S.yTop),d1=S.dc.dOf(S.yBot),depths=LD.makeDepths(d0,d1,step);if(!depths.length||depths.length>400000)return null;
+  const nv=num($('nullV').value),curves=[];
+  S.tracks.forEach(t=>{if(!trackOK(t)||!scaleOK(t))return;t.curves.forEach(c=>{if(!c.u)return;
+    curves.push({mnem:c.mnem,unit:c.unit,values:LD.sampleCurve(c.u,S.dc,coreTrack(t),depths,{yTop:S.yTop,yBot:S.yBot}),track:t.name})})});
+  return{depths,curves,step,nullVal:isFinite(nv)?nv:LD.NULL};
+}
+function renderOut(){
+  const o=outputData();if(!o){$('oh').innerHTML='';$('ob').innerHTML='';setMsg('msgOut',!S.dc?'Calibrate the depth axis to get output.':!bandOK()?'Set the y band.':'Set a positive step.');return}
+  if(!o.curves.length){$('oh').innerHTML='';$('ob').innerHTML='';setMsg('msgOut',`${o.depths.length} depths from ${fmt(o.depths[0])} to ${fmt(o.depths[o.depths.length-1])} ${S.unit}; no curve traced yet.`);return}
+  const names=[...new Map(o.curves.map(c=>[c.mnem,0])).keys()];
+  const dup=names.length<o.curves.length;
+  const cov=o.curves.map(c=>`${c.mnem} ${(100*c.values.filter(v=>v!==LD.NULL).length/o.depths.length).toFixed(0)} %`).join(', ');
+  setMsg('msgOut',`${o.depths.length} rows, ${fmt(o.depths[0])} to ${fmt(o.depths[o.depths.length-1])} ${S.unit}. Coverage: ${cov}.${dup?' Two curves share a mnemonic: rename one.':''}`,dup);
+  $('oh').innerHTML='<tr><th>DEPT</th>'+o.curves.map(c=>`<th>${esc(c.mnem)}</th>`).join('')+'</tr>';
+  const rows=Math.min(200,o.depths.length);let h='';for(let i=0;i<rows;i++)h+=`<tr><td>${fmt(o.depths[i])}</td>`+o.curves.map(c=>`<td>${c.values[i]===LD.NULL?'—':fmt(+c.values[i].toPrecision(5))}</td>`).join('')+'</tr>';
+  if(o.depths.length>rows)h+=`<tr><td colspan="${o.curves.length+1}">… ${o.depths.length-rows} more rows (all are exported)</td></tr>`;$('ob').innerHTML=h}
+['step','nullV'].forEach(id=>$(id).addEventListener('input',renderOut));
+function download(name,data,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+const baseName=()=>($('well').value.trim()||'digitised-log').replace(/[^\w.-]+/g,'_');
+function needOut(){const o=outputData();if(!o||!o.curves.length){toast('Nothing to export: calibrate depth and trace at least one curve.');return null}
+  const names=o.curves.map(c=>c.mnem);if(new Set(names).size<names.length){toast('Two curves share a mnemonic: rename one.');return null}return o}
+$('bLas').onclick=()=>{const o=needOut();if(!o)return;
+  const txt=LD.buildLAS({depthUnit:S.unit==='ft'?'FT':'M',step:o.step,depths:o.depths,nullVal:o.nullVal,well:$('well').value.trim()||'UNKNOWN',comp:$('comp').value.trim(),field:$('fld').value.trim(),curves:o.curves});
+  download(baseName()+'.las',txt);toast('LAS 2.0 written. Please QC it (LAS checker) before use.')};
+$('bCsv').onclick=()=>{const o=needOut();if(!o)return;download(baseName()+'.csv',LD.buildCSV({depthUnit:S.unit==='ft'?'FT':'M',depths:o.depths,nullVal:o.nullVal,curves:o.curves}),'text/csv');toast('CSV written (empty cell = not traced).')};
+
+// ---------- project ----------
+$('bSave').onclick=()=>{
+  const P={app:'logdigitizer',version:1,unit:S.unit,image:S.img?{w:S.img.w,h:S.img.h,name:S.name}:null,ticks:S.ticks,yTop:S.yTop,yBot:S.yBot,step:num($('step').value),nullVal:$('nullV').value,well:$('well').value,comp:$('comp').value,field:$('fld').value,
+    tracks:S.tracks.map(t=>({...t,x0:isFinite(t.x0)?t.x0:null,x1:isFinite(t.x1)?t.x1:null,curves:t.curves.map(c=>({...c,u:c.u?Array.from(c.u,v=>v===v?+v.toFixed(5):null):null}))}))};
+  download(baseName()+'.logdigitizer.json',JSON.stringify(P),'application/json');toast('Project saved (the image itself is not included: reload it before opening).')};
+$('bOpenProj').onclick=()=>$('projFile').click();
+$('projFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{
+  const P=JSON.parse(r.result);if(P.app!=='logdigitizer')throw new Error('not a Well-log digitizer project');
+  S.unit=P.unit==='ft'?'ft':'m';$('unit').value=S.unit;S.ticks=(P.ticks||[]).map(k=>({y:+k.y,depth:k.depth==null?NaN:+k.depth}));S.yTop=P.yTop==null?NaN:+P.yTop;S.yBot=P.yBot==null?NaN:+P.yBot;
+  S.tracks=(P.tracks||[]).map(t=>({...newTrack(1),...t,x0:t.x0==null?NaN:t.x0,x1:t.x1==null?NaN:t.x1,curves:(t.curves||[]).map(c=>({...newCurve(1),...c,u:c.u?Float32Array.from(c.u,v=>v==null?NaN:v):null}))}));
+  if(!S.tracks.length)S.tracks=[newTrack(1)];S.tracks.forEach(t=>{if(!t.curves.length)t.curves=[newCurve(1)]});S.at=0;S.ac=0;S.undo=[];S.grid=null;
+  if(P.step)$('step').value=P.step;if(P.nullVal)$('nullV').value=P.nullVal;$('well').value=P.well||'';$('comp').value=P.comp||'';$('fld').value=P.field||'';$('stepU').textContent=S.unit;
+  renderAll();updMask();const w=P.image&&S.img&&(P.image.w!==S.img.w||P.image.h!==S.img.h);
+  toast(!S.img?`Project opened. Load the image${P.image?' ('+P.image.name+', '+P.image.w+' × '+P.image.h+')':''} to see the traces.`:w?`Project opened, but the loaded image is ${S.img.w} × ${S.img.h}, the project was made on ${P.image.w} × ${P.image.h}.`:'Project opened.')
+  }catch(err){toast('Cannot open: '+err.message)}};r.readAsText(f);e.target.value=''};
+
+setStep();renderAll();$('bGrid').title='Find the horizontal grid lines (projection profile of the dark pixels)';
+size();draw();
+</script>
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:nowrap;width:1%}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published</b> the source was read; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Well-log digitizer','logdigitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec']]],
+      ['Decision support',[['MCDA (AHP & PROMETHEE)','mcda'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp'],['Contact and well POS','contact'],['Distribution fitting','distfit']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: the image is read in memory and never uploaded. Turns a scanned well-log image (raster, colour or black and white) into depth-indexed curves and a LAS 2.0 file, with a person checking every step: you straighten the image, calibrate the depth axis, draw one rectangle per track and give its scale (linear or logarithmic), pick the ink of each curve, and check the traced curve drawn over the image before exporting. Classical image processing only: there is no machine-learning model.","method":["Depth: two or more clicked ticks with typed depths; depth is a least-squares straight line of the image row (m or ft). The fit error is shown. Grid lines are found from the row projection profile (mean darkness of each row minus its local median); they give the line spacing and let you snap the ticks to the lines.","Tracks: a rectangle per track gives the x range; the values at the left and right edges define the scale. Linear: value = left + fraction × (right − left). Logarithmic: value = left × (right/left)^fraction, exact at both edges. Track borders can be proposed from the column projection of dark pixels.","Colour mode: you click on the curve; the ink is that pixel colour. A pixel belongs to the mask when its distance to the ink is below the tolerance (CIE Lab distance, or RGB). Light grey pixels (typical grid lines) are never part of the mask when the ink is coloured. For each depth row, the mask pixels are grouped into runs; the curve position is the centre of the run that continues the previous row (nearest, within the maximum jump). Tracing starts at the clicked point and goes up and down.","Gaps: rows without a candidate are interpolated linearly if the gap is at most the chosen number of rows, otherwise left null (−999.25). Optional median smoothing.","Wrap: when a curve leaves the track on the right and re-enters on the left (or the reverse), the tracker counts the wraps and the value is read on the backup scale (for example 0–100 then 100–200). The lowest part of the trace is put on the primary scale; a wrap offset corrects that if the guess is wrong.","Black-and-white mode: the dark ridge is followed from the clicked waypoint(s) by dynamic programming over the rows: it maximises ridge strength minus a penalty on the sideways jump between rows, so a dashed or noisy line is bridged and specks of dirt are ignored. Vertical grid lines and horizontal grid lines are first subtracted using the median darkness of each column and row. More waypoints force the path through the points (crossings, ambiguous passages).","Manual correction: click points along the true curve; the stretch between the first and last point is replaced by the polyline through them. Undo (Ctrl+Z) restores the previous state.","Output: the trace is resampled at the chosen depth step (default 0.2 m or 0.5 ft) on multiples of the step; rows outside the traced band or without a value are written as the null value. The LAS 2.0 file is unwrapped with one line per depth, curve mnemonics and units typed by you; a CSV (empty cell = not traced) and a JSON project (calibration, tracks, settings, traces; not the image) are also available."],"sources":[["Workflow: raster well log, human-checked digitisation, LAS output (concept only; here with classical methods, no neural network; no code read or reused)","pyLogDigitizer README (github.com/GeoLarryLai/pyLogDigitizer)","concept: README read"],["Colour thresholding in CIE Lab, run centres per row, continuity tracking with a maximum jump","Standard image processing (CIE 1976 colour difference)","derived"],["Row and column projection profiles for grid lines and track borders","Standard image processing","derived"],["Ridge following by dynamic programming (Viterbi) with a continuity penalty","Standard method, written for this page","derived"],["Linear and logarithmic track scales, backup scale on wrap","Own derivation from the usual log-header conventions","derived"],["LAS 2.0 layout (sections ~V ~W ~C ~P ~O ~A, one line per depth, NULL −999.25)","Same layout as the sample file used by the LAS checker of this site; the self-check parses the output back with that checker's parser","derived"]],"validation":["Self-check script (scripts/logdigitizer_test.mjs) on a synthetic log drawn by the page itself (three tracks, grid, a logarithmic resistivity track, a dashed curve, a wrapping curve). On that clean image: linear track, mean error 0.09 % of the track width (max 0.25 %); logarithmic 0.2–2000 track, max 0.010 decade; dashed curve, max 0.55 %; wrapping curve on a 0–100 / 100–200 scale, max 0.7 %; black-and-white tracker on a dashed, noisy, black curve with one click, mean 0.17 %, max 1.4 %. Depth calibration round trip, x → value exact at both track edges, grid exclusion by the colour mask, gap handling, deskew, grid and border detection, and the LAS output parsed back by the LAS checker's parser with the same values are also checked.","These figures are for a clean synthetic image with a known answer. A real scan (paper distortion, fading, JPEG noise, hand-drawn lines) will do worse: always read the overlay."],"limits":["Colour scans work best. In black and white, curves that cross or touch are ambiguous: the tracker follows the smoothest path, not necessarily the right curve; add waypoints or correct by hand.","A scanned log is never as good as the original digital data. Resolution is limited by the pixel size (a pixel of the image is a fraction of a depth step and of the track width), by the scan distortion and by the accuracy of your ticks and scale values. Use it to recover data that exist nowhere else.","Digitised data should be quality-controlled before use: run the LAS file through the LAS checker of this site and compare with the printed log.","Depth is a straight line of the image row: a scan stretched unevenly (paper shrinkage, tape joins) is not corrected; digitise such logs in pieces with their own ticks.","Only vertical logs with depth running down and a shared depth band for all tracks. Rotation and cropping are done before calibration and clear ticks, tracks and traces. No automatic skew detection (two clicks on a vertical grid line, or type the angle).","The black-and-white tracker does not follow wraps. Several curves of the same colour in one track are not separated in colour mode: use the black-and-white tracker with waypoints, or crop.","The synthetic example is fictitious."],"date":"26 November 2026"});
+</script>
+</body></html>
