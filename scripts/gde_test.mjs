@@ -58,7 +58,7 @@ test('parseWells: tab, semicolon (decimal comma) and comma tables, header skippe
 
 // ---------- library of depositional systems ----------
 const GROUPS = ['Continental', 'Coastal & deltaic', 'Shelf & carbonate', 'Deep water', 'Lacustrine', 'Custom'];
-const STATUS = /^(published|published \(abstract\)|published \(second hand\)|existence confirmed|memory|on the page)$/;
+const STATUS = /^(published|existence confirmed|memory|on the page|to verify)( (.*))?$/;
 test('library: every system and group present, grouped in the UI order', () => {
   for (const k of ['fluvial', 'aeolian', 'estuary', 'wavedelta', 'delta', 'shelf', 'carbonate', 'ramp', 'mixed', 'glacial', 'fan', 'fansand', 'fanmud', 'apron', 'lake', 'playa', 'custom'])
     assert.ok(G.templates[k], 'missing template ' + k);
