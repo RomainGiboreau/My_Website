@@ -178,6 +178,21 @@ test('column guess: "z (m)" is depth, "T (K)" sets kelvin, a °C header sets cel
   assert.equal(DG.guessCols(['Age (Ma)', 'Temperature (°C)'])[4], 'C');
 });
 
+// ---- input validation and model uncertainty (review fixes 26 Nov 2026)
+test('core returns an explicit error for T = -300 °C (below absolute zero), NaN or Infinity, instead of NaN or 0.2019 %Ro', () => {
+  for (const bad of [-300, NaN, Infinity, -273.16]) {
+    assert.throws(() => DG.integrate([{ t: 100, T: bad }, { t: 0, T: 100 }], true, true, [DG.EASY]), /temperature/i, 'first row ' + bad);
+    assert.throws(() => DG.integrate([{ t: 100, T: 20 }, { t: 0, T: bad }], true, true, [DG.EASY]), /temperature/i, 'last row ' + bad);
+  }
+  assert.doesNotThrow(() => DG.integrate([{ t: 100, T: -50 }, { t: 0, T: 20 }], true, true, [DG.EASY]));
+});
+test('model spread: lo/hi over the active models at a sample; secondary models are flagged as not verified', () => {
+  const q = final([{ t: 100, T: 20 }, { t: 0, T: 150 }], DG.MODELS), v = DG.MODELS.map(M => q.Ro[M.id]), sp = DG.spread(q, DG.MODELS);
+  close(sp.lo, Math.min(...v), 1e-12, 'lo'); close(sp.hi, Math.max(...v), 1e-12, 'hi');
+  assert.ok(!DG.EASY.secondary && DG.DL.secondary && DG.BASIN.secondary);
+  assert.equal(DG.spread(q, [DG.EASY]).hi - DG.spread(q, [DG.EASY]).lo, 0);
+});
+
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
