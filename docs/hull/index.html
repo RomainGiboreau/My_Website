@@ -141,11 +141,13 @@ td.l,th.l{text-align:left}
   <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
   <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
   <div class="pg"><span>X</span><select id="cx"></select><span>Y</span><select id="cy"></select><span>Group</span><select id="cg"></select></div>
+  <div class="pg"><span>Units</span><select id="unit" title="Unit of the coordinates, used to label areas and perimeters"><option value="auto">auto</option><option value="m">metres</option><option value="km">kilometres</option><option value="ft">feet</option><option value="deg">degrees (lon/lat)</option><option value="data">data units</option></select><span>Null values</span><input id="nulls" type="text" value="-999, -999.25, -9999, 9999, 1e30, 1.70141e38" title="Coordinates equal to one of these values are excluded and counted. Empty the field to keep every value."></div>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
  <section class="panel"><h2><span class="n">2</span>Hulls<span class="tt" tabindex="0" data-tip="Triangles kept: share of Delaunay triangles retained, ranked by circumradius (smallest first). 100 % is the convex hull. Lower it until the outline follows the shape you want; the radius R that this corresponds to is shown in your data units. Fill holes keeps only the outer boundaries. Duplicated points are merged.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Show</span><select id="mode"><option value="both">convex + concave</option><option value="cvx">convex only</option><option value="ccv">concave only</option></select></div>
   <div class="hint" style="margin-top:8px">Triangles kept: <b id="keepV">90</b> %  ·  R = <b id="rV">–</b></div>
   <input type="range" id="keep" min="30" max="100" step="1" value="90">
+  <div class="pg"><span>Rule</span><select id="rule" title="Threshold on the share of triangles kept, or directly on the circumradius in data units"><option value="share">share of triangles</option><option value="radius">radius R (data units)</option></select><span>R</span><input id="rad" type="number" min="0" step="any" placeholder="data units"><span>Min area</span><input id="minA" type="number" min="0" step="any" placeholder="drop smaller islands"></div>
   <label class="inl"><input type="checkbox" id="holes">Fill holes (outer boundaries only)</label>
   <div class="msg" id="runMsg"></div></div></section>
  <section class="panel"><h2><span class="n">3</span>Display<i class="chev"></i></h2>
@@ -159,15 +161,141 @@ td.l,th.l{text-align:left}
  <div class="card" style="margin-top:12px"><h3>Results<span class="tt" tabindex="0" data-tip="Areas are in squared data units, perimeters in data units. Perimeter of the concave hull includes the boundaries of holes. Solidity = concave area / convex area: 1 for a convex cloud, small for a crescent or a ring.">?</span></h3><div class="tw" id="resT"></div></div>
 </main></div>
 
+<script id="hull-core">
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+// ---- decoding numbers (shared contract A)
+const MISSING_RE=/^(nan|na|n\/a|nd|n\.d\.?|null|none|[-−–]+)$/i;
+function parseNumber(text,o){o=o||{};
+  let s=String(text==null?'':text).trim().replace(/[   ]/g,' ').replace(/[−–]/g,'-');
+  if(s===''||MISSING_RE.test(s))return{value:null,kind:'missing'};
+  const m=/^<\s*(.+)$/.exec(s);if(m){const l=parseNumber(m[1],o);return{value:null,kind:'below',limit:l.kind==='ok'?l.value:null}}
+  if(/^[-+]?\d{1,3}( \d{3})+([.,]\d+)?$/.test(s))s=s.replace(/ /g,'');
+  let amb=false,t=null;
+  if(/^[-+]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)){
+    if(/^[-+]?\d{1,3},\d{3}$/.test(s)){amb=true;t=o.decimalComma?s.replace(',','.'):s.replace(',','')}   // "1,234": thousands or decimal comma
+    else t=s.replace(/,/g,'')}
+  else if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))t=s.replace(/\./g,'').replace(',','.');
+  else if(/^[-+]?\d{1,3}(\.\d{3}){2,}$/.test(s))t=s.replace(/\./g,'');
+  else if(/^[-+]?\d+,\d+([eE][-+]?\d+)?$/.test(s))t=s.replace(',','.');
+  else t=s;
+  if(!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(t))return{value:null,kind:'text'};
+  const v=+t;if(!isFinite(v))return{value:null,kind:'range'};
+  return amb?{value:v,kind:'ok',ambiguous:true}:{value:v,kind:'ok'}}
+function splitLine(l,sep){
+  if(sep==='ws')return l.trim().split(/\s+/).map(s=>s.replace(/^"|"$/g,''));
+  if(sep==='\t')return l.split('\t').map(s=>s.trim().replace(/^"|"$/g,''));
+  const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}
+// choose the delimiter giving the same number (>= 2) of fields on the large majority of lines; a comma is not a delimiter
+// when it is the decimal comma of a file that has another usable delimiter
+function detectDelimiter(lines,minCols){minCols=minCols||2;
+  const ok=sep=>{const cnt=new Map();for(const l of lines){const n=splitLine(l,sep).length;cnt.set(n,(cnt.get(n)||0)+1)}let best=0,bn=0;for(const [n,c] of cnt)if(c>best){best=c;bn=n}return bn>=minCols&&best>=0.9*lines.length};
+  if(lines.some(l=>l.includes('\t'))&&ok('\t'))return'\t';
+  if(lines.some(l=>l.includes(';'))&&ok(';'))return';';
+  const c=ok(','),w=ok('ws');
+  if(c&&w)return lines.some(l=>/\d,\d{1,2}(?!\d)/.test(l))?'ws':',';
+  return c?',':w?'ws':null}
+const isNum=k=>k==='ok'||k==='missing'||k==='below';
+function parseTable(text,minCols){minCols=minCols||2;
+  const lines=[];text.replace(/\r/g,'').split('\n').forEach((l,i)=>{l=l.replace(/\s+$/,'');if(l.trim()&&!/^(#|\/\/)/.test(l.trim()))lines.push({s:l,no:i+1})});
+  if(!lines.length)return{err:'Empty input.'};
+  const sep=detectDelimiter(lines.map(l=>l.s),minCols);
+  if(!sep)return{err:`Could not find a delimiter giving at least ${minCols} columns on most lines (tab, semicolon, comma or spaces).`};
+  let rows=lines.map(l=>splitLine(l.s,sep));const nos=lines.map(l=>l.no),nc=Math.max(...rows.map(r=>r.length));
+  const numFrac=r=>r.filter(s=>s!==''&&isNum(parseNumber(s,{decimalComma:true}).kind)).length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();nos.shift();if(rows.length>1&&numFrac(rows[0])<0.34&&rows[0].every(s=>s===''||parseNumber(s,{decimalComma:true}).kind==='text')){units=rows.shift();nos.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  return{head,units,rows,nos,nc,sep:sep==='ws'?' ':sep}}
+// default null values (shared contract C) and their parsing from the editable field
+const DEFAULT_NULLS='-999, -999.25, -9999, 9999, 1e30, 1.70141e38';
+function parseNulls(txt){return String(txt==null?'':txt).split(/[\s;,]+/).map(s=>parseNumber(s,{decimalComma:false})).filter(r=>r.kind==='ok').map(r=>r.value)}
+const isNull=(v,nulls)=>nulls.some(n=>Math.abs(v-n)<=1e-9*Math.max(1,Math.abs(n)));
+// ---- build the groups from the table: contract A (counted and shown skips), C (null values)
+function buildGroups(t,cx,cy,cg,nulls){
+  let dc=t.sep===';';if(!dc)for(const r of t.rows){for(const s of[r[cx],r[cy]]){const k=String(s).trim().replace(/ /g,'');if(/^[-+]?\d+,\d+$/.test(k)&&!/^[-+]?\d+,\d{3}$/.test(k)){dc=true;break}}if(dc)break}
+  const m=new Map(),sk={text:0,missing:0,below:0,sentinel:0,range:0},first={text:[],missing:[],below:[],sentinel:[],range:[]},nullHits=new Map(),cand=new Map();
+  let dup=0,amb=0,read=0;
+  const note=(k,no)=>{sk[k]++;if(first[k].length<5)first[k].push(no)};
+  t.rows.forEach((r,ri)=>{read++;const no=t.nos?t.nos[ri]:ri+1,a=parseNumber(r[cx],{decimalComma:dc}),b=parseNumber(r[cy],{decimalComma:dc});
+    if(a.ambiguous||b.ambiguous)amb++;
+    for(const [p,raw] of[[a,r[cx]],[b,r[cy]]])if(p.kind==='ok'&&!isNull(p.value,nulls)){const k=String(raw).trim().replace(/[−–]/g,'-');
+      if(/^[-+]?(9{3,}(\.\d*)?|99+\.9+|999\.25)$/.test(k)||Math.abs(p.value)>=1e29)cand.set(p.value,(cand.get(p.value)||0)+1)}
+    for(const p of[a,b])if(p.kind==='ok'&&isNull(p.value,nulls)){p.nv=p.value;p.kind='sentinel'}
+    const bad=a.kind!=='ok'?a:b.kind!=='ok'?b:null;
+    if(bad){if(bad.kind==='sentinel')nullHits.set(bad.nv,(nullHits.get(bad.nv)||0)+1);note(bad.kind,no);return}
+    const g=cg>=0?(r[cg]||'').trim()||'(blank)':'all';if(!m.has(g))m.set(g,{g,P:[],seen:new Set()});
+    const o=m.get(g),key=a.value+'|'+b.value;if(o.seen.has(key)){dup++;return}o.seen.add(key);o.P.push([a.value,b.value])});
+  const groups=[...m.values()],npts=groups.reduce((s,o)=>s+o.P.length,0),skipped=Object.values(sk).reduce((s,v)=>s+v,0);
+  return{groups,npts,read,skipped,sk,first,dup,nullHits:[...nullHits].map(([v,n])=>({v,n})),cands:[...cand].filter(([v,n])=>n>=3).map(([v,n])=>({v,n})),ambiguous:amb,decimalComma:dc}}
+function loadMessage(b){
+  const R={text:'non-numeric',missing:'missing',below:'below detection limit',sentinel:'null value',range:'out of range'};
+  let s=`${b.read} rows read, ${b.skipped} skipped`;
+  const why=Object.keys(R).filter(k=>b.sk[k]).map(k=>`${b.sk[k]} ${R[k]} (line${b.first[k].length>1?'s':''} ${b.first[k].join(', ')}${b.sk[k]>b.first[k].length?', …':''})`);
+  if(why.length)s+=': '+why.join('; ');
+  s+=` · ${b.npts} points · ${b.groups.length} group(s)`+(b.dup?` · ${b.dup} duplicate(s) merged`:'');
+  for(const h of b.nullHits)s+=` · ${h.n} row(s) with the null value ${h.v} excluded`;
+  return s}
+function loadWarnings(b){const w=[];for(const c of b.cands)w.push(`${c.v} appears ${c.n} times and is not in the null list (kept as data: add it to the null values if it is a null).`);
+  if(b.ambiguous)w.push(`${b.ambiguous} row(s) contain a value like 1,234, read as ${b.decimalComma?'a decimal comma (1.234)':'a thousands separator (1234)'} given the rest of the file.`);return w}
+// ---- units: the area is in squared data units; show which, and warn for degrees
+function unitInfo(sel,pts){
+  let geo=pts.length>0;for(const p of pts)if(Math.abs(p[0])>180.0001||Math.abs(p[1])>90.0001){geo=false;break}
+  const auto=!sel||sel==='auto',u=auto?(geo?'deg':'m'):sel,sq={m:'m²',km:'km²',ft:'ft²',deg:'deg²',data:'data units²'}[u]||u+'²',ln={m:'m',km:'km',ft:'ft',deg:'deg',data:'data units'}[u]||u;
+  return{unit:u,area:sq,len:ln,assumed:auto,warnDeg:u==='deg'||(geo&&auto)}}
+// =====================================================================================
+//  Convex hull (Andrew monotone chain) and concave hull (alpha shape from a Bowyer–Watson Delaunay triangulation).
+//  Geometry is planar and works on coordinates centred and scaled to unit size (internal scale s), so that
+//  circumcircle tests stay well conditioned for projected coordinates of order 1e6.
+// =====================================================================================
+const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+function convexHull(P){const p=P.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);if(p.length<3)return p;
+  const lo=[],up=[];for(const q of p){while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],q)<=0)lo.pop();lo.push(q)}
+  for(let i=p.length-1;i>=0;i--){const q=p[i];while(up.length>=2&&cross(up[up.length-2],up[up.length-1],q)<=0)up.pop();up.push(q)}
+  lo.pop();up.pop();return lo.concat(up)}   // counter-clockwise, no repeated first point
+const ringArea=r=>{let s=0;for(let i=0;i<r.length;i++){const a=r[i],b=r[(i+1)%r.length];s+=a[0]*b[1]-b[0]*a[1]}return s/2}   // signed: > 0 counter-clockwise
+const ringLen=r=>{let s=0;for(let i=0;i<r.length;i++){const a=r[i],b=r[(i+1)%r.length];s+=Math.hypot(a[0]-b[0],a[1]-b[1])}return s}
+// ---- Delaunay (Bowyer–Watson, O(n^2)): fine up to a few thousand points
+function delaunay(P){const n=P.length;let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;for(const p of P){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])}
+  const dm=Math.max(x1-x0,y1-y0)||1,mx=(x0+x1)/2,my=(y0+y1)/2,V=P.concat([[mx-2000*dm,my-dm],[mx,my+2000*dm],[mx+2000*dm,my-dm]]);
+  const mk=(a,b,c)=>{if(cross(V[a],V[b],V[c])<0){const t=b;b=c;c=t}const A=V[a],B=V[b],C=V[c],d=2*(A[0]*(B[1]-C[1])+B[0]*(C[1]-A[1])+C[0]*(A[1]-B[1]));
+    if(Math.abs(d)<1e-300)return{a,b,c,cx:0,cy:0,r2:-1};   // degenerate (collinear): never "contains" a point, removed at the end
+    const a2=A[0]*A[0]+A[1]*A[1],b2=B[0]*B[0]+B[1]*B[1],c2=C[0]*C[0]+C[1]*C[1],cx=(a2*(B[1]-C[1])+b2*(C[1]-A[1])+c2*(A[1]-B[1]))/d,cy=(a2*(C[0]-B[0])+b2*(A[0]-C[0])+c2*(B[0]-A[0]))/d;
+    return{a,b,c,cx,cy,r2:(A[0]-cx)**2+(A[1]-cy)**2}};
+  let T=[mk(n,n+1,n+2)];
+  for(let i=0;i<n;i++){const p=V[i],bad=[],keep=[];for(const t of T){const dx=p[0]-t.cx,dy=p[1]-t.cy;(dx*dx+dy*dy<t.r2*(1+1e-12)?bad:keep).push(t)}
+    const E=new Map();for(const t of bad)for(const [u,v] of[[t.a,t.b],[t.b,t.c],[t.c,t.a]]){const k=u<v?u+','+v:v+','+u,e=E.get(k);if(e)e.c++;else E.set(k,{u,v,c:1})}
+    for(const e of E.values())if(e.c===1)keep.push(mk(e.u,e.v,i));T=keep}
+  return{V,T:T.filter(t=>t.a<n&&t.b<n&&t.c<n&&t.r2>=0&&Math.abs(cross(V[t.a],V[t.b],V[t.c]))>1e-14*dm*dm)}}
+// ---- alpha shape: keep triangles with circumradius <= R; boundary = directed edges used once (triangles are CCW, so outer rings are CCW and holes CW)
+function alphaShape(V,T,R){const kept=T.filter(t=>Math.sqrt(t.r2)<=R),E=new Map();
+  for(const t of kept)for(const [u,v] of[[t.a,t.b],[t.b,t.c],[t.c,t.a]]){const k=u+','+v,rk=v+','+u;if(E.has(rk))E.delete(rk);else E.set(k,[u,v])}
+  const out=new Map();for(const [u,v] of E.values()){if(!out.has(u))out.set(u,[]);out.get(u).push(v)}
+  const rings=[];for(const [u0] of out){while(out.get(u0)&&out.get(u0).length){const ring=[u0];let u=u0;
+      for(let g=0;g<E.size+2;g++){const nx=out.get(u);if(!nx||!nx.length)break;const v=nx.pop();if(v===u0)break;ring.push(v);u=v}
+      if(ring.length>=3)rings.push(ring.map(i=>V[i]))}}
+  return{rings,kept:kept.length}}
+// ---- helpers
+const pip=(pt,ring)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>pt[1])!==(b[1]>pt[1])&&pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
+// group rings into polygons: each CCW ring is an exterior, each CW ring a hole of the smallest exterior containing it
+function polygons(rings){const ext=rings.filter(r=>ringArea(r)>0),hol=rings.filter(r=>ringArea(r)<0),P=ext.map(e=>({ext:e,holes:[]}));
+  for(const h of hol){let best=null;for(const p of P)if(pip(h[0],p.ext)&&(!best||ringArea(p.ext)<ringArea(best.ext)))best=p;if(best)best.holes.push(h)}return P}
+function hullOf(U,keepPct,fill,opt){opt=opt||{};// U: unique points [[x,y]] in data units
+  const out={n:U.length,cvx:null,ccv:null};if(U.length<3){out.cvx=U.slice();return out}
+  let cx=0,cy=0;for(const p of U){cx+=p[0]/U.length;cy+=p[1]/U.length}let s=0;for(const p of U)s=Math.max(s,Math.abs(p[0]-cx),Math.abs(p[1]-cy));s=s||1;
+  const N=U.map(p=>[(p[0]-cx)/s,(p[1]-cy)/s]),hull=convexHull(U);out.cvx=hull;
+  const dt=delaunay(N);out.tri=dt;out.s=s;out.cx=cx;out.cy=cy;if(!dt.T.length)return out;
+  const rr=dt.T.map(t=>Math.sqrt(t.r2)).sort((a,b)=>a-b),q=Math.min(rr.length-1,Math.max(0,Math.ceil(keepPct/100*rr.length)-1)),R=opt.radius>0?opt.radius/s:rr[q]*(1+1e-9);out.R=R*s;
+  const A=alphaShape(dt.V,dt.T,R);let rings=A.rings.map(r=>r.map(p=>[p[0]*s+cx,p[1]*s+cy]));if(keepPct>=100&&!(opt.radius>0))rings=[hull];   // 100 % is the convex hull by definition (the finite super-triangle of Bowyer–Watson can lose a near-collinear boundary sliver)
+  if(fill)rings=rings.filter(r=>ringArea(r)>0);
+  if(opt.minArea>0){const PP=polygons(rings),K=PP.filter(p=>ringArea(p.ext)>=opt.minArea);out.dropped=PP.length-K.length;rings=[];for(const p of K)rings.push(p.ext,...p.holes)}
+  out.ccv=rings;out.nkept=A.kept;out.ntri=dt.T.length;return out}
+var HC={rng,parseNumber,detectDelimiter,parseTable,parseNulls,isNull,buildGroups,loadMessage,loadWarnings,unitInfo,DEFAULT_NULLS,convexHull,delaunay,alphaShape,polygons,hullOf,ringArea,ringLen,pip};
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
-  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
-  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
 const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
 const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
-function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
 let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
   b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
 function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
@@ -175,18 +303,6 @@ function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)na
 function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
 const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
 document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
-// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
-function parseTable(text,minCols){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
-  const has=c=>lines.some(l=>l.includes(c));let sep;
-  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
-  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
-  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
-  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
-  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
-  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
-  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
-  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
 const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
 // ---- plotting engine ----------------------------------------------------------------
 const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
@@ -237,68 +353,34 @@ function drawChart(cv,spec){
     cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
 function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)})}
 
-// =====================================================================================
-//  Convex hull (Andrew monotone chain) and concave hull (alpha shape from a Bowyer–Watson Delaunay triangulation).
-//  Geometry is planar and works on coordinates centred and scaled to unit size (internal scale s), so that
-//  circumcircle tests stay well conditioned for projected coordinates of order 1e6.
-// =====================================================================================
 const D={table:null,pts:[],groups:[],res:[]};
-const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
-function convexHull(P){const p=P.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);if(p.length<3)return p;
-  const lo=[],up=[];for(const q of p){while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],q)<=0)lo.pop();lo.push(q)}
-  for(let i=p.length-1;i>=0;i--){const q=p[i];while(up.length>=2&&cross(up[up.length-2],up[up.length-1],q)<=0)up.pop();up.push(q)}
-  lo.pop();up.pop();return lo.concat(up)}   // counter-clockwise, no repeated first point
-const ringArea=r=>{let s=0;for(let i=0;i<r.length;i++){const a=r[i],b=r[(i+1)%r.length];s+=a[0]*b[1]-b[0]*a[1]}return s/2}   // signed: > 0 counter-clockwise
-const ringLen=r=>{let s=0;for(let i=0;i<r.length;i++){const a=r[i],b=r[(i+1)%r.length];s+=Math.hypot(a[0]-b[0],a[1]-b[1])}return s}
-// ---- Delaunay (Bowyer–Watson, O(n^2)): fine up to a few thousand points
-function delaunay(P){const n=P.length;let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;for(const p of P){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])}
-  const dm=Math.max(x1-x0,y1-y0)||1,mx=(x0+x1)/2,my=(y0+y1)/2,V=P.concat([[mx-20*dm,my-dm],[mx,my+20*dm],[mx+20*dm,my-dm]]);
-  const mk=(a,b,c)=>{if(cross(V[a],V[b],V[c])<0){const t=b;b=c;c=t}const A=V[a],B=V[b],C=V[c],d=2*(A[0]*(B[1]-C[1])+B[0]*(C[1]-A[1])+C[0]*(A[1]-B[1]));
-    if(Math.abs(d)<1e-300)return{a,b,c,cx:0,cy:0,r2:-1};   // degenerate (collinear): never "contains" a point, removed at the end
-    const a2=A[0]*A[0]+A[1]*A[1],b2=B[0]*B[0]+B[1]*B[1],c2=C[0]*C[0]+C[1]*C[1],cx=(a2*(B[1]-C[1])+b2*(C[1]-A[1])+c2*(A[1]-B[1]))/d,cy=(a2*(C[0]-B[0])+b2*(A[0]-C[0])+c2*(B[0]-A[0]))/d;
-    return{a,b,c,cx,cy,r2:(A[0]-cx)**2+(A[1]-cy)**2}};
-  let T=[mk(n,n+1,n+2)];
-  for(let i=0;i<n;i++){const p=V[i],bad=[],keep=[];for(const t of T){const dx=p[0]-t.cx,dy=p[1]-t.cy;(dx*dx+dy*dy<t.r2*(1+1e-12)?bad:keep).push(t)}
-    const E=new Map();for(const t of bad)for(const [u,v] of[[t.a,t.b],[t.b,t.c],[t.c,t.a]]){const k=u<v?u+','+v:v+','+u,e=E.get(k);if(e)e.c++;else E.set(k,{u,v,c:1})}
-    for(const e of E.values())if(e.c===1)keep.push(mk(e.u,e.v,i));T=keep}
-  return{V,T:T.filter(t=>t.a<n&&t.b<n&&t.c<n&&t.r2>=0&&Math.abs(cross(V[t.a],V[t.b],V[t.c]))>1e-14*dm*dm)}}
-// ---- alpha shape: keep triangles with circumradius <= R; boundary = directed edges used once (triangles are CCW, so outer rings are CCW and holes CW)
-function alphaShape(V,T,R){const kept=T.filter(t=>Math.sqrt(t.r2)<=R),E=new Map();
-  for(const t of kept)for(const [u,v] of[[t.a,t.b],[t.b,t.c],[t.c,t.a]]){const k=u+','+v,rk=v+','+u;if(E.has(rk))E.delete(rk);else E.set(k,[u,v])}
-  const out=new Map();for(const [u,v] of E.values()){if(!out.has(u))out.set(u,[]);out.get(u).push(v)}
-  const rings=[];for(const [u0] of out){while(out.get(u0)&&out.get(u0).length){const ring=[u0];let u=u0;
-      for(let g=0;g<E.size+2;g++){const nx=out.get(u);if(!nx||!nx.length)break;const v=nx.pop();if(v===u0)break;ring.push(v);u=v}
-      if(ring.length>=3)rings.push(ring.map(i=>V[i]))}}
-  return{rings,kept:kept.length}}
-// ---- helpers
-const pip=(pt,ring)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>pt[1])!==(b[1]>pt[1])&&pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c};
-// group rings into polygons: each CCW ring is an exterior, each CW ring a hole of the smallest exterior containing it
-function polygons(rings){const ext=rings.filter(r=>ringArea(r)>0),hol=rings.filter(r=>ringArea(r)<0),P=ext.map(e=>({ext:e,holes:[]}));
-  for(const h of hol){let best=null;for(const p of P)if(pip(h[0],p.ext)&&(!best||ringArea(p.ext)<ringArea(best.ext)))best=p;if(best)best.holes.push(h)}return P}
-function hullOf(U,keepPct,fill){// U: unique points [[x,y]] in data units
-  const out={n:U.length,cvx:null,ccv:null};if(U.length<3){out.cvx=U.slice();return out}
-  let cx=0,cy=0;for(const p of U){cx+=p[0]/U.length;cy+=p[1]/U.length}let s=0;for(const p of U)s=Math.max(s,Math.abs(p[0]-cx),Math.abs(p[1]-cy));s=s||1;
-  const N=U.map(p=>[(p[0]-cx)/s,(p[1]-cy)/s]),hull=convexHull(U);out.cvx=hull;
-  const dt=delaunay(N);out.tri=dt;out.s=s;out.cx=cx;out.cy=cy;if(!dt.T.length)return out;
-  const rr=dt.T.map(t=>Math.sqrt(t.r2)).sort((a,b)=>a-b),q=Math.min(rr.length-1,Math.max(0,Math.ceil(keepPct/100*rr.length)-1)),R=rr[q]*(1+1e-9);out.R=R*s;
-  const A=alphaShape(dt.V,dt.T,R);let rings=A.rings.map(r=>r.map(p=>[p[0]*s+cx,p[1]*s+cy]));if(fill)rings=rings.filter(r=>ringArea(r)>0);
-  out.ccv=rings;out.nkept=A.kept;out.ntri=dt.T.length;return out}
 // ---- data
 function guess(head){const f=re=>head.findIndex(h=>re.test(normName(h)));let x=f(/^(x|lon|long|longitude|east|easting|xcoord)/),y=f(/^(y|lat|latitude|north|northing|ycoord)/),g=f(/^(group|class|facies|lith|well|unit|name|type|cluster|label)/);
   if(x<0)x=0;if(y<0||y===x)y=head.findIndex((_,i)=>i!==x);return[x,y,g]}
 function fillCols(){const t=D.table,[x,y,g]=guess(t.head),opts=t.head.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');
   $('cx').innerHTML=opts;$('cy').innerHTML=opts;$('cg').innerHTML='<option value="-1">— (single group)</option>'+opts;$('cx').value=x;$('cy').value=y;$('cg').value=g}
-function loadText(text){const t=parseTable(text,2);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillCols();build();return true}
-function build(){const t=D.table;if(!t)return;const cx=+$('cx').value,cy=+$('cy').value,cg=+$('cg').value,m=new Map();let bad=0,dup=0;
-  for(const r of t.rows){const x=toN(r[cx]),y=toN(r[cy]);if(!isFinite(x)||!isFinite(y)){bad++;continue}const g=cg>=0?(r[cg]||'').trim()||'(blank)':'all';if(!m.has(g))m.set(g,{g,P:[],seen:new Set()});const o=m.get(g),k=x+'|'+y;if(o.seen.has(k)){dup++;continue}o.seen.add(k);o.P.push([x,y])}
-  D.groups=[...m.values()];D.npts=D.groups.reduce((a,o)=>a+o.P.length,0);
-  $('dataMsg').className='msg';$('dataMsg').textContent=`${D.npts} points · ${D.groups.length} group(s)`+(bad?` · ${bad} row(s) skipped`:'')+(dup?` · ${dup} duplicate(s) merged`:'');
-  if(D.npts<3){$('dataMsg').className='msg err';$('dataMsg').textContent='At least 3 distinct points are needed.';return}
+function clearResults(msg,err){D.groups=[];D.res=[];D.npts=0;$('rV').textContent='–';$('runMsg').textContent='';$('runMsg').className='msg';$('legend').innerHTML='';$('resT').innerHTML='';$('tScat').firstChild.textContent='Hulls';draw();
+  if(msg!=null){$('dataMsg').textContent=msg;$('dataMsg').className='msg'+(err?' err':'')}}   // a failed load never leaves the previous hulls on screen
+function loadText(text){const t=parseTable(text,2);if(t.err){D.table=null;clearResults(t.err,true);return false}D.table=t;fillCols();build();return true}
+function build(){const t=D.table;if(!t)return;const b=buildGroups(t,+$('cx').value,+$('cy').value,+$('cg').value,parseNulls($('nulls').value));
+  D.groups=b.groups;D.npts=b.npts;D.load=b;const msg=loadMessage(b),w=loadWarnings(b);
+  if(b.npts<3){clearResults(msg+' · At least 3 distinct points are needed.',true);return}
+  $('dataMsg').className='msg';$('dataMsg').textContent=msg+(w.length?' · Warning: '+w.join(' '):'');
   D.tri=null;compute()}
-function compute(){if(!D.groups.length)return;const keep=+$('keep').value,fill=$('holes').checked;$('keepV').textContent=keep;
-  D.res=D.groups.map(o=>{try{return{g:o.g,P:o.P,h:hullOf(o.P,keep,fill)}}catch(e){return{g:o.g,P:o.P,h:{n:o.P.length,cvx:convexHull(o.P),ccv:null,err:e.message}}}});
+function compute(){if(!D.groups.length)return;const keep=+$('keep').value,fill=$('holes').checked,useR=$('rule').value==='radius'&&+$('rad').value>0,minA=Math.max(0,+$('minA').value||0);$('keepV').textContent=keep;
+  $('keep').disabled=useR;
+  const opt={radius:useR?+$('rad').value:0,minArea:minA};
+  D.res=D.groups.map(o=>{try{return{g:o.g,P:o.P,h:hullOf(o.P,keep,fill,opt)}}catch(e){return{g:o.g,P:o.P,h:{n:o.P.length,cvx:convexHull(o.P),ccv:null,err:e.message}}}});
+  D.U=unitInfo($('unit').value,[].concat(...D.groups.map(o=>o.P)));
   const Rs=D.res.map(r=>r.h.R).filter(isFinite);$('rV').textContent=Rs.length?(D.res.length>1?Rs.map(fmt).join(' / '):fmt(Rs[0])):'–';
-  $('runMsg').className='msg';$('runMsg').textContent=D.res.some(r=>r.h.err)?D.res.find(r=>r.h.err).h.err:'';draw();table()}
+  const M=[];if(D.res.some(r=>r.h.err))M.push(D.res.find(r=>r.h.err).h.err);
+  if($('rule').value==='radius'&&!useR)M.push('Enter a radius greater than 0 (data units); the share of triangles is used meanwhile.');
+  if(D.U.warnDeg)M.push('The coordinates look like degrees (longitude/latitude): areas are in deg² and are not true areas. Project to metres first for areas in m².');
+  else if(D.U.assumed)M.push('Units assumed to be '+D.U.len+' (set the coordinate units in Data if not).');
+  for(const r of D.res){const np=r.h.ccv?r.h.ccv.filter(q=>ringArea(q)>0).length:0;
+    if(np>5)M.push((r.g==='all'?'The':'Group '+r.g+':')+' concave hull is fragmented into '+np+' polygons ('+r.h.n+' points): raise the share of triangles kept, use a larger radius, or drop small islands with a minimum area.');
+    if(r.h.dropped)M.push((r.g==='all'?'':r.g+': ')+r.h.dropped+' polygon(s) smaller than the minimum area dropped.')}
+  $('runMsg').className='msg';$('runMsg').textContent=M.join(' · ');draw();table()}
 // tick labels in plain decimals (projected coordinates such as 4200000 must not become 4e+6)
 const tk=(v,st)=>{const dec=Math.max(0,Math.min(8,-Math.floor(Math.log10(st||1)+1e-9)));return v.toFixed(dec)};
 // ---- drawing (own canvas: polygon fills, holes by even-odd rule)
@@ -324,10 +406,10 @@ function draw(){const cv=$('cv'),dpr=window.devicePixelRatio||1,W=cv.clientWidth
   x.save();x.translate(12,T+ph/2);x.rotate(-Math.PI/2);x.textBaseline='middle';x.fillText($('cy').selectedOptions[0].text,0,0);x.restore();
   $('legend').innerHTML=D.res.map((r,i)=>`<span><i style="background:${PAL[i%PAL.length]}"></i>${esc(r.g==='all'?'points':r.g)} (${r.P.length})</span>`).join('')+'<span>── concave</span><span>- - convex</span>';
   $('tScat').firstChild.textContent=D.npts+' points · '+D.res.length+' group(s)'}
-function table(){const rows=D.res.map((r,i)=>{const h=r.h,cv=h.cvx&&h.cvx.length>=3?{a:ringArea(h.cvx),p:ringLen(h.cvx),v:h.cvx.length}:{a:NaN,p:NaN,v:h.cvx?h.cvx.length:0};
+function table(){const U=D.U||unitInfo($("unit").value,[]);const rows=D.res.map((r,i)=>{const h=r.h,cv=h.cvx&&h.cvx.length>=3?{a:ringArea(h.cvx),p:ringLen(h.cvx),v:h.cvx.length}:{a:NaN,p:NaN,v:h.cvx?h.cvx.length:0};
     let cc=null;if(h.ccv&&h.ccv.length){const ex=h.ccv.filter(q=>ringArea(q)>0),ho=h.ccv.filter(q=>ringArea(q)<0);cc={a:h.ccv.reduce((s,q)=>s+ringArea(q),0),p:h.ccv.reduce((s,q)=>s+ringLen(q),0),v:h.ccv.reduce((s,q)=>s+q.length,0),np:ex.length,nh:ho.length}}
     r.stat={cv,cc};return`<tr><td class="l"><span class="dot" style="background:${PAL[i%PAL.length]}"></span> ${esc(r.g==='all'?'points':r.g)}</td><td>${h.n}</td><td>${cv.v}</td><td>${fmt(cv.a)}</td><td>${fmt(cv.p)}</td><td>${cc?cc.v:'–'}</td><td>${cc?fmt(cc.a):'–'}</td><td>${cc?fmt(cc.p):'–'}</td><td>${cc?cc.np+' / '+cc.nh:'–'}</td><td>${cc&&isFinite(cv.a)?(cc.a/cv.a).toFixed(3):'–'}</td></tr>`}).join('');
-  $('resT').innerHTML='<table><thead><tr><th class="l">Group</th><th>points</th><th>convex vertices</th><th>convex area</th><th>convex perimeter</th><th>concave vertices</th><th>concave area</th><th>concave perimeter</th><th>polygons / holes</th><th>solidity</th></tr></thead><tbody>'+rows+'</tbody></table>'}
+  $('resT').innerHTML=`<table><thead><tr><th class="l">Group</th><th>points</th><th>convex vertices</th><th>convex area (${U.area})</th><th>convex perimeter (${U.len})</th><th>concave vertices</th><th>concave area (${U.area})</th><th>concave perimeter (${U.len})</th><th>polygons / holes</th><th>solidity</th></tr></thead><tbody>${rows}</tbody></table>`}
 // ---- exports
 const rg=r=>r.concat([r[0]]);
 function geom(r,which){const h=r.h;if(which==='cvx')return h.cvx&&h.cvx.length>=3?[{ext:h.cvx,holes:[]}]:[];return h.ccv&&h.ccv.length?polygons(h.ccv):[]}
@@ -343,13 +425,14 @@ $('bCsv').onclick=()=>{if(!D.res.length)return banner('Nothing to export.',true)
   for(const r of D.res)for(const w of['cvx','ccv'])geom(r,w).forEach((p,pi)=>[['outer',p.ext],...p.holes.map(h=>['hole',h])].forEach(([k,ring])=>ring.forEach((q,i)=>L.push([csvCell(r.g,','),w==='cvx'?'convex':'concave',pi+1,k,i+1,q[0],q[1]].join(',')))));
   download('hull_vertices.csv',L.join('\n'))};
 // ---- events
-$('paste').addEventListener('input',()=>{clearTimeout(D.pt);D.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
+$('paste').addEventListener('input',()=>{clearTimeout(D.pt);D.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value);else{D.table=null;clearResults('No data yet.')}},350)});
 $('bOpen').onclick=()=>$('file').click();
 $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>3e6?r.result.slice(0,3e6):r.result;loadText(r.result)};r.readAsText(f);e.target.value=''};
 document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
 ['cx','cy','cg'].forEach(i=>$(i).addEventListener('change',build));
 $('keep').addEventListener('input',()=>{$('keepV').textContent=$('keep').value;clearTimeout(D.kt);D.kt=setTimeout(compute,60)});
 ['holes'].forEach(i=>$(i).addEventListener('change',compute));['mode','eq','tri','fill'].forEach(i=>$(i).addEventListener('change',draw));
+['rule','rad','minA','unit'].forEach(i=>$(i).addEventListener('change',compute));$('nulls').addEventListener('change',build);
 window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(draw,150)});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b)pngOf($(b.dataset.png),'hulls.png')});$('bPng').onclick=()=>pngOf($('cv'),'hulls.png');
 // ---- example (synthetic): a crescent and a noisy ring (which has a hole), in projected-like units (m)
@@ -438,6 +521,6 @@ window.DG={convexHull,delaunay,alphaShape,hullOf,ringArea,rng};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. Convex hull and alpha-shape concave hull per group, with area, perimeter, WKT and GeoJSON export.","method":["Convex hull: Andrew's monotone chain.","Concave hull: alpha shape from a Bowyer–Watson Delaunay triangulation. Only triangles whose circumradius is below a threshold R are kept; the boundary of what remains is the hull. The page sets R from the share of triangles retained (ranked by circumradius, smallest first); 100 % is the convex hull.","Geometry is planar: with longitude/latitude, areas and lengths are in degrees². The concave perimeter includes the boundaries of holes. Solidity = concave area / convex area."],"sources":[["Convex hull by Andrew’s monotone chain","Andrew, A. M. (1979), Another efficient algorithm for convex hulls in two dimensions, Information Processing Letters 9(5), 216–219, <a href=\"https://doi.org/10.1016/0020-0190(79)90072-3\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0020-0190(79)90072-3</a>","published (metadata verified)"],["Delaunay triangulation by the Bowyer–Watson algorithm","Bowyer, A. (1981), Computing Dirichlet tessellations, The Computer Journal 24(2), 162–166, <a href=\"https://doi.org/10.1093/comjnl/24.2.162\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.162</a>; Watson, D. F. (1981), Computing the n-dimensional Delaunay tessellation with application to Voronoi polytopes, The Computer Journal 24(2), 167–172, <a href=\"https://doi.org/10.1093/comjnl/24.2.167\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.167</a>","published (metadata verified)"],["Alpha shape: keep the Delaunay triangles of circumradius below R (concave hull)","Edelsbrunner, H., Kirkpatrick, D. G. & Seidel, R. (1983), On the shape of a set of points in the plane, IEEE Transactions on Information Theory 29(4), 551–559, <a href=\"https://doi.org/10.1109/TIT.1983.1056714\" target=\"_blank\" rel=\"noopener\">doi:10.1109/TIT.1983.1056714</a>; Edelsbrunner, H. & Mücke, E. P. (1994), Three-dimensional alpha shapes, ACM Transactions on Graphics 13(1), 43–72, <a href=\"https://doi.org/10.1145/174462.156635\" target=\"_blank\" rel=\"noopener\">doi:10.1145/174462.156635</a>","published (metadata verified)"],["Setting R from the share of triangles retained (ranked by circumradius); filling of holes; merging of duplicated points","Choices of the page; the alpha shape itself is defined by R. Other concave-hull algorithms exist (for instance Duckham, M., Kulik, L., Worboys, M. & Galton, A. (2008), Pattern Recognition 41(10), 3224–3236, <a href=\"https://doi.org/10.1016/j.patcog.2008.03.023\" target=\"_blank\" rel=\"noopener\">doi:10.1016/j.patcog.2008.03.023</a>) and are not implemented","on the page (no publication)"],["Polygon area (shoelace formula) and perimeter","Braden, B. (1986), The surveyor’s area formula, The College Mathematics Journal 17(4), 326–337, <a href=\"https://doi.org/10.1080/07468342.1986.11972974\" target=\"_blank\" rel=\"noopener\">doi:10.1080/07468342.1986.11972974</a>","published (metadata verified)"],["Solidity = concave area / convex area","Ratio defined on the page; no publication behind this particular use","on the page (no publication)"],["GeoJSON export","Butler, H., Daly, M., Doyle, A., Gillies, S., Hagen, S. & Schaub, T. (2016), The GeoJSON Format, IETF RFC 7946, <a href=\"https://doi.org/10.17487/RFC7946\" target=\"_blank\" rel=\"noopener\">doi:10.17487/RFC7946</a>","published (metadata verified)"],["WKT export","OGC (2011), OpenGIS Implementation Standard for Geographic information – Simple feature access – Part 1: Common architecture, OGC 06-103r4, <a href=\"https://doi.org/10.62973/06-103r4\" target=\"_blank\" rel=\"noopener\">doi:10.62973/06-103r4</a>","published (metadata verified)"],["Comparison with scipy in the validation","Virtanen, P. et al. (2020), SciPy 1.0: fundamental algorithms for scientific computing in Python, Nature Methods 17, 261–272, <a href=\"https://doi.org/10.1038/s41592-019-0686-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41592-019-0686-2</a>; Qhull: Barber, C. B., Dobkin, D. P. & Huhdanpaa, H. (1996), The quickhull algorithm for convex hulls, ACM Transactions on Mathematical Software 22(4), 469–483, <a href=\"https://doi.org/10.1145/235815.235821\" target=\"_blank\" rel=\"noopener\">doi:10.1145/235815.235821</a>","published (metadata verified)"]],"validation":["Convex hull (17 vertices, 3 948 796 m²) and alpha shape (494 of 581 triangles, 1 283 546 m²) identical to scipy."],"limits":[],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Convex hull and alpha-shape concave hull per group, with area, perimeter, WKT and GeoJSON export.","method":["Convex hull: Andrew's monotone chain.","Concave hull: alpha shape from a Bowyer–Watson Delaunay triangulation. Only triangles whose circumradius is below a threshold R are kept; the boundary of what remains is the hull. The page sets R from the share of triangles retained (ranked by circumradius, smallest first); 100 % is the convex hull.","Geometry is planar: with longitude/latitude, areas and lengths are in degrees². The concave perimeter includes the boundaries of holes. Solidity = concave area / convex area.","The concave rule can also be a radius R in data units instead of a share of triangles, and a minimum area drops small islands. Numbers are read with decimal commas, thousands separators, &lt;detection-limit and missing markers; the load message gives rows read and skipped with the reasons and first line numbers. Coordinates equal to a null value (-999, -999.25, -9999, 9999, 1e30, 1.70141e38, editable) are excluded and counted, and a failed load clears the previous hulls."],"sources":[["Convex hull by Andrew’s monotone chain","Andrew, A. M. (1979), Another efficient algorithm for convex hulls in two dimensions, Information Processing Letters 9(5), 216–219, <a href=\"https://doi.org/10.1016/0020-0190(79)90072-3\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0020-0190(79)90072-3</a>","published (metadata verified)"],["Delaunay triangulation by the Bowyer–Watson algorithm","Bowyer, A. (1981), Computing Dirichlet tessellations, The Computer Journal 24(2), 162–166, <a href=\"https://doi.org/10.1093/comjnl/24.2.162\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.162</a>; Watson, D. F. (1981), Computing the n-dimensional Delaunay tessellation with application to Voronoi polytopes, The Computer Journal 24(2), 167–172, <a href=\"https://doi.org/10.1093/comjnl/24.2.167\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.167</a>","published (metadata verified)"],["Alpha shape: keep the Delaunay triangles of circumradius below R (concave hull)","Edelsbrunner, H., Kirkpatrick, D. G. & Seidel, R. (1983), On the shape of a set of points in the plane, IEEE Transactions on Information Theory 29(4), 551–559, <a href=\"https://doi.org/10.1109/TIT.1983.1056714\" target=\"_blank\" rel=\"noopener\">doi:10.1109/TIT.1983.1056714</a>; Edelsbrunner, H. & Mücke, E. P. (1994), Three-dimensional alpha shapes, ACM Transactions on Graphics 13(1), 43–72, <a href=\"https://doi.org/10.1145/174462.156635\" target=\"_blank\" rel=\"noopener\">doi:10.1145/174462.156635</a>","published (metadata verified)"],["Setting R from the share of triangles retained (ranked by circumradius); filling of holes; merging of duplicated points","Choices of the page; the alpha shape itself is defined by R. Other concave-hull algorithms exist (for instance Duckham, M., Kulik, L., Worboys, M. & Galton, A. (2008), Pattern Recognition 41(10), 3224–3236, <a href=\"https://doi.org/10.1016/j.patcog.2008.03.023\" target=\"_blank\" rel=\"noopener\">doi:10.1016/j.patcog.2008.03.023</a>) and are not implemented","on the page (no publication)"],["Polygon area (shoelace formula) and perimeter","Braden, B. (1986), The surveyor’s area formula, The College Mathematics Journal 17(4), 326–337, <a href=\"https://doi.org/10.1080/07468342.1986.11972974\" target=\"_blank\" rel=\"noopener\">doi:10.1080/07468342.1986.11972974</a>","published (metadata verified)"],["Solidity = concave area / convex area","Ratio defined on the page; no publication behind this particular use","on the page (no publication)"],["GeoJSON export","Butler, H., Daly, M., Doyle, A., Gillies, S., Hagen, S. & Schaub, T. (2016), The GeoJSON Format, IETF RFC 7946, <a href=\"https://doi.org/10.17487/RFC7946\" target=\"_blank\" rel=\"noopener\">doi:10.17487/RFC7946</a>","published (metadata verified)"],["WKT export","OGC (2011), OpenGIS Implementation Standard for Geographic information – Simple feature access – Part 1: Common architecture, OGC 06-103r4, <a href=\"https://doi.org/10.62973/06-103r4\" target=\"_blank\" rel=\"noopener\">doi:10.62973/06-103r4</a>","published (metadata verified)"],["Comparison with scipy in the validation","Virtanen, P. et al. (2020), SciPy 1.0: fundamental algorithms for scientific computing in Python, Nature Methods 17, 261–272, <a href=\"https://doi.org/10.1038/s41592-019-0686-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41592-019-0686-2</a>; Qhull: Barber, C. B., Dobkin, D. P. & Huhdanpaa, H. (1996), The quickhull algorithm for convex hulls, ACM Transactions on Mathematical Software 22(4), 469–483, <a href=\"https://doi.org/10.1145/235815.235821\" target=\"_blank\" rel=\"noopener\">doi:10.1145/235815.235821</a>","published (metadata verified)"]],"validation":["Convex hull (17 vertices, 3 948 796 m²) and alpha shape (494 of 581 triangles, 1 283 546 m²) identical to scipy.","Regression test scripts/hull_test.mjs: convex area against gift wrapping on random sets; alpha-shape area against a brute-force Delaunay triangulation on 45 points at 100, 80, 60 and 40 % of triangles.","Changed on 26 November 2026: the Delaunay super-triangle is now 2000 times the data extent (it was 20 times), because a near-collinear boundary triangle could be lost, which shifted the triangle ranking by one and changed the concave area of small samples (up to a few percent on 45 points); 100 % now returns the convex hull exactly. Areas are labelled with their unit (m² assumed for projected coordinates, deg² when lon/lat are detected)."],"limits":["The geometry is planar: with longitude/latitude the areas are in deg² and are not true areas; project the coordinates first. The unit is only assumed for projected data.","Bowyer–Watson is O(n²): fine up to a few thousand points per group, slow beyond.","A concave hull of scattered points can be fragmented (about 100 rings for 3000 random points at 70 % of the triangles); raise the share, use a larger radius or a minimum area. The result depends on the share or radius chosen: there is no single correct concave hull.","A very rare near-collinear boundary sliver (about 1 sample in 300 random sets) can still be missing from the triangulation; it has a negligible area."],"date":"26 November 2026"});
 </script>
 </body></html>
