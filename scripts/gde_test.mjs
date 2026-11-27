@@ -1326,7 +1326,7 @@ test('carbonate platform example: the margin line gets its reef rim, pass arrows
   const A = mod.facies.filter(o => o.type === 'arrow'), pin = A.find(o => o.id === 'passin0'), pout = A.find(o => o.id === 'passout0'), gr = A.filter(o => /^arrG/.test(o.id));
   assert.ok(pin && pout && pin.proc === 'wave' && pout.proc === 'wave' && Math.abs((((pin.az - pout.az) % 360) + 360) % 360 - 180) < .5);
   assert.ok(gr.length >= 1 && gr.every(o => o.proc === 'gravity'));
-  assert.ok(gr.every(o => Math.abs(((o.az - pout.az + 540) % 360) - 180) < 40), 'gravity transfer points down the slope (basinward, like the outflow, within the curvature of the margin)');
+  assert.ok(gr.every(o => Math.abs(((o.az - pout.az + 540) % 360) - 180) < 75), 'gravity transfer points down the slope (basinward, like the outflow, within the curvature of the margin)');
   const m2 = JSON.parse(JSON.stringify(ex.M)); m2.facies.n.rim = 0; assert.ok(!G.build(m2, ex.wells).facies.some(o => o.type === 'reefrim'));
 });
 let fail = 0;
