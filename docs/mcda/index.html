@@ -175,8 +175,8 @@ main{min-width:0}
  <section class="panel"><h2><span class="n">2</span>Method<i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Standardization</span><select id="norm"><option value="minmax">min–max (0 to 1)</option><option value="vector">vector (x / ‖x‖)</option><option value="z">z-score</option><option value="none">none (raw units)</option></select>
   <span>Weights</span><select id="wsrc"><option value="equal">equal</option><option value="manual">manual</option><option value="ahp">AHP</option></select></div>
-  <div class="row"><button id="bThr" title="q = 5 %, p = 30 %, sigma = 15 % of the standardized range of each criterion">Reset thresholds</button></div>
-  <div class="hint">Standardization applies to “higher / lower is better” rules; window rules always give a 0 to 1 score. Thresholds q, p, σ are in the standardized unit.</div>
+  <div class="pg"><span>Thresholds q, p, σ in</span><select id="thrm"><option value="units" selected>criterion units</option><option value="std">standardized scale</option></select><span class="tt" tabindex="0" data-tip="Criterion units (default, usual PROMETHEE practice): q, p and σ are numbers in the unit of the raw criterion, fixed when you set or reset them, so the ranking does not change when you add or remove an alternative. Standardized scale: they are fractions of the min–max range of the alternatives, which moves with the set of alternatives and can change the ranking when a dominated alternative is added. Window criteria are scored 0 to 1 and their thresholds stay on that scale.">?</span><span>Null values</span><input type="text" id="nulls" value="-999, -999.25, -9999, 9999, 1e30, 1.70141e38" style="width:100%" title="Values equal to one of these are treated as missing (the alternative is skipped and counted). Empty the field to disable."></div><div class="row"><button id="bThr" title="q = 5 %, p = 30 %, sigma = 15 % of the range of each criterion (in the unit chosen above)">Reset thresholds</button></div>
+  <div class="hint">Standardization applies to “higher / lower is better” rules; window rules always give a 0 to 1 score. Thresholds q, p, σ are in the unit chosen above: criterion units by default (stable when alternatives are added), or the standardized scale (depends on the set of alternatives). Windows always score 0 to 1.</div>
   <div class="msg" id="runMsg"></div></div></section>
 </aside>
 <main>
@@ -220,12 +220,138 @@ main{min-width:0}
 
 </main></div>
 
+<script id="mcda-core">
+/* mcda-core: pure engine (no DOM). Exposes window.MCDA. Tested by scripts/mcda_test.mjs */
+(function(W){
+const EPS=1e-12;
+const RI={1:0,2:0,3:.58,4:.90,5:1.12,6:1.24,7:1.32,8:1.41,9:1.45,10:1.49}; // Saaty random indices, n <= 10 (no verified table beyond)
+const DEFAULT_NULLS='-999, -999.25, -9999, 9999, 1e30, 1.70141e38';
+// ---------------- number decoding (shared contract A) ----------------------------------------------------------------
+const MISSING=/^(|-+|n\.?d\.?|na|n\/a|nan|null|none)$/i;
+function parseNumber(text,o){
+  o=o||{};if(typeof text==='number')return isFinite(text)?{value:text,kind:'ok'}:{value:null,kind:'missing'};
+  let s=String(text==null?'':text).replace(/[−–‒]/g,'-').replace(/[   ]/g,' ').trim();
+  if(MISSING.test(s))return{value:null,kind:'missing'};
+  const bm=s.match(/^<\s*(.+)$/);
+  if(bm){const p=parseNumber(bm[1],o);return{value:null,kind:'below',limit:p.kind==='ok'?p.value:null}}
+  let sign=1;if(/^[-+]/.test(s)){if(s[0]==='-')sign=-1;s=s.slice(1).trim()}
+  let m,v=null,amb=false;const EX='([eE][-+]?\\d+)?';
+  const re=x=>new RegExp('^'+x+'$');
+  if(re('\\d+\\.?\\d*'+EX).test(s)||re('\\.\\d+'+EX).test(s))v=+s;
+  else if((m=s.match(re('(\\d{1,3}(?:\\.\\d{3})+),(\\d+)'+EX))))v=+(m[1].replace(/\./g,'')+'.'+m[2]+(m[3]||'')); // 1.234,5
+  else if((m=s.match(re('(\\d{1,3}(?:,\\d{3})+)(\\.\\d+)?'+EX)))){ // 1,234.5 / 1,234,567 / 1,234
+    const single=/^\d{1,3},\d{3}$/.test(s);
+    if(single&&o.decimalComma)v=+(s.replace(',','.'));else v=+(m[1].replace(/,/g,'')+(m[2]||'')+(m[3]||''));
+    if(single)amb=true}
+  else if((m=s.match(re('(\\d{1,3}(?: \\d{3})+)(?:([.,])(\\d+))?'+EX))))v=+(m[1].replace(/ /g,'')+(m[2]?'.'+m[3]:'')+(m[4]||'')); // 1 234,5
+  else if((m=s.match(re('(\\d*),(\\d+)'+EX))))v=+((m[1]||'0')+'.'+m[2]+(m[3]||'')); // 0,55
+  if(v==null||!isFinite(v))return{value:null,kind:'text'};
+  const r={value:sign*v,kind:'ok'};if(amb)r.ambiguous=true;return r}
+const toN=(s,dc)=>{const r=parseNumber(s,{decimalComma:!!dc});return r.kind==='ok'?r.value:NaN};
+function parseNulls(text){const out=[];String(text==null?'':text).split(/[;,\s]+/).forEach(t=>{if(!t)return;const r=parseNumber(t);if(r.kind==='ok')out.push(r.value)});return out}
+const isNull=(v,list)=>list.some(n=>Math.abs(v-n)<=1e-9*Math.max(1,Math.abs(n)));
+const CAND=[-99999,99999,-999999,999999,-9999.99,9999.99,-99.99,-0.999];
+// ---------------- table parsing ---------------------------------------------------------------------------------------------
+const DECPAT=/\d,\d{1,2}(?!\d)/;
+function detectDelimiter(lines,minCols){
+  minCols=minCols||2;const major=sep=>{const cnt=lines.map(l=>(sep==='ws'?l.trim().split(/\s+/):splitQ(l,sep)).length),f={};cnt.forEach(c=>f[c]=(f[c]||0)+1);
+    let bc=0,bn=0;for(const k in f)if(f[k]>bn){bn=f[k];bc=+k}return{n:bc,frac:bn/lines.length}};
+  const ok={};for(const s of['\t',';',',','ws']){if(s!=='ws'&&!lines.some(l=>l.includes(s))){ok[s]=false;continue}const q=major(s);ok[s]=q.n>=minCols&&q.frac>=.8}
+  if(ok['\t'])return'\t';if(ok[';'])return';';
+  const decUse=lines.some(l=>DECPAT.test(l));
+  if(ok[',']&&!(decUse&&ok.ws))return',';
+  if(ok.ws)return'ws';
+  if(ok[','])return',';
+  // nothing consistent: fall back to the most frequent plausible one
+  for(const s of['\t',';',',']){if(lines.some(l=>l.includes(s)))return s}return'ws'}
+function splitQ(l,sep){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o}
+function parseTable(text,minCols){
+  const raw=String(text).replace(/\r/g,'').split('\n'),lines=[],lineNo=[];
+  raw.forEach((l,i)=>{l=l.replace(/\s+$/,'');if(l.trim()&&!/^(#|\/\/)/.test(l.trim())){lines.push(l);lineNo.push(i+1)}});
+  if(!lines.length)return{err:'Empty input.'};
+  const sep=detectDelimiter(lines,minCols||2);
+  const split=l=>sep==='ws'?l.trim().split(/\s+/).map(s=>s.replace(/^"|"$/g,'')):splitQ(l,sep).map(s=>s.trim());
+  let rows=lines.map(split),ln=lineNo.slice();const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
+  // decimal mark of the table: comma if the delimiter is ';' or some cell uses a comma followed by a number of digits other than three
+  let dc=sep===';';const cells=[].concat(...rows);
+  if(!dc)dc=cells.some(s=>/^[-+−]?\d*,\d+$/.test(s)&&!/^[-+−]?\d{1,3},\d{3}$/.test(s)&&!/^[-+−]?\d{1,3}(,\d{3})+$/.test(s))||cells.some(s=>/^[-+−]?\d{1,3}(\.\d{3})+,\d+$/.test(s));
+  const numFrac=r=>r.filter(s=>s!==''&&parseNumber(s,{decimalComma:dc}).kind!=='text').length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;
+  if(rows[0].some(s=>s!==''&&parseNumber(s,{decimalComma:dc}).kind==='text')&&numFrac(rows[0])<0.5){head=rows.shift();ln.shift();
+    if(rows.length>1&&rows[0].every(s=>s===''||parseNumber(s,{decimalComma:dc}).kind==='text')){units=rows.shift();ln.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  const amb=cells.filter(s=>/^[-+−]?\d{1,3},\d{3}$/.test(s)).length;
+  return{head,units,rows,lineNo:ln,nc,sep:sep==='ws'?' ':sep,decimalComma:dc,ambiguous:amb}}
+// ---------------- scoring ------------------------------------------------------------------------------------------------
+const isWin=r=>r==='hp'||r==='lp'||r==='bp';
+function trap(x,a,b,c,d){ // trapezoid: 0 below a, ramp to 1 at b, 1 on [b,c], ramp down to 0 at d; a==b or c==d give steps
+  if(x<a)return 0;if(x<b)return(x-a)/(b-a);if(x<=c)return 1;if(x<d)return(d-x)/(d-c);return 0}
+function winPts(c){ // sorted window corners; open sides become +-Infinity
+  const n=v=>(v==null||!isFinite(v))?null:+v;let a=n(c.a),b=n(c.b),cc=n(c.c),d=n(c.d);
+  if(c.rule==='hp'){a=a==null?-Infinity:a;b=b==null?a:b;[a,b]=[Math.min(a,b),Math.max(a,b)];return[a,b,Infinity,Infinity]}
+  if(c.rule==='lp'){cc=cc==null?Infinity:cc;d=d==null?cc:d;[cc,d]=[Math.min(cc,d),Math.max(cc,d)];return[-Infinity,-Infinity,cc,d]}
+  const v=[a,b,cc,d].map(t=>t==null?NaN:t);if(v.some(isNaN))return null;v.sort((p,q)=>p-q);return v}
+function winScore(x,c){const w=winPts(c);return w?trap(x,w[0],w[1],w[2],w[3]):NaN}
+function colStats(vals){const n=vals.length;let lo=Infinity,hi=-Infinity,s=0,s2=0;for(const v of vals){if(v<lo)lo=v;if(v>hi)hi=v;s+=v;s2+=v*v}
+  const mean=s/n,sd=n>1?Math.sqrt(Math.max(0,(s2-n*mean*mean)/(n-1))):0;return{lo,hi,mean,sd,vn:Math.sqrt(s2)}}
+function cScore(x,c,st,norm){
+  if(isWin(c.rule))return winScore(x,c);
+  let v;
+  if(norm==='minmax')v=st.hi>st.lo?(x-st.lo)/(st.hi-st.lo):0;
+  else if(norm==='vector')v=st.vn>0?x/st.vn:0;
+  else if(norm==='z')v=st.sd>0?(x-st.mean)/st.sd:0;
+  else v=x;
+  if(c.rule==='min')return(norm==='minmax'||norm==='vector')?1-v:-v;
+  return v}
+function scoreMatrix(raw,crit,idx,norm,frozen){
+  const st=frozen||crit.map((c,k)=>colStats(idx.map(i=>raw[i][k])));
+  return{sc:idx.map(i=>crit.map((c,k)=>cScore(raw[i][k],c,st[k],norm))),st}}
+/* Two matrices: sc = standardised scores (display, weighted sum); pm = scale on which PROMETHEE differences and thresholds act.
+   thr 'units': pm = raw criterion units (sign-flipped for 'lower is better'; windows stay 0..1), so q, p, sigma do not depend on the set of alternatives.
+   thr 'std'  : pm = sc (thresholds in the standardised unit; min-max bounds move when alternatives are added or removed). */
+function prefMatrix(raw,crit,idx,norm,thr,frozen){
+  const a=scoreMatrix(raw,crit,idx,norm,frozen);if(thr!=='units')return{sc:a.sc,pm:a.sc,st:a.st};
+  return{sc:a.sc,pm:scoreMatrix(raw,crit,idx,'none').sc,st:a.st}}
+// ---------------- PROMETHEE ----------------------------------------------------------------------------------------------
+function prefP(d,c){
+  if(d<=0)return 0;
+  switch(+c.pf){
+    case 1:return 1;
+    case 2:return d>c.q?1:0;
+    case 3:return c.p>0?(d>=c.p?1:d/c.p):1;
+    case 4:return d<=c.q?0:(d<=c.p?.5:1);
+    case 5:return d<=c.q?0:(c.p>c.q?(d>=c.p?1:(d-c.q)/(c.p-c.q)):1);
+    case 6:return c.s>0?1-Math.exp(-d*d/(2*c.s*c.s)):1}
+  return 0}
+function unic(sc,crit){
+  const n=sc.length,m=crit.length,Up=[],Um=[];
+  for(let a=0;a<n;a++){Up.push(new Array(m).fill(0));Um.push(new Array(m).fill(0))}
+  for(let k=0;k<m;k++)for(let a=0;a<n;a++)for(let b=0;b<n;b++){if(a===b)continue;const p=prefP(sc[a][k]-sc[b][k],crit[k]);Up[a][k]+=p;Um[b][k]+=p}
+  const f=n>1?1/(n-1):0;for(let a=0;a<n;a++)for(let k=0;k<m;k++){Up[a][k]*=f;Um[a][k]*=f}
+  return{Up,Um}}
+const dot=(row,w)=>{let s=0;for(let k=0;k<w.length;k++)s+=row[k]*w[k];return s};
+function flows(sc,w,crit){const{Up,Um}=unic(sc,crit);const pp=Up.map(r=>dot(r,w)),pm=Um.map(r=>dot(r,w));return{Up,Um,pp,pm,phi:pp.map((v,i)=>v-pm[i])}}
+function ranksOf(v){return v.map(x=>1+v.filter(y=>y>x+EPS).length)}
+function rel(pp,pm,a,b){
+  const sp=Math.abs(pp[a]-pp[b])<EPS?0:(pp[a]>pp[b]?1:-1),sm=Math.abs(pm[a]-pm[b])<EPS?0:(pm[a]<pm[b]?1:-1);
+  if(sp===0&&sm===0)return'I';if(sp>=0&&sm>=0)return'P';if(sp<=0&&sm<=0)return'M';return'R'}
+// ---------------- AHP ----------------------------------------------------------------------------------------------------
+function ahpSolve(A){
+  const n=A.length;if(n===1)return{w:[1],lam:1,CI:0,CR:0,g:[1]};
+  let w=new Array(n).fill(1/n);
+  for(let it=0;it<10000;it++){const v=A.map(r=>dot(r,w)),s=v.reduce((p,q)=>p+q,0),nw=v.map(x=>x/s);let dm=0;for(let i=0;i<n;i++)dm=Math.max(dm,Math.abs(nw[i]-w[i]));w=nw;if(dm<1e-15)break}
+  const Aw=A.map(r=>dot(r,w));let lam=0;for(let i=0;i<n;i++)lam+=Aw[i]/w[i];lam/=n;
+  const CI=(lam-n)/(n-1),ri=RI[n],CR=ri===undefined?NaN:(ri===0?0:CI/ri);
+  const gm=A.map(r=>Math.pow(r.reduce((p,q)=>p*q,1),1/n)),gs=gm.reduce((p,q)=>p+q,0);
+  return{w,lam,CI,CR,g:gm.map(x=>x/gs)}}
+W.MCDA={EPS,RI,DEFAULT_NULLS,CAND,parseNumber,toN,parseNulls,isNull,detectDelimiter,parseTable,isWin,trap,winPts,winScore,colStats,cScore,scoreMatrix,prefMatrix,prefP,unic,dot,flows,ranksOf,rel,ahpSolve};
+})(window);
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
-  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
-  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
+const {EPS,RI,DEFAULT_NULLS,CAND,parseNumber,toN,parseNulls,isNull,parseTable,isWin,trap,winPts,winScore,colStats,cScore,prefP,unic,dot,flows,ranksOf,rel,ahpSolve}=window.MCDA;
 const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
 const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
 function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
@@ -236,18 +362,6 @@ function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)na
 function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
 const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
 document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
-// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
-function parseTable(text,minCols){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
-  const has=c=>lines.some(l=>l.includes(c));let sep;
-  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
-  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
-  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
-  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
-  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
-  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
-  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
-  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
 const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
 // ---- plotting engine ----------------------------------------------------------------
 const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
@@ -304,77 +418,21 @@ function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href
 // Conventions: every criterion is turned into a score s in which HIGHER IS BETTER, then PROMETHEE works on
 // differences d = s(a) - s(b). Phi is linear in the weights: Phi(a) = sum_k w_k * U[a][k], which makes the sweeps
 // and Monte Carlo draws cheap (no pairwise loop inside them).
-const EPS=1e-12;
-const RI={1:0,2:0,3:.58,4:.90,5:1.12,6:1.24,7:1.32,8:1.41,9:1.45,10:1.49}; // Saaty random indices, n <= 10
 const SAATY=[9,8,7,6,5,4,3,2,1,1/2,1/3,1/4,1/5,1/6,1/7,1/8,1/9];
 const sL=v=>v>=1?String(v):'1/'+Math.round(1/v);
 const PFN=['','1 Usual','2 U-shape','3 V-shape','4 Level','5 V-shape + indiff.','6 Gaussian'];
 const RULES=[['max','Higher is better'],['min','Lower is better'],['hp','High-pass (a→b)'],['lp','Low-pass (c→d)'],['bp','Band-pass (a,b,c,d)']];
-const isWin=r=>r==='hp'||r==='lp'||r==='bp';
 const f4=v=>isFinite(v)?v.toFixed(4):'';
-const S={names:[],raw:[],crit:[],ahp:{},sel:0};
+const S={names:[],raw:[],crit:[],ahp:{},sel:0,thr:'units'}; // thr: thresholds q/p/sigma in criterion units ('units', default) or in the standardized unit ('std')
 let R=null,TAB='crit';
 
 // ---------------- scoring ------------------------------------------------------------------------------------
-function trap(x,a,b,c,d){ // trapezoid: 0 below a, ramp to 1 at b, 1 on [b,c], ramp down to 0 at d; a==b or c==d give steps
-  if(x<a)return 0;if(x<b)return(x-a)/(b-a);if(x<=c)return 1;if(x<d)return(d-x)/(d-c);return 0}
-function winPts(c){ // sorted window corners; open sides become +-Infinity
-  const n=v=>(v==null||!isFinite(v))?null:+v;let a=n(c.a),b=n(c.b),cc=n(c.c),d=n(c.d);
-  if(c.rule==='hp'){a=a==null?-Infinity:a;b=b==null?a:b;[a,b]=[Math.min(a,b),Math.max(a,b)];return[a,b,Infinity,Infinity]}
-  if(c.rule==='lp'){cc=cc==null?Infinity:cc;d=d==null?cc:d;[cc,d]=[Math.min(cc,d),Math.max(cc,d)];return[-Infinity,-Infinity,cc,d]}
-  const v=[a,b,cc,d].map(t=>t==null?NaN:t);if(v.some(isNaN))return null;v.sort((p,q)=>p-q);return v}
-function winScore(x,c){const w=winPts(c);return w?trap(x,w[0],w[1],w[2],w[3]):NaN}
-function colStats(vals){const n=vals.length;let lo=Infinity,hi=-Infinity,s=0,s2=0;for(const v of vals){if(v<lo)lo=v;if(v>hi)hi=v;s+=v;s2+=v*v}
-  const mean=s/n,sd=n>1?Math.sqrt(Math.max(0,(s2-n*mean*mean)/(n-1))):0;return{lo,hi,mean,sd,vn:Math.sqrt(s2)}}
-function cScore(x,c,st,norm){
-  if(isWin(c.rule))return winScore(x,c);
-  let v;
-  if(norm==='minmax')v=st.hi>st.lo?(x-st.lo)/(st.hi-st.lo):0;
-  else if(norm==='vector')v=st.vn>0?x/st.vn:0;
-  else if(norm==='z')v=st.sd>0?(x-st.mean)/st.sd:0;
-  else v=x;
-  if(c.rule==='min')return(norm==='minmax'||norm==='vector')?1-v:-v;
-  return v}
 function koList(){ // alternatives eliminated by a knock-out criterion (score exactly 0 on a window rule)
   const ko=S.names.map(()=>null);
   S.crit.forEach((c,k)=>{if(!c.ko||!isWin(c.rule))return;S.raw.forEach((r,i)=>{if(!ko[i]&&winScore(r[k],c)===0)ko[i]=c.name})});return ko}
-function scoreMatrix(idx,norm,frozen){
-  const st=frozen||S.crit.map((c,k)=>colStats(idx.map(i=>S.raw[i][k])));
-  return{sc:idx.map(i=>S.crit.map((c,k)=>cScore(S.raw[i][k],c,st[k],norm))),st}}
-
-// ---------------- PROMETHEE ----------------------------------------------------------------------------------
-function prefP(d,c){
-  if(d<=0)return 0;
-  switch(+c.pf){
-    case 1:return 1;
-    case 2:return d>c.q?1:0;
-    case 3:return c.p>0?(d>=c.p?1:d/c.p):1;
-    case 4:return d<=c.q?0:(d<=c.p?.5:1);
-    case 5:return d<=c.q?0:(c.p>c.q?(d>=c.p?1:(d-c.q)/(c.p-c.q)):1);
-    case 6:return c.s>0?1-Math.exp(-d*d/(2*c.s*c.s)):1}
-  return 0}
-function unic(sc,crit){ // per-criterion mean preference flows: Up[a][k] = sum_b P_k(a,b)/(n-1), Um[a][k] = sum_b P_k(b,a)/(n-1)
-  const n=sc.length,m=crit.length,Up=[],Um=[];
-  for(let a=0;a<n;a++){Up.push(new Array(m).fill(0));Um.push(new Array(m).fill(0))}
-  for(let k=0;k<m;k++)for(let a=0;a<n;a++)for(let b=0;b<n;b++){if(a===b)continue;const p=prefP(sc[a][k]-sc[b][k],crit[k]);Up[a][k]+=p;Um[b][k]+=p}
-  const f=n>1?1/(n-1):0;for(let a=0;a<n;a++)for(let k=0;k<m;k++){Up[a][k]*=f;Um[a][k]*=f}
-  return{Up,Um}}
-const dot=(row,w)=>{let s=0;for(let k=0;k<w.length;k++)s+=row[k]*w[k];return s};
-function flows(sc,w,crit){const{Up,Um}=unic(sc,crit);const pp=Up.map(r=>dot(r,w)),pm=Um.map(r=>dot(r,w));return{Up,Um,pp,pm,phi:pp.map((v,i)=>v-pm[i])}}
-function ranksOf(v){return v.map(x=>1+v.filter(y=>y>x+EPS).length)}
-function rel(pp,pm,a,b){ // PROMETHEE I relation of a to b: 'P' a outranks b, 'M' b outranks a, 'I', 'R'
-  const sp=Math.abs(pp[a]-pp[b])<EPS?0:(pp[a]>pp[b]?1:-1),sm=Math.abs(pm[a]-pm[b])<EPS?0:(pm[a]<pm[b]?1:-1);
-  if(sp===0&&sm===0)return'I';if(sp>=0&&sm>=0)return'P';if(sp<=0&&sm<=0)return'M';return'R'}
+const scoreMatrix=(idx,norm,frozen)=>window.MCDA.prefMatrix(S.raw,S.crit,idx,norm,S.thr,frozen);
 
 // ---------------- AHP ----------------------------------------------------------------------------------------
-function ahpSolve(A){
-  const n=A.length;if(n===1)return{w:[1],lam:1,CI:0,CR:0,g:[1]};
-  let w=new Array(n).fill(1/n);
-  for(let it=0;it<10000;it++){const v=A.map(r=>dot(r,w)),s=v.reduce((p,q)=>p+q,0),nw=v.map(x=>x/s);let dm=0;for(let i=0;i<n;i++)dm=Math.max(dm,Math.abs(nw[i]-w[i]));w=nw;if(dm<1e-15)break}
-  const Aw=A.map(r=>dot(r,w));let lam=0;for(let i=0;i<n;i++)lam+=Aw[i]/w[i];lam/=n;
-  const CI=(lam-n)/(n-1),ri=RI[n],CR=ri===undefined?NaN:(ri===0?0:CI/ri);
-  const gm=A.map(r=>Math.pow(r.reduce((p,q)=>p*q,1),1/n)),gs=gm.reduce((p,q)=>p+q,0);
-  return{w,lam,CI,CR,g:gm.map(x=>x/gs)}}
 function groupsInfo(){
   const nm=S.crit.map(c=>(c.grp||'').trim()||'(none)'),gs=[...new Set(nm)];if(gs.length<2)return null;
   return gs.map(g=>({g,idx:nm.map((x,k)=>x===g?k:-1).filter(k=>k>=0)}))}
@@ -404,32 +462,46 @@ function recalc(){
   const A=ahpAll(),w=effW($('wsrc').value,A.gw);
   R={norm,ko,idx,A,w};
   if(idx.length<2){R.err='Fewer than two active alternatives.';return}
-  const{sc,st}=scoreMatrix(idx,norm);R.sc=sc;R.st=st;
-  const F=flows(sc,w,S.crit);Object.assign(R,F);R.rk=ranksOf(F.phi);
+  const{sc,pm,st}=scoreMatrix(idx,norm);R.sc=sc;R.pm=pm;R.st=st;
+  const F=flows(pm,w,S.crit);Object.assign(R,F);R.rk=ranksOf(F.phi);
   R.ws=sc.map(r=>dot(r,w));const lo=Math.min(...R.ws),hi=Math.max(...R.ws);R.wsn=R.ws.map(v=>hi>lo?(v-lo)/(hi-lo):0);R.wr=ranksOf(R.ws);
   R.U=F.Up.map((r,a)=>r.map((v,k)=>v-F.Um[a][k]))}
 
 // ---------------- data loading ----------------------------------------------------------------------------------
 function mkCrit(name){return{name,grp:'',rule:'max',a:null,b:null,c:null,d:null,ko:false,w:1,pf:5,q:.05,p:.3,s:.15}}
 function msg(t,err){const e=$('dataMsg');e.textContent=t;e.className='msg'+(err?' err':'')}
+function clearData(){S.names=[];S.raw=[];S.crit=[];S.ahp={};S.sel=0;R=null;structure()}
 function loadText(text){
-  const t=parseTable(text,2);if(t.err){msg(t.err,true);return false}
-  const fr=c=>t.rows.filter(r=>isFinite(toN(r[c]))).length/Math.max(1,t.rows.length);
+  const fail=m=>{clearData();msg(m+' Previous data cleared.',true);return false};
+  const t=parseTable(text,2);if(t.err)return fail(t.err);
+  const dc=t.decimalComma,nulls=parseNulls($('nulls').value);
+  const kinds=t.rows.map(r=>r.map(c=>{const p=parseNumber(c,{decimalComma:dc});if(p.kind==='ok'&&isNull(p.value,nulls))return{kind:'null',v:p.value};return p}));
+  const fr=c=>kinds.filter(k=>k[c].kind==='ok'||k[c].kind==='null').length/Math.max(1,t.rows.length);
   const nameCol=fr(0)<.5?0:-1,cols=[];for(let c=0;c<t.nc;c++)if(c!==nameCol&&fr(c)>=.5)cols.push(c);
-  if(!cols.length){msg('No numeric column found.',true);return false}
-  const names=[],raw=[],drop=[];
-  t.rows.forEach((r,i)=>{const nm=(nameCol>=0?r[nameCol]:'')||('A'+(i+1)),v=cols.map(c=>toN(r[c]));
-    if(v.some(x=>!isFinite(x)))drop.push(nm);else{names.push(nm);raw.push(v)}});
-  if(names.length<2){msg('At least two complete alternatives are needed.',true);return false}
+  if(!cols.length)return fail('No numeric column found.');
+  const names=[],raw=[],drop=[],why={missing:[],below:[],text:[],sentinel:[]},nullVals={};
+  t.rows.forEach((r,i)=>{const nm=(nameCol>=0?r[nameCol]:'')||('A'+(i+1)),ks=cols.map(c=>kinds[i][c]);
+    const bad=ks.find(k=>k.kind!=='ok');
+    if(bad){drop.push(nm);const key=bad.kind==='null'?'sentinel':bad.kind;why[key].push(t.lineNo[i]);ks.forEach(k=>{if(k.kind==='null')nullVals[k.v]=(nullVals[k.v]||0)+1})}
+    else{names.push(nm);raw.push(ks.map(k=>k.value))}});
+  if(names.length<2)return fail(`${t.rows.length} rows read, ${drop.length} skipped: at least two complete alternatives are needed.`);
   const seen={};names.forEach((n,i)=>{seen[n]=(seen[n]||0)+1;if(seen[n]>1)names[i]=n+' ('+seen[n]+')'});
   S.names=names;S.raw=raw;S.sel=0;S.ahp={};
   S.crit=cols.map((c,k)=>mkCrit(t.head[c]+((t.units&&t.units[c])?' ('+t.units[c]+')':'')));
-  msg(`${names.length} alternatives × ${cols.length} criteria`+(drop.length?` — dropped for missing values: ${drop.join(', ')}`:'')+'.',false);
+  const lab={missing:'missing value',below:'below detection limit',text:'non-numeric text',sentinel:'null value'},parts=[];
+  for(const k in why)if(why[k].length)parts.push(`${why[k].length} ${lab[k]} (line${why[k].length>1?'s':''} ${why[k].slice(0,5).join(', ')}${why[k].length>5?'…':''})`);
+  let m=`${t.rows.length} rows read, ${drop.length} skipped${parts.length?': '+parts.join('; '):''}. ${names.length} alternatives × ${cols.length} criteria.`;
+  const nv=Object.keys(nullVals);if(nv.length)m+=' Null values excluded: '+nv.map(v=>`${nullVals[v]} equal to ${v}`).join(', ')+'.';
+  if(t.ambiguous)m+=` Decimal mark: ${dc?'comma':'point'} (values such as 1,234 read as ${dc?'1.234':'1234'}; ambiguous, check).`;
+  else if(dc)m+=' Decimal mark: comma.';
+  const cand=[];CAND.forEach(v=>{if(isNull(v,nulls))return;let c=0;cols.forEach(cc=>kinds.forEach(k=>{if(k[cc].kind==='ok'&&k[cc].value===v)c++}));if(c>=2)cand.push(v+' appears '+c+' times')});
+  if(cand.length)m+=' Warning, possible null value not in the list: '+cand.join('; ')+'.';
+  msg(m,drop.length>0&&names.length<t.rows.length*.5);
   resetThr();structure();return true}
-function resetThr(){ // q, p, sigma as fractions of the standardized range of each criterion
+function resetThr(){ // q = 5 %, p = 30 %, sigma = 15 % of the range of each criterion, in the unit of the thresholds (see S.thr); frozen numbers afterwards
   const norm=$('norm').value,idx=S.names.map((_,i)=>i);if(!idx.length)return;
-  const{sc}=scoreMatrix(idx,norm);
-  S.crit.forEach((c,k)=>{const v=sc.map(r=>r[k]),rg=Math.max(...v)-Math.min(...v)||1;c.q=+(.05*rg).toPrecision(4);c.p=+(.3*rg).toPrecision(4);c.s=+(.15*rg).toPrecision(4)})}
+  const{pm}=scoreMatrix(idx,norm);
+  S.crit.forEach((c,k)=>{const v=pm.map(r=>r[k]),rg=Math.max(...v)-Math.min(...v)||1;c.q=+(.05*rg).toPrecision(4);c.p=+(.3*rg).toPrecision(4);c.s=+(.15*rg).toPrecision(4)})}
 function prefill(c,k){ // placeholder window from the data range, to be edited
   const v=S.raw.map(r=>r[k]),lo=Math.min(...v),hi=Math.max(...v),R_=hi-lo||1,g=x=>+(lo+x*R_).toPrecision(5);
   if(c.rule==='hp'&&(c.a==null||c.b==null)){c.a=g(.25);c.b=g(.5)}
@@ -440,7 +512,7 @@ const EXAMPLE='Prospect\tOil volume (MMbbl)\tGOR (scf/bbl)\tDrilling depth (m)\t
 function example(band){
   $('paste').value=EXAMPLE;if(!loadText(EXAMPLE))return;
   const cfg=[['max',.35,5],['min',.15,5],['min',.2,5],['max',.1,1],['min',.2,5]];
-  S.crit.forEach((c,k)=>{c.rule=cfg[k][0];c.w=cfg[k][1];c.pf=cfg[k][2];c.q=c.pf===1?0:.05;c.p=c.pf===1?0:.3;c.s=.15});
+  S.crit.forEach((c,k)=>{c.rule=cfg[k][0];c.w=cfg[k][1];c.pf=cfg[k][2]});resetThr();S.crit.forEach(c=>{if(c.pf===1){c.q=0;c.p=0}});
   if(band){const g=S.crit[1];g.rule='bp';g.a=300;g.b=500;g.c=900;g.d=1200;g.ko=false;g.name='GOR (scf/bbl), window'}
   $('wsrc').value='manual';structure()}
 
@@ -492,7 +564,7 @@ function buildAhp(){
 function onAhp(e){
   const el=e.target;if(el.dataset.b==null)return;
   const key=el.dataset.b,i=el.dataset.i,j=el.dataset.j;(S.ahp[key]=S.ahp[key]||{})[i+','+j]=SAATY[+el.value];refresh()}
-function chip(cr){return!isFinite(cr)?'<span class="chip masked">CR n/a (n &gt; 10)</span>':`<span class="chip ${cr<.1?'ok':'warn'}">CR = ${cr.toFixed(3)} ${cr<.1?'(acceptable)':'(≥ 0.10: revisit the judgments)'}</span>`}
+function chip(cr){return!isFinite(cr)?'<span class="chip masked">CR n/a (n &gt; 10: no verified random-index table)</span>':`<span class="chip ${cr<.1?'ok':'warn'}">CR = ${cr.toFixed(3)} ${cr<.1?'(acceptable)':'(≥ 0.10: revisit the judgments)'}</span>`}
 function updAhp(){
   if(!R)return;
   R.A.res.forEach((q,bi)=>{const{b,r}=q,n=b.labels.length,o=$('ahpO'+bi);if(!o)return;
@@ -572,13 +644,13 @@ function drawPrev(){
   $('prevTitle').textContent='Selected criterion: '+c.name;
   const xs=[],ys=[];for(let i=0;i<=200;i++){const v=lo-pad+(hi-lo+2*pad)*i/200;xs.push(v);ys.push(cScore(v,c,st,R.norm))}
   const pts=S.raw.map((r,i)=>{const p=R.idx.indexOf(i);return{x:r[k],y:p<0?winScore(r[k],c):R.sc[p][k],c:p<0?'#c9c4b6':'#4a5a4e',info:`<b>${esc(S.names[i])}</b><br>raw ${esc(r[k])} → score ${f4(p<0?winScore(r[k],c):R.sc[p][k])}`}});
-  const sv=R.sc.map(r=>r[k]),srg=Math.max(...sv)-Math.min(...sv)||1,dm=srg*1.05,dd=[],pp=[];for(let i=0;i<=200;i++){const d=dm*i/200;dd.push(d);pp.push(prefP(d,c))}
+  const sv=R.pm.map(r=>r[k]),srg=Math.max(...sv)-Math.min(...sv)||1,dm=srg*1.05,dd=[],pp=[];for(let i=0;i<=200;i++){const d=dm*i/200;dd.push(d);pp.push(prefP(d,c))}
   const vl=[];if(isWin(c.rule)){const w=winPts(c);if(w)['a','b','c','d'].forEach((l,i)=>{if(isFinite(w[i]))vl.push({v:w[i],label:l})})}
-  const inside=sv.every(v=>v>=-1e-9&&v<=1+1e-9)&&ys.every(v=>v>=-1e-9&&v<=1+1e-9);
+  const inside=S.thr!=='units'&&sv.every(v=>v>=-1e-9&&v<=1+1e-9)&&ys.every(v=>v>=-1e-9&&v<=1+1e-9);
   const pq=[];if([2,4,5].includes(+c.pf))pq.push({v:c.q,label:'q',c:'#3b6ea5'});if([3,4,5].includes(+c.pf))pq.push({v:c.p,label:'p',c:'#3b6ea5'});if(+c.pf===6)pq.push({v:c.s,label:'σ',c:'#3b6ea5'});
   drawChart(cv,{ylab:'score  |  preference P(d)',ylim:inside?[-.04,1.06]:undefined,panels:[
     {xlab:'raw value → standardized score',xlim:[lo-pad,hi+pad],pts,lines:[{x:xs,y:ys,c:'#a8623a',w:1.6}],vlines:vl},
-    {xlab:'difference d between two alternatives → P(d)',xlim:[0,dm],pts:[],lines:[{x:dd,y:pp,c:'#4a5a4e',w:1.8}],vlines:pq}]})}
+    {xlab:'difference d between two alternatives ('+(S.thr==='units'?'criterion units':'standardized')+') → P(d)',xlim:[0,dm],pts:[],lines:[{x:dd,y:pp,c:'#4a5a4e',w:1.8}],vlines:pq}]})}
 
 // ---------------- UI: sensitivity ---------------------------------------------------------------------------------------
 const ordKey=phi=>phi.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]||a[1]-b[1]).map(q=>q[1]).join(',');
@@ -616,7 +688,7 @@ function runRr(){
   const fz=$('rrFreeze').checked;let h='<table><thead><tr><th class="l">Removed</th><th class="l">New order (Φ)</th><th>Reversed pairs</th></tr></thead><tbody>';
   for(let r=0;r<n;r++){
     const keep=R.idx.map((_,a)=>a).filter(a=>a!==r),idx=keep.map(a=>R.idx[a]);
-    const{sc}=scoreMatrix(idx,R.norm,fz?R.st:null),F=flows(sc,R.w,S.crit),pairs=[];
+    const{pm}=scoreMatrix(idx,R.norm,fz?R.st:null),F=flows(pm,R.w,S.crit),pairs=[];
     for(let i=0;i<keep.length;i++)for(let j=i+1;j<keep.length;j++){const s1=Math.sign(R.phi[keep[i]]-R.phi[keep[j]]),s2=Math.sign(F.phi[i]-F.phi[j]);if(s1!==0&&s2!==0&&s1!==s2)pairs.push(S.names[idx[i]]+'/'+S.names[idx[j]])}
     const ord=keep.map((_,i)=>i).sort((a,b)=>F.phi[b]-F.phi[a]||a-b).map(i=>S.names[idx[i]]).join(' > ');
     h+=`<tr><td class="l">${esc(S.names[R.idx[r]])}</td><td class="l">${esc(ord)}</td><td class="l${pairs.length?' bad':''}">${pairs.length?pairs.length+': '+esc(pairs.slice(0,4).join(', '))+(pairs.length>4?'…':''):'none'}</td></tr>`}
@@ -631,12 +703,12 @@ function exportCsv(){
   R.ord.forEach(a=>{const i=R.idx[a];rows.push([S.names[i]].concat(S.raw[i],R.sc[a],[R.pp[a],R.pm[a],R.phi[a],R.rk[a],R.wsn[a],R.wr[a]]).map(v=>csvCell(typeof v==='number'?+v.toPrecision(10):v,',')).join(','))});
   S.names.forEach((nm,i)=>{if(R.ko[i])rows.push(csvCell(nm,',')+',knocked out on '+csvCell(R.ko[i],','))});
   download('mcda_results.csv',rows.join('\n')+'\n');$('exportMsg').textContent='CSV saved.'}
-function saveJson(){download('mcda_session.json',JSON.stringify({v:1,names:S.names,raw:S.raw,crit:S.crit,ahp:S.ahp,norm:$('norm').value,wsrc:$('wsrc').value},null,1),'application/json');$('exportMsg').textContent='JSON saved.'}
+function saveJson(){download('mcda_session.json',JSON.stringify({v:1,names:S.names,raw:S.raw,crit:S.crit,ahp:S.ahp,norm:$('norm').value,wsrc:$('wsrc').value,thr:S.thr},null,1),'application/json');$('exportMsg').textContent='JSON saved.'}
 function loadJson(txt){
   try{const o=JSON.parse(txt);if(!o||!Array.isArray(o.names)||!Array.isArray(o.raw)||!Array.isArray(o.crit))throw 0;
     if(o.raw.length!==o.names.length||o.raw.some(r=>!Array.isArray(r)||r.length!==o.crit.length||r.some(v=>typeof v!=='number'||!isFinite(v))))throw 0;
     S.names=o.names.map(String);S.raw=o.raw;S.crit=o.crit.map(c=>Object.assign(mkCrit(String(c.name)),c));S.ahp=o.ahp&&typeof o.ahp==='object'?o.ahp:{};S.sel=0;
-    if(['minmax','vector','z','none'].includes(o.norm))$('norm').value=o.norm;if(['equal','manual','ahp'].includes(o.wsrc))$('wsrc').value=o.wsrc;
+    S.thr=o.thr==='units'?'units':'std';$('thrm').value=S.thr;if(['minmax','vector','z','none'].includes(o.norm))$('norm').value=o.norm;if(['equal','manual','ahp'].includes(o.wsrc))$('wsrc').value=o.wsrc;
     msg(`Loaded session: ${S.names.length} alternatives × ${S.crit.length} criteria.`,false);structure()}
   catch(e){banner('Not a valid MCDA session file.',true)}}
 
@@ -647,6 +719,7 @@ function refresh(){
   const warn=[];
   S.crit.forEach(c=>{if(isWin(c.rule)&&!winPts(c))warn.push(c.name+': window incomplete')});
   if(R&&R.A&&$('wsrc').value==='ahp')R.A.res.forEach(q=>{if(q.b.labels.length>2&&q.r.CR>=.1)warn.push('AHP “'+q.b.title+'”: CR '+q.r.CR.toFixed(2)+' ≥ 0.10')});
+  if(R&&!R.err)S.crit.forEach((c,k)=>{if(!isWin(c.rule)&&R.st[k].hi===R.st[k].lo)warn.push(c.name+': constant over the active alternatives, no discrimination (score 0 for all)')});
   if(R&&R.err)warn.push(R.err);
   const rm=$('runMsg');rm.textContent=warn.join(' · ');rm.className='msg'+(warn.length?' err':'');
   updScores();updAhp();updPro();redraw()}
@@ -655,13 +728,13 @@ function redraw(){
   if(TAB==='pro'){drawBar();drawPM()}
   if(TAB==='sens'){updSens()}}
 function init(){
-  let pt;$('paste').addEventListener('input',()=>{clearTimeout(pt);pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
+  let pt;$('paste').addEventListener('input',()=>{clearTimeout(pt);pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value);else{clearData();msg('No data yet.',false)}},350)});
   $('bOpen').onclick=()=>$('file').click();
   $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.slice(0,3e6);loadText(r.result)};r.readAsText(f);e.target.value=''};
   document.addEventListener('dragover',e=>e.preventDefault());
   document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{if(/\.json$/i.test(f.name))loadJson(r.result);else{$('paste').value=r.result.slice(0,3e6);loadText(r.result)}};r.readAsText(f)});
   $('bEx1').onclick=()=>example(false);$('bEx2').onclick=()=>example(true);
-  $('norm').onchange=()=>{resetThr();structure()};$('wsrc').onchange=()=>{refresh()};
+  $('norm').onchange=()=>{resetThr();structure()};$('thrm').onchange=()=>{S.thr=$('thrm').value;resetThr();structure()};$('nulls').onchange=()=>{if($('paste').value.trim())loadText($('paste').value)};$('wsrc').onchange=()=>{refresh()};
   $('bThr').onclick=()=>{resetThr();renderCrit();refresh()};
   const ct=$('critT');ct.addEventListener('change',onCrit);
   ct.addEventListener('click',e=>{const tr=e.target.closest('tr[data-r]');if(!tr||e.target.closest('input,select'))return;S.sel=+tr.dataset.r;ct.querySelectorAll('tr[data-r]').forEach(r=>r.classList.toggle('sel',r===tr));drawPrev()});
@@ -756,6 +829,6 @@ init();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. AHP weights (Saaty matrix, consistency ratio, two-level groups), PROMETHEE I and II with six preference functions, high-pass / low-pass / band-pass scoring, weight sensitivity and rank reversal.","method":["<b>Standardization.</b> Min–max s = (x − min)/(max − min), inverted for ‘lower is better’; vector and z-score are also offered. Windows use a trapezoid a, b, c, d: high-pass, low-pass or band-pass. Bounds are taken over the active alternatives only (after knock-out).","<b>PROMETHEE.</b> d = s(a) − s(b) on each criterion; P<sub>k</sub>(d) is the chosen preference function (usual, U-shape, V-shape, level, V-shape with indifference, Gaussian); π(a,b) = Σ w<sub>k</sub> P<sub>k</sub>(d<sub>k</sub>); Φ+(a) = Σ<sub>b</sub> π(a,b)/(n − 1), Φ−(a) = Σ<sub>b</sub> π(b,a)/(n − 1), Φ = Φ+ − Φ−.","<b>AHP.</b> Weights are the principal right eigenvector of the reciprocal judgment matrix (power iteration); the geometric-mean approximation is shown for comparison. λmax, CI = (λmax − n)/(n − 1), CR = CI/RI with Saaty's random indices (n ≤ 10). With groups, global weight = group weight × local weight.","<b>Weighted sum.</b> WS = Σ w<sub>k</sub> s<sub>k</sub>, rescaled to 0–1: the fully compensatory counterpart, shown for comparison with Φ."],"sources":[["PROMETHEE I and II: pairwise preference degrees, flows Φ+, Φ−, Φ","Brans, J.P. &amp; Vincke, P. (1985), Note—A Preference Ranking Organisation Method, Management Science 31(6), 647–656, <a href=\"https://doi.org/10.1287/mnsc.31.6.647\" target=\"_blank\" rel=\"noopener\">doi:10.1287/mnsc.31.6.647</a>; Brans, J.P., Vincke, P. &amp; Mareschal, B. (1986), How to select and how to rank projects: the PROMETHEE method, European Journal of Operational Research 24(2), 228–238, <a href=\"https://doi.org/10.1016/0377-2217(86)90044-5\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0377-2217(86)90044-5</a>","published (metadata verified)"],["The six preference functions (usual, U-shape, V-shape, level, V-shape with indifference, Gaussian)","Same two papers (the six generalised criteria are the ones defined by the PROMETHEE authors; the content of the papers was not re-read here)","published (metadata verified)"],["AHP: reciprocal judgment matrix, 1–9 scale, principal right eigenvector","Saaty, T.L. (1977), A scaling method for priorities in hierarchical structures, Journal of Mathematical Psychology 15(3), 234–281, <a href=\"https://doi.org/10.1016/0022-2496(77)90033-5\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(77)90033-5</a>; Saaty, R.W. (1987), The analytic hierarchy process—what it is and how it is used, Mathematical Modelling 9(3–5), 161–176, <a href=\"https://doi.org/10.1016/0270-0255(87)90473-8\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0270-0255(87)90473-8</a>","published (metadata verified)"],["Consistency index CI = (λmax − n)/(n − 1), CR = CI/RI, acceptance limit 0.10","Saaty (1977) and Saaty, R.W. (1987), as above (the 0.10 limit is the usual attribution to Saaty; not re-read). Statistical review of the consistency criterion and of the random indices: Alonso, J.A. &amp; Lamata, M.T. (2006), Consistency in the analytic hierarchy process: a new approach, International Journal of Uncertainty, Fuzziness and Knowledge-Based Systems 14(4), 445–459, <a href=\"https://doi.org/10.1142/s0218488506004114\" target=\"_blank\" rel=\"noopener\">doi:10.1142/s0218488506004114</a>","published (metadata verified)"],["Random indices RI(3…10) = 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49","Table attributed to Saaty (Saaty, R.W. 1987 above); the table itself was not read in the publication. Order of magnitude checked by simulation. Alonso &amp; Lamata (2006) give a recomputed table; its values were not compared here","published (metadata verified); table values not read"],["Geometric-mean approximation of the AHP weights (shown for comparison)","Crawford, G. &amp; Williams, C. (1985), A note on the analysis of subjective judgment matrices, Journal of Mathematical Psychology 29(4), 387–405, <a href=\"https://doi.org/10.1016/0022-2496(85)90002-1\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(85)90002-1</a>","published (metadata verified)"],["Rank reversal (shown as a check on the ranking)","AHP: Belton, V. &amp; Gear, T. (1983), On a short-coming of Saaty's method of analytic hierarchies, Omega 11(3), 228–230, <a href=\"https://doi.org/10.1016/0305-0483(83)90047-6\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0305-0483(83)90047-6</a>; Saaty, T.L. (1987), Rank generation, preservation, and reversal in the analytic hierarchy decision process, Decision Sciences 18(2), 157–177, <a href=\"https://doi.org/10.1111/j.1540-5915.1987.tb01514.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.1540-5915.1987.tb01514.x</a>. PROMETHEE II: Mareschal, B., De Smet, Y. &amp; Nemery, P. (2008), Rank reversal in the PROMETHEE II method: some new results, 2008 IEEE International Conference on Industrial Engineering and Engineering Management, 959–963, <a href=\"https://doi.org/10.1109/ieem.2008.4738012\" target=\"_blank\" rel=\"noopener\">doi:10.1109/ieem.2008.4738012</a>","published (metadata verified)"],["Standardization of the criterion values (min–max, z-score)","Effect of standardization choices on multivariate results: Milligan, G.W. &amp; Cooper, M.C. (1988), A study of standardization of variables in cluster analysis, Journal of Classification 5(2), 181–204, <a href=\"https://doi.org/10.1007/bf01897163\" target=\"_blank\" rel=\"noopener\">doi:10.1007/bf01897163</a>. The formulas themselves are elementary; vector normalization is offered as a site choice, no publication is cited for it","published (metadata verified)"],["Weighted sum WS = Σ w s (fully compensatory counterpart)","Keeney, R.L. &amp; Raiffa, H. (1976), Decisions with Multiple Objectives: Preferences and Value Trade-offs, Wiley, New York (additive value function; existence confirmed in Open Library, content not read)","published (metadata verified, Open Library)"],["High-pass / low-pass / band-pass trapezoid scoring (a, b, c, d)","Site construction. The shape is that of a trapezoidal membership function (Zadeh, L.A. (1965), Fuzzy sets, Information and Control 8(3), 338–353, <a href=\"https://doi.org/10.1016/s0019-9958(65)90241-x\" target=\"_blank\" rel=\"noopener\">doi:10.1016/s0019-9958(65)90241-x</a>), but no fuzzy calculus is used","derived"],["Thresholds q, p, σ, perturbation δ, window of the band example","User settings, not sourced values","on the page (no publication)"],["Numerical check of the flows and weights","Independent recomputation with numpy (eigen-decomposition) and with a public Python implementation of PROMETHEE and AHP, on the five-prospect case of the MCDA note (see Validation); a software check, not a source of the method","on the page (no publication)"]],"validation":["Flows Φ+, Φ−, Φ identical to numpy and to pyDecision (4 decimals) on the five-prospect case of the MCDA note, which also gives its ranking P2 &gt; P1 &gt; P5 &gt; P3 &gt; P4.","AHP weights, λmax and CR identical to numpy eigen-decomposition."],"limits":["Not implemented: GAIA plane, PROMETHEE III–VI, fuzzy AHP, pairwise judgments of alternatives under each criterion, propagation of P10/P50/P90 ranges on the criterion values."],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. AHP weights (Saaty matrix, consistency ratio, two-level groups), PROMETHEE I and II with six preference functions, high-pass / low-pass / band-pass scoring, weight sensitivity and rank reversal.","method":["<b>Standardization.</b> Min–max s = (x − min)/(max − min), inverted for ‘lower is better’; vector and z-score are also offered. Windows use a trapezoid a, b, c, d: high-pass, low-pass or band-pass. Bounds are taken over the active alternatives only (after knock-out). Thresholds q, p, σ are in <b>criterion units</b> by default: PROMETHEE then works on raw differences (sign-flipped for ‘lower is better’), so adding or removing an alternative does not move the thresholds; the older choice, thresholds as fractions of the standardized (min–max) range, is still offered and then depends on the set of alternatives. Windows are scored 0 to 1 and their thresholds stay on that scale. Weighted sum and displayed scores always use the standardization chosen.","<b>PROMETHEE.</b> d = s(a) − s(b) on each criterion; P<sub>k</sub>(d) is the chosen preference function (usual, U-shape, V-shape, level, V-shape with indifference, Gaussian); π(a,b) = Σ w<sub>k</sub> P<sub>k</sub>(d<sub>k</sub>); Φ+(a) = Σ<sub>b</sub> π(a,b)/(n − 1), Φ−(a) = Σ<sub>b</sub> π(b,a)/(n − 1), Φ = Φ+ − Φ−.","<b>AHP.</b> Weights are the principal right eigenvector of the reciprocal judgment matrix (power iteration); the geometric-mean approximation is shown for comparison. λmax, CI = (λmax − n)/(n − 1), CR = CI/RI with Saaty's random indices (n ≤ 10). With groups, global weight = group weight × local weight.","<b>Reading numbers.</b> Decimal point or comma, thousands separators (1,234.5, 1 234,5, 1.234,5), exponents and unicode minus are decoded; a lone 1,234 is read as 1234 unless the table uses a decimal comma elsewhere (or is ‘;’ separated), and the ambiguity is reported. Empty, ‘-’, n.d., NA, ‘&lt;0.1’ and text values make the alternative skipped; so do values equal to a null value (default list -999, -999.25, -9999, 9999, 1e30, 1.70141e38, editable). Each load reports the rows read and skipped with the reasons and first line numbers; a failed load clears the previous data.","<b>Weighted sum.</b> WS = Σ w<sub>k</sub> s<sub>k</sub>, rescaled to 0–1: the fully compensatory counterpart, shown for comparison with Φ."],"sources":[["PROMETHEE I and II: pairwise preference degrees, flows Φ+, Φ−, Φ","Brans, J.P. &amp; Vincke, P. (1985), Note—A Preference Ranking Organisation Method, Management Science 31(6), 647–656, <a href=\"https://doi.org/10.1287/mnsc.31.6.647\" target=\"_blank\" rel=\"noopener\">doi:10.1287/mnsc.31.6.647</a>; Brans, J.P., Vincke, P. &amp; Mareschal, B. (1986), How to select and how to rank projects: the PROMETHEE method, European Journal of Operational Research 24(2), 228–238, <a href=\"https://doi.org/10.1016/0377-2217(86)90044-5\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0377-2217(86)90044-5</a>","published (metadata verified)"],["The six preference functions (usual, U-shape, V-shape, level, V-shape with indifference, Gaussian)","Same two papers (the six generalised criteria are the ones defined by the PROMETHEE authors; the content of the papers was not re-read here)","published (metadata verified)"],["AHP: reciprocal judgment matrix, 1–9 scale, principal right eigenvector","Saaty, T.L. (1977), A scaling method for priorities in hierarchical structures, Journal of Mathematical Psychology 15(3), 234–281, <a href=\"https://doi.org/10.1016/0022-2496(77)90033-5\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(77)90033-5</a>; Saaty, R.W. (1987), The analytic hierarchy process—what it is and how it is used, Mathematical Modelling 9(3–5), 161–176, <a href=\"https://doi.org/10.1016/0270-0255(87)90473-8\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0270-0255(87)90473-8</a>","published (metadata verified)"],["Consistency index CI = (λmax − n)/(n − 1), CR = CI/RI, acceptance limit 0.10","Saaty (1977) and Saaty, R.W. (1987), as above (the 0.10 limit is the usual attribution to Saaty; not re-read). Statistical review of the consistency criterion and of the random indices: Alonso, J.A. &amp; Lamata, M.T. (2006), Consistency in the analytic hierarchy process: a new approach, International Journal of Uncertainty, Fuzziness and Knowledge-Based Systems 14(4), 445–459, <a href=\"https://doi.org/10.1142/s0218488506004114\" target=\"_blank\" rel=\"noopener\">doi:10.1142/s0218488506004114</a>","published (metadata verified)"],["Random indices RI(3…10) = 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49","Table attributed to Saaty (Saaty, R.W. 1987 above); the table itself was not read in the publication. Order of magnitude checked by simulation. Alonso &amp; Lamata (2006) give a recomputed table; its values were not compared here","published (metadata verified); table values not read"],["Geometric-mean approximation of the AHP weights (shown for comparison)","Crawford, G. &amp; Williams, C. (1985), A note on the analysis of subjective judgment matrices, Journal of Mathematical Psychology 29(4), 387–405, <a href=\"https://doi.org/10.1016/0022-2496(85)90002-1\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(85)90002-1</a>","published (metadata verified)"],["Rank reversal (shown as a check on the ranking)","AHP: Belton, V. &amp; Gear, T. (1983), On a short-coming of Saaty's method of analytic hierarchies, Omega 11(3), 228–230, <a href=\"https://doi.org/10.1016/0305-0483(83)90047-6\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0305-0483(83)90047-6</a>; Saaty, T.L. (1987), Rank generation, preservation, and reversal in the analytic hierarchy decision process, Decision Sciences 18(2), 157–177, <a href=\"https://doi.org/10.1111/j.1540-5915.1987.tb01514.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.1540-5915.1987.tb01514.x</a>. PROMETHEE II: Mareschal, B., De Smet, Y. &amp; Nemery, P. (2008), Rank reversal in the PROMETHEE II method: some new results, 2008 IEEE International Conference on Industrial Engineering and Engineering Management, 959–963, <a href=\"https://doi.org/10.1109/ieem.2008.4738012\" target=\"_blank\" rel=\"noopener\">doi:10.1109/ieem.2008.4738012</a>","published (metadata verified)"],["Standardization of the criterion values (min–max, z-score)","Effect of standardization choices on multivariate results: Milligan, G.W. &amp; Cooper, M.C. (1988), A study of standardization of variables in cluster analysis, Journal of Classification 5(2), 181–204, <a href=\"https://doi.org/10.1007/bf01897163\" target=\"_blank\" rel=\"noopener\">doi:10.1007/bf01897163</a>. The formulas themselves are elementary; vector normalization is offered as a site choice, no publication is cited for it","published (metadata verified)"],["Weighted sum WS = Σ w s (fully compensatory counterpart)","Keeney, R.L. &amp; Raiffa, H. (1976), Decisions with Multiple Objectives: Preferences and Value Trade-offs, Wiley, New York (additive value function; existence confirmed in Open Library, content not read)","published (metadata verified, Open Library)"],["High-pass / low-pass / band-pass trapezoid scoring (a, b, c, d)","Site construction. The shape is that of a trapezoidal membership function (Zadeh, L.A. (1965), Fuzzy sets, Information and Control 8(3), 338–353, <a href=\"https://doi.org/10.1016/s0019-9958(65)90241-x\" target=\"_blank\" rel=\"noopener\">doi:10.1016/s0019-9958(65)90241-x</a>), but no fuzzy calculus is used","derived"],["Thresholds q, p, σ, perturbation δ, window of the band example","User settings, not sourced values","on the page (no publication)"],["Numerical check of the flows and weights","Independent recomputation with numpy (eigen-decomposition) and with a public Python implementation of PROMETHEE and AHP, on the five-prospect case of the MCDA note (see Validation); a software check, not a source of the method","on the page (no publication)"]],"validation":["Regression test scripts/mcda_test.mjs: Saaty 3×3 [[1,3,5],[1/3,1,3],[1/5,1/3,1]] gives w 0.6370/0.2583/0.1047, λmax 3.0385, CR 0.0332; a consistent 4×4 gives CR 0; a V-shape example (4 alternatives, 2 criteria, weights 0.6/0.4, p = 2) gives Φ 0.3667/0.3000/0.1667/−0.8333 summing to 0.","Measured on 3 alternatives [10,5], [8,9], [6,10] (min–max thresholds q 5 %, p 30 %): A is ahead of C; adding a dominated alternative [0,0] makes A = C when thresholds are on the standardized scale, whereas A stays ahead of C in criterion units. This is why criterion units are now the default; <b>numbers of a session saved before this change keep the standardized scale</b> (the file has no threshold mode), new sessions and the examples use criterion units, so rankings of the examples can differ slightly from earlier versions.","Number decoding (1,234 / 1,234.5 / 0,55 / 100 0,55 / ‘;’ files) and null values are covered by the same test script. Previously 1,234 was read as 1.234 and 1,234.5 as NaN.","Flows Φ+, Φ−, Φ identical to numpy and to pyDecision (4 decimals) on the five-prospect case of the MCDA note, which also gives its ranking P2 &gt; P1 &gt; P5 &gt; P3 &gt; P4.","AHP weights, λmax and CR identical to numpy eigen-decomposition."],"limits":["The consistency ratio is not computed above 10 criteria (the random-index table stops at n = 10 and no extended table was verified): it is shown as n/a.","A criterion that is constant over the alternatives gives the same score to all of them and a warning is shown; it has no effect on the ranking.","Ambiguous 1,234 (thousands or decimal comma) is decided by the rest of the table, which cannot be right for a table containing only such values.","Not implemented: GAIA plane, PROMETHEE III–VI, fuzzy AHP, pairwise judgments of alternatives under each criterion, propagation of P10/P50/P90 ranges on the criterion values."],"date":"26 November 2026"});
 </script>
 </body></html>
