@@ -96,3 +96,10 @@ Reply to the user in French. Push as soon as something is done and verified.
   `portfolio_test.mjs`, `fdp_test.mjs`. Each page has a copy of the "Tools" menu (CAT) — add a new tool to all pages with sed.
 - GDE generator: paused at the user's request (they test and think). Left column now organised by map; consistency check in the verdict.
 - Ideas not done: FDP → push the MEFV into a risking file; portfolio import of an FDP case; gas volumetrics; production sharing regimes.
+
+## Added on 27 Nov (GDE, plan-view references)
+- Reference images (concept only, AI-generated, never traced): `specs/ref-gde-*.png` (deltas river/wave/tide, submarine fan, carbonate platform and ramp, source-to-sink and carbonate block diagrams).
+- Done and pushed: Source -> sink chain strip + grain-size ramp / carbonate components key + process-coloured arrows; delta regimes (river/wave/tide, global per map), detailed submarine fan (`sfan`) + Sand content view (`&sand=1`), reef-rimmed platform (`reefrim`), ramp zones (`rampzone`); examples deltariver, deltawave, deltatide, subfan, carbplat, rampzones.
+- Not done: delta form per feeder (global only), swell arcs on the wave delta, meandering edges on river-delta fingers, detailed fan on non-canyon fan sources and by default on margins, ramp parameters frozen at generation (do not follow later belt edits), inner/mid/outer ramp not coloured differently on the EOD map.
+- Still to check with real wells: after switching system, the starting key lines do not follow it.
+- Remaining image wishes from the user: shoreface/shelf clastic plan, passive-margin overview plan (drifting example), fluvial / alluvial fan plan, mixed systems.
