@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MCDA AHP</title>
+<title>MCDA AHP: weights and preference maps</title>
 <link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/mcda-ahp/">
-<meta name="description" content="Analytic Hierarchy Process: Saaty pairwise comparison matrix, eigenvector weights, consistency ratio and a weights file for the MCDA PROMETHEE page. Runs in your browser.">
+<meta name="description" content="Analytic Hierarchy Process: Saaty pairwise comparison, eigenvector weights, consistency ratio, a weights file for MCDA PROMETHEE, and a 0 to 1 preference map from one grid per criterion (weighted linear combination). Runs in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -83,6 +83,16 @@ table.mx th:first-child,table.mx td:first-child{text-align:left}
 table.mx select{padding:.1rem .2rem;font-size:.78rem}
 table.mx td.rec{color:var(--mut);background:var(--alt)}
 .wbar{display:inline-block;height:9px;background:var(--acc);border-radius:2px;vertical-align:middle}
+.mini{width:110px;height:auto;max-height:90px;image-rendering:pixelated;background:#e9e6dc;border:1px solid var(--line);display:block}
+#cvP,#cvD{width:100%;height:auto;image-rendering:pixelated;background:#e9e6dc;border:1px solid var(--line);cursor:crosshair;display:block}
+#cvD{cursor:default}
+#cvH{width:100%;height:90px;display:block}
+.leg{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--mut);margin:6px 0}
+.leg .grad{flex:0 1 220px;height:10px;border:1px solid var(--line);border-radius:2px}
+.leg .nsw{display:inline-block;width:12px;height:10px;background:#d6d1c2;border:1px solid var(--line)}
+.mapgrid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:14px;padding:4px 6px}
+@media (max-width:1100px){.mapgrid{grid-template-columns:minmax(0,1fr)}}
+.card h3 .exp{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 main{min-width:0}
 main .card{margin-bottom:12px}
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
@@ -93,7 +103,7 @@ main .card{margin-bottom:12px}
   <button id="bCsv" title="Criteria weights and consistency figures in a CSV file">CSV</button>
   <button id="bLoad" title="Reload the criteria and judgments of a weights file saved here">Load JSON</button><input type="file" id="jfile" accept=".json,application/json" hidden>
   <span class="msg" id="exportMsg"></span>
-  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. List the criteria, compare them two by two on the Saaty scale (1 equal to 9 extreme), and read the weights (principal eigenvector), the consistency ratio and the judgment that departs most from the others. Export the weights as a JSON file that the MCDA PROMETHEE page can import. Criteria are not scored against alternatives here.">?</span></div>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. List the criteria, compare them two by two on the Saaty scale (1 equal to 9 extreme), and read the weights (principal eigenvector), the consistency ratio and the judgment that departs most from the others. Export the weights as a JSON file that the MCDA PROMETHEE page can import. Alternatives are not ranked here; instead, give one grid per criterion (Map layers) to get a 0 to 1 preference map, its sensitivity to the weights, and ZMAP+, ESRI ASCII, CSV XYZ and audit exports.">?</span></div>
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
 <aside class="side">
@@ -105,11 +115,29 @@ main .card{margin-bottom:12px}
   <div class="body"><div class="hint">Each cell states how much more important the ROW criterion is than the COLUMN criterion: 1 equal, 3 moderate, 5 strong, 7 very strong, 9 extreme, 2, 4, 6, 8 in between, 1/3 means the column is moderately more important. The lower triangle is the reciprocal.</div>
   <div class="hint">CR = CI / RI with CI = (λmax − n)/(n − 1). Below 0.10 is the usual acceptance limit. Above 10 criteria no verified random-index table is used: CR is shown as n/a.</div>
   <div class="msg" id="runMsg"></div></div></section>
+<section class="panel"><h2><span class="n">3</span>Map layers<i class="chev"></i></h2>
+  <div class="body"><div class="hint">One grid per criterion (same names as above). Formats: ZMAP+, Surfer ASCII (DSAA), ESRI ASCII grid, x y z text on a regular lattice. Use the File… button in the Layers table, or paste a grid here. The first criterion’s grid is the reference geometry; other grids are resampled bilinearly onto it.</div>
+  <div class="row"><span>Null values</span><input type="text" id="nullv" style="flex:1;min-width:0" title="Values equal to one of these are excluded (null). Native null values of the formats are always excluded."></div>
+  <div class="row"><select id="layerSel" style="max-width:100%"></select><button id="bPasteLoad">Load pasted grid</button></div>
+  <textarea id="gpaste" rows="5" placeholder="Paste a ZMAP+, DSAA, ESRI ASCII or x y z grid here" spellcheck="false"></textarea>
+  <div class="row"><button id="bWf" title="Use the weights of an MCDA AHP weights file instead of the AHP computed on this page (criteria matched by name)">Weights from file…</button><button id="bWa">Use AHP above</button><input type="file" id="wfile" accept=".json,application/json" hidden></div>
+  <div class="msg" id="wMsg"></div><input type="file" id="gfile" hidden></div></section>
 </aside>
 <main>
  <div class="card"><h3>Pairwise judgments</h3>
   <div id="ahpBox" style="padding:4px 6px"></div></div>
  <div class="card"><h3>Global weights<span class="sp"></span></h3><div class="tw" id="gwT"></div></div>
+<div class="card"><h3>Layers<span class="tt" tabindex="0" data-tip="Each layer is standardised to 0–1 between its low and high bounds (linear, values outside are clamped). Higher is better: low gives 0, high gives 1. Lower is better: the scale is reversed. Bounds default to the minimum and maximum, or to the 2nd and 98th percentiles; editing a bound switches to custom.">?</span></h3>
+  <div class="tw tall" id="layBox" style="max-height:none"></div></div>
+ <div class="card"><h3>Preference map<span class="tt" tabindex="0" data-tip="Preference = sum of weight × standardised layer in each cell, between 0 (least preferred) and 1 (most preferred); weights add up to 1. A cell that is null in any layer is null in the result: it is never counted as 0. This is a compensatory weighted linear combination: a high score on one criterion can offset a low score on another.">?</span>
+   <span class="exp"><button id="bZ" disabled>ZMAP+</button><button id="bA" disabled>ESRI ASCII</button><button id="bX" disabled>CSV XYZ</button><button id="bAud" disabled>Audit JSON</button></span></h3>
+  <div class="msg" id="mapMsg" style="padding:2px 8px"></div><div class="msg" id="mapExpMsg" style="padding:0 8px"></div>
+  <div id="mapWrap" class="mapgrid" style="display:none"><div><canvas id="cvP"></canvas><div class="leg"><span>0</span><span class="grad" id="mLeg"></span><span>1</span><span class="nsw"></span><span>null</span></div><div class="hint" id="mapStat"></div></div>
+   <div><h4 style="font:600 .82rem 'Space Grotesk',Inter,sans-serif;margin:0 0 4px">Distribution of the preference</h4><canvas id="cvH"></canvas><div id="pickBox" class="tw" style="max-height:none;margin-top:8px"></div></div></div></div>
+ <div class="card" id="sensBox" style="display:none"><h3>Sensitivity to the weights</h3>
+  <div class="row" style="padding:0 8px">± <input type="number" id="sDel" value="20" min="1" max="99" style="width:64px"> % on one weight · top <input type="number" id="sTop" value="20" min="1" max="99" style="width:64px"> % class <button class="pri" id="bSens">Run</button><span class="msg" id="sensMsg"></span></div>
+  <div class="tw" id="sensT" style="max-height:none;margin:4px 8px"></div>
+  <div id="sensDWrap" style="display:none;padding:4px 8px"><canvas id="cvD" style="max-width:640px"></canvas><div class="hint" id="sensDLeg"></div></div></div>
 </main></div>
 
 <script id="mcda-ahp-core">
@@ -171,7 +199,236 @@ function readSession(o){ // criteria and judgments of a weights file saved by th
   const ahp={},J=o.judgments&&typeof o.judgments==='object'?o.judgments:{};
   for(const k in J){if(!J[k]||typeof J[k]!=='object')continue;ahp[k]={};for(const q in J[k]){const v=J[k][q];if(/^\d+,\d+$/.test(q)&&typeof v==='number'&&v>0&&isFinite(v))ahp[k][q]=v}}
   return{crit,ahp}}
-W.MCDA_AHP={RI,SAATY,sL,FORMAT,dot,ahpSolve,groupsInfo,ahpBlocks,ahpMat,ahpAll,parseCriteria,weightsFile,readSession};
+const DEFAULT_NULLS='-999, -999.25, -9999, 9999, 1e30, 1.70141e38';
+// ---------------- number decoding (shared contract A) ----------------------------------------------------------------
+const MISSING=/^(|-+|n\.?d\.?|na|n\/a|nan|null|none)$/i;
+function parseNumber(text,o){
+  o=o||{};if(typeof text==='number')return isFinite(text)?{value:text,kind:'ok'}:{value:null,kind:'missing'};
+  let s=String(text==null?'':text).replace(/[−–‒]/g,'-').replace(/[   ]/g,' ').trim();
+  if(MISSING.test(s))return{value:null,kind:'missing'};
+  const bm=s.match(/^<\s*(.+)$/);
+  if(bm){const p=parseNumber(bm[1],o);return{value:null,kind:'below',limit:p.kind==='ok'?p.value:null}}
+  let sign=1;if(/^[-+]/.test(s)){if(s[0]==='-')sign=-1;s=s.slice(1).trim()}
+  let m,v=null,amb=false;const EX='([eE][-+]?\\d+)?';
+  const re=x=>new RegExp('^'+x+'$');
+  if(re('\\d+\\.?\\d*'+EX).test(s)||re('\\.\\d+'+EX).test(s))v=+s;
+  else if((m=s.match(re('(\\d{1,3}(?:\\.\\d{3})+),(\\d+)'+EX))))v=+(m[1].replace(/\./g,'')+'.'+m[2]+(m[3]||'')); // 1.234,5
+  else if((m=s.match(re('(\\d{1,3}(?:,\\d{3})+)(\\.\\d+)?'+EX)))){ // 1,234.5 / 1,234,567 / 1,234
+    const single=/^\d{1,3},\d{3}$/.test(s);
+    if(single&&o.decimalComma)v=+(s.replace(',','.'));else v=+(m[1].replace(/,/g,'')+(m[2]||'')+(m[3]||''));
+    if(single)amb=true}
+  else if((m=s.match(re('(\\d{1,3}(?: \\d{3})+)(?:([.,])(\\d+))?'+EX))))v=+(m[1].replace(/ /g,'')+(m[2]?'.'+m[3]:'')+(m[4]||'')); // 1 234,5
+  else if((m=s.match(re('(\\d*),(\\d+)'+EX))))v=+((m[1]||'0')+'.'+m[2]+(m[3]||'')); // 0,55
+  if(v==null||!isFinite(v))return{value:null,kind:'text'};
+  const r={value:sign*v,kind:'ok'};if(amb)r.ambiguous=true;return r}
+const toN=(s,dc)=>{const r=parseNumber(s,{decimalComma:!!dc});return r.kind==='ok'?r.value:NaN};
+function parseNulls(text){const out=[];String(text==null?'':text).split(/[;,\s]+/).forEach(t=>{if(!t)return;const r=parseNumber(t);if(r.kind==='ok')out.push(r.value)});return out}
+const isNull=(v,list)=>list.some(n=>Math.abs(v-n)<=1e-9*Math.max(1,Math.abs(n)));
+const CAND=[-99999,99999,-999999,999999,-9999.99,9999.99,-99.99,-0.999];
+// ---------------- table parsing ---------------------------------------------------------------------------------------------
+const DECPAT=/\d,\d{1,2}(?!\d)/;
+function detectDelimiter(lines,minCols){
+  minCols=minCols||2;const major=sep=>{const cnt=lines.map(l=>(sep==='ws'?l.trim().split(/\s+/):splitQ(l,sep)).length),f={};cnt.forEach(c=>f[c]=(f[c]||0)+1);
+    let bc=0,bn=0;for(const k in f)if(f[k]>bn){bn=f[k];bc=+k}return{n:bc,frac:bn/lines.length}};
+  const ok={};for(const s of['\t',';',',','ws']){if(s!=='ws'&&!lines.some(l=>l.includes(s))){ok[s]=false;continue}const q=major(s);ok[s]=q.n>=minCols&&q.frac>=.8}
+  if(ok['\t'])return'\t';if(ok[';'])return';';
+  const decUse=lines.some(l=>DECPAT.test(l));
+  if(ok[',']&&!(decUse&&ok.ws))return',';
+  if(ok.ws)return'ws';
+  if(ok[','])return',';
+  // nothing consistent: fall back to the most frequent plausible one
+  for(const s of['\t',';',',']){if(lines.some(l=>l.includes(s)))return s}return'ws'}
+function splitQ(l,sep){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o}
+// ---------------- grids: readers (same logic as the Grid attributes page), geometry, resampling ---------------------------------------
+const toNum=x=>+String(x).replace(/[dD]/,'e');
+const NUM=/^[-+]?(\d+\.?\d*|\.\d+)([eEdD][-+]?\d+)?$/;
+const NULL_ZMAP_TXT='1.0000000E+30',NULL_ESRI=-9999;
+const isBig=v=>!(Math.abs(v)<1e29);
+// grid: {nx,ny,dx,dy,x0,y1,z,name}; z Float64Array row-major, row 0 = top (y = y1), null = NaN; node (r,c) at x0+c*dx, y1-r*dy
+function makeGrid(nx,ny,dx,dy,x0,y1,z,name){return{nx,ny,dx,dy,x0,y1,z,name:name||'grid'}}
+const xmaxOf=g=>g.x0+(g.nx-1)*g.dx, yminOf=g=>g.y1-(g.ny-1)*g.dy;
+function splitLines(text){text=String(text);if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);return text.split(/\r\n|\n|\r/)}
+function parseZmap(text,name){
+  const L=splitLines(text),at=[];L.forEach((l,i)=>{if(l.trim()[0]==='@')at.push(i)});
+  if(at.length<2)throw new Error('ZMAP+: the two "@" header markers were not found');
+  const csv=s=>s.split(',').map(x=>x.trim());
+  const t1=csv(L[at[0]].trim().slice(1));
+  if(t1[1]&&t1[1].toUpperCase()!=='GRID')throw new Error('ZMAP+ file of type '+t1[1]+': only GRID is supported');
+  const hdr=[];for(let i=at[0]+1;i<at[1];i++){const t=L[i].trim();if(t&&t[0]!=='!')hdr.push(t)}
+  if(hdr.length<2)throw new Error('ZMAP+: header lines missing');
+  const t2=csv(hdr[0]),t3=csv(hdr[1]).map(Number);
+  const width=+t2[0],nullTxt=t2[1]||t2[2]||'1.0E+30',nullVal=NUM.test(nullTxt)?toNum(nullTxt):1e30;
+  if(t3.length<6||!t3.slice(0,6).every(isFinite))throw new Error('ZMAP+: third header line must hold rows, columns, xmin, xmax, ymin, ymax');
+  const [nr,nc,xmin,xmax,ymin,ymax]=t3;
+  if(!(nr>=2&&nc>=2&&Number.isInteger(nr)&&Number.isInteger(nc)))throw new Error('ZMAP+: invalid number of rows or columns');
+  const vals=new Float64Array(nr*nc);let k=0;
+  for(let i=at[1]+1;i<L.length;i++){const l=L[i],t=l.trim();if(!t||t[0]==='!'||(t[0]==='+'&&!NUM.test(t.split(/\s+/)[0])))continue;
+    let tk=t.split(/\s+/);
+    if(width>0&&l.length%width===0&&tk.some(x=>!NUM.test(x))){const c=[];for(let a=0;a<l.length;a+=width)c.push(l.slice(a,a+width).trim());if(c.every(x=>NUM.test(x)||!x))tk=c.filter(Boolean)}
+    for(const x of tk){if(k>=vals.length){k++;continue}vals[k++]=NUM.test(x)?toNum(x):NaN}}
+  if(k!==nr*nc)throw new Error(`ZMAP+: ${k} values for ${nr} x ${nc} = ${nr*nc} nodes`);
+  const z=new Float64Array(nr*nc);
+  for(let c=0;c<nc;c++)for(let r=0;r<nr;r++){const v=vals[c*nr+r];z[r*nc+c]=(v===nullVal||isBig(v))?NaN:v}
+  return makeGrid(nc,nr,(xmax-xmin)/(nc-1),(ymax-ymin)/(nr-1),xmin,ymax,z,name||t1[0]);
+}
+function parseSurfer(text,name){
+  const tk=String(text).replace(/^﻿/,'').trim().split(/\s+/);
+  if(tk[0]!=='DSAA')throw new Error('Surfer ASCII: DSAA keyword not found');
+  const h=tk.slice(1,9).map(Number);if(h.length<8||!h.every(isFinite))throw new Error('Surfer ASCII: header incomplete');
+  const [nx,ny,xlo,xhi,ylo,yhi]=h;if(!(nx>=2&&ny>=2))throw new Error('Surfer ASCII: invalid size');
+  if(tk.length-9!==nx*ny)throw new Error(`Surfer ASCII: ${tk.length-9} values for ${nx} x ${ny} = ${nx*ny} nodes`);
+  const z=new Float64Array(nx*ny);
+  for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const v=toNum(tk[9+r*nx+c]);z[(ny-1-r)*nx+c]=isBig(v)?NaN:v}
+  return makeGrid(nx,ny,(xhi-xlo)/(nx-1),(yhi-ylo)/(ny-1),xlo,yhi,z,name);
+}
+function parseEsri(text,name){
+  const L=splitLines(text),hd={};let i=0;
+  for(;i<L.length;i++){const t=L[i].trim();if(!t)continue;const m=t.match(/^([A-Za-z_]+)\s+(\S+)$/);if(!m||NUM.test(t.split(/\s+/)[0]))break;hd[m[1].toLowerCase()]=m[2]}
+  const nx=+hd.ncols,ny=+hd.nrows;if(!(nx>=2&&ny>=2))throw new Error('Esri ASCII: ncols / nrows not found');
+  let dx=+hd.cellsize,dy=dx;if(!isFinite(dx)){dx=+hd.dx;dy=+hd.dy}
+  if(!(dx>0&&dy>0))throw new Error('Esri ASCII: cellsize not found');
+  const x0=hd.xllcenter!=null?+hd.xllcenter:+hd.xllcorner+dx/2,yb=hd.yllcenter!=null?+hd.yllcenter:+hd.yllcorner+dy/2;
+  if(!isFinite(x0)||!isFinite(yb))throw new Error('Esri ASCII: xllcorner / yllcorner not found');
+  const nd=hd.nodata_value!=null?+hd.nodata_value:NULL_ESRI;
+  const z=new Float64Array(nx*ny);let k=0;
+  for(;i<L.length;i++){const t=L[i].trim();if(!t)continue;for(const x of t.split(/\s+/)){if(k<z.length){const v=toNum(x);z[k]=(v===nd||isBig(v))?NaN:v}k++}}
+  if(k!==nx*ny)throw new Error(`Esri ASCII: ${k} values for ${nx} x ${ny} = ${nx*ny} nodes`);
+  return makeGrid(nx,ny,dx,dy,x0,yb+(ny-1)*dy,z,name);
+}
+const addWhy=(info,why,ln)=>{info.skipped++;info.reasons[why]=(info.reasons[why]||0)+1;const a=info.first[why]=info.first[why]||[];if(a.length<5)a.push(ln)};
+// x y z text on a regular lattice, contract A decoding (delimiter, decimal comma, header, missing / below detection); missing lattice nodes become null
+function parseXYZ(text,name){
+  const info={read:0,skipped:0,reasons:{},first:{},ambiguous:false};
+  const body=[];splitLines(text).forEach((l,i)=>{const t=l.trim();if(t&&!/^[#!\/]/.test(t))body.push({t,ln:i+1})});
+  if(body.length<4)throw new Error('x y z text: fewer than 4 data lines');
+  const sep=detectDelimiter(body.slice(0,2000).map(b=>b.t),3);
+  const split=t=>sep==='ws'?t.split(/\s+/):splitQ(t,sep).map(s=>s.trim());
+  const dc=sep!==','&&(sep===';'||body.slice(0,2000).some(b=>split(b.t).some(f=>/^[-+−]?\d*,(\d{1,2}|\d{4,})$/.test(f))));
+  const num=s=>parseNumber(s,{decimalComma:dc});
+  let ix=0,iy=1,iz=2,start=0;
+  const f0=split(body[0].t);
+  if(f0.some(f=>num(f).kind==='text')){start=1;
+    const nm=f0.map(f=>f.toLowerCase().replace(/\[.*?\]|\(.*?\)/g,'').trim());
+    const fx=nm.findIndex(s=>/^(x|easting|east|lon|long|longitude|xcoord)$/.test(s)),fy=nm.findIndex(s=>/^(y|northing|north|lat|latitude|ycoord)$/.test(s));
+    if(fx>=0&&fy>=0){ix=fx;iy=fy;const fz=nm.findIndex((s,i)=>i!==fx&&i!==fy&&/^(z|value|val|v|depth|time|attr|attribute|prop|preference)$/.test(s));iz=fz>=0?fz:nm.findIndex((s,i)=>i!==fx&&i!==fy);if(iz<0)iz=2}}
+  const P=[];
+  for(let i=start;i<body.length;i++){info.read++;const f=split(body[i].t),ln=body[i].ln;
+    if(f.length<=Math.max(ix,iy,iz)){addWhy(info,'too few fields',ln);continue}
+    const px=num(f[ix]),py=num(f[iy]);if(px.kind!=='ok'||py.kind!=='ok'){addWhy(info,'non-numeric x or y',ln);continue}
+    if(px.ambiguous||py.ambiguous)info.ambiguous=true;
+    const pz=num(f[iz]);if(pz.ambiguous)info.ambiguous=true;
+    if(pz.kind==='ok')P.push([px.value,py.value,pz.value]);
+    else{addWhy(info,pz.kind==='missing'?'missing value':pz.kind==='below'?'below detection limit':'non-numeric value',ln);if(pz.kind!=='text')P.push([px.value,py.value,NaN])}}
+  if(P.length<4)throw new Error('x y z text: fewer than 4 usable rows');
+  const uniq=a=>[...new Set(a)].sort((p,q)=>p-q);
+  const ux=uniq(P.map(p=>p[0])),uy=uniq(P.map(p=>p[1]));
+  const step=u=>{if(u.length<2)return NaN;const d=[];for(let i=1;i<u.length;i++)d.push(u[i]-u[i-1]);d.sort((a,b)=>a-b);return d[0]>0&&d[Math.floor(d.length/2)]>0?d[0]:NaN};
+  const clean=(u,tol)=>{const o=[u[0]];for(let i=1;i<u.length;i++)if(u[i]-o[o.length-1]>tol)o.push(u[i]);return o};
+  const gx=clean(ux,1e-9*Math.max(1,ux[ux.length-1]-ux[0])),gy=clean(uy,1e-9*Math.max(1,uy[uy.length-1]-uy[0]));
+  const dx=step(gx),dy=step(gy);
+  if(!(dx>0&&dy>0))throw new Error('x y z text: cannot find the cell size (need at least 2 distinct x and y)');
+  const nx=Math.round((gx[gx.length-1]-gx[0])/dx)+1,ny=Math.round((gy[gy.length-1]-gy[0])/dy)+1;
+  if(nx*ny>2.5e7)throw new Error('x y z text: lattice too large ('+nx+' x '+ny+')');
+  const z=new Float64Array(nx*ny).fill(NaN),seen=new Uint8Array(nx*ny);let bad=0;
+  for(const [x,y,v] of P){const fc=(x-gx[0])/dx,fr=(gy[gy.length-1]-y)/dy,c=Math.round(fc),r=Math.round(fr);
+    if(Math.abs(fc-c)>1e-3||Math.abs(fr-r)>1e-3){bad++;continue}
+    if(seen[r*nx+c]){info.reasons.duplicate=(info.reasons.duplicate||0)+1}seen[r*nx+c]=1;z[r*nx+c]=v}
+  if(bad){info.reasons['off the lattice']=bad;info.skipped+=bad}
+  if(bad>0.01*P.length)throw new Error(`x y z text: ${bad} of ${P.length} points are off a regular lattice (spacing ${dx} x ${dy}); resample the data on a grid first`);
+  const g=makeGrid(nx,ny,dx,dy,gx[0],gy[gy.length-1],z,name);g.xyzInfo=info;return g;
+}
+// reads any of the four formats; o.nulls = list of null values (contract C); returns a grid with g.fmt and g.info (counts and warnings)
+function parseGrid(text,name,o){
+  o=o||{};const nulls=o.nulls||[];text=String(text);
+  const head=text.slice(0,400).replace(/^﻿/,'').trimStart();let g,fmt;
+  if(/^DSAA/.test(head)){g=parseSurfer(text,name);fmt='Surfer ASCII (DSAA)'}
+  else if(/^ncols\b/i.test(head)){g=parseEsri(text,name);fmt='ESRI ASCII grid'}
+  else if(/^(!|@)/m.test(text.slice(0,4000))&&/^\s*@/m.test(text.slice(0,20000))){g=parseZmap(text,name);fmt='ZMAP+'}
+  else{g=parseXYZ(text,name);fmt='XYZ text'}
+  const info=g.xyzInfo||{read:g.nx*g.ny,skipped:0,reasons:{},first:{},ambiguous:false};delete g.xyzInfo;
+  info.fmt=fmt;info.sentinel={};info.candidates={};let sent=0;const z=g.z;
+  for(let i=0;i<z.length;i++){const v=z[i];if(v!==v)continue;
+    if(isBig(v)||isNull(v,nulls)){const k=String(v);info.sentinel[k]=(info.sentinel[k]||0)+1;sent++;z[i]=NaN}
+    else if(CAND.includes(v))info.candidates[v]=(info.candidates[v]||0)+1}
+  for(const k in info.candidates)if(info.candidates[k]<5)delete info.candidates[k];
+  let nn=0;for(let i=0;i<z.length;i++)if(z[i]!==z[i])nn++;
+  info.nullNodes=nn;info.sentinelCount=sent;g.fmt=fmt;g.info=info;return g;
+}
+function loadMessage(g){
+  const i=g.info,p=[`${i.fmt}, ${g.nx} x ${g.ny} nodes, cell ${+g.dx.toPrecision(6)} x ${+g.dy.toPrecision(6)}, ${i.nullNodes} null node(s).`];
+  if(i.fmt==='XYZ text'){const r=Object.keys(i.reasons).map(k=>`${k} ${i.reasons[k]}`+(i.first[k]?` (line ${i.first[k].join(', ')})`:''));p.push(`${i.read} rows read, ${i.skipped} skipped`+(r.length?': '+r.join('; '):'')+'.')}
+  for(const k in i.sentinel)p.push(`${i.sentinel[k]} value(s) equal to the null value ${k} excluded.`);
+  for(const k in i.candidates)p.push(`Warning: ${k} appears ${i.candidates[k]} times (possible null value, not excluded: add it to the null values to exclude it).`);
+  if(i.ambiguous)p.push('Ambiguous numbers such as 1,234 were read with the decimal-comma rule of the file.');
+  return p.join(' ')}
+function sameGeom(a,b){const t=1e-6;return a.nx===b.nx&&a.ny===b.ny&&Math.abs(a.dx-b.dx)<=t*b.dx&&Math.abs(a.dy-b.dy)<=t*b.dy&&Math.abs(a.x0-b.x0)<=t*b.dx&&Math.abs(a.y1-b.y1)<=t*b.dy}
+// bilinear resampling of src onto the geometry of ref; a node outside src, or whose 4 neighbours are not all valid, is null
+function resample(src,ref,o){
+  const minOv=o&&o.minOverlap!=null?o.minOverlap:.5,z=new Float64Array(ref.nx*ref.ny).fill(NaN),eps=1e-9;let inside=0,lost=0;
+  for(let r=0;r<ref.ny;r++){const y=ref.y1-r*ref.dy,fr0=(src.y1-y)/src.dy;
+    for(let c=0;c<ref.nx;c++){const fc0=(ref.x0+c*ref.dx-src.x0)/src.dx;
+      if(fc0<-eps||fr0<-eps||fc0>src.nx-1+eps||fr0>src.ny-1+eps)continue;inside++;
+      const fc=Math.min(src.nx-1,Math.max(0,fc0)),fr=Math.min(src.ny-1,Math.max(0,fr0)),c0=Math.min(src.nx-2,Math.floor(fc)),r0=Math.min(src.ny-2,Math.floor(fr)),u=fc-c0,v=fr-r0;
+      let acc=0,bad=false;
+      for(const [dr,dc,w] of [[0,0,(1-u)*(1-v)],[0,1,u*(1-v)],[1,0,(1-u)*v],[1,1,u*v]]){if(w<=1e-12)continue;const q=src.z[(r0+dr)*src.nx+c0+dc];if(q!==q){bad=true;break}acc+=w*q}
+      if(bad)lost++;else z[r*ref.nx+c]=acc}}
+  const overlap=inside/(ref.nx*ref.ny);
+  if(overlap<minOv)throw new Error(`the grid covers only ${(100*overlap).toFixed(0)} % of the first grid (at least ${(100*minOv).toFixed(0)} % needed)`);
+  const g=makeGrid(ref.nx,ref.ny,ref.dx,ref.dy,ref.x0,ref.y1,z,src.name);g.info={overlap,lost};return g}
+// ---------------- standardisation, weighted linear combination, sensitivity ------------------------------------------------------------
+function validSorted(z){let n=0;for(let i=0;i<z.length;i++)if(z[i]===z[i])n++;const a=new Float64Array(n);let k=0;for(let i=0;i<z.length;i++)if(z[i]===z[i])a[k++]=z[i];return a.sort()}
+function quantile(s,p){const n=s.length;if(!n)return NaN;const x=(n-1)*p,i=Math.floor(x),f=x-i;return i+1<n?s[i]*(1-f)+s[i+1]*f:s[n-1]}
+function boundsOf(z,mode){const s=validSorted(z);if(!s.length)throw new Error('no valid cell');return mode==='pct'?[quantile(s,.02),quantile(s,.98)]:[s[0],s[s.length-1]]}
+function standardise(z,lo,hi,higher){ // linear between lo and hi, clamped to 0..1; lower is better: 1 - s; null stays null
+  if(!(hi>lo))throw new Error('the upper bound must be greater than the lower bound');
+  const o=new Float64Array(z.length);for(let i=0;i<z.length;i++){const v=z[i];if(v!==v){o[i]=NaN;continue}let s=(v-lo)/(hi-lo);s=s<0?0:s>1?1:s;o[i]=higher?s:1-s}return o}
+function clampCount(z,lo,hi){let a=0,b=0;for(let i=0;i<z.length;i++){const v=z[i];if(v<lo)a++;else if(v>hi)b++}return{below:a,above:b}}
+function normaliseWeights(w){if(!w.length||w.some(x=>!(x>=0)||!isFinite(x)))throw new Error('weights must be finite and not negative');const s=w.reduce((p,q)=>p+q,0);if(!(s>0))throw new Error('weights add up to 0');return w.map(x=>x/s)}
+function combine(stds,w){const n=stds[0].length,k=stds.length,o=new Float64Array(n);
+  for(let i=0;i<n;i++){let s=0,bad=false;for(let j=0;j<k;j++){const v=stds[j][i];if(v!==v){bad=true;break}s+=w[j]*v}o[i]=bad?NaN:s}return o}
+const normName=s=>String(s).trim().toLowerCase().replace(/\s+/g,' ');
+function weightsFromFile(o,names){
+  if(!o||o.format!==FORMAT||!Array.isArray(o.criteria))throw new Error('not an MCDA AHP weights file');
+  const m={};o.criteria.forEach(c=>{m[normName(c.name)]=+c.weight});
+  const miss=names.filter(n=>!(normName(n) in m));if(miss.length)throw new Error('no weight in the file for: '+miss.join(', '));
+  return normaliseWeights(names.map(n=>m[normName(n)]))}
+function perturbWeights(w,i,f){const p=w.slice();p[i]*=f;return normaliseWeights(p)}
+function topMask(p,frac){const s=validSorted(p),thr=quantile(s,1-frac),m=new Uint8Array(p.length);for(let i=0;i<p.length;i++)m[i]=p[i]>=thr?1:0;return{thr,m}}
+function deltaMap(stds,w,i,f){const a=combine(stds,w),b=combine(stds,perturbWeights(w,i,f)),o=new Float64Array(a.length);for(let k=0;k<o.length;k++)o[k]=b[k]-a[k];return o}
+// one-at-a-time: weight i multiplied by (1-d) and (1+d), all weights renormalised; class = top `top` share of the valid cells
+function sensitivity(stds,w,o){o=o||{};const d=o.delta==null?.2:o.delta,top=o.top==null?.2:o.top,base=combine(stds,w),t0=topMask(base,top),rows=[];
+  let nv=0;for(let i=0;i<base.length;i++)if(base[i]===base[i])nv++;
+  for(let i=0;i<w.length;i++)for(const f of[1-d,1+d]){const wp=perturbWeights(w,i,f),p=combine(stds,wp),t1=topMask(p,top);let sa=0,mx=0,ch=0;
+    for(let k=0;k<p.length;k++)if(p[k]===p[k]){const e=Math.abs(p[k]-base[k]);sa+=e;if(e>mx)mx=e;if(t0.m[k]!==t1.m[k])ch++}
+    rows.push({i,factor:f,weight:wp[i],meanAbs:nv?sa/nv:NaN,maxAbs:mx,changedPct:nv?100*ch/nv:NaN})}
+  return{rows,thr:t0.thr,valid:nv,delta:d,top}}
+function contributions(stds,w,idx){return w.map((x,j)=>{const s=stds[j][idx];return{w:x,s,c:s===s?x*s:NaN}})}
+function statsOf(a){let n=0,s=0,mn=Infinity,mx=-Infinity;for(const v of a)if(v===v){n++;s+=v;if(v<mn)mn=v;if(v>mx)mx=v}return{n,nulls:a.length-n,min:n?mn:NaN,max:n?mx:NaN,mean:n?s/n:NaN}}
+function histogram(a,nb){const h=new Array(nb).fill(0);for(const v of a)if(v===v)h[Math.min(nb-1,Math.floor(v*nb))]++;return h}
+// ---------------- writers ------------------------------------------------------------------------------------------------------------
+const fnum=v=>String(+(+v).toPrecision(12));
+function validRange(g){let mn=Infinity,mx=-Infinity;for(const v of g.z)if(v===v){if(v<mn)mn=v;if(v>mx)mx=v}return[mn,mx]}
+function writeZmap(g,o){o=o||{};const npl=o.npl||5,width=o.width||20,nr=g.ny,nc=g.nx,[mn,mx]=validRange(g),sc=Math.max(Math.abs(mn),Math.abs(mx))||1;
+  const dec=o.dec!=null?o.dec:Math.max(0,Math.min(15,Math.ceil(10-Math.log10(sc))));
+  const label=String(o.label||g.name||'GRID').replace(/[,@\r\n]/g,'_').slice(0,40)||'GRID';
+  const out=['!','! '+label+' - written by MCDA AHP','!',`@${label}, GRID, ${npl}`,`${width}, ${NULL_ZMAP_TXT}, , ${dec}, 1`,`${nr}, ${nc}, ${fnum(g.x0)}, ${fnum(xmaxOf(g))}, ${fnum(yminOf(g))}, ${fnum(g.y1)}`,'0.0, 0.0, 0.0','@'];
+  for(let c=0;c<nc;c++){let s='',k=0;for(let r=0;r<nr;r++){const v=g.z[r*nc+c];s+=(v===v?v.toFixed(dec):NULL_ZMAP_TXT).padStart(width);if(++k===npl||r===nr-1){out.push(s);s='';k=0}}}
+  return out.join('\r\n')+'\r\n'}
+function writeEsri(g){const nx=g.nx,ny=g.ny,sq=Math.abs(g.dx-g.dy)<=1e-9*Math.abs(g.dx);
+  const L=[`ncols ${nx}`,`nrows ${ny}`,`xllcorner ${fnum(g.x0-g.dx/2)}`,`yllcorner ${fnum(yminOf(g)-g.dy/2)}`,sq?`cellsize ${fnum(g.dx)}`:`dx ${fnum(g.dx)}\r\ndy ${fnum(g.dy)}`,`NODATA_value ${NULL_ESRI}`];
+  for(let r=0;r<ny;r++){const a=new Array(nx);for(let c=0;c<nx;c++){const v=g.z[r*nx+c];a[c]=v===v?String(+v.toPrecision(10)):String(NULL_ESRI)}L.push(a.join(' '))}
+  return L.join('\r\n')+'\r\n'}
+function writeXYZ(g,col){const L=['x,y,'+(col||'preference')];for(let r=0;r<g.ny;r++)for(let c=0;c<g.nx;c++){const v=g.z[r*g.nx+c];if(v===v)L.push(fnum(g.x0+c*g.dx)+','+fnum(g.y1-r*g.dy)+','+String(+v.toPrecision(10)))}return L.join('\r\n')+'\r\n'}
+// ---------------- audit file ------------------------------------------------------------------------------------------------------------
+const geomOf=g=>({nx:g.nx,ny:g.ny,dx:g.dx,dy:g.dy,x0:g.x0,y1:g.y1,xmax:xmaxOf(g),ymin:yminOf(g)});
+function auditFile(a){ // a: {ref, layers:[...], weightsSource, CR, sens, stats, computedBy, nullValues}
+  return{format:'mcda-ahp-preference-map',version:1,computedBy:a.computedBy||'',
+    method:'weighted linear combination: P = sum_i w_i * s_i, s_i = linear standardisation of layer i between its bounds, clamped to 0..1 (reversed when lower is better), weights add up to 1',
+    nullPolicy:'a cell that is null in any layer is null in the result (never replaced by 0)',nullValues:a.nullValues||[],
+    referenceGeometry:geomOf(a.ref),resampling:'bilinear onto the geometry of the first grid; a node outside the source grid or with a null neighbour becomes null',
+    weightsSource:a.weightsSource,CR:a.CR==null||!isFinite(a.CR)?null:a.CR,layers:a.layers,preference:a.stats||null,sensitivity:a.sens||null}}
+W.MCDA_AHP={RI,SAATY,sL,FORMAT,dot,ahpSolve,groupsInfo,ahpBlocks,ahpMat,ahpAll,parseCriteria,weightsFile,readSession,
+  DEFAULT_NULLS,parseNumber,parseNulls,isNull,CAND,detectDelimiter,makeGrid,parseGrid,loadMessage,sameGeom,resample,boundsOf,standardise,clampCount,normaliseWeights,combine,weightsFromFile,perturbWeights,deltaMap,sensitivity,contributions,statsOf,histogram,quantile,writeZmap,writeEsri,writeXYZ,auditFile,xmaxOf,yminOf};
 })(window);
 </script>
 <script>
@@ -234,7 +491,7 @@ function refresh(){
   const warn=[];
   if(R)R.res.forEach(q=>{if(q.b.labels.length>2&&q.r.CR>=.1)warn.push('“'+q.b.title+'”: CR '+q.r.CR.toFixed(2)+' ≥ 0.10');if(q.b.labels.length>10)warn.push('“'+q.b.title+'”: CR n/a (n > 10)')});
   const rm=$('runMsg');rm.textContent=warn.join(' · ');rm.className='msg'+(warn.length?' err':'');
-  updAhp()}
+  updAhp();mapRefresh()}
 function structure(){buildAhp();refresh()}
 function setCriteria(text,keepJ){
   S.crit=parseCriteria(text);if(!keepJ)S.ahp={};
@@ -258,16 +515,138 @@ function loadJson(txt){
     msg(`Loaded ${S.crit.length} criteria and their judgments.`,false);structure()}
   catch(e){banner('Cannot load: '+e.message+'.',true)}}
 
+// ---------------- maps: one grid per criterion -> preference map (weighted linear combination) ---------------------------------------
+const {DEFAULT_NULLS,parseNulls,parseNumber,parseGrid,loadMessage,sameGeom,resample,boundsOf,standardise,clampCount,combine,normaliseWeights,weightsFromFile,deltaMap,sensitivity,contributions,statsOf,histogram,writeZmap,writeEsri,writeXYZ,auditFile,makeGrid,xmaxOf,yminOf}=window.MCDA_AHP;
+const MP={layers:{},wfile:null,wname:'',M:null,pick:null,sens:null,sel:null,fileFor:null};
+const RAMP=[[0,[68,1,84]],[.25,[59,82,139]],[.5,[33,144,141]],[.75,[93,200,99]],[1,[253,231,37]]],DIV=[[0,[33,102,172]],[.5,[247,247,247]],[1,[178,24,43]]],NULLC=[214,209,194];
+const rampCss=r=>'linear-gradient(90deg,'+r.map(([t,c])=>`rgb(${c}) ${t*100}%`).join(',')+')';
+function rampAt(r,t){t=Math.max(0,Math.min(1,t));for(let i=1;i<r.length;i++)if(t<=r[i][0]){const a=r[i-1],b=r[i],f=(t-a[0])/(b[0]-a[0]||1);return a[1].map((v,k)=>Math.round(v+(b[1][k]-v)*f))}return r[r.length-1][1]}
+const LUT=(r)=>{const o=[];for(let i=0;i<256;i++)o.push(rampAt(r,i/255));return o};const LUT_S=LUT(RAMP),LUT_D=LUT(DIV);
+const fv=v=>isFinite(v)?String(+v.toPrecision(5)):'–';
+function lay(n){return MP.layers[n]||(MP.layers[n]={grid:null,file:'',text:'',dir:true,mode:'minmax',lo:NaN,hi:NaN,msg:'',err:'',_rk:null,_rz:null,_ri:null})}
+function mapMsg(t,err){const e=$('mapMsg');if(e){e.textContent=t;e.className='msg'+(err?' err':'')}}
+function drawField(cv,arr,nx,ny,lo,hi,lut,g){cv.width=nx;cv.height=ny;if(g)cv.style.aspectRatio=((nx*g.dx)/(ny*g.dy)).toFixed(5);
+  const ctx=cv.getContext('2d'),im=ctx.createImageData(nx,ny),d=im.data,k=255/((hi-lo)||1);
+  for(let i=0;i<nx*ny;i++){const v=arr[i],c=v!==v?NULLC:lut[Math.max(0,Math.min(255,Math.round((v-lo)*k)))];d[4*i]=c[0];d[4*i+1]=c[1];d[4*i+2]=c[2];d[4*i+3]=255}
+  ctx.putImageData(im,0,0)}
+function curWeights(names){ // weights used by the map: the AHP of this page, or a weights file
+  if(MP.wfile)return{w:weightsFromFile(MP.wfile,names),src:'weights file '+MP.wname};
+  if(!R||R.gw.length!==names.length)throw new Error('no AHP weights');return{w:normaliseWeights(R.gw.slice()),src:'AHP on this page'}}
+function loadLayer(name,text,fname){
+  const L=lay(name),prev=L.grid;L.text=text;L.file=fname||'pasted text';L._rk=null;
+  try{const g=parseGrid(text,fname||name,{nulls:parseNulls($('nullv').value)});L.grid=g;L.msg=loadMessage(g);L.err='';banner(`${name}: ${g.nx} × ${g.ny} grid loaded.`)}
+  catch(e){L.grid=null;L.text='';L.msg='';L.err='Cannot load: '+e.message+'.';banner(name+': '+L.err,true)} // contract B: a failed load clears the layer
+  L.lo=L.hi=NaN;mapCompute()}
+function mapRefresh(){clearTimeout(mapRefresh.t);mapRefresh.t=setTimeout(mapCompute,40)}
+function mapCompute(){
+  MP.M=null;MP.sens=null;MP.sel=null;
+  const names=S.crit.map(c=>c.name);
+  if(!names.length||!R){mapMsg('List the criteria on the left (or load the example), then give one grid per criterion.');drawLayers();drawMap();return}
+  const miss=names.filter(n=>!lay(n).grid);
+  if(miss.length){mapMsg(`${names.length-miss.length} of ${names.length} layers loaded. Missing: ${miss.join(', ')}. The map needs one grid per criterion; a missing layer is never replaced by 0.`);drawLayers();drawMap();return}
+  try{
+    const cw=curWeights(names),ref=lay(names[0]).grid,rk=[ref.nx,ref.ny,ref.dx,ref.dy,ref.x0,ref.y1].join('|');
+    const M={names,w:cw.w,wsrc:cw.src,ref,rz:[],std:[],info:[]};
+    names.forEach((n,i)=>{const L=lay(n);L.err='';let z=L.grid.z,info={resampled:false,overlap:1,lost:0};
+      if(i>0&&!sameGeom(L.grid,ref)){try{if(L._rk!==rk){const r=resample(L.grid,ref);L._rk=rk;L._rz=r.z;L._ri=r.info}}catch(e){throw new Error(n+': '+e.message)}z=L._rz;info={resampled:true,overlap:L._ri.overlap,lost:L._ri.lost}}
+      if(L.mode!=='custom'){const b=boundsOf(z,L.mode);L.lo=b[0];L.hi=b[1]}
+      if(!(L.hi>L.lo))throw new Error(`${n}: the upper bound must be greater than the lower bound`);
+      M.rz.push(z);M.std.push(standardise(z,L.lo,L.hi,L.dir));info.clamp=clampCount(z,L.lo,L.hi);M.info.push(info)});
+    M.pref=combine(M.std,M.w);M.stats=statsOf(M.pref);MP.M=M;
+    const rs=M.info.map((q,i)=>q.resampled?`${names[i]} (${(100*q.overlap).toFixed(0)} % overlap)`:'').filter(Boolean);
+    mapMsg(`Preference map on the grid of “${names[0]}” (${ref.nx} × ${ref.ny}): ${M.stats.n} valid cells, ${M.stats.nulls} null (a cell null in any layer stays null).`+(rs.length?` Resampled bilinearly onto this grid: ${rs.join(', ')}.`:' All layers share this geometry.')+` Weights: ${cw.src}.`)
+  }catch(e){mapMsg('Cannot compute the map: '+e.message+'.',true)}
+  drawLayers();drawMap()}
+function drawLayers(){
+  const names=S.crit.map(c=>c.name),box=$('layBox');
+  const sel=$('layerSel'),pv=sel.value;sel.innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');if(names.includes(pv))sel.value=pv;
+  if(!names.length){box.innerHTML='<div class="empty">No criteria.</div>';return}
+  let w=null;try{w=curWeights(names).w}catch(e){}
+  let h='<table><thead><tr><th class="l">Criterion</th><th class="l">Grid</th><th>Direction</th><th>Bounds</th><th>Low</th><th>High</th><th>Standardised</th></tr></thead><tbody>';
+  names.forEach((n,i)=>{const L=lay(n),g=L.grid,M=MP.M,rs=M&&M.info[i].resampled;
+    const dis=L.mode==='custom'?'':'';
+    h+=`<tr><td class="l"><b>${esc(n)}</b><br><span class="hint">weight ${w?f4(w[i]):'–'}</span></td><td class="l"><button data-act="file" data-i="${i}">File…</button> <button data-act="clr" data-i="${i}" title="Remove this grid"${g?'':' disabled'}>×</button><div class="hint">${g?esc(L.file)+' · '+esc(g.fmt)+' · '+g.nx+' × '+g.ny+(rs?' · resampled':''):(L.err?'<span style="color:var(--acc2)">'+esc(L.err)+'</span>':'no grid')}</div>${g&&L.msg?'<div class="hint">'+esc(L.msg)+'</div>':''}</td>`
+      +`<td><select data-f="dir" data-i="${i}"><option value="1"${L.dir?' selected':''}>higher is better</option><option value="0"${L.dir?'':' selected'}>lower is better</option></select></td>`
+      +`<td><select data-f="mode" data-i="${i}"><option value="minmax"${L.mode==='minmax'?' selected':''}>min – max</option><option value="pct"${L.mode==='pct'?' selected':''}>2 – 98 percentile</option><option value="custom"${L.mode==='custom'?' selected':''}>custom</option></select></td>`
+      +`<td><input type="number" step="any" data-f="lo" data-i="${i}" style="width:84px" value="${isFinite(L.lo)?+L.lo.toPrecision(7):''}"></td><td><input type="number" step="any" data-f="hi" data-i="${i}" style="width:84px" value="${isFinite(L.hi)?+L.hi.toPrecision(7):''}"></td>`
+      +`<td>${g?`<canvas class="mini" id="mm${i}"></canvas>`:''}</td></tr>`});
+  box.innerHTML=h+'</tbody></table>';
+  names.forEach((n,i)=>{const L=lay(n),g=L.grid,cv=$('mm'+i);if(!g||!cv)return;
+    if(MP.M)drawField(cv,MP.M.std[i],MP.M.ref.nx,MP.M.ref.ny,0,1,LUT_S,MP.M.ref);
+    else{const b=boundsOf(g.z,'minmax');drawField(cv,g.z,g.nx,g.ny,b[0],b[1],LUT_S,g)}})}
+function drawMap(){
+  const M=MP.M,wr=$('mapWrap');['bZ','bA','bX','bAud'].forEach(id=>$(id).disabled=!M);
+  wr.style.display=M?'':'none';$('sensBox').style.display=M?'':'none';if(!M)return;
+  drawField($('cvP'),M.pref,M.ref.nx,M.ref.ny,0,1,LUT_S,M.ref);
+  if(MP.pick){const cv=$('cvP'),c=cv.getContext('2d'),{r,c:cc}=MP.pick;c.strokeStyle='#d81b1b';c.lineWidth=Math.max(.2,Math.max(M.ref.nx,M.ref.ny)/700);c.strokeRect(cc,r,1,1)}
+  const s=M.stats;$('mapStat').textContent=`min ${fv(s.min)} · mean ${fv(s.mean)} · max ${fv(s.max)} · ${s.nulls} null cell(s)`;
+  const hg=histogram(M.pref,20),cv=$('cvH'),W_=cv.clientWidth||400,H_=90;cv.width=W_;cv.height=H_;const x=cv.getContext('2d'),mx=Math.max(...hg,1),bw=W_/20;
+  x.clearRect(0,0,W_,H_);x.fillStyle='#4a5a4e';hg.forEach((v,i)=>{const bh=(H_-16)*v/mx;x.fillRect(i*bw+1,H_-14-bh,bw-2,bh)});x.fillStyle='#5c5a52';x.font='10px Inter,sans-serif';x.fillText('0',1,H_-2);x.fillText('0.5',W_/2-8,H_-2);x.fillText('1',W_-8,H_-2);
+  drawPick();drawSens()}
+function drawPick(){const M=MP.M,e=$('pickBox');if(!M||!MP.pick){e.innerHTML='<div class="hint">Click the map to read each layer’s contribution at a cell.</div>';return}
+  const {r,c}=MP.pick,i=r*M.ref.nx+c,cs=contributions(M.std,M.w,i),x=M.ref.x0+c*M.ref.dx,y=M.ref.y1-r*M.ref.dy,p=M.pref[i];
+  let h=`<div class="hint">Cell row ${r+1}, column ${c+1} · x ${fv(x)}, y ${fv(y)} · preference <b>${p===p?p.toFixed(4):'null (a layer is null here)'}</b></div><table><thead><tr><th class="l">Criterion</th><th>Value</th><th>Standardised</th><th>Weight</th><th>Contribution</th><th class="l"></th></tr></thead><tbody>`;
+  M.names.forEach((n,k)=>{const q=cs[k];h+=`<tr><td class="l">${esc(n)}</td><td>${fv(M.rz[k][i])}</td><td>${fv(q.s)}</td><td>${f4(q.w)}</td><td><b>${q.c===q.c?q.c.toFixed(4):'null'}</b></td><td class="l"><span class="wbar" style="width:${q.c===q.c?Math.round(120*q.c/Math.max(p,1e-9)):0}px"></span></td></tr>`});
+  e.innerHTML=h+'</tbody></table>'}
+function drawSens(){const e=$('sensT'),M=MP.M,S_=MP.sens;
+  if(!S_){e.innerHTML='';$('sensDWrap').style.display='none';return}
+  let h=`<div class="hint">One-at-a-time: each weight × ${(1-S_.delta).toFixed(2)} and × ${(1+S_.delta).toFixed(2)}, all weights renormalised. “Class change” is the share of valid cells that enter or leave the top ${(100*S_.top).toFixed(0)} % (threshold ${fv(S_.thr)} on the base map). Click a row to map the change in preference.</div><table><thead><tr><th class="l">Criterion</th><th>Weight</th><th>New weight</th><th>Mean |Δ|</th><th>Max |Δ|</th><th>Class change</th></tr></thead><tbody>`;
+  S_.rows.forEach((r,k)=>{h+=`<tr data-k="${k}" style="cursor:pointer${MP.sel===k?';background:var(--alt)':''}"><td class="l">${esc(M.names[r.i])} ${r.factor<1?'−':'+'}${Math.round(Math.abs(1-r.factor)*100)} %</td><td>${f4(M.w[r.i])}</td><td>${f4(r.weight)}</td><td>${r.meanAbs.toFixed(4)}</td><td>${r.maxAbs.toFixed(4)}</td><td>${r.changedPct.toFixed(1)} %</td></tr>`});
+  e.innerHTML=h+'</tbody></table>';
+  if(MP.sel==null){$('sensDWrap').style.display='none';return}
+  const r=S_.rows[MP.sel],d=deltaMap(M.std,M.w,r.i,r.factor);let m=0;for(const v of d)if(v===v&&Math.abs(v)>m)m=Math.abs(v);m=m||1e-9;
+  $('sensDWrap').style.display='';drawField($('cvD'),d.map(v=>v),M.ref.nx,M.ref.ny,-m,m,LUT_D,M.ref);
+  $('sensDLeg').textContent=`Change in preference: ${M.names[r.i]} ${r.factor<1?'−':'+'}${Math.round(Math.abs(1-r.factor)*100)} %: blue ${(-m).toFixed(4)}, white 0, red +${m.toFixed(4)}; grey = null.`}
+function runSens(){const M=MP.M;if(!M)return;const d=+$('sDel').value/100,t=+$('sTop').value/100;
+  if(!(d>0&&d<1)||!(t>0&&t<1)){banner('Perturbation and top share must be between 0 and 100 %.',true);return}
+  $('sensMsg').textContent='Computing…';setTimeout(()=>{MP.sens=sensitivity(M.std,M.w,{delta:d,top:t});MP.sel=null;$('sensMsg').textContent='';drawSens()},20)}
+function auditNow(){const M=MP.M;let CR=null;if(R){const c=R.res.filter(q=>q.b.labels.length>1).map(q=>q.r.CR);if(c.length&&c.every(isFinite))CR=Math.max(...c)}
+  return auditFile({ref:M.ref,computedBy:STAMP,weightsSource:M.wsrc,CR,nullValues:parseNulls($('nullv').value),stats:Object.assign({},M.stats),
+    sens:MP.sens?{delta:MP.sens.delta,top:MP.sens.top,threshold:MP.sens.thr,rows:MP.sens.rows.map(r=>({criterion:M.names[r.i],factor:r.factor,newWeight:r.weight,meanAbsChange:r.meanAbs,maxAbsChange:r.maxAbs,classChangePct:r.changedPct}))}:null,
+    layers:M.names.map((n,i)=>{const L=lay(n),g=L.grid,q=M.info[i];return{criterion:n,weight:M.w[i],file:L.file,format:g.fmt,geometry:{nx:g.nx,ny:g.ny,dx:g.dx,dy:g.dy,x0:g.x0,y1:g.y1},load:{nullNodes:g.info.nullNodes,nullValuesExcluded:g.info.sentinel,rowsRead:g.info.read,rowsSkipped:g.info.skipped,skipReasons:g.info.reasons},
+      resampled:q.resampled,overlap:q.overlap,nodesNullAfterResampling:q.lost,direction:L.dir?'higher is better':'lower is better',boundsMode:L.mode,lo:L.lo,hi:L.hi,cellsClampedLow:q.clamp.below,cellsClampedHigh:q.clamp.above}})})}
+function saveMap(kind){const M=MP.M;if(!M)return;const g=makeGrid(M.ref.nx,M.ref.ny,M.ref.dx,M.ref.dy,M.ref.x0,M.ref.y1,M.pref,'PREFERENCE');let t,n,mime='text/plain';
+  if(kind==='z'){t=writeZmap(g,{label:'PREFERENCE'});n='preference_map.zmap'}else if(kind==='a'){t=writeEsri(g);n='preference_map.asc'}else if(kind==='x'){t=writeXYZ(g,'preference');n='preference_map_xyz.csv';mime='text/csv'}else{t=JSON.stringify(auditNow(),null,1);n='preference_map_audit.json';mime='application/json'}
+  download(n,t,mime);$('mapExpMsg').textContent='Saved '+n+(kind==='x'?' (null cells are omitted)':'')}
+function exampleLayer(k,nx,ny,dx,x0,y1,hole){const z=new Float64Array(nx*ny);
+  for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){const x=(x0+c*dx-450000)/10000,y=(y1-r*dx-6780000)/10000;let v=Math.sin(x*1.3+k)*Math.cos(y*1.1-k*.7)+.4*Math.sin((x+y)*.8*(k+1));
+    if(hole&&Math.hypot(x-.9*nx*dx/10000,y-.4*ny*dx/10000)<.35*Math.min(nx,ny)*dx/10000)v=NaN;z[r*nx+c]=isNaN(v)?NaN:v*(10+5*k)+50*(k+1)}
+  const g=makeGrid(nx,ny,dx,dx,x0,y1,z,'example'+k);g.fmt='synthetic';return g}
+function loadExampleLayers(){const names=S.crit.map(c=>c.name),geo=[[40,30,500,450000,6795000],[40,30,500,450000,6795000],[32,24,600,450500,6794500],[80,60,250,450000,6795000],[40,30,500,450000,6795000]];
+  names.forEach((n,i)=>{const L=lay(n),q=geo[i%geo.length],g=exampleLayer(i,q[0],q[1],q[2],q[3],q[4],i===1);L.grid=g;L.file='synthetic example';L.text='';L._rk=null;L.mode='minmax';L.lo=L.hi=NaN;L.err='';L.dir=![2,4].includes(i);
+    L.msg=`synthetic grid, ${q[0]} × ${q[1]}, cell ${q[2]} m`+(i===1?', with a null hole':'')+(i===2?' (different geometry: resampled)':'')});mapCompute()}
+function initMap(){
+  $('nullv').value=DEFAULT_NULLS;$('mLeg').style.background=rampCss(RAMP);
+  $('layBox').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const n=S.crit[+b.dataset.i].name;
+    if(b.dataset.act==='file'){MP.fileFor=n;$('gfile').click()}else if(b.dataset.act==='clr'){const L=lay(n);L.grid=null;L.text='';L.msg='';L.err='';L._rk=null;mapCompute()}});
+  $('layBox').addEventListener('change',e=>{const t=e.target,f=t.dataset.f;if(!f)return;const L=lay(S.crit[+t.dataset.i].name);
+    if(f==='dir')L.dir=t.value==='1';else if(f==='mode'){L.mode=t.value}
+    else{const p=parseNumber(t.value);if(p.kind!=='ok'){banner('Not a number.',true);drawLayers();return}L[f]=p.value;L.mode='custom'}
+    mapCompute()});
+  $('gfile').onchange=e=>{const f=e.target.files[0];if(!f||!MP.fileFor)return;const n=MP.fileFor,r=new FileReader();r.onload=()=>loadLayer(n,String(r.result),f.name);r.readAsText(f);e.target.value=''};
+  $('bPasteLoad').onclick=()=>{const n=$('layerSel').value,t=$('gpaste').value;if(!n||!t.trim()){banner('Choose a criterion and paste a grid.',true);return}loadLayer(n,t,'')};
+  $('nullv').addEventListener('change',()=>{Object.keys(MP.layers).forEach(n=>{const L=MP.layers[n];if(L.grid&&L.text)loadLayer(n,L.text,L.file==='pasted text'?'':L.file)});mapCompute()});
+  $('bWf').onclick=()=>$('wfile').click();
+  $('wfile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);weightsFromFile(o,S.crit.map(c=>c.name));MP.wfile=o;MP.wname=f.name;$('wMsg').textContent='Weights from '+f.name+'.';mapCompute()}catch(x){banner('Cannot use this weights file: '+x.message+'.',true)}};r.readAsText(f);e.target.value=''};
+  $('bWa').onclick=()=>{MP.wfile=null;MP.wname='';$('wMsg').textContent='';mapCompute()};
+  $('cvP').addEventListener('click',e=>{const M=MP.M;if(!M)return;const q=e.currentTarget.getBoundingClientRect();
+    MP.pick={c:Math.max(0,Math.min(M.ref.nx-1,Math.floor((e.clientX-q.left)/q.width*M.ref.nx))),r:Math.max(0,Math.min(M.ref.ny-1,Math.floor((e.clientY-q.top)/q.height*M.ref.ny)))};drawMap()});
+  $('bSens').onclick=runSens;
+  $('sensT').addEventListener('click',e=>{const tr=e.target.closest('tr[data-k]');if(!tr)return;MP.sel=+tr.dataset.k;drawSens()});
+  $('bZ').onclick=()=>saveMap('z');$('bA').onclick=()=>saveMap('a');$('bX').onclick=()=>saveMap('x');$('bAud').onclick=()=>saveMap('j');
+  window.addEventListener('resize',()=>{if(MP.M)drawMap()});
+  mapCompute()}
+
 function init(){
   let pt;$('paste').addEventListener('input',()=>{clearTimeout(pt);pt=setTimeout(()=>setCriteria($('paste').value,true),300)});
-  $('bEx').onclick=()=>{$('paste').value=EXAMPLE;setCriteria(EXAMPLE,false);S.ahp=JSON.parse(JSON.stringify(EXJ));structure()};
+  $('bEx').onclick=()=>{$('paste').value=EXAMPLE;setCriteria(EXAMPLE,false);S.ahp=JSON.parse(JSON.stringify(EXJ));structure();loadExampleLayers()};
   $('bClr').onclick=()=>{S.ahp={};structure()};
   $('ahpBox').addEventListener('change',onAhp);
   $('bW').onclick=exportJson;$('bCsv').onclick=exportCsv;$('bLoad').onclick=()=>$('jfile').click();
   $('jfile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>loadJson(r.result);r.readAsText(f);e.target.value=''};
   document.addEventListener('dragover',e=>e.preventDefault());
   document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{if(/\.json$/i.test(f.name))loadJson(r.result);else{$('paste').value=String(r.result).slice(0,1e5);setCriteria($('paste').value,false)}};r.readAsText(f)});
-  structure()}
+  structure();initMap()}
 init();
 
 </script><script id="rgm-js">
@@ -348,6 +727,6 @@ init();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you enter leaves your machine. Analytic Hierarchy Process for the weights of criteria: Saaty pairwise comparison matrix (1 to 9 scale), principal eigenvector weights, λmax, consistency index and ratio, two-level groups, and a JSON weights file for the MCDA PROMETHEE page. Alternatives are not ranked here.","method":["<b>Pairwise judgments.</b> Each cell states how much more important the row criterion is than the column criterion on the Saaty scale (1, 3, 5, 7, 9 and the values in between); the lower triangle is the reciprocal.","<b>AHP.</b> Weights are the principal right eigenvector of the reciprocal judgment matrix (power iteration); the geometric-mean approximation is shown for comparison. λmax, CI = (λmax − n)/(n − 1), CR = CI/RI with Saaty's random indices (n ≤ 10). With groups, global weight = group weight × local weight.","<b>Consistency hints.</b> When CR ≥ 0.10 the page names the pair whose judgment departs most from the ratio of the two weights implied by the others, and what that ratio is.","<b>Weights file.</b> Export writes a JSON file (format mcda-ahp-weights): criteria with their global weights (adding up to 1), λmax, CI, CR (null when not available), the judgments and the date. The MCDA PROMETHEE page imports it and matches criteria by name; Load JSON here restores the criteria and judgments. A CSV with the weights and the consistency figures is also offered."],"sources":[["AHP: reciprocal judgment matrix, 1–9 scale, principal right eigenvector","Saaty, T.L. (1977), A scaling method for priorities in hierarchical structures, Journal of Mathematical Psychology 15(3), 234–281, <a href=\"https://doi.org/10.1016/0022-2496(77)90033-5\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(77)90033-5</a>; Saaty, R.W. (1987), The analytic hierarchy process—what it is and how it is used, Mathematical Modelling 9(3–5), 161–176, <a href=\"https://doi.org/10.1016/0270-0255(87)90473-8\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0270-0255(87)90473-8</a>","published (metadata verified)"],["Consistency index CI = (λmax − n)/(n − 1), CR = CI/RI, acceptance limit 0.10","Saaty (1977) and Saaty, R.W. (1987), as above (the 0.10 limit is the usual attribution to Saaty; not re-read). Statistical review of the consistency criterion and of the random indices: Alonso, J.A. &amp; Lamata, M.T. (2006), Consistency in the analytic hierarchy process: a new approach, International Journal of Uncertainty, Fuzziness and Knowledge-Based Systems 14(4), 445–459, <a href=\"https://doi.org/10.1142/s0218488506004114\" target=\"_blank\" rel=\"noopener\">doi:10.1142/s0218488506004114</a>","published (metadata verified)"],["Random indices RI(3…10) = 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49","Table attributed to Saaty (Saaty, R.W. 1987 above); the table itself was not read in the publication. Order of magnitude checked by simulation. Alonso &amp; Lamata (2006) give a recomputed table; its values were not compared here","published (metadata verified); table values not read"],["Geometric-mean approximation of the AHP weights (shown for comparison)","Crawford, G. &amp; Williams, C. (1985), A note on the analysis of subjective judgment matrices, Journal of Mathematical Psychology 29(4), 387–405, <a href=\"https://doi.org/10.1016/0022-2496(85)90002-1\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(85)90002-1</a>","published (metadata verified)"],["Rank reversal of AHP rankings of alternatives (background; this page ranks no alternatives)","Belton, V. &amp; Gear, T. (1983), On a short-coming of Saaty's method of analytic hierarchies, Omega 11(3), 228–230, <a href=\"https://doi.org/10.1016/0305-0483(83)90047-6\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0305-0483(83)90047-6</a>; Saaty, T.L. (1987), Rank generation, preservation, and reversal in the analytic hierarchy decision process, Decision Sciences 18(2), 157–177, <a href=\"https://doi.org/10.1111/j.1540-5915.1987.tb01514.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.1540-5915.1987.tb01514.x</a>","published (metadata verified)"],["Numerical check of the weights","Independent recomputation with numpy (eigen-decomposition), on the Saaty 3×3 case; a software check, not a source of the method","on the page (no publication)"],["Weights file for the MCDA PROMETHEE page","Site construction: JSON file with format mcda-ahp-weights, written here and read by the MCDA PROMETHEE page","on the page (no publication)"]],"validation":["Regression test scripts/mcda_ahp_test.mjs: Saaty 3×3 [[1,3,5],[1/3,1,3],[1/5,1/3,1]] gives w 0.6370/0.2583/0.1047, λmax 3.0385, CR 0.0332; a consistent 4×4 gives CR 0; above 10 criteria CR is not a number (shown as n/a); the weights file holds the weights, the consistency figures and the judgments.","AHP weights, λmax and CR identical to numpy eigen-decomposition."],"limits":["The consistency ratio is not computed above 10 criteria (the random-index table stops at n = 10 and no extended table was verified): it is shown as n/a.","The pairwise matrix compares criteria only: judgments of alternatives under each criterion and the resulting AHP ranking of alternatives are not implemented. Fuzzy AHP is not implemented either.","Weights are those of a single set of judgments: there is no aggregation of several decision makers."],"date":"27 November 2026"});
+({"what":"Runs entirely in your browser: nothing you enter leaves your machine. Analytic Hierarchy Process for the weights of criteria: Saaty pairwise comparison matrix (1 to 9 scale), principal eigenvector weights, λmax, consistency index and ratio, two-level groups, and a JSON weights file for the MCDA PROMETHEE page. Alternatives are not ranked here. The weights can then weight maps: one grid per criterion is standardised to 0–1 and combined by weighted linear combination into a preference map (0 to 1), with a one-at-a-time weight sensitivity and map exports.","method":["<b>Pairwise judgments.</b> Each cell states how much more important the row criterion is than the column criterion on the Saaty scale (1, 3, 5, 7, 9 and the values in between); the lower triangle is the reciprocal.","<b>AHP.</b> Weights are the principal right eigenvector of the reciprocal judgment matrix (power iteration); the geometric-mean approximation is shown for comparison. λmax, CI = (λmax − n)/(n − 1), CR = CI/RI with Saaty's random indices (n ≤ 10). With groups, global weight = group weight × local weight.","<b>Consistency hints.</b> When CR ≥ 0.10 the page names the pair whose judgment departs most from the ratio of the two weights implied by the others, and what that ratio is.","<b>Weights file.</b> Export writes a JSON file (format mcda-ahp-weights): criteria with their global weights (adding up to 1), λmax, CI, CR (null when not available), the judgments and the date. The MCDA PROMETHEE page imports it and matches criteria by name; Load JSON here restores the criteria and judgments. A CSV with the weights and the consistency figures is also offered.","<b>Layers.</b> One grid per criterion (ZMAP+, Surfer ASCII DSAA, ESRI ASCII grid, x y z text on a regular lattice; null values are the format's own plus an editable list, default −999, −999.25, −9999, 9999, 1e30, 1.70141e38, each exclusion counted in the load message; x y z text uses the same number decoding as the PROMETHEE page: decimal comma, thousands separators, header, missing and below-detection values counted with line numbers). The first criterion's grid sets the geometry; the others are resampled onto it by bilinear interpolation (stated on the page and in the audit file) and the load fails when a grid covers less than 50 % of it. A node outside a source grid, or next to a null node, becomes null.","<b>Standardisation.</b> Each layer is scaled linearly between a low and a high bound, values outside being clamped: s = (v − low)/(high − low) (higher is better) or 1 − that (lower is better). Bounds default to the minimum and maximum, or to the 2nd and 98th percentiles (linear interpolation), and can be edited. The number of clamped cells is written to the audit file.","<b>Preference map.</b> P = Σ w<sub>i</sub> s<sub>i</sub> in each cell, with the weights of the AHP computed on the page (global weights adding up to 1) or of a weights file matched by criterion name; P lies between 0 and 1. A cell that is null in any layer, whatever its weight, is null in the result: it is never counted as 0. Clicking the map gives the value, standardised value, weight and contribution w<sub>i</sub> s<sub>i</sub> of each layer at that cell.","<b>Sensitivity.</b> One at a time, each weight is multiplied by 0.8 and 1.2 (editable) and all weights are renormalised to 1. The page gives the mean and maximum absolute change of P, the share of valid cells that enter or leave the top 20 % class (the 80th percentile of the valid cells is recomputed for each perturbation, so the class always holds 20 % of the area), and the map of the change in P for a selected row.","<b>Exports.</b> The preference map as ZMAP+, ESRI ASCII grid or CSV XYZ (null cells omitted from the CSV, written as the null value in the two grid formats), and an audit JSON (format mcda-ahp-preference-map): layers, files, formats, geometries, resampling, directions, bounds, clamped cells, weights and their source, CR, null policy, map statistics and the sensitivity table if it was run."],"sources":[["AHP: reciprocal judgment matrix, 1–9 scale, principal right eigenvector","Saaty, T.L. (1977), A scaling method for priorities in hierarchical structures, Journal of Mathematical Psychology 15(3), 234–281, <a href=\"https://doi.org/10.1016/0022-2496(77)90033-5\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(77)90033-5</a>; Saaty, R.W. (1987), The analytic hierarchy process—what it is and how it is used, Mathematical Modelling 9(3–5), 161–176, <a href=\"https://doi.org/10.1016/0270-0255(87)90473-8\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0270-0255(87)90473-8</a>","published (metadata verified)"],["Consistency index CI = (λmax − n)/(n − 1), CR = CI/RI, acceptance limit 0.10","Saaty (1977) and Saaty, R.W. (1987), as above (the 0.10 limit is the usual attribution to Saaty; not re-read). Statistical review of the consistency criterion and of the random indices: Alonso, J.A. &amp; Lamata, M.T. (2006), Consistency in the analytic hierarchy process: a new approach, International Journal of Uncertainty, Fuzziness and Knowledge-Based Systems 14(4), 445–459, <a href=\"https://doi.org/10.1142/s0218488506004114\" target=\"_blank\" rel=\"noopener\">doi:10.1142/s0218488506004114</a>","published (metadata verified)"],["Random indices RI(3…10) = 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49","Table attributed to Saaty (Saaty, R.W. 1987 above); the table itself was not read in the publication. Order of magnitude checked by simulation. Alonso &amp; Lamata (2006) give a recomputed table; its values were not compared here","published (metadata verified); table values not read"],["Geometric-mean approximation of the AHP weights (shown for comparison)","Crawford, G. &amp; Williams, C. (1985), A note on the analysis of subjective judgment matrices, Journal of Mathematical Psychology 29(4), 387–405, <a href=\"https://doi.org/10.1016/0022-2496(85)90002-1\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(85)90002-1</a>","published (metadata verified)"],["Rank reversal of AHP rankings of alternatives (background; this page ranks no alternatives)","Belton, V. &amp; Gear, T. (1983), On a short-coming of Saaty's method of analytic hierarchies, Omega 11(3), 228–230, <a href=\"https://doi.org/10.1016/0305-0483(83)90047-6\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0305-0483(83)90047-6</a>; Saaty, T.L. (1987), Rank generation, preservation, and reversal in the analytic hierarchy decision process, Decision Sciences 18(2), 157–177, <a href=\"https://doi.org/10.1111/j.1540-5915.1987.tb01514.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.1540-5915.1987.tb01514.x</a>","published (metadata verified)"],["Weighted linear combination of standardised map layers (suitability overlay), its assumptions and good practice","Malczewski, J. (2000), On the use of weighted linear combination method in GIS: common and best practice approaches, Transactions in GIS 4(1), 5–22, <a href=\"https://doi.org/10.1111/1467-9671.00035\" target=\"_blank\" rel=\"noopener\">doi:10.1111/1467-9671.00035</a>","published (metadata verified)"],["GIS-based multicriteria decision analysis, AHP weights applied to map layers (background)","Malczewski, J. (2006), GIS-based multicriteria decision analysis: a survey of the literature, International Journal of Geographical Information Science 20(7), 703–726, <a href=\"https://doi.org/10.1080/13658810600661508\" target=\"_blank\" rel=\"noopener\">doi:10.1080/13658810600661508</a>","published (metadata verified)"],["Linear min–max standardisation with bounds and clamping, bilinear resampling, one-at-a-time weight perturbation","Standard operations; the bounds, the clamp, the 2–98 percentile option and the top-20 % class test are choices of this page, not taken from a publication","on the page (no publication)"],["Numerical check of the weights","Independent recomputation with numpy (eigen-decomposition), on the Saaty 3×3 case; a software check, not a source of the method","on the page (no publication)"],["Weights file for the MCDA PROMETHEE page","Site construction: JSON file with format mcda-ahp-weights, written here and read by the MCDA PROMETHEE page","on the page (no publication)"]],"validation":["Regression test scripts/mcda_ahp_test.mjs: Saaty 3×3 [[1,3,5],[1/3,1,3],[1/5,1/3,1]] gives w 0.6370/0.2583/0.1047, λmax 3.0385, CR 0.0332; a consistent 4×4 gives CR 0; above 10 criteria CR is not a number (shown as n/a); the weights file holds the weights, the consistency figures and the judgments.","AHP weights, λmax and CR identical to numpy eigen-decomposition.","Regression test scripts/mcda_ahp_map_test.mjs: a 3×3 case with two layers and weights 0.7/0.3 (one reversed) matches the hand-computed preference (0.3, 0.5, 0.7 at the corners and centre); a null in one layer stays null; bilinear resampling reproduces a linear field exactly and gives null outside the source grid or next to a null node; ZMAP+, ESRI ASCII and CSV XYZ files written by the page are read back with the same geometry, orientation and nulls; Surfer ASCII reading; null values counted, candidate null values only warned; XYZ with header, semicolon and decimal comma, with missing and text rows counted and numbered; weights file matching by name; sensitivity with a zero perturbation gives no change."],"limits":["The consistency ratio is not computed above 10 criteria (the random-index table stops at n = 10 and no extended table was verified): it is shown as n/a.","The pairwise matrix compares criteria only: judgments of alternatives under each criterion and the resulting AHP ranking of alternatives are not implemented. Fuzzy AHP is not implemented either.","Weights are those of a single set of judgments: there is no aggregation of several decision makers.","The preference map is a compensatory weighted linear combination: a high score on one criterion can offset a low score on another (no veto or threshold, no ordered weighted averaging). The AHP weights assume the criteria are independent; correlated layers count twice.","Scaling is linear between two bounds: no sigmoid or fuzzy membership, no non-monotonic (optimum-range) criteria. The bounds, not only the weights, decide the result.","Spatial uncertainty is not propagated: the layers are taken as exact, bilinear resampling smooths them, and the sensitivity analysis varies the weights only (one at a time, not jointly, and not the bounds or the data). Planar grids: no geodesic correction; all grids must share one coordinate system.","x y z text must lie on a regular lattice. The MCDA PROMETHEE page ranks alternatives against each other and does not produce maps."],"date":"27 November 2026"});
 </script>
 </body></html>
