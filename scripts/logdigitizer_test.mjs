@@ -197,7 +197,7 @@ test('LAS 2.0 output parses back with the LAS checker and gives the same values'
     cur.push({ mnem: mn, unit: un, values: LD.sampleCurve(u, dc, tr, ds, band) });
   }
   assert.ok(cur.every(c => c.values.some(v => v === LD.NULL)), 'depths outside the traced band are null');
-  const text = LD.buildLAS({ depthUnit: 'M', step, depths: ds, well: 'FICTITIOUS-1', comp: 'NONE', field: 'NONE', date: '2026-11-26', curves: cur });
+  const text = LD.buildLAS({ depthUnit: 'M', step, depths: ds, well: 'FICTITIOUS-1', uwi: 'FICT-0001', comp: 'NONE', field: 'NONE', date: '2026-11-26', curves: cur });
   const las = LAS.parse(text, 'out.las'), f = LAS.check(las);
   assert.deepEqual([...f.filter(x => x.sev === 'E').map(x => `${x.rule} ${x.msg}`)], []);
   assert.equal(las.ver.VERS, '2.0'); assert.equal(las.curves.length, 4); assert.equal(las.data.length, ds.length);
@@ -213,6 +213,33 @@ test('LAS 2.0 output parses back with the LAS checker and gives the same values'
   const csv = LD.buildCSV({ depthUnit: 'M', depths: ds, curves: cur }).split('\r\n');
   assert.equal(csv[0], 'DEPT_M,GR_GAPI,RT_OHMM,RHOB_G/C3'); assert.equal(csv.length, ds.length + 2);
   assert.equal(csv[1], '1498,,,');
+});
+
+test('export identification: no well/UWI without an explicit unknown choice (no silent UNKNOWN)', () => {
+  const o = { depthUnit: 'M', step: 1, depths: [1, 2], curves: [{ mnem: 'GR', unit: 'GAPI', values: [10, 20] }] };
+  assert.throws(() => LD.buildLAS(o), /well name/);
+  assert.throws(() => LD.buildLAS({ ...o, well: 'W-1' }), /UWI/);
+  assert.equal(LD.exportProblems({ well: 'W-1', uwi: '123' }).length, 0);
+  const t = LD.buildLAS({ ...o, unknown: true });
+  assert.ok(/WELL\.\s+UNKNOWN/.test(t));
+  const t2 = LD.buildLAS({ ...o, well: 'W-1', uwi: 'UWI-9', kb: 25.5, dref: 'KB' });
+  const las = LAS.parse(t2, 'x.las');
+  assert.equal(las.well.find(h => h.mnem === 'UWI').value, 'UWI-9'); assert.ok(/EKB\s*\.M\s+25\.5/.test(t2)); assert.ok(/DREF\s*\./.test(t2));
+});
+
+test('resolution per track and known-depth check', () => {
+  const lin = LD.pixelSize({ x0: 50, x1: 250, left: 0, right: 150, log: false }); assert.ok(Math.abs(lin.perPx - 0.75) < 1e-12);
+  const lg = LD.pixelSize({ x0: 270, x1: 470, left: 0.2, right: 2000, log: true }); assert.ok(Math.abs(lg.decadesPerPx - 0.02) < 1e-12 && lg.relPct > 4.5 && lg.relPct < 4.8);
+  assert.equal(LD.pixelSize({ x0: 5, x1: 5, left: 0, right: 1 }), null);
+  const c = LD.depthCheck(dc, L.truth.yOf(1580), 1580); assert.ok(Math.abs(c.diff) < 1e-9);
+  const c2 = LD.depthCheck(dc, L.truth.yOf(1580), 1583); assert.ok(Math.abs(c2.diff + 3) < 1e-9 && Math.abs(c2.pxErr - 30) < 1e-6);
+  assert.equal(LD.depthCheck(null, 1, 1), null);
+});
+
+test('audit record keeps calibration and parameters', () => {
+  const a = LD.auditRecord({ well: 'W', uwi: 'U', unit: 'm', ticks: [{ y: 1, depth: 2 }], dc, yTop: 1, yBot: 2, step: 0.5, nullVal: -999.25, tracks: [{ name: 'GR' }], kb: NaN });
+  assert.equal(a.kind, 'calibration-audit'); assert.equal(a.kb, null); assert.ok(Math.abs(a.depthFit.depthPerPx - 0.1) < 1e-9); assert.equal(a.ticks.length, 1);
+  JSON.stringify(a);
 });
 
 let fail = 0;
