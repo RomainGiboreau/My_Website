@@ -1160,6 +1160,46 @@ test('howHonoured / leaveOneOut / suggestSystem', () => {
   const s = G.suggestSystem(r.wells, 'shelf'); assert.ok(s && s.count > s.curCount, JSON.stringify(s));
   assert.equal(G.suggestSystem(G.parseWells('A 0 0 shoreface\nB 1 1 slope').wells, 'shelf'), null);
 });
+// ---------- source-to-sink chain, grain size / carbonate components, transport arrows by process ----------
+const synth = names => { const M = G.makeModel('shelf', {}); M.belts = names.map((n, i) => ({ name: n, color: '#' + (i + 1) + '0a0a0', w: 1, alias: [] })); return M; };
+test('sinkChain: clastic chain follows the belt order, own colours, grain per link; delta without shelf is greyed with a tooltip', () => {
+  const M = synth(['Delta plain', 'Delta front', 'Prodelta', 'Slope', 'Basin plain']);
+  let c = G.sinkChain(M); assert.equal(c.mode, 'clastic');
+  assert.deepEqual(c.links.map(l => l.name), ['Delta plain', 'Delta front', 'Prodelta', 'Slope', 'Basin plain']);
+  assert.equal(c.links[0].color, M.belts[0].color); assert.ok(c.links.every(l => !l.missing));
+  assert.deepEqual(c.links.map(l => l.grain), ['sand', 'sand', 'silt', 'silt', 'clay']);
+  const M2 = synth(['Delta plain', 'Delta front', 'Basin plain']); c = G.sinkChain(M2);
+  const miss = c.links.filter(l => l.missing); assert.deepEqual(miss.map(l => l.name), ['Shelf', 'Slope']);
+  assert.ok(/No shelf between/.test(miss[0].tip) && miss[0].color === '#d9d7cf' && !miss[0].k.length);
+  assert.deepEqual(c.links.map(l => l.name), ['Delta plain', 'Delta front', 'Shelf', 'Slope', 'Basin plain']);
+  c = G.sinkChain(M2, { present: new Set([0, 2]) }); assert.deepEqual(c.links.filter(l => !l.missing).map(l => l.name), ['Delta plain', 'Basin plain']);
+});
+test('sinkChain: carbonate platform to basin uses the existing carbonate belts, components instead of grain size, reef missing is flagged, ramp is not', () => {
+  const M = G.makeModel('carbonate', {}); let c = G.sinkChain(M);
+  assert.equal(c.mode, 'carbonate'); assert.deepEqual(c.links.map(l => l.stage), [0, 1, 1, 3, 4, 5]); assert.ok(c.links.every(l => !l.missing));
+  assert.deepEqual(c.links[3].comps, ['reef']); assert.deepEqual(c.links[4].comps, ['debris']); assert.deepEqual(c.links[5].comps, ['mud']);
+  const M2 = G.makeModel('carbonate', {}); M2.belts = M2.belts.filter(b => !/margin/i.test(b.name)); c = G.sinkChain(M2);
+  assert.deepEqual(c.links.filter(l => l.missing).map(l => l.name), ['Reef margin']);
+  c = G.sinkChain(G.makeModel('ramp', {})); assert.equal(c.mode, 'carbonate'); assert.ok(c.ramp && c.links.every(l => !l.missing));
+  assert.equal(G.sinkChain(G.makeModel('shelf', {})).mode, 'clastic');
+});
+test('sinkChain: EOD level merges consecutive links of the same domain and takes the EOD colours', () => {
+  const M = G.makeModel('delta', {}), c = G.sinkChain(M, { eod: true }), cl = G.eodClasses ? G.eodClasses(M) : null;
+  assert.ok(c.links.length >= 1 && c.links.every(l => l.eod && l.k.length >= 1));
+  if (cl) assert.ok(c.links.every(l => l.color === cl[l.eod[0]].color));
+});
+test('transport arrows carry a process; carbonate and clastic maps get wave/tide, gravity and settling arrows along the chain', () => {
+  const ex = G.examples.delta; ex.M.facies = Object.assign(G.faciesDefaults(), { arrows: true });
+  let mod = G.build(ex.M, ex.wells), A = (mod.facies || []).filter(o => o.type === 'arrow');
+  assert.ok(A.length >= 1 && A.every(o => ['river', 'wave', 'gravity', 'settle'].includes(o.proc)), JSON.stringify(A.map(o => o.proc)));
+  const Mc = G.makeModel('carbonate', {}); Mc.facies = Object.assign(G.faciesDefaults(), { arrows: true });
+  mod = G.build(Mc, []); A = (mod.facies || []).filter(o => o.type === 'arrow');
+  assert.deepEqual(A.map(o => o.proc).sort(), ['gravity', 'settle', 'wave']);
+  const pr = A.find(o => o.proc === 'gravity'), q = A.find(o => o.proc === 'wave');
+  assert.ok(Number.isFinite(pr.x) && Number.isFinite(pr.az));
+  const b = (o) => mod.beltAt(o.x + Math.sin(o.az * Math.PI / 180) * .5 * o.L, o.y + Math.cos(o.az * Math.PI / 180) * .5 * o.L);
+  assert.ok(b(pr) >= b(q), 'gravity-flow arrow lies more distal than the wave/tide arrow');
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
