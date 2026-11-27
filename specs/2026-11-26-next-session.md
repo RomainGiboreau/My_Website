@@ -21,7 +21,7 @@ All work is on `main`; check `git status -sb` and `git worktree list` first. Tes
 - Wave 2 merged and pushed: portfolio, wellpos, distfit, gridding, variogram, hull.
 - Wave 3 merged and pushed: burial, bht, compaction, biomarkers, rockeval, trcycles (no fix-* branch or worktree should remain: check anyway with
   `git worktree list` and `git branch --list "fix-*"`).
-- Wave 4 TO DO: chromatogram, ternary, clustering, gridattr, mapdigitizer (continuous), discretemap.
+- Wave 4 merged and pushed (27 Nov): chromatogram, ternary, clustering, gridattr, mapdigitizer, discretemap.
 - Wave 5 TO DO: logdigitizer, zmap-checker, mcda (move engine into a core block + add scripts/mcda_test.mjs), maturity (small), cvd (only if accurate viridis/cividis tables
   can be obtained from an open source), psec (no change needed).
 - Wave 6 LAST (the user asked for it last): gdemap. Fix the verdict banner (never a green "All N wells honoured" while some wells are unmatched or ✗; show how each well
