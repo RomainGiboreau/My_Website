@@ -141,6 +141,7 @@ td.l,th.l{text-align:left}
   <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
   <div class="pg"><span>Label column</span><select id="clab"></select></div>
   <div class="hint" style="margin-top:6px">Feature columns</div><div id="feats" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px"></div>
+  <div class="pg"><span title="Values equal to one of these are not used as data (counted in the message below). Separate with commas; empty the box to keep every value.">Null values</span><input type="text" id="nulls" value="-999, -999.25, -9999, 9999, 1e30, 1.70141e38" spellcheck="false"></div>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
  <section class="panel"><h2><span class="n">2</span>Method<span class="tt" tabindex="0" data-tip="k-means: Lloyd iterations from k-means++ starts, best of 10 runs, spherical clusters in the scaled space. Hierarchical: agglomerative; Ward minimises the variance increase, single/complete/average use Euclidean distances. DBSCAN: density-based, no k, noise points get no cluster (grey crosses). Gaussian mixture: EM from a k-means start, diagonal or full covariance, soft assignments (tooltip shows the probability). Scaling matters: without it, the feature with the largest unit decides.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Algorithm</span><select id="alg"><option value="km">k-means</option><option value="hc">Hierarchical</option><option value="db">DBSCAN</option><option value="gm">Gaussian mixture</option></select>
@@ -149,12 +150,14 @@ td.l,th.l{text-align:left}
   <span class="o-db">eps (scaled units)</span><input type="number" id="eps" value="0.5" min="0.001" step="0.05" class="o-db">
   <span class="o-db">min points</span><input type="number" id="minpts" value="5" min="1" step="1" class="o-db">
   <span class="o-gm">Covariance</span><select id="cov" class="o-gm"><option value="diag">diagonal</option><option value="full">full</option></select>
+  <span class="o-db">suggested eps</span><span class="o-db"><button id="bEps" type="button" title="Knee of the k-distance plot: the distance at which points start to be isolated. Click to use it.">–</button></span>
   <span>Scaling</span><select id="scal"><option value="z">z-score</option><option value="mm">min–max</option><option value="none">none</option></select>
   <span>Seed</span><input type="number" id="seed" value="1" step="1"></div>
   <label class="inl"><input type="checkbox" id="log10">log10 of all features (positive values only)</label>
   <div class="msg" id="runMsg"></div></div></section>
  <section class="panel"><h2><span class="n">3</span>Display<i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>X axis</span><select id="ax"></select><span>Y axis</span><select id="ay"></select></div>
+  <div class="pg"><span>Map X</span><select id="mx"></select><span>Map Y</span><select id="my"></select></div>
   <label class="inl"><input type="checkbox" id="cent" checked>Cluster centres</label>
   <label class="inl"><input type="checkbox" id="scan" checked>Compute metrics for k = 2…10</label></div></section>
 </aside>
@@ -163,96 +166,58 @@ td.l,th.l{text-align:left}
  <div class="cards"><div class="card wide"><h3 id="tScat">Clusters<span class="sp"></span><button data-png="cv">PNG</button></h3><canvas id="cv" style="position:static;height:460px"></canvas></div>
   <div class="card" id="cScan1"><h3>Silhouette vs k<span class="sp"></span><button data-png="cs1">PNG</button></h3><canvas id="cs1"></canvas></div>
   <div class="card" id="cScan2"><h3 id="tScan2">Inertia vs k<span class="sp"></span><button data-png="cs2">PNG</button></h3><canvas id="cs2"></canvas></div>
+  <div class="card" id="cKd"><h3 id="tKd">k-distance<span class="tt" tabindex="0" data-tip="Distance of each point to its (min points − 1)-th nearest other point, sorted. DBSCAN eps should sit near the knee: below it many points are noise, above it clusters merge. Dashed lines: the eps in use and the suggested one.">?</span><span class="sp"></span><button data-png="ckd">PNG</button></h3><canvas id="ckd"></canvas></div>
+  <div class="card wide" id="cMap"><h3 id="tMap">Map<span class="sp"></span><button data-png="cmap">PNG</button></h3><canvas id="cmap" style="position:static;height:420px"></canvas><div class="hint" style="margin:4px 6px">Spatial autocorrelation is not accounted for: the clusters are built from the feature columns only, neighbouring samples are not independent, and a spatially smooth map does not by itself show that the clusters are meaningful.</div></div>
   <div class="card" id="cSil"><h3>Silhouette per sample<span class="sp"></span><button data-png="csil">PNG</button></h3><canvas id="csil"></canvas></div>
   <div class="card" id="cDen"><h3>Dendrogram<span class="sp"></span><button data-png="cden">PNG</button></h3><canvas id="cden"></canvas></div></div>
  <div class="card" style="margin-top:12px"><h3>Clusters<span class="tt" tabindex="0" data-tip="Means are in the original units (before scaling and log). Silhouette ranges from −1 to 1: above about 0.5 the structure is clear, below 0.25 it is weak or absent. Clusters are numbered by decreasing size.">?</span></h3><div class="tw" id="sumT"></div></div>
 </main></div>
 
-<script>
-const $=id=>document.getElementById(id);
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
-  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
-  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
-const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
-const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
+<script id="clu-core">
+// ---------- numbers and tables (contracts A and C)
+// parseNumber -> {value, kind}: ok | missing | below (<0.1: value null, limit kept) | text.  opts.decimalComma: read "1,234" as 1.234 (default: thousands separator)
+function parseNumber(s,opts){if(typeof s==='number')return isFinite(s)?{value:s,kind:'ok'}:{value:null,kind:'missing'};
+  s=String(s==null?'':s).trim().replace(/[\u2212\u2012\u2013]/g,'-').replace(/[\s\u00a0\u202f]/g,'');
+  if(s===''||/^(nan|na|n\/a|nd|n\.d\.|null|-+)$/i.test(s))return{value:null,kind:'missing'};
+  const b=s.match(/^<=?([-+]?[\d.,]+)$/);if(b){const q=parseNumber(b[1],opts);return{value:null,kind:'below',limit:q.kind==='ok'?q.value:null}}
+  const dc=opts&&opts.decimalComma;
+  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');          // 1.234,5
+  else if(/^[-+]?\d{1,3}(,\d{3})+\.\d+$/.test(s)||/^[-+]?\d{1,3}(,\d{3}){2,}$/.test(s))s=s.replace(/,/g,'');   // 1,234.5  1,234,567
+  else if(/^[-+]?[1-9]\d{0,2},\d{3}$/.test(s)){s=dc?s.replace(',','.'):s.replace(',','')}     // 1,234: ambiguous
+  else if(s.includes(',')&&!s.includes('.')&&(s.match(/,/g)||[]).length===1)s=s.replace(',','.');   // 0,55  1,5
+  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?{value:+s,kind:'ok'}:{value:null,kind:'text'}}
+const toN=s=>{const p=parseNumber(s);return p.kind==='ok'?p.value:NaN};
+// decimal-comma evidence in a table (or a ; delimited file); ambiguous = cells like 1,234 (thousands or decimal comma)
+function tableCommaInfo(rows,sep){let dec=sep===';',amb=0;for(const r of rows)for(const c of r){const s=String(c).trim();
+    if(/^[-+]?\d+,\d{1,2}$/.test(s)||/^[-+]?\d+,\d{4,}$/.test(s)||/^[-+]?0,\d{3}$/.test(s))dec=true;else if(/^[-+]?[1-9]\d{0,2},\d{3}$/.test(s))amb++}
+  return{decimalComma:dec,ambiguous:amb}}
+// delimiter: tab, ;, whitespace or comma. A comma is never a delimiter when other fields use a decimal comma ("100 0,55").
+function detectDelimiter(lines,minCols){minCols=minCols||2;const has=c=>lines.some(l=>l.includes(c));
+  if(has('\t'))return'\t';if(has(';'))return';';
+  const ws=lines.every(l=>l.trim().split(/\s+/).length>=minCols);
+  if(ws&&lines.some(l=>/\d,\d{1,2}(?!\d)/.test(l))&&!lines.some(l=>/,\s|\s,/.test(l)))return' ';
+  if(lines.every(l=>l.split(',').length>=minCols))return',';return' '}
+// null values (contract C)
+const DEFAULT_NULLS='-999, -999.25, -9999, 9999, 1e30, 1.70141e38';
+const parseNulls=t=>String(t==null?'':t).split(/[,;\s]+/).filter(Boolean).map(Number).filter(isFinite);
+const isNull=(v,list)=>list.some(s=>Math.abs(v-s)<=1e-9*Math.max(1,Math.abs(s)));
+// values such as -99999 repeated in the data but not in the list: warn, do not exclude
+function candidateNulls(vals,list){const m=new Map();for(const v of vals)if(isFinite(v)&&!isNull(v,list)&&/^9{3,}(\.\d+)?$/.test(String(Math.abs(v))))m.set(v,(m.get(v)||0)+1);
+  return[...m].filter(e=>e[1]>=3).map(e=>({value:e[0],count:e[1]}))}
+const firstRows=a=>a.slice(0,5).join(', ')+(a.length>5?', …':'');
+// "N rows read, M skipped" with reasons; R = {missing,text,below,nul,log}: arrays of data-row numbers
+function describeSkips(nRead,R,nulHits,cands,used){const skip=new Set([].concat(R.missing,R.text,R.below,R.nul,R.log)).size,parts=[];
+  if(R.missing.length)parts.push(`${R.missing.length} missing (rows ${firstRows(R.missing)})`);
+  if(R.text.length)parts.push(`${R.text.length} non-numeric (rows ${firstRows(R.text)})`);
+  if(R.below.length)parts.push(`${R.below.length} below detection limit "<" (rows ${firstRows(R.below)})`);
+  if(R.nul.length)parts.push(`${R.nul.length} with a null value (rows ${firstRows(R.nul)})`);
+  if(R.log.length)parts.push(`${R.log.length} ≤ 0 with log10 (rows ${firstRows(R.log)})`);
+  let s=`${nRead} rows read, ${skip} skipped`+(parts.length?': '+parts.join('; '):'')+`; ${used} used.`;
+  for(const k of Object.keys(nulHits))s+=` ${nulHits[k]} values equal to the null value ${k} were excluded.`;
+  for(const c of cands||[])s+=` Warning: ${c.value} appears ${c.count} times (possible null value, not excluded: add it to the null values to exclude it).`;
+  return s}
 function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
-let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
-  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
-function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
-function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>banner(ok||'Copied.'),()=>fallbackCopy(t,ok));else fallbackCopy(t,ok)}
-function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
-const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
-document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
-// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
-function parseTable(text,minCols){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
-  const has=c=>lines.some(l=>l.includes(c));let sep;
-  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
-  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
-  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
-  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
-  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
-  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
-  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
-  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
-const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
-// ---- plotting engine ----------------------------------------------------------------
-const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
-function niceStep(r,n){const raw=r/n,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return(m<1.5?1:m<2.25?2:m<3.5?2.5:m<7.5?5:10)*p}
-function lin(lo,hi,n){const st=niceStep(hi-lo,n),a=Math.ceil(lo/st-1e-9)*st,t=[];for(let v=a;v<=hi+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t}
-function logt(lo,hi){const t=[];for(let e=Math.floor(Math.log10(lo));e<=Math.ceil(Math.log10(hi));e++)for(const m of[1,2,5]){const v=m*Math.pow(10,e);if(v>=lo*0.999&&v<=hi*1.001)t.push(v)}return t}
-const tickTxt=v=>(Math.abs(v)>=1e5||(Math.abs(v)<1e-2&&v!==0))?v.toExponential(0):String(+v.toPrecision(6));
-function tipEl(){let t=$('tip');if(!t){t=document.createElement('div');t.id='tip';document.body.appendChild(t)}return t}
-/* spec: {title, ylab, ylim, yrev, ylog, panels:[{xlab,xlim,xlog,pts:[{x,y,c,g(rey),info}],lines:[{x:[],y:[],c,w,dash,label}],vlines:[{v,c,label}],hlines:[{v,c,label}]}], sq(uare)} */
-function drawChart(cv,spec){
-  const dpr=window.devicePixelRatio||1,W=cv.clientWidth||600,H=cv.clientHeight||340;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
-  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,W,H);
-  const P=spec.panels,np=P.length,L=58,R=10,T=spec.title?22:10,B=44,gap=np>1?10:0,pw=(W-L-R-gap*(np-1))/np,ph=H-T-B;
-  const fin=Number.isFinite;
-  // shared y range
-  let ys=[];for(const p of P){for(const q of p.pts)if(fin(q.y))ys.push(q.y);for(const l of p.lines||[])for(const v of l.y)if(fin(v))ys.push(v)}
-  let [y0,y1]=spec.ylim||[Math.min(...ys),Math.max(...ys)];if(!fin(y0)||!fin(y1)){y0=0;y1=1}if(y0===y1){y0-=1;y1+=1}
-  if(!spec.ylim){const pd=(y1-y0)*0.04;if(spec.ylog){y0/=1.15;y1*=1.15}else{y0-=pd;y1+=pd}}
-  const fy=spec.ylog?Math.log10:v=>v,ya=fy(y0),yb=fy(y1),py=v=>spec.yrev?T+(fy(v)-ya)/(yb-ya)*ph:T+ph-(fy(v)-ya)/(yb-ya)*ph;
-  x.font='11px Inter,sans-serif';x.textBaseline='middle';cv._hits=[];
-  if(spec.title){x.fillStyle='#232220';x.font='600 12px "Space Grotesk",Inter,sans-serif';x.textAlign='left';x.fillText(spec.title,L,10)}
-  P.forEach((p,k)=>{
-    const ox=L+k*(pw+gap);let xs=[];for(const q of p.pts)if(fin(q.x))xs.push(q.x);
-    let [x0,x1]=p.xlim||[Math.min(...xs),Math.max(...xs)];if(!fin(x0)||!fin(x1)){x0=0;x1=1}if(x0===x1){x0-=1;x1+=1}
-    if(!p.xlim){if(p.xlog){x0/=1.15;x1*=1.15}else{const pd=(x1-x0)*0.05;x0-=pd;x1+=pd}}
-    const fx=p.xlog?Math.log10:v=>v,xa=fx(x0),xb=fx(x1),px=v=>p.xrev?ox+pw-(fx(v)-xa)/(xb-xa)*pw:ox+(fx(v)-xa)/(xb-xa)*pw;
-    x.save();x.beginPath();x.rect(ox,T,pw,ph);x.clip();
-    // grid
-    const xt=p.xlog?logt(x0,x1):lin(x0,x1,Math.max(3,Math.floor(pw/70))),yt=spec.ylog?logt(y0,y1):lin(y0,y1,Math.max(3,Math.floor(ph/48)));
-    x.strokeStyle='#ece9df';x.lineWidth=1;x.beginPath();for(const t of xt){const u=Math.round(px(t))+.5;x.moveTo(u,T);x.lineTo(u,T+ph)}for(const t of yt){const u=Math.round(py(t))+.5;x.moveTo(ox,u);x.lineTo(ox+pw,u)}x.stroke();
-    for(const v of p.vlines||[]){const u=px(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(u,T);x.lineTo(u,T+ph);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,u+3,T+9)}}
-    for(const v of p.hlines||[]){const u=py(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(ox,u);x.lineTo(ox+pw,u);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,ox+3,u-7)}}
-    for(const l of p.lines||[]){x.strokeStyle=l.c||'#5c5a52';x.lineWidth=l.w||1.2;x.setLineDash(l.dash||[]);x.beginPath();let on=false,last=null,first=null;
-      for(let i=0;i<l.x.length;i++){if(!fin(l.x[i])||!fin(l.y[i])){on=false;continue}const a=px(l.x[i]),b=py(l.y[i]);if(on)x.lineTo(a,b);else x.moveTo(a,b);on=true;last=[a,b];if(!first)first=[a,b]}x.stroke();x.setLineDash([]);
-      if(l.label&&l.start&&first){x.fillStyle=l.c||'#5c5a52';x.textAlign='left';x.fillText(l.label,Math.max(first[0]+4,ox+4),Math.min(T+ph-8,first[1]-8))}else if(l.label&&last){x.fillStyle=l.c||'#5c5a52';x.textAlign='right';x.fillText(l.label,Math.min(last[0]-3,ox+pw-3),Math.max(T+8,last[1]-8))}}
-    // points: grey crosses first, then coloured
-    for(const q of p.pts){if(!q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y);x.strokeStyle='#9a968a';x.lineWidth=1.3;x.beginPath();x.moveTo(a-3,b-3);x.lineTo(a+3,b+3);x.moveTo(a+3,b-3);x.lineTo(a-3,b+3);x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
-    for(const q of p.pts){if(q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y),r=q.r||4;x.beginPath();x.arc(a,b,r,0,7);x.fillStyle=q.c||'#4a5a4e';x.fill();x.lineWidth=q.ring?2:1;x.strokeStyle=q.ring||'#232220';x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
-    x.restore();
-    x.strokeStyle='#8a8678';x.lineWidth=1;x.strokeRect(ox+.5,T+.5,pw,ph);
-    x.fillStyle='#5c5a52';x.textAlign='center';x.textBaseline='top';x.font='11px Inter,sans-serif';for(const t of xt){const u=px(t);if(u>=ox-1&&u<=ox+pw+1)x.fillText(tickTxt(t),u,T+ph+4)}
-    x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(p.xlab||'',ox+pw/2,T+ph+22);
-    if(k===0){x.textAlign='right';x.textBaseline='middle';x.fillStyle='#5c5a52';x.font='11px Inter,sans-serif';for(const t of yt){const u=py(t);if(u>=T-1&&u<=T+ph+1)x.fillText(tickTxt(t),ox-5,u)}
-      x.save();x.translate(12,T+ph/2);x.rotate(-Math.PI/2);x.textAlign='center';x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(spec.ylab||'',0,0);x.restore()}
-    x.textBaseline='middle'});
-  if(!cv._tip){cv._tip=true;cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=100;for(const h of cv._hits||[]){const d=(h.x-mx)**2+(h.y-my)**2;if(d<bd){bd=d;best=h}}
-      const t=tipEl();if(best&&best.i){t.innerHTML=best.i;t.style.display='block';t.style.left=Math.min(window.innerWidth-310,e.clientX+14)+'px';t.style.top=(e.clientY+14)+'px'}else t.style.display='none'});
-    cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
-function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)})}
-
-// =====================================================================================
-//  Clustering: k-means, hierarchical (Lance–Williams), DBSCAN, Gaussian mixture (EM), silhouette, PCA.
-//  All algorithms work on X = n x d scaled features (array of Float64Array).
-// =====================================================================================
-const D={table:null,rows:[],feat:[],X:null,raw:null,lab:null,sil:null,silM:NaN,pc:null,pcv:null,hc:null,scanR:null,msgs:[]};
-const NOISE=-1,GREY='#9a968a';
-const col=c=>c<0?GREY:PAL[c%PAL.length];
+const NOISE=-1;
 const sq=(a,b)=>{let s=0;for(let i=0;i<a.length;i++){const t=a[i]-b[i];s+=t*t}return Math.sqrt(s)};
 // ---------- k-means (k-means++ seeding, Lloyd iterations, best of `reps` runs by inertia)
 function kmeans(X,k,r,reps){const n=X.length,d=X[0].length;let best=null;k=Math.min(k,n);
@@ -344,23 +309,125 @@ function pca(X){const n=X.length,d=X[0].length,m=new Float64Array(d);for(const x
   const ev=Array.from({length:d},(_,i)=>({v:A[i][i],i})).sort((a,b)=>b.v-a.v),tot=ev.reduce((a,b)=>a+Math.max(b.v,0),0)||1;
   const pcs=ev.slice(0,Math.min(2,d)).map(e=>X.map(x=>{let s=0;for(let j=0;j<d;j++)s+=(x[j]-m[j])*V[j][e.i];return s}));
   return{pcs,frac:ev.slice(0,2).map(e=>Math.max(e.v,0)/tot)}}
+// ---------- DBSCAN helpers: sorted distance of each point to its (minPts-1)-th nearest other point (the point itself counts in minPts), and the knee
+function kdist(X,minPts){const n=X.length,m=Math.max(1,Math.min(Math.round(minPts)||1,n))-1,out=new Float64Array(n);
+  if(m>0)for(let i=0;i<n;i++){const d=[];for(let j=0;j<n;j++)if(j!==i)d.push(sq(X[i],X[j]));d.sort((a,b)=>a-b);out[i]=d[Math.min(m,d.length)-1]}
+  return Array.from(out).sort((a,b)=>a-b)}
+// knee of an ascending curve: point farthest below the chord joining its ends (normalised axes)
+function suggestEps(asc){const n=asc.length;if(n<3)return null;const v0=asc[0],v1=asc[n-1];if(!(v1>v0))return null;let bi=-1,bd=0;
+  for(let i=0;i<n;i++){const d=i/(n-1)-(asc[i]-v0)/(v1-v0);if(d>bd){bd=d;bi=i}}return bi<0?null:asc[bi]}
+window.CLU={parseNumber,toN,tableCommaInfo,detectDelimiter,parseNulls,isNull,candidateNulls,describeSkips,DEFAULT_NULLS,rng,sq,NOISE,kmeans,hclust,hcut,dbscan,gmm,silhouette,pca,kdist,suggestEps};
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
+const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>banner(ok||'Copied.'),()=>fallbackCopy(t,ok));else fallbackCopy(t,ok)}
+function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
+const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
+document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
+function parseTable(text,minCols){
+  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
+  let sep=detectDelimiter(lines,minCols),sepName=sep;if(sep===' ')sep=/\s+/;
+  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
+  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
+  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  return{head,units,rows,nc,sep:sepName,comma:tableCommaInfo(rows,sepName)}}
+const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+// ---- plotting engine ----------------------------------------------------------------
+const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
+function niceStep(r,n){const raw=r/n,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return(m<1.5?1:m<2.25?2:m<3.5?2.5:m<7.5?5:10)*p}
+function lin(lo,hi,n){const st=niceStep(hi-lo,n),a=Math.ceil(lo/st-1e-9)*st,t=[];for(let v=a;v<=hi+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t}
+function logt(lo,hi){const t=[];for(let e=Math.floor(Math.log10(lo));e<=Math.ceil(Math.log10(hi));e++)for(const m of[1,2,5]){const v=m*Math.pow(10,e);if(v>=lo*0.999&&v<=hi*1.001)t.push(v)}return t}
+const tickTxt=v=>(Math.abs(v)>=1e5||(Math.abs(v)<1e-2&&v!==0))?v.toExponential(0):String(+v.toPrecision(6));
+function tipEl(){let t=$('tip');if(!t){t=document.createElement('div');t.id='tip';document.body.appendChild(t)}return t}
+/* spec: {title, ylab, ylim, yrev, ylog, panels:[{xlab,xlim,xlog,pts:[{x,y,c,g(rey),info}],lines:[{x:[],y:[],c,w,dash,label}],vlines:[{v,c,label}],hlines:[{v,c,label}]}], sq(uare)} */
+function drawChart(cv,spec){
+  const dpr=window.devicePixelRatio||1,W=cv.clientWidth||600,H=cv.clientHeight||340;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  const P=spec.panels,np=P.length,L=58,R=10,T=spec.title?22:10,B=44,gap=np>1?10:0,pw=(W-L-R-gap*(np-1))/np,ph=H-T-B;
+  const fin=Number.isFinite;
+  // shared y range
+  let ys=[];for(const p of P){for(const q of p.pts)if(fin(q.y))ys.push(q.y);for(const l of p.lines||[])for(const v of l.y)if(fin(v))ys.push(v)}
+  let [y0,y1]=spec.ylim||[Math.min(...ys),Math.max(...ys)];if(!fin(y0)||!fin(y1)){y0=0;y1=1}if(y0===y1){y0-=1;y1+=1}
+  if(!spec.ylim){const pd=(y1-y0)*0.04;if(spec.ylog){y0/=1.15;y1*=1.15}else{y0-=pd;y1+=pd}}
+  const fy=spec.ylog?Math.log10:v=>v,ya=fy(y0),yb=fy(y1),py=v=>spec.yrev?T+(fy(v)-ya)/(yb-ya)*ph:T+ph-(fy(v)-ya)/(yb-ya)*ph;
+  x.font='11px Inter,sans-serif';x.textBaseline='middle';cv._hits=[];
+  if(spec.title){x.fillStyle='#232220';x.font='600 12px "Space Grotesk",Inter,sans-serif';x.textAlign='left';x.fillText(spec.title,L,10)}
+  P.forEach((p,k)=>{
+    const ox=L+k*(pw+gap);let xs=[];for(const q of p.pts)if(fin(q.x))xs.push(q.x);
+    let [x0,x1]=p.xlim||[Math.min(...xs),Math.max(...xs)];if(!fin(x0)||!fin(x1)){x0=0;x1=1}if(x0===x1){x0-=1;x1+=1}
+    if(!p.xlim){if(p.xlog){x0/=1.15;x1*=1.15}else{const pd=(x1-x0)*0.05;x0-=pd;x1+=pd}}
+    const fx=p.xlog?Math.log10:v=>v,xa=fx(x0),xb=fx(x1),px=v=>p.xrev?ox+pw-(fx(v)-xa)/(xb-xa)*pw:ox+(fx(v)-xa)/(xb-xa)*pw;
+    x.save();x.beginPath();x.rect(ox,T,pw,ph);x.clip();
+    // grid
+    const xt=p.xlog?logt(x0,x1):lin(x0,x1,Math.max(3,Math.floor(pw/70))),yt=spec.ylog?logt(y0,y1):lin(y0,y1,Math.max(3,Math.floor(ph/48)));
+    x.strokeStyle='#ece9df';x.lineWidth=1;x.beginPath();for(const t of xt){const u=Math.round(px(t))+.5;x.moveTo(u,T);x.lineTo(u,T+ph)}for(const t of yt){const u=Math.round(py(t))+.5;x.moveTo(ox,u);x.lineTo(ox+pw,u)}x.stroke();
+    for(const v of p.vlines||[]){const u=px(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(u,T);x.lineTo(u,T+ph);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,u+3,T+9)}}
+    for(const v of p.hlines||[]){const u=py(v.v);x.strokeStyle=v.c||'#a8623a';x.setLineDash([5,4]);x.beginPath();x.moveTo(ox,u);x.lineTo(ox+pw,u);x.stroke();x.setLineDash([]);if(v.label){x.fillStyle=v.c||'#a8623a';x.textAlign='left';x.fillText(v.label,ox+3,u-7)}}
+    for(const l of p.lines||[]){x.strokeStyle=l.c||'#5c5a52';x.lineWidth=l.w||1.2;x.setLineDash(l.dash||[]);x.beginPath();let on=false,last=null,first=null;
+      for(let i=0;i<l.x.length;i++){if(!fin(l.x[i])||!fin(l.y[i])){on=false;continue}const a=px(l.x[i]),b=py(l.y[i]);if(on)x.lineTo(a,b);else x.moveTo(a,b);on=true;last=[a,b];if(!first)first=[a,b]}x.stroke();x.setLineDash([]);
+      if(l.label&&l.start&&first){x.fillStyle=l.c||'#5c5a52';x.textAlign='left';x.fillText(l.label,Math.max(first[0]+4,ox+4),Math.min(T+ph-8,first[1]-8))}else if(l.label&&last){x.fillStyle=l.c||'#5c5a52';x.textAlign='right';x.fillText(l.label,Math.min(last[0]-3,ox+pw-3),Math.max(T+8,last[1]-8))}}
+    // points: grey crosses first, then coloured
+    for(const q of p.pts){if(!q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y);x.strokeStyle='#9a968a';x.lineWidth=1.3;x.beginPath();x.moveTo(a-3,b-3);x.lineTo(a+3,b+3);x.moveTo(a+3,b-3);x.lineTo(a-3,b+3);x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    for(const q of p.pts){if(q.g||!fin(q.x)||!fin(q.y))continue;const a=px(q.x),b=py(q.y),r=q.r||4;x.beginPath();x.arc(a,b,r,0,7);x.fillStyle=q.c||'#4a5a4e';x.fill();x.lineWidth=q.ring?2:1;x.strokeStyle=q.ring||'#232220';x.stroke();cv._hits.push({x:a,y:b,i:q.info})}
+    x.restore();
+    x.strokeStyle='#8a8678';x.lineWidth=1;x.strokeRect(ox+.5,T+.5,pw,ph);
+    x.fillStyle='#5c5a52';x.textAlign='center';x.textBaseline='top';x.font='11px Inter,sans-serif';for(const t of xt){const u=px(t);if(u>=ox-1&&u<=ox+pw+1)x.fillText(tickTxt(t),u,T+ph+4)}
+    x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(p.xlab||'',ox+pw/2,T+ph+22);
+    if(k===0){x.textAlign='right';x.textBaseline='middle';x.fillStyle='#5c5a52';x.font='11px Inter,sans-serif';for(const t of yt){const u=py(t);if(u>=T-1&&u<=T+ph+1)x.fillText(tickTxt(t),ox-5,u)}
+      x.save();x.translate(12,T+ph/2);x.rotate(-Math.PI/2);x.textAlign='center';x.fillStyle='#232220';x.font='500 12px Inter,sans-serif';x.fillText(spec.ylab||'',0,0);x.restore()}
+    x.textBaseline='middle'});
+  if(!cv._tip){cv._tip=true;cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=100;for(const h of cv._hits||[]){const d=(h.x-mx)**2+(h.y-my)**2;if(d<bd){bd=d;best=h}}
+      const t=tipEl();if(best&&best.i){t.innerHTML=best.i;t.style.display='block';t.style.left=Math.min(window.innerWidth-310,e.clientX+14)+'px';t.style.top=(e.clientY+14)+'px'}else t.style.display='none'});
+    cv.addEventListener('mouseleave',()=>{tipEl().style.display='none'})}}
+function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)})}
+
+// =====================================================================================
+//  Clustering: k-means, hierarchical (Lance–Williams), DBSCAN, Gaussian mixture (EM), silhouette, PCA.
+//  All algorithms work on X = n x d scaled features (array of Float64Array).
+// =====================================================================================
+const D={table:null,rows:[],feat:[],X:null,raw:null,lab:null,sil:null,silM:NaN,pc:null,pcv:null,hc:null,scanR:null,msgs:[]};
+const GREY='#9a968a';
+const col=c=>c<0?GREY:PAL[c%PAL.length];
 // ---------- data
 function numCols(t){return t.head.map((_,j)=>{let ok=0,all=0;for(const r of t.rows)if(r[j]!==''){all++;if(isFinite(toN(r[j])))ok++}return all>0&&ok/all>=0.8})}
 function fillCols(){const t=D.table,num=numCols(t);let lab=t.head.findIndex((h,j)=>!num[j]);if(lab<0)lab=t.head.findIndex(h=>/^(id|name|sample|well|label)/.test(normName(h)));
   $('clab').innerHTML='<option value="-1">— (row number)</option>'+t.head.map((h,j)=>`<option value="${j}"${j===lab?' selected':''}>${esc(h)}</option>`).join('');
   $('feats').innerHTML=t.head.map((h,j)=>num[j]&&j!==lab&&!/^(depth|prof|md|tvd|x|y|lat|lon|easting|northing)$/.test(normName(h))?`<label class="inl"><input type="checkbox" data-f="${j}" checked>${esc(h)}</label>`:num[j]?`<label class="inl"><input type="checkbox" data-f="${j}">${esc(h)}</label>`:'').join('');
+  const mo='<option value="-1">—</option>'+t.head.map((h,j)=>num[j]?`<option value="${j}">${esc(h)}</option>`:'').join('');$('mx').innerHTML=mo;$('my').innerHTML=mo;
+  const find=re=>t.head.findIndex((h,j)=>num[j]&&re.test(normName(h)));const ix=find(/^(x|xcoord|easting|east|lon|long|longitude)$/),iy=find(/^(y|ycoord|northing|north|lat|latitude)$/);if(ix>=0&&iy>=0){$('mx').value=ix;$('my').value=iy}
   document.querySelectorAll('#feats input').forEach(e=>e.addEventListener('change',build))}
-function loadText(text){const t=parseTable(text,2);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillCols();build();return true}
+function clearResults(keep){if(!keep){D.X=null;D.rows=[];D.pc=null}D.lab=null;D.sil=null;D.silM=NaN;D.hc=null;D.scanR=null;D.sumRows=null;D.epsSug=null;D.kd=null;
+  ['cv','cs1','cs2','csil','cden','ckd','cmap'].forEach(id=>{const c=$(id),x=c.getContext('2d');x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,c.width,c.height)});
+  ['cScan1','cScan2','cSil','cDen','cKd','cMap'].forEach(id=>$(id).style.display='none');
+  $('legend').innerHTML='';$('sumT').innerHTML='';$('runMsg').textContent='';$('runMsg').className='msg';$('exportMsg').textContent='';$('tScat').firstChild.textContent='Clusters'}
+function clearAll(msg){D.table=null;$('feats').innerHTML='';$('clab').innerHTML='';$('ax').innerHTML='';$('ay').innerHTML='';$('mx').innerHTML='';$('my').innerHTML='';clearResults();
+  $('dataMsg').textContent=msg+' The previous data and results were cleared.';$('dataMsg').className='msg err'}
+function failBuild(msg){clearResults();$('dataMsg').textContent=msg;$('dataMsg').className='msg err'}
+function loadText(text){const t=parseTable(text,2);if(t.err){clearAll(t.err);return false}D.table=t;fillCols();build();return true}
 function build(){const t=D.table;if(!t)return;const fj=[...document.querySelectorAll('#feats input:checked')].map(e=>+e.dataset.f),lj=+$('clab').value;
-  if(fj.length<1){$('dataMsg').textContent='Select at least one feature column.';$('dataMsg').className='msg err';D.X=null;return}
-  const lg=$('log10').checked;let rows=[],drop=0,dropLog=0;
-  t.rows.forEach((r,i)=>{const v=fj.map(j=>toN(r[j]));if(v.some(x=>!isFinite(x))){drop++;return}if(lg&&v.some(x=>x<=0)){dropLog++;return}rows.push({i,r,v,name:lj>=0?r[lj]:'#'+(i+1)})});
-  if(rows.length<3){$('dataMsg').textContent='Fewer than 3 usable rows.';$('dataMsg').className='msg err';D.X=null;return}
+  if(fj.length<1)return failBuild('Select at least one feature column.');
+  const lg=$('log10').checked,nl=parseNulls($('nulls').value),po={decimalComma:t.comma.decimalComma};let rows=[];const R={missing:[],text:[],below:[],nul:[],log:[]},nulHits={},seen=[];
+  t.rows.forEach((r,i)=>{let bad=null;const v=[];
+    for(const j of fj){const p=parseNumber(r[j],po);if(p.kind!=='ok'){bad=bad||p.kind;v.push(NaN);continue}
+      if(isNull(p.value,nl)){nulHits[p.value]=(nulHits[p.value]||0)+1;bad=bad||'nul';v.push(NaN);continue}seen.push(p.value);v.push(p.value)}
+    if(bad){R[bad].push(i+1);return}if(lg&&v.some(x=>x<=0)){R.log.push(i+1);return}rows.push({i,r,v,name:lj>=0?r[lj]:'#'+(i+1)})});
+  const info=describeSkips(t.rows.length,R,nulHits,candidateNulls(seen,nl),rows.length)+(t.comma.ambiguous?(t.comma.decimalComma?` ${t.comma.ambiguous} value(s) like 1,234 were read with a decimal comma (the table uses decimal commas elsewhere).`:` ${t.comma.ambiguous} value(s) like 1,234 were read as thousands separators (no other decimal comma in the table).`):'');
+  if(rows.length<3)return failBuild('Fewer than 3 usable rows. '+info);
   D.feat=fj.map(j=>t.head[j]);D.rows=rows;D.raw=rows.map(o=>Float64Array.from(o.v));
   let X=D.raw.map(v=>lg?v.map(Math.log10):Float64Array.from(v));const d=fj.length,n=X.length,sc=$('scal').value;
   if(sc!=='none'){for(let j=0;j<d;j++){let lo=Infinity,hi=-Infinity,m=0;for(const x of X){lo=Math.min(lo,x[j]);hi=Math.max(hi,x[j]);m+=x[j]/n}
       let s=0;for(const x of X)s+=(x[j]-m)**2/n;const sd=Math.sqrt(s)||1,rg=(hi-lo)||1;for(const x of X)x[j]=sc==='z'?(x[j]-m)/sd:(x[j]-lo)/rg}}
-  D.X=X;$('dataMsg').className='msg';$('dataMsg').textContent=`${n} samples · ${d} feature(s)`+(drop?` · ${drop} row(s) skipped (missing values)`:'')+(dropLog?` · ${dropLog} skipped (≤ 0 with log10)`:'');
+  D.X=X;$('dataMsg').className='msg';$('dataMsg').textContent=`${n} samples · ${d} feature(s). `+info;
   const pc=pca(X);D.pc=pc.pcs;D.pcv=pc.frac;fillAxes();run()}
 function fillAxes(){const o=D.feat.map((h,j)=>`<option value="f${j}">${esc(h)}</option>`).join('')+(D.feat.length>1?`<option value="p0">PC1 (${Math.round(D.pcv[0]*100)} %)</option><option value="p1">PC2 (${Math.round(D.pcv[1]*100)} %)</option>`:'');
   const px=$('ax').value,py=$('ay').value;$('ax').innerHTML=o;$('ay').innerHTML=o;
@@ -371,7 +438,8 @@ function relabel(lab,extra){const n=lab.length,cnt=new Map();for(const c of lab)
   const ord=[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]),map=new Map(ord.map((c,i)=>[c,i]));const out=Int32Array.from(lab,c=>c<0?NOISE:map.get(c));return out}
 function runAlg(alg,k,X,r,reps){if(alg==='km'){const b=kmeans(X,k,r,reps);return{lab:b.lab,inertia:b.inertia}}
   if(alg==='gm'){const g=gmm(X,k,$('cov').value,r);return{lab:g.lab,bic:g.bic,prob:g.prob}}return null}
-function run(){if(!D.X)return;const alg=$('alg').value,k=Math.max(1,Math.min(20,Math.round(+$('k').value)||1)),X=D.X,n=X.length,r=rng((+$('seed').value||1)*7919+3);
+function run(){if(!D.X)return;const alg=$('alg').value,kReq=Math.round(+$('k').value)||1,X=D.X,n=X.length,k=Math.max(1,Math.min(20,n,kReq)),r=rng((+$('seed').value||1)*7919+3);
+  const kWarn=alg==='db'||k===kReq?'':kReq>20?`k = ${kReq} was reduced to 20 (the maximum of this tool).`:kReq>n?`k = ${kReq} was reduced to ${n} (number of samples).`:`k = ${kReq} was raised to 1.`;
   document.querySelectorAll('.o-k').forEach(e=>e.style.display=alg==='db'?'none':'');document.querySelectorAll('.o-hc').forEach(e=>e.style.display=alg==='hc'?'':'none');
   document.querySelectorAll('.o-db').forEach(e=>e.style.display=alg==='db'?'':'none');document.querySelectorAll('.o-gm').forEach(e=>e.style.display=alg==='gm'?'':'none');
   let lab,prob=null,msg='';D.hc=null;
@@ -379,10 +447,13 @@ function run(){if(!D.X)return;const alg=$('alg').value,k=Math.max(1,Math.min(20,
     else if(alg==='hc'){const M=hclust(X,$('link').value);D.hc=M;lab=hcut(M,n,Math.min(k,n))}
     else if(alg==='db'){lab=dbscan(X,+$('eps').value||0.5,Math.max(1,Math.round(+$('minpts').value)||5))}
     else{const g=gmm(X,k,$('cov').value,r);lab=g.lab;prob=g.prob;msg=`log-likelihood ${fmt(g.ll)} · BIC ${fmt(g.bic)} · ${g.iters} EM iterations`}}
-  catch(e){$('runMsg').textContent=e.message;$('runMsg').className='msg err';return}
+  catch(e){const m=e.message;clearResults(true);$('runMsg').textContent=m;$('runMsg').className='msg err';return}
   D.lab=relabel(lab);D.prob=prob;const S=silhouette(X,D.lab);D.sil=S.s;D.silM=S.mean;
-  const K=Math.max(-1,...D.lab)+1,nz=D.lab.filter(c=>c<0).length;
-  $('runMsg').className='msg';$('runMsg').textContent=`${K} cluster(s)`+(alg==='db'?` · ${nz} noise point(s)`:'')+(isFinite(S.mean)?` · mean silhouette ${S.mean.toFixed(3)}`:'')+(msg?' · '+msg:'');
+  const K=Math.max(-1,...D.lab)+1,nz=D.lab.filter(c=>c<0).length;let warn=kWarn;D.epsSug=null;$('bEps').textContent='–';
+  if(alg==='db'){D.kd=kdist(X,Math.max(1,Math.round(+$('minpts').value)||5));D.epsSug=suggestEps(D.kd);if(D.epsSug!=null)$('bEps').textContent=String(+D.epsSug.toPrecision(3));
+    if(nz>0.2*n)warn+=` ${nz} of ${n} samples (${Math.round(100*nz/n)} %) are noise with eps = ${fmt(+$('eps').value||0.5)}`+(D.epsSug!=null?`: the knee of the k-distance plot suggests eps ≈ ${fmt(+D.epsSug.toPrecision(3))} (button in the Method panel).`:': try a larger eps (see the k-distance plot).')}
+  $('runMsg').className='msg';$('runMsg').textContent=(warn?warn.trim()+' · ':'')+`${K} cluster(s)`+(alg==='db'?` · ${nz} noise point(s)`:'')+(isFinite(S.mean)?` · mean silhouette ${S.mean.toFixed(3)}`:'')+(msg?' · '+msg:'');
+  if(warn)$('runMsg').style.color='#a8623a';else $('runMsg').style.color='';
   D.scanR=null;if($('scan').checked&&alg!=='db')scanK(alg,r);draw()}
 function scanK(alg,r){const X=D.X,n=X.length,K=Math.min(10,n-1),out=[];let M=D.hc;
   for(let k=2;k<=K;k++){let lab,y2=NaN;if(alg==='hc')lab=hcut(M,n,k);else{const q=runAlg(alg,k,X,r,4);lab=q.lab;y2=alg==='km'?q.inertia:q.bic}
@@ -391,7 +462,7 @@ function scanK(alg,r){const X=D.X,n=X.length,K=Math.min(10,n-1),out=[];let M=D.h
 // ---------- drawing
 function axVal(code,i){return code[0]==='f'?D.raw[i][+code.slice(1)]:D.pc[+code.slice(1)][i]}
 function axName(code){return code[0]==='f'?D.feat[+code.slice(1)]:`PC${+code.slice(1)+1} (${Math.round(D.pcv[+code.slice(1)]*100)} %)`}
-function draw(){if(!D.X)return;drawScatter();drawScan();drawSil();drawDend();drawSum();legend()}
+function draw(){if(!D.X||!D.lab)return;drawScatter();drawScan();drawSil();drawDend();drawKd();drawMap();drawSum();legend()}
 function legend(){const K=Math.max(-1,...D.lab)+1,cnt=new Int32Array(K+1);let nz=0;for(const c of D.lab){if(c>=0)cnt[c]++;else nz++}
   $('legend').innerHTML=Array.from({length:K},(_,c)=>`<span><i style="background:${col(c)}"></i>cluster ${c+1} (${cnt[c]})</span>`).join('')+(nz?`<span><i class="x">×</i>noise (${nz})</span>`:'')}
 function drawScatter(){const ax=$('ax').value,ay=$('ay').value,n=D.X.length,pts=[];
@@ -399,6 +470,17 @@ function drawScatter(){const ax=$('ax').value,ay=$('ay').value,n=D.X.length,pts=
   if($('cent').checked){const K=Math.max(-1,...D.lab)+1;for(let c=0;c<K;c++){let sx=0,sy=0,m=0;for(let i=0;i<n;i++)if(D.lab[i]===c){sx+=axVal(ax,i);sy+=axVal(ay,i);m++}if(m)pts.push({x:sx/m,y:sy/m,c:col(c),r:8,ring:true,info:`<b>centre of cluster ${c+1}</b><br>${m} samples`})}}
   $('tScat').firstChild.textContent=D.lab.length+' samples · '+({km:'k-means',hc:'hierarchical ('+$('link').value+')',db:'DBSCAN',gm:'Gaussian mixture ('+$('cov').value+')'})[$('alg').value];
   drawChart($('cv'),{ylab:axName(ay),panels:[{xlab:axName(ax),pts}]})}
+function drawKd(){const card=$('cKd');if($('alg').value!=='db'||!D.kd){card.style.display='none';return}card.style.display='';
+  const kd=D.kd,mp=Math.max(1,Math.round(+$('minpts').value)||5),pts=kd.map((v,i)=>({x:i+1,y:v,c:PAL[0],r:2.5,info:`rank ${i+1}<br>distance ${fmt(v)}`})),hl=[{v:+$('eps').value||0.5,c:'#a8623a',label:'eps in use'}];
+  if(D.epsSug!=null)hl.push({v:D.epsSug,c:'#3b6ea5',label:'suggested '+fmt(+D.epsSug.toPrecision(3))});
+  $('tKd').firstChild.textContent='k-distance (min points = '+mp+')';
+  drawChart($('ckd'),{ylab:'distance to the '+(mp-1)+'-th nearest other point',panels:[{xlab:'points sorted by distance',pts,lines:[{x:kd.map((_,i)=>i+1),y:kd,c:PAL[0],w:1.2}],hlines:hl}]})}
+function drawMap(){const card=$('cMap'),a=+$('mx').value,b=+$('my').value;if(!(a>=0)||!(b>=0)||a===b||!D.table){card.style.display='none';return}card.style.display='';
+  const nl=parseNulls($('nulls').value),po={decimalComma:D.table.comma.decimalComma},cv=r=>{const p=parseNumber(r,po);return p.kind==='ok'&&!isNull(p.value,nl)?p.value:NaN};
+  const pts=D.rows.map((o,i)=>{const c=D.lab[i];return{x:cv(o.r[a]),y:cv(o.r[b]),c:col(c),g:c<0,info:`<b>${esc(o.name)}</b><br>${c<0?'noise':'cluster '+(c+1)}`}});
+  const miss=pts.filter(p=>!isFinite(p.x)||!isFinite(p.y)).length;
+  $('tMap').firstChild.textContent='Map: '+D.table.head[a]+' vs '+D.table.head[b]+(miss?` (${miss} sample(s) without valid coordinates not shown)`:'');
+  drawChart($('cmap'),{ylab:D.table.head[b],panels:[{xlab:D.table.head[a],pts}]})}
 function lineChart(cv,ks,ys,ylab,best,bestMode){const pts=ks.map((k,i)=>({x:k,y:ys[i],c:PAL[0],info:`k = ${k}<br>${esc(ylab)} ${fmt(ys[i])}`}));
   const cur=Math.round(+$('k').value);const vl=[{v:cur,label:'k = '+cur,c:'#a8623a'}];
   drawChart(cv,{ylab,panels:[{xlab:'k (number of clusters)',pts,lines:[{x:ks,y:ys,c:PAL[0],w:1.4}],vlines:vl,xlim:[ks[0]-.5,ks[ks.length-1]+.5]}]})}
@@ -441,7 +523,9 @@ $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileRe
 document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
 $('clab').addEventListener('change',build);['scal','log10'].forEach(i=>$(i).addEventListener('change',build));
 ['alg','k','link','eps','minpts','cov','seed','scan'].forEach(i=>$(i).addEventListener('change',run));['k','eps','minpts'].forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(D.kt);D.kt=setTimeout(run,400)}));
-['ax','ay','cent'].forEach(i=>$(i).addEventListener('change',()=>{if(D.X)drawScatter()}));
+['ax','ay','cent'].forEach(i=>$(i).addEventListener('change',()=>{if(D.X&&D.lab)drawScatter()}));['mx','my'].forEach(i=>$(i).addEventListener('change',()=>{if(D.X&&D.lab)drawMap()}));
+$('nulls').addEventListener('change',build);
+$('bEps').onclick=()=>{if(D.epsSug!=null){$('eps').value=+D.epsSug.toPrecision(3);run()}};
 window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(draw,150)});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b)pngOf($(b.dataset.png),'clustering_'+b.dataset.png+'.png')});$('bPng').onclick=()=>pngOf($('cv'),'clustering.png');
 $('bLab').onclick=()=>{if(!D.lab)return banner('Nothing to export.',true);const t=D.table,sep=',',H=[...t.head,'cluster','silhouette','PC1','PC2'],L=[H.map(h=>csvCell(h,sep)).join(sep)];
@@ -535,6 +619,6 @@ window.DG={kmeans,hclust,hcut,dbscan,gmm,silhouette,pca,rng};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow/BIC and a PCA view.","method":["k-means: Lloyd iterations from k-means++ starts, best of 10 runs, spherical clusters in the scaled space.","Hierarchical: agglomerative (Lance–Williams); Ward minimises the variance increase, single, complete and average use Euclidean distances.","DBSCAN: density-based, no k; noise points get no cluster.","Gaussian mixture: EM from a k-means start, diagonal or full covariance, soft assignments, BIC.","Scaling matters: without it the feature with the largest unit decides. Silhouette ranges from −1 to 1; above about 0.5 the structure is clear, below 0.25 it is weak or absent. Clusters are numbered by decreasing size."],"sources":[["k-means: Lloyd iterations, inertia, best of 10 runs","Lloyd, S. P. (1982), Least squares quantization in PCM, IEEE Transactions on Information Theory 28(2), 129–137, <a href=\"https://doi.org/10.1109/TIT.1982.1056489\" target=\"_blank\" rel=\"noopener\">doi:10.1109/TIT.1982.1056489</a>. Keeping the best of 10 runs by inertia is the page’s choice","published (metadata verified)"],["k-means++ seeding","Arthur, D. & Vassilvitskii, S. (2007), k-means++: the advantages of careful seeding, Proceedings of the 18th ACM-SIAM Symposium on Discrete Algorithms, 1027–1035 (ACM id 10.5555/1283383.1283494; found in OpenAlex, not in Crossref)","published (metadata verified)"],["Hierarchical agglomerative clustering, Lance–Williams update (Ward, single, complete, average)","Lance, G. N. & Williams, W. T. (1967), A general theory of classificatory sorting strategies: 1. Hierarchical systems, The Computer Journal 9(4), 373–380, <a href=\"https://doi.org/10.1093/comjnl/9.4.373\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/9.4.373</a>","published (metadata verified)"],["Ward criterion on squared Euclidean distances, merge height = square root (as in SciPy)","Ward, J. H. (1963), Hierarchical grouping to optimize an objective function, Journal of the American Statistical Association 58(301), 236–244, <a href=\"https://doi.org/10.1080/01621459.1963.10500845\" target=\"_blank\" rel=\"noopener\">doi:10.1080/01621459.1963.10500845</a>; Murtagh, F. & Legendre, P. (2014), Ward’s hierarchical agglomerative clustering method: which algorithms implement Ward’s criterion?, Journal of Classification 31(3), 274–295, <a href=\"https://doi.org/10.1007/s00357-014-9161-z\" target=\"_blank\" rel=\"noopener\">doi:10.1007/s00357-014-9161-z</a>","published (metadata verified)"],["DBSCAN density-based clustering, noise points","Ester, M., Kriegel, H.-P., Sander, J. & Xu, X. (1996), A density-based algorithm for discovering clusters in large spatial databases with noise, Proceedings of the 2nd International Conference on Knowledge Discovery and Data Mining (KDD-96), 226–231 (found in OpenAlex, no DOI); Schubert, E., Sander, J., Ester, M., Kriegel, H.-P. & Xu, X. (2017), DBSCAN revisited, revisited: why and how you should (still) use DBSCAN, ACM Transactions on Database Systems 42(3), article 19, <a href=\"https://doi.org/10.1145/3068335\" target=\"_blank\" rel=\"noopener\">doi:10.1145/3068335</a>","published (metadata verified)"],["Gaussian mixture fitted by EM, diagonal or full covariance, soft assignments","Dempster, A. P., Laird, N. M. & Rubin, D. B. (1977), Maximum likelihood from incomplete data via the EM algorithm, Journal of the Royal Statistical Society B 39(1), 1–38, <a href=\"https://doi.org/10.1111/j.2517-6161.1977.tb01600.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.2517-6161.1977.tb01600.x</a>; McLachlan, G. & Peel, D. (2000), Finite Mixture Models, Wiley, <a href=\"https://doi.org/10.1002/0471721182\" target=\"_blank\" rel=\"noopener\">doi:10.1002/0471721182</a>","published (metadata verified)"],["Bayesian information criterion (BIC) against k","Schwarz, G. (1978), Estimating the dimension of a model, The Annals of Statistics 6(2), 461–464, <a href=\"https://doi.org/10.1214/aos/1176344136\" target=\"_blank\" rel=\"noopener\">doi:10.1214/aos/1176344136</a>","published (metadata verified)"],["Silhouette coefficient","Rousseeuw, P. J. (1987), Silhouettes: a graphical aid to the interpretation and validation of cluster analysis, Journal of Computational and Applied Mathematics 20, 53–65, <a href=\"https://doi.org/10.1016/0377-0427(87)90125-7\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0377-0427(87)90125-7</a>","published (metadata verified)"],["Silhouette reading thresholds (about 0.5: clear structure; below 0.25: weak or none)","Kaufman, L. & Rousseeuw, P. J. (1990), Finding Groups in Data: An Introduction to Cluster Analysis, Wiley, <a href=\"https://doi.org/10.1002/9780470316801\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470316801</a>. The scale of the book (0.71–1 strong, 0.51–0.70 reasonable, 0.26–0.50 weak, 0.25 or less no substantial structure) is quoted from memory; the page rounds it to two thresholds","published (metadata verified); thresholds from memory, book not re-read"],["Inertia against k (elbow)","Thorndike, R. L. (1953), Who belongs in the family?, Psychometrika 18(4), 267–276, <a href=\"https://doi.org/10.1007/BF02289263\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF02289263</a>","published (metadata verified)"],["Scaling of the variables (z-score, min–max)","Milligan, G. W. & Cooper, M. C. (1988), A study of standardization of variables in cluster analysis, Journal of Classification 5(2), 181–204, <a href=\"https://doi.org/10.1007/BF01897163\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01897163</a>","published (metadata verified)"],["Principal component view (Jacobi eigen-decomposition of the covariance matrix)","Pearson, K. (1901), On lines and planes of closest fit to systems of points in space, Philosophical Magazine 2(11), 559–572, <a href=\"https://doi.org/10.1080/14786440109462720\" target=\"_blank\" rel=\"noopener\">doi:10.1080/14786440109462720</a>; Hotelling, H. (1933), Analysis of a complex of statistical variables into principal components, Journal of Educational Psychology 24(6), 417–441, <a href=\"https://doi.org/10.1037/h0071325\" target=\"_blank\" rel=\"noopener\">doi:10.1037/h0071325</a>. Jacobi eigenvalue method: Golub, G. H. & Van Loan, C. F., Matrix Computations, Johns Hopkins University Press (existence confirmed by reviews in Mathematics of Computation 47, 376 and SIAM Review 28, 252; edition not specified)","published (metadata verified)"],["Adjusted Rand index used in the validation","Hubert, L. & Arabie, P. (1985), Comparing partitions, Journal of Classification 2(1), 193–218, <a href=\"https://doi.org/10.1007/BF01908075\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01908075</a>","published (metadata verified)"],["Reference implementations used in the validation","Pedregosa, F. et al. (2011), Scikit-learn: machine learning in Python, Journal of Machine Learning Research 12, 2825–2830, <a href=\"https://doi.org/10.5555/1953048.2078195\" target=\"_blank\" rel=\"noopener\">doi:10.5555/1953048.2078195</a>; Virtanen, P. et al. (2020), SciPy 1.0: fundamental algorithms for scientific computing in Python, Nature Methods 17, 261–272, <a href=\"https://doi.org/10.1038/s41592-019-0686-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41592-019-0686-2</a>","published (metadata verified)"],["Clusters numbered by decreasing size; default parameters","Choices of the page","on the page (no publication)"]],"validation":["Hierarchical, DBSCAN and mixture: adjusted Rand index 1.0 against scipy / scikit-learn.","k-means reaches another local optimum (ARI 0.989).","Silhouette and PCA identical."],"limits":[],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow/BIC and a PCA view.","method":["k-means: Lloyd iterations from k-means++ starts, best of 10 runs, spherical clusters in the scaled space.","Hierarchical: agglomerative (Lance–Williams); Ward minimises the variance increase, single, complete and average use Euclidean distances.","DBSCAN: density-based, no k; noise points get no cluster.","Gaussian mixture: EM from a k-means start, diagonal or full covariance, soft assignments, BIC.","Null values: values equal to one of the listed null values (default -999, -999.25, -9999, 9999, 1e30, 1.70141e38, editable) are excluded, counted in the load message, and a repeated value such as -99999 that is not in the list triggers a warning. After every load the page states how many rows were read and skipped, with the reasons (missing, non-numeric, below detection limit, null value, ≤ 0 with log10) and the first row numbers; a failed load clears the previous data and results.","Numbers are read with decimal comma or point and thousands separators; a value like 1,234 is taken as a thousands separator unless the table uses decimal commas elsewhere (stated in the message). A comma is never used as a column separator when the other fields use a decimal comma (100 0,55).","k above 20 (or above the number of samples) is reduced and the message says so. DBSCAN: a k-distance plot (distance to the (min points − 1)-th nearest other point, sorted) is drawn and the knee, the point farthest below the chord joining the ends of the curve, is offered as a suggested eps (a heuristic of the page); a warning appears when more than 20 % of the samples are noise.","Map: when two numeric columns are chosen as X and Y (preselected when named x/y, easting/northing, lon/lat), the samples are drawn on a map coloured by cluster. The clustering uses the feature columns only and does not account for spatial autocorrelation.","Scaling matters: without it the feature with the largest unit decides. Silhouette ranges from −1 to 1; above about 0.5 the structure is clear, below 0.25 it is weak or absent. Clusters are numbered by decreasing size."],"sources":[["k-means: Lloyd iterations, inertia, best of 10 runs","Lloyd, S. P. (1982), Least squares quantization in PCM, IEEE Transactions on Information Theory 28(2), 129–137, <a href=\"https://doi.org/10.1109/TIT.1982.1056489\" target=\"_blank\" rel=\"noopener\">doi:10.1109/TIT.1982.1056489</a>. Keeping the best of 10 runs by inertia is the page’s choice","published (metadata verified)"],["k-means++ seeding","Arthur, D. & Vassilvitskii, S. (2007), k-means++: the advantages of careful seeding, Proceedings of the 18th ACM-SIAM Symposium on Discrete Algorithms, 1027–1035 (ACM id 10.5555/1283383.1283494; found in OpenAlex, not in Crossref)","published (metadata verified)"],["Hierarchical agglomerative clustering, Lance–Williams update (Ward, single, complete, average)","Lance, G. N. & Williams, W. T. (1967), A general theory of classificatory sorting strategies: 1. Hierarchical systems, The Computer Journal 9(4), 373–380, <a href=\"https://doi.org/10.1093/comjnl/9.4.373\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/9.4.373</a>","published (metadata verified)"],["Ward criterion on squared Euclidean distances, merge height = square root (as in SciPy)","Ward, J. H. (1963), Hierarchical grouping to optimize an objective function, Journal of the American Statistical Association 58(301), 236–244, <a href=\"https://doi.org/10.1080/01621459.1963.10500845\" target=\"_blank\" rel=\"noopener\">doi:10.1080/01621459.1963.10500845</a>; Murtagh, F. & Legendre, P. (2014), Ward’s hierarchical agglomerative clustering method: which algorithms implement Ward’s criterion?, Journal of Classification 31(3), 274–295, <a href=\"https://doi.org/10.1007/s00357-014-9161-z\" target=\"_blank\" rel=\"noopener\">doi:10.1007/s00357-014-9161-z</a>","published (metadata verified)"],["DBSCAN density-based clustering, noise points","Ester, M., Kriegel, H.-P., Sander, J. & Xu, X. (1996), A density-based algorithm for discovering clusters in large spatial databases with noise, Proceedings of the 2nd International Conference on Knowledge Discovery and Data Mining (KDD-96), 226–231 (found in OpenAlex, no DOI); Schubert, E., Sander, J., Ester, M., Kriegel, H.-P. & Xu, X. (2017), DBSCAN revisited, revisited: why and how you should (still) use DBSCAN, ACM Transactions on Database Systems 42(3), article 19, <a href=\"https://doi.org/10.1145/3068335\" target=\"_blank\" rel=\"noopener\">doi:10.1145/3068335</a>","published (metadata verified)"],["Gaussian mixture fitted by EM, diagonal or full covariance, soft assignments","Dempster, A. P., Laird, N. M. & Rubin, D. B. (1977), Maximum likelihood from incomplete data via the EM algorithm, Journal of the Royal Statistical Society B 39(1), 1–38, <a href=\"https://doi.org/10.1111/j.2517-6161.1977.tb01600.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.2517-6161.1977.tb01600.x</a>; McLachlan, G. & Peel, D. (2000), Finite Mixture Models, Wiley, <a href=\"https://doi.org/10.1002/0471721182\" target=\"_blank\" rel=\"noopener\">doi:10.1002/0471721182</a>","published (metadata verified)"],["Bayesian information criterion (BIC) against k","Schwarz, G. (1978), Estimating the dimension of a model, The Annals of Statistics 6(2), 461–464, <a href=\"https://doi.org/10.1214/aos/1176344136\" target=\"_blank\" rel=\"noopener\">doi:10.1214/aos/1176344136</a>","published (metadata verified)"],["Silhouette coefficient","Rousseeuw, P. J. (1987), Silhouettes: a graphical aid to the interpretation and validation of cluster analysis, Journal of Computational and Applied Mathematics 20, 53–65, <a href=\"https://doi.org/10.1016/0377-0427(87)90125-7\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0377-0427(87)90125-7</a>","published (metadata verified)"],["Silhouette reading thresholds (about 0.5: clear structure; below 0.25: weak or none)","Kaufman, L. & Rousseeuw, P. J. (1990), Finding Groups in Data: An Introduction to Cluster Analysis, Wiley, <a href=\"https://doi.org/10.1002/9780470316801\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470316801</a>. The scale of the book (0.71–1 strong, 0.51–0.70 reasonable, 0.26–0.50 weak, 0.25 or less no substantial structure) is quoted from memory; the page rounds it to two thresholds","published (metadata verified); thresholds from memory, book not re-read"],["Inertia against k (elbow)","Thorndike, R. L. (1953), Who belongs in the family?, Psychometrika 18(4), 267–276, <a href=\"https://doi.org/10.1007/BF02289263\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF02289263</a>","published (metadata verified)"],["Scaling of the variables (z-score, min–max)","Milligan, G. W. & Cooper, M. C. (1988), A study of standardization of variables in cluster analysis, Journal of Classification 5(2), 181–204, <a href=\"https://doi.org/10.1007/BF01897163\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01897163</a>","published (metadata verified)"],["Principal component view (Jacobi eigen-decomposition of the covariance matrix)","Pearson, K. (1901), On lines and planes of closest fit to systems of points in space, Philosophical Magazine 2(11), 559–572, <a href=\"https://doi.org/10.1080/14786440109462720\" target=\"_blank\" rel=\"noopener\">doi:10.1080/14786440109462720</a>; Hotelling, H. (1933), Analysis of a complex of statistical variables into principal components, Journal of Educational Psychology 24(6), 417–441, <a href=\"https://doi.org/10.1037/h0071325\" target=\"_blank\" rel=\"noopener\">doi:10.1037/h0071325</a>. Jacobi eigenvalue method: Golub, G. H. & Van Loan, C. F., Matrix Computations, Johns Hopkins University Press (existence confirmed by reviews in Mathematics of Computation 47, 376 and SIAM Review 28, 252; edition not specified)","published (metadata verified)"],["Adjusted Rand index used in the validation","Hubert, L. & Arabie, P. (1985), Comparing partitions, Journal of Classification 2(1), 193–218, <a href=\"https://doi.org/10.1007/BF01908075\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01908075</a>","published (metadata verified)"],["Reference implementations used in the validation","Pedregosa, F. et al. (2011), Scikit-learn: machine learning in Python, Journal of Machine Learning Research 12, 2825–2830, <a href=\"https://doi.org/10.5555/1953048.2078195\" target=\"_blank\" rel=\"noopener\">doi:10.5555/1953048.2078195</a>; Virtanen, P. et al. (2020), SciPy 1.0: fundamental algorithms for scientific computing in Python, Nature Methods 17, 261–272, <a href=\"https://doi.org/10.1038/s41592-019-0686-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41592-019-0686-2</a>","published (metadata verified)"],["Clusters numbered by decreasing size; default parameters","Choices of the page","on the page (no publication)"]],"validation":["Hierarchical, DBSCAN and mixture: adjusted Rand index 1.0 against scipy / scikit-learn.","k-means reaches another local optimum (ARI 0.989).","Silhouette and PCA identical.","Regression test (scripts/clustering_test.mjs): k-means, the four linkages and the mixture recover three well separated blobs (ARI 1); silhouette of the point 0 in [0, 1, 10, 11] = 0.9048 (hand computation); DBSCAN components and noise; null values, number formats, delimiter and skip report; k-distance knee on blobs plus sparse noise.","Changes of 26 November 2026: values equal to a null value (for example -999) are no longer used as measurements, and a failed load no longer leaves the previous results on screen. On the example, DBSCAN with the default eps 0.5 puts 52 of 160 samples in noise; the suggested eps (0.708) gives 3 clusters and 4 noise points."],"limits":["The suggested eps is a heuristic: check the k-distance plot, a clear knee is not guaranteed.","k is limited to 20; hierarchical clustering to 1500 points; the silhouette is computed on at most 2500 points (random subsample, noise ignored).","The silhouette and the elbow assume roughly compact clusters in the scaled space: they say little for elongated or nested shapes.","The map and the clustering ignore spatial autocorrelation: neighbouring samples are not independent, and clusters that look spatially coherent are not thereby geologically meaningful.","Null values are matched against the list only; other placeholder values stay in the data (a warning is given for repeated values such as -99999).","Scaling and log10 apply to all features at once."],"date":"26 November 2026"});
 </script>
 </body></html>
