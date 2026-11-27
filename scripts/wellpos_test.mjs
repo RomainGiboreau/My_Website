@@ -88,4 +88,37 @@ test('CSV export has the contact statistics, the shares and the POS curve', () =
   const M = C.example('a'); M.n = 5000; const S = C.sample(M), s = C.summarize(S), t = C.csv(M, S, s, 20);
   assert.ok(/P90,/.test(t) && /controlling_limit,share/.test(t) && /POS_posterior/.test(t)); assert.equal(t.trim().split('\n').filter(l => /^\d/.test(l)).length, 21);
 });
+// ---- review fixes (26 Nov 2026)
+test('regression: decimal comma in the area-depth table is read (2000;0,5 is 0.5, not 0)', () => {
+  const t = C.parseTable('2000;0,5\n2100;4,5\n2200;9,25'); assert.equal(t.err, null); assert.deepEqual(t.pts, [[2000, .5], [2100, 4.5], [2200, 9.25]]);
+  const u = C.parseTable('2000 0,5\n2100 4,5'); assert.deepEqual(u.pts, [[2000, .5], [2100, 4.5]]);
+  const v = C.parseTable('2000\t0,5\n2100\t4,5'); assert.deepEqual(v.pts, [[2000, .5], [2100, 4.5]]);
+  const w1 = C.parseTable('depth;area\n1 000;1,5\n1 100;2,5'); assert.deepEqual(w1.pts, [[1000, 1.5], [1100, 2.5]]);
+  near(C.grv(C.grvTable(t.pts), 2100), 100 * (.5 + 4.5) / 2, 1e-9);
+});
+test('parseNumber: thousands, European, exponent, missing, below detection, ambiguity', () => {
+  const P = C.parseNumber; assert.equal(P('1,234.5').value, 1234.5); assert.equal(P('1.234,5').value, 1234.5); assert.equal(P('1 234,5').value, 1234.5); assert.equal(P('1 234.5').value, 1234.5);
+  assert.equal(P('0,55').value, .55); assert.equal(P('1e-3').value, .001); assert.equal(P('−2.5').value, -2.5); assert.equal(P('+3').value, 3);
+  for (const s of ['', '-', 'n.d.', 'ND', 'NA', 'NaN', 'null']) assert.equal(P(s).kind, 'missing', s);
+  assert.equal(P('<0,1').kind, 'below'); assert.equal(P('<0.1').limit, .1); assert.equal(P('abc').kind, 'text');
+  assert.equal(P('1,234').value, 1234); assert.equal(P('1,234', { decimalComma: true }).value, 1.234); assert.equal(P('1,234').ambiguous, true);
+});
+test('table load reports rows read and skipped with reasons and line numbers; ambiguous 1,234 is reported', () => {
+  const t = C.parseTable('depth;area\n2000;0,5\n2100;n.d.\n2200;abc\n2300;<0,1\n2400;9,5'); assert.equal(t.read, 2); assert.equal(t.skipped, 3); assert.ok(/3 skipped/.test(t.msg) && /below detection/.test(t.msg) && /line 3/.test(t.msg), t.msg);
+  const a = C.parseTable('2000\t1,234\n2100\t2,345'); assert.deepEqual(a.pts, [[2000, 1234], [2100, 2345]]); assert.ok(/ambiguous/i.test(a.msg), a.msg);
+  const b = C.parseTable('2000;1,234\n2100;2,5'); assert.deepEqual(b.pts, [[2000, 1.234], [2100, 2.5]]);
+});
+test('a well above the crest is flagged, a well at or below is not', () => {
+  assert.equal(C.wellWarnings({ crest: 2000, z1: 1900, z2: null }).length, 1); assert.ok(/above the crest/.test(C.wellWarnings({ crest: 2000, z1: 2100, z2: 1950 })[0]));
+  assert.equal(C.wellWarnings({ crest: 2000, z1: 2000, z2: 2100 }).length, 0);
+});
+test('risking file: warning when the summary is absent, none with a summary; v2 summary read', () => {
+  const els = [{ level: 'play', p: .5 }, { level: 'prospect', p: .4 }];
+  const b = C.fromRisking({ format: 'prospect-risk', elements: els }); assert.ok(/no summary: gas, correlation, likelihood ratios, conditional chances and ESL are ignored/.test(b.warning));
+  const a = C.fromRisking({ format: 'prospect-risk', elements: els, summary: { version: 2, gcos: .2818, pPlay: .6, pPros: .47, mean: 80, quantiles: [[.9, 10]] } }); near(a.pG, .2818, 0); assert.equal(a.warning, null); near(a.pPros, .47, 0); near(a.pPlay, .6, 0);
+});
+test('normal limit: mass below the crest goes to the crest like the other distributions (not renormalised)', () => {
+  const S = C.sample(mk([{ name: 'N', p: 1, dist: 'normal', a: 2000, b: 100 }], { crest: 2000, zmax: 2500, n: 100000 })), atCrest = S.raw.filter(v => v === 2000).length / S.n; near(atCrest, .5, .01);
+  const U2 = C.sample(mk([U('u', 1900, 2100)], { n: 100000 })), uc = U2.raw.filter(v => v === 2000).length / U2.n; near(uc, .5, .01);
+});
 console.log(`\n${n} tests passed`);
