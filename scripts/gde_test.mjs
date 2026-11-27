@@ -1303,6 +1303,32 @@ test('detailed fan: example builds and honours its wells; with the option on, a 
   assert.equal(b.filter(o => o.type === 'sfan').length, nf);
   assert.ok(!b.some(o => /^fairway\d/.test(o.id)) && !b.some(o => /^fan\d/.test(o.id)));
 });
+// ---------- carbonate platform: scalloped reef rim, pass, patch reefs, sand banks, slope tongues ----------
+const rimObj = (extra) => Object.assign({ id: 'r', type: 'reefrim', path: [[30000, 0], [30000, 20000], [30000, 40000]], lag: 12000, sl: 4000, w: 600, np: 1, patch: 6, nb: 3, tg: 6, seed: 5 }, extra || {});
+test('reef-rimmed margin: scalloped (not smooth) rim, cut by a pass, patch reefs and sand banks on the lagoon side, debris tongues on the slope side', () => {
+  const g = G.faciesShape(rimObj()), w = 600, X0 = 30000;
+  assert.equal(g.rings.length, 2, 'one pass cuts the rim in two segments');
+  const gapLo = Math.max(...g.rings[0].map(p => p[1])), gapHi = Math.min(...g.rings[1].map(p => p[1])), lo = gapLo < gapHi ? [gapLo, gapHi] : [Math.max(...g.rings[1].map(p => p[1])), Math.min(...g.rings[0].map(p => p[1]))];
+  assert.ok(lo[1] - lo[0] > 3 * w, 'pass gap ' + (lo[1] - lo[0]));
+  const outer = g.rings.flat().filter(p => p[0] > X0 + .25 * w).map(p => p[0] - X0), mean = outer.reduce((s, v) => s + v, 0) / outer.length, sd = Math.sqrt(outer.reduce((s, v) => s + (v - mean) ** 2, 0) / outer.length);
+  assert.ok(sd > .2 * w && Math.max(...outer) - Math.min(...outer) > .9 * w, `scalloped outer edge: sd ${sd}`);
+  const cx = p => p.ring.reduce((s, q) => s + q[0], 0) / p.ring.length, of = k => g.parts.filter(p => p.kind === k);
+  assert.ok(of('reef').length >= 4 && of('reef').every(p => cx(p) < X0), 'patch reefs behind the rim (lagoon = left of a north-going line has basin on the right)');
+  assert.ok(of('sandbank').length === 3 && of('sandbank').every(p => cx(p) < X0));
+  assert.ok(of('tongue').length === 6 && of('tongue').every(p => cx(p) > X0 + w), 'tongues on the basin side');
+  const nopass = G.faciesShape(rimObj({ np: 0 })); assert.equal(nopass.rings.length, 1);
+  const t0 = performance.now(); for (let i = 0; i < 5; i++) G.faciesShape(rimObj({ seed: i })); assert.ok((performance.now() - t0) / 5 < 40);
+});
+test('carbonate platform example: the margin line gets its reef rim, pass arrows (wave / tide purple, both ways) and gravity arrows down the slope, wells honoured', () => {
+  const ex = G.examples.carbplat, mod = G.build(ex.M, ex.wells), rim = mod.facies.find(o => o.type === 'reefrim');
+  assert.ok(rim && rim.lag > 0 && rim.sl > 0 && mod.check.every(c => c.honoured));
+  assert.ok(G.EXGROUPS.some(g => g[1].includes('carbplat')) && G.EXNAMES.carbplat);
+  const A = mod.facies.filter(o => o.type === 'arrow'), pin = A.find(o => o.id === 'passin0'), pout = A.find(o => o.id === 'passout0'), gr = A.filter(o => /^arrG/.test(o.id));
+  assert.ok(pin && pout && pin.proc === 'wave' && pout.proc === 'wave' && Math.abs((((pin.az - pout.az) % 360) + 360) % 360 - 180) < .5);
+  assert.ok(gr.length >= 1 && gr.every(o => o.proc === 'gravity'));
+  assert.ok(gr.every(o => Math.abs(((o.az - pout.az + 540) % 360) - 180) < 40), 'gravity transfer points down the slope (basinward, like the outflow, within the curvature of the margin)');
+  const m2 = JSON.parse(JSON.stringify(ex.M)); m2.facies.n.rim = 0; assert.ok(!G.build(m2, ex.wells).facies.some(o => o.type === 'reefrim'));
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }

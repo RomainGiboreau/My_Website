@@ -266,7 +266,7 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
    <span>Fan deltas per fault</span><input type="number" id="fFd" min="0" max="40" step="1" title="Along each synrift fault with a throw: a sand-rich alluvial fan and a small lobe on the hanging-wall side (besides the fault-bounded sources)">
    <span>Transport arrows</span><label class="inl" title="Hollow arrows coloured by process: river transport (blue), wave / tidal reworking (purple), seabed gravity flows (red), settling (dotted). Concept, not a prediction."><input type="checkbox" id="fArr">by process, from the feeders and sources</label>
    <span>Delta form</span><select id="fReg" title="Plan-view form of the deltaic lobes. Auto: from the system (river-dominated delta: bird-foot; wave-dominated delta: arcuate; tide-dominated delta / estuary: funnels and tidal bars), the classical lobe for the margins. River: elongate distributaries with levees, mouth bars at the tips, interdistributary bays. Wave: smooth arcuate front, one main channel, beach ridges parallel to the coast, longshore drift (arrows option). Tide: funnel-shaped distributaries, sand bars perpendicular to the coast, mud tidal flat, flood (blue) and ebb (red) arrows (arrows option). Idealised concept forms, not predictions."><option value="auto">Auto (from the system)</option><option value="generic">Generic lobe</option><option value="river">River-dominated (bird-foot)</option><option value="wave">Wave-dominated (arcuate)</option><option value="tide">Tide-dominated (funnels, bars)</option></select>
-   <span>Detailed submarine fans</span><input type="number" id="fSfan" min="0" max="40" step="1" title="Replaces the canyon fairway and fan of each deep-water system by one detailed fan: canyon, sinuous leveed channel with overbank fines, channel–lobe transition, distributary channels, terminal lobes with sand axis and fringe, abandoned channel (dashed). Idealised."><span>Sand content view</span><label class="inl" title="Qualitative sand content of the clastic objects: low (blue), intermediate (pale yellow), high (orange); the substrate, the eroded areas and the carbonates are not represented (grey). A reading aid on the concept, not a net-to-gross prediction."><input type="checkbox" id="fSand">low / intermediate / high</label>
+   <span>Reef-rimmed margin</span><input type="number" id="fRim" min="0" max="1" step="1" title="1: along the platform-margin key line of a carbonate map, a scalloped reef rim cut by a tidal pass, patch reefs and carbonate sand banks in the lagoon, reef-debris tongues down the slope (arrows option: tidal exchange through the pass, gravity transfer down the slope). Idealised geometry."><span>Detailed submarine fans</span><input type="number" id="fSfan" min="0" max="40" step="1" title="Replaces the canyon fairway and fan of each deep-water system by one detailed fan: canyon, sinuous leveed channel with overbank fines, channel–lobe transition, distributary channels, terminal lobes with sand axis and fringe, abandoned channel (dashed). Idealised."><span>Sand content view</span><label class="inl" title="Qualitative sand content of the clastic objects: low (blue), intermediate (pale yellow), high (orange); the substrate, the eroded areas and the carbonates are not represented (grey). A reading aid on the concept, not a net-to-gross prediction."><input type="checkbox" id="fSand">low / intermediate / high</label>
    <span>Channels per fairway</span><input type="number" id="fChan" min="1" max="16" step="1"><span>Seed</span><span class="two"><input type="number" id="fSeed" step="1" style="flex:1"><button id="fSeedN" title="Another seed: other, equally likely, object shapes and positions">New</button></span></div>
   <div class="lst" id="foList"></div>
   <div class="row"><button id="fReset" title="Remove the moves, deletions and objects added by hand">Reset object edits</button></div>
@@ -1903,6 +1903,7 @@ const FTYPE={
  contourite:{name:'Contourite drift',color:'#c9a640',edge:'#6b5518',poly:true,alias:['contourite','contourite drift','contourite system','sediment drift','drift deposit','contourites'],home:['slope','deep','abyssal','neritic','clastshelf','isslope']},
  carbmud:{name:'Carbonate mudstone',color:'#b9b7e2',edge:'#3e3e78',poly:true,alias:['carbonate mudstone','lime mudstone','calcilutite','carbonate mud','chalk'],home:['slope','deep','abyssal','neritic','clastshelf','carbshelf','isslope']},
  sfan:{name:'Submarine fan (detailed)',color:'#f0d54c',edge:'#4a4012',poly:true,alias:['detailed submarine fan','submarine fan system','canyon channel lobe system'],home:['slope','deep','abyssal','bypass']},
+ reefrim:{name:'Reef-rimmed platform margin',color:'#e58aa8',edge:'#8a2f55',poly:true,alias:['reef rim','reef rimmed margin','reef margin','barrier reef','platform margin reef','shelf margin reef'],home:['carbshelf','clastshelf','isslope','slope','neritic']},
  arrow:{name:'Sediment transport',color:'#ffffff',edge:'#232220',poly:true,alias:['sediment transport direction'],home:EOD.map(d=>d.key)}};
 const FKEYS=Object.keys(FTYPE);
 function ftypeOf(env){const e=norm(env);if(!e)return null;const s=strip(e);
@@ -2098,7 +2099,28 @@ function sfanShape(o){const rnd=mulberry32(((o.seed|0)*69069+23)>>>0),a=fin(o.az
     for(let k=0;k<=14;k++){const f=k/14,s=.6*(sl-sc)+sc+f*.2*L,c=(cc[Math.round(.6*K)][0]-o.x)*vx+(cc[Math.round(.6*K)][1]-o.y)*vy+sg*f*.14*L+.012*L*Math.sin(5*f+ph)*f;pts.push(Q(s,c))}
     lines.push({pts,w:.006*L,kind:'abandoned'});const q=pts[pts.length-1];parts.push({kind:'fringe',z:0,ring:lensRing(q[0]+.03*L*ux,q[1]+.03*L*uy,ux,uy,.1*L,.07*L,rnd)})}
   const hull=hullPts(all.concat(can,cc));return{ring:hull.length>=3?smoothRing(hull,1):null,parts,lines}}
-function faciesShape(o){if(Array.isArray(o.ring)&&o.ring.length>=3)return{ring:smoothRing(o.ring.map(q=>[+q[0],+q[1]]),2),lines:[]};switch(o.type){case'lobe':return lobeShape(o,false);case'sfan':return sfanShape(o);case'fan':return lobeShape(o,true);case'platform':return blobShape(o,1);case'ponded':return blobShape(o,2);
+// ---- reef-rimmed carbonate platform margin (plan view) along a key line (basin on the right of the drawing direction): scalloped reef rim cut by tidal passes,
+// patch reefs and carbonate sand banks in the lagoon (behind the rim), reef-debris tongues on the fore-reef slope. lag / sl = widths of the lagoon and of the slope, w = rim width ----
+function reefrimShape(o){const rnd=mulberry32(((o.seed|0)*48271+31)>>>0),P0=(o.path||[]).filter(q=>isFinite(q[0])&&isFinite(q[1]));if(P0.length<2)return{ring:null,rings:[],parts:[],lines:[],info:{}};
+  const S0=ptsLen(P0),{P,S}=resample(chaikinArc(P0,2,false),S0/160),Sx=S[S.length-1],lag=Math.max(1,fin(o.lag,.25*S0)),sl=Math.max(1,fin(o.sl,.18*S0)),w=Math.max(1,fin(o.w,.012*S0));
+  const N=P.map((p,i)=>{const a=P[Math.max(0,i-2)],b=P[Math.min(P.length-1,i+2)],tx=b[0]-a[0],ty=b[1]-a[1],l=Math.hypot(tx,ty)||1;return[ty/l,-tx/l]}),off=(i,c)=>[P[i][0]+N[i][0]*c,P[i][1]+N[i][1]*c],
+    at=s=>{const i=S.findIndex(v=>v>=s);return i<0?P.length-1:i};
+  const np=clamp(Math.round(fin(o.np,1)),0,3),pass=[];for(let k=0;k<np;k++)pass.push({s:Sx*(.22+.56*(k+.25+.5*rnd())/np),hw:Math.max(2*w,.018*Sx)});
+  const inPass=s=>pass.some(q=>Math.abs(s-q.s)<q.hw),lam=Math.max(4*w,.035*Sx),ph=rnd()*6.28,rings=[],parts=[],info={};let run=[];
+  const flush=()=>{if(run.length>=4){const ou=run.map(i=>off(i,w*.3+w*1.5*Math.pow(Math.abs(Math.sin(Math.PI*S[i]/lam+ph)),.55))),inn=run.map(i=>off(i,-w*.6));rings.push(smoothRing(ou.concat(inn.reverse()),1))}run=[]};
+  for(let i=0;i<P.length;i++){if(inPass(S[i]))flush();else run.push(i)}flush();
+  const tang=i=>[-N[i][1],N[i][0]];
+  // patch reefs and sand banks in the lagoon (platform side = negative offset)
+  const npr=clamp(Math.round(fin(o.patch,5)),0,20),nb=clamp(Math.round(fin(o.nb,3)),0,10),nt=clamp(Math.round(fin(o.tg,5)),0,12);
+  for(let k=0;k<npr;k++){const i=at(Sx*(.06+.88*rnd())),q=off(i,-(.18+.6*rnd())*lag),a=(.006+.007*rnd())*S0,T=tang(i);parts.push({kind:'reef',z:1,ring:lensRing(q[0],q[1],T[0],T[1],2*a,1.5*a,rnd,16)})}
+  for(let k=0;k<nb;k++){const i=at(Sx*(.1+.8*(k+.3+.4*rnd())/Math.max(1,nb))),q=off(i,-(.1+.18*rnd())*lag),T=tang(i);parts.push({kind:'sandbank',z:1,ring:lensRing(q[0],q[1],T[0],T[1],(.06+.05*rnd())*Sx,Math.min(.35*lag,.018*S0),rnd,20)})}
+  // reef-debris tongues down the slope, widening towards the toe
+  info.grav=[];for(let k=0;k<nt;k++){const sq=Sx*(.06+.88*(k+.3+.4*rnd())/nt),i=at(sq),ell=(.35+.65*rnd())*sl,hwM=Math.min(.04*S0,.12*ell+.004*S0),T=tang(i),pts=[];
+    for(let q=0;q<=12;q++){const f=q/12,c=w*.8+ell*f,lat=.004*S0*Math.sin(5*f+k)*f;pts.push([P[i][0]+N[i][0]*c+T[0]*lat,P[i][1]+N[i][1]*c+T[1]*lat])}
+    parts.push({kind:'tongue',z:0,ring:smoothRing(stripRing(pts,f=>hwM*(.25+.75*Math.pow(f,.6))),1)});if(k%2===0&&!pass.some(q=>Math.abs(sq-q.s)<2.5*q.hw))info.grav.push({x:pts[4][0],y:pts[4][1],nx:N[i][0],ny:N[i][1]})}
+  info.passes=pass.map(q=>{const i=at(q.s);return{x:P[i][0],y:P[i][1],nx:N[i][0],ny:N[i][1],hw:q.hw}});
+  return{ring:null,rings,parts,lines:[],info}}
+function faciesShape(o){if(Array.isArray(o.ring)&&o.ring.length>=3)return{ring:smoothRing(o.ring.map(q=>[+q[0],+q[1]]),2),lines:[]};switch(o.type){case'lobe':return lobeShape(o,false);case'sfan':return sfanShape(o);case'reefrim':return reefrimShape(o);case'fan':return lobeShape(o,true);case'platform':return blobShape(o,1);case'ponded':return blobShape(o,2);
   case'mtc':return tongueShape(o);case'fairway':return fairwayShape(o);case'river':return riverShape(o);case'afan':return{ring:lobeShape(o,true).ring,lines:[]};case'carbmud':return blobShape(o,3);
   case'ribbon':return ribbonShape(o);case'contourite':return driftShape(o);case'arrow':return arrowShape(o);default:return{ring:null,lines:[]}}}
 // inside an object: polygon (point in ring), network (within a channel width of a line)
@@ -2148,6 +2170,15 @@ function faciesGen(M,mod){const F=Object.assign(faciesDefaults(),M.facies||{}),n
     const sl=(shk!=null&&KL.find(l=>Math.round(+l.k)===shk))||KL.find(l=>/shore|lake margin|coast/i.test(l.name||''))||KL.find(l=>+l.k>=0)||KL[0];
     if(sl)segAlong(cpts(sl),n.ribbon,.2*diag,.014*diag,(k,P)=>push({id:'rib'+k,type:'ribbon',path:P,w:.007*diag}))}
   if(n.contourite>0&&linesOn(M)){const tl=toeLine(M)||(M.lines||[]).filter(keyL).slice(-1)[0];if(tl)segAlong(cpts(tl),n.contourite,.28*diag,.07*diag,(k,P)=>push({id:'ctr'+k,type:'contourite',path:P,W:.06*diag,n:6}))}
+  // reef-rimmed margin along the platform-margin key line: scalloped rim cut by a tidal pass, patch reefs and sand banks in the lagoon, debris tongues on the slope
+  if(n.rim>0&&linesOn(M)){const KL=(M.lines||[]).filter(keyL),ml=KL.find(l=>/platform margin|reef|rim/i.test(l.name||''))||KL.find(l=>/shelf edge|margin/i.test(l.name||'')),shl=KL.find(l=>/shore|coast/i.test(l.name||'')),tl=toeLine(M);
+    if(ml){const P=cpts(ml),mid=P[Math.floor(P.length/2)],dist=l=>cpts(l).reduce((b,q)=>Math.min(b,Math.hypot(q[0]-mid[0],q[1]-mid[1])),Infinity),S0=ptsLen(P),
+        lag=shl?clamp(.8*dist(shl),.03*diag,.35*diag):.15*diag,slw=tl&&tl!==ml?clamp(.9*dist(tl),.01*diag,.2*diag):.06*diag,o={id:'rim0',type:'reefrim',path:P,lag,sl:slw,w:.0125*S0,np:S0>.9*diag?2:1,patch:6,nb:3,tg:6};push(o);
+      if(F.arrows){const g=reefrimShape(o),az=(x,y)=>(Math.atan2(x,y)/RAD+360)%360,Lp=4*o.w;
+        (g.info.passes||[]).forEach((q,k)=>{const e=.4*q.hw,t=[-q.ny,q.nx];
+          push({id:'passout'+k,type:'arrow',proc:'wave',x:q.x+t[0]*e-q.nx*.3*Lp,y:q.y+t[1]*e-q.ny*.3*Lp,az:+az(q.nx,q.ny).toFixed(1),L:Lp,w:.2*Lp});
+          push({id:'passin'+k,type:'arrow',proc:'wave',x:q.x-t[0]*e+q.nx*.7*Lp,y:q.y-t[1]*e+q.ny*.7*Lp,az:+az(-q.nx,-q.ny).toFixed(1),L:Lp,w:.2*Lp})});
+        (g.info.grav||[]).forEach((q,k)=>push({id:'arrG'+k,type:'arrow',proc:'gravity',x:q.x,y:q.y,az:+az(q.nx,q.ny).toFixed(1),L:3.5*o.w,w:.24*3.5*o.w}))}}}
   // reefs, isolated platforms and MTC aprons drawn as bodies become facies objects (brick, stipple)
   activeBodies(M).forEach((b,i)=>{const t=b.type==='pinnacle'||b.type==='platform'?'platform':b.type==='mtc'?'mtc':null;if(!t)return;
     if(b.shape==='ellipse'){const T=BODY[b.type],a=fin(b.a,T.a)+(b.type==='pinnacle'?fin(b.w&&b.w[0],0):0);push({id:'body'+i,type:'platform',x:fin(b.x,0),y:fin(b.y,0),a,e:clamp(fin(b.e,T.e),.2,1),rot:90-fin(b.rot,0),body:true})}
@@ -2406,6 +2437,9 @@ function exSubFan(){const M=makeModel('fan',{az:182,src:[25000,39500],fan:40,spa
     facies:{arrows:true,n:{platform:0,mtc:0,sfan:1}}});
   return{title:'Submarine fan, detailed plan view (idealised): canyon, sinuous leveed channel, channel–lobe transition, distributary channels, terminal lobes with sand axis, abandoned channel; the sand content view colours it low / intermediate / high, 3 wells',view:'facies',M,
     wells:[{name:'Sf-1',x:24600,y:28500,env:'Channel-levee complex'},{name:'Sf-2',x:16800,y:17500,env:'Proximal lobes'},{name:'Sf-3',x:30500,y:7000,env:'Distal lobes'}]}}
+// the rimmed carbonate margin on the facies map: scalloped reef rim with a tidal pass, patch reefs and sand banks in the lagoon, debris tongues, pinnacles
+function exCarbPlat(){const r=exCarbMargin();r.M.facies=Object.assign(faciesDefaults(),{arrows:true,seed:2,n:Object.assign(faciesDefaults().n,{platform:0,mtc:0,rim:1})});
+  return{title:'Carbonate platform, rimmed margin (idealised): scalloped reef rim with a tidal pass, patch reefs and sand banks in the lagoon, reef-debris tongues with gravity transfer on the slope, three pinnacle reefs, 4 wells',view:'facies',M:r.M,wells:r.wells}}
 const examples={
  delta:{title:'River-dominated delta, 4 wells',M:makeModel('delta',{az:165,src:[12000,30000],fan:50,span:32000,outside:'strike',protrude:9000,noise:{amp:1500,wl:8000,seed:7},warp:{on:true,R:4000},
    ext:{xmin:0,xmax:40000,ymin:0,ymax:30000},cell:100}),
@@ -2424,12 +2458,12 @@ const examples={
    ext:{xmin:0,xmax:30000,ymin:0,ymax:36000},cell:50}),
    wells:[{name:'Lake-1',x:26500,y:24000,env:'Fan delta'},{name:'Lake-2',x:20200,y:15000,env:'Lake shoreline'},{name:'Lake-3',x:15000,y:22000,env:'Littoral'},{name:'Lake-4',x:6000,y:17000,env:'Profundal'}]}};
 // v2 examples built on first use (the synthetic attribute images take a moment)
-for(const [k,fn] of [['atlas',exAtlas],['atlastr',exAtlasTr],['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift],['riftearly',()=>exRiftStage('early')],['riftmid',()=>exRiftStage('mid')],['riftlate',()=>exRiftStage('late')],['deltariver',()=>exDeltaForm('river')],['deltawave',()=>exDeltaForm('wave')],['deltatide',()=>exDeltaForm('tide')],['subfan',exSubFan]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
+for(const [k,fn] of [['atlas',exAtlas],['atlastr',exAtlasTr],['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift],['riftearly',()=>exRiftStage('early')],['riftmid',()=>exRiftStage('mid')],['riftlate',()=>exRiftStage('late')],['deltariver',()=>exDeltaForm('river')],['deltawave',()=>exDeltaForm('wave')],['deltatide',()=>exDeltaForm('tide')],['subfan',exSubFan],['carbplat',exCarbPlat]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
 // the v2 links: #coast opens the passive margin (it replaces the two-delta coast), #rimmed the carbonate margin
 for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.defineProperty(examples,a,{enumerable:false,get(){return examples[b]}});
 // the examples select: groups in the UI order, short names
-const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','rift']],['Rift stages (one area, the same wells)',['riftearly','riftmid','riftlate']],['Seismic-driven',['canyon']],['Delta forms (facies map)',['deltariver','deltawave','deltatide']],['Deep-water fan, detailed (facies map, sand content view)',['subfan']],['Single systems',['delta','fan','estuary','ramp','lake']]];
-const EXNAMES={atlas:'Margin with a marginal plateau, lowstand (8 wells)',atlastr:'Same margin, transgressive interval (7 wells)',margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',riftearly:'1 · Early synrift, non-marine (6 wells)',riftmid:'2 · Mid synrift, marine incursion (6 wells)',riftlate:'3 · Late synrift, deep marine (6 wells)',
+const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','carbplat','rift']],['Rift stages (one area, the same wells)',['riftearly','riftmid','riftlate']],['Seismic-driven',['canyon']],['Delta forms (facies map)',['deltariver','deltawave','deltatide']],['Deep-water fan, detailed (facies map, sand content view)',['subfan']],['Single systems',['delta','fan','estuary','ramp','lake']]];
+const EXNAMES={atlas:'Margin with a marginal plateau, lowstand (8 wells)',atlastr:'Same margin, transgressive interval (7 wells)',margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',carbplat:'Carbonate platform: scalloped reef rim, pass, patch reefs (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',riftearly:'1 · Early synrift, non-marine (6 wells)',riftmid:'2 · Mid synrift, marine incursion (6 wells)',riftlate:'3 · Late synrift, deep marine (6 wells)',
  subfan:'Submarine fan: canyon, leveed channel, lobes (3 wells)',deltariver:'River-dominated delta, bird-foot (4 wells)',deltawave:'Wave-dominated delta, arcuate (5 wells)',deltatide:'Tide-dominated delta, funnels and bars (5 wells)',delta:'Delta (4 wells)',fan:'Deep-water fan (3 wells)',estuary:'Estuary (5 wells)',ramp:'Carbonate ramp (4 wells)',lake:'Rift lake (4 wells)'};
 // verdict of the wells check: green only when ALL wells are matched to a class AND honoured; amber when none is contradicted but some are not matched;
 // red when a matched well is not honoured. Counts every well.
@@ -3323,7 +3357,7 @@ function drawFacies(c,L,opt,only){const O=(S.mod&&S.mod.facies)||[],T0=GDE.FTYPE
   const placed=[],wp=((S.mod&&S.mod.check)||[]).map(w=>[L.X(w.x),L.Y(w.y),c.measureText(w.name).width]);
   const lab=(t,x,y,col)=>{const w=c.measureText(t).width/2+3,free=(X,Y)=>!wp.some(q=>X+w>q[0]-10&&X-w<q[0]+q[2]+30&&Math.abs(Y-q[1]+4)<16)&&!placed.some(q=>Math.abs(X-q[0])<w+q[2]&&Math.abs(Y-q[1])<14);
     for(const [dx,dy] of [[0,0],[0,16],[0,-16],[0,30],[0,-30],[w+12,0],[-w-12,0],[0,44]])if(free(x+dx,y+dy)){placed.push([x+dx,y+dy,w]);halo(c,t,x+dx,y+dy,col);return}placed.push([x,y,w]);halo(c,t,x,y,col)};
-  const PL={lobe:'Deltaic lobes',river:'Fluvial channels',fairway:'Turbidite fairways',fan:'Basin-floor fans',platform:'Carbonate platform',mtc:'MTC',ponded:'Ponded area',afan:'Sand-rich alluvial fans',ribbon:'Sand ribbons',contourite:'Contourite drift',carbmud:'Carbonate mudstone',sfan:'Submarine fan'};
+  const PL={lobe:'Deltaic lobes',river:'Fluvial channels',fairway:'Turbidite fairways',fan:'Basin-floor fans',platform:'Carbonate platform',mtc:'MTC',ponded:'Ponded area',afan:'Sand-rich alluvial fans',ribbon:'Sand ribbons',contourite:'Contourite drift',carbmud:'Carbonate mudstone',sfan:'Submarine fan',reefrim:'Reef-rimmed margin'};
   const size=o=>o.g.ring?Math.abs(GDE.sArea(o.g.ring)):(o.path?o.path.length:1);
   for(const ty of GDE.FKEYS){const os=O.filter(o=>o.type===ty);if(!os.length||ty==='arrow'||(SV&&os.every(o=>!svDrawn(ty,o.g))))continue;const big=os.reduce((a,b)=>size(b)>size(a)?b:a),a=fobjAnchor(big),nm=os.length>1||ty==='platform'?PL[ty]:T[ty].name;
     if(ty==='platform'||ty==='mtc'||ty==='ponded'){for(const o of os){const q=fobjAnchor(o);lab(ty==='platform'?'Carbonate platform':PL[ty],L.X(q[0]),L.Y(q[1]),'#1f2f55')}continue}
@@ -3350,7 +3384,7 @@ function fedit(id){const F=S.M.facies;F.edits=F.edits||{};return F.edits[id]||(F
 function fobj(id){return((S.mod&&S.mod.facies)||[]).find(o=>o.id===id)}
 function renderEod(){const M=S.M;if(!M)return;$('tbPal').value=(M.eod&&M.eod.palette)||'atlas';const F=M.facies||(M.facies=GDE.faciesDefaults()),E=M.eod||{};
   $('eTitle').value=E.title||'';$('eAbyss').value=E.abyss||0;$('fOn').checked=F.on!==false;
-  for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd'],['fSfan','sfan']])$(id).value=(F.n||{})[k]??0;$('fChan').value=F.chan||5;$('fReg').value=F.regime||'auto';$('fSand').checked=!!F.sandView;$('fArr').checked=!!F.arrows;$('fSeed').value=F.seed||1;
+  for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd'],['fSfan','sfan'],['fRim','rim']])$(id).value=(F.n||{})[k]??0;$('fChan').value=F.chan||5;$('fReg').value=F.regime||'auto';$('fSand').checked=!!F.sandView;$('fArr').checked=!!F.arrows;$('fSeed').value=F.seed||1;
   const AB=GDE.allBelts(M),em=GDE.eodMap(M),cl=GDE.eodClasses(M),used=new Set(em);
   $('eodList').innerHTML=cl.map((d,i)=>`<div class="br" data-k="${d.key}"><input type="color" value="${d.color}" aria-label="Colour of ${esc(d.name)}"><input type="text" value="${esc(d.name)}" aria-label="EOD domain name" style="flex:1"${used.has(i)?'':' class="unused"'}></div>`).join('')
     +'<div class="note">Class → domain</div>'+AB.map((c,i)=>`<div class="pg" style="margin:2px 0"><span title="${esc(c.name)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span><select data-c="${esc(c.name)}">${cl.map((d,j)=>`<option value="${d.key}"${em[i]===j?' selected':''}>${esc(d.name)}</option>`).join('')}</select></div>`).join('');
@@ -3369,7 +3403,7 @@ function renderEod(){const M=S.M;if(!M)return;$('tbPal').value=(M.eod&&M.eod.pal
 on('eTitle','change',()=>{S.M.eod=S.M.eod||{};S.M.eod.title=$('eTitle').value.trim();draw()});
 on('eAbyss','change',()=>{const v=numv('eAbyss');if(v>=0){S.M.eod=S.M.eod||{};S.M.eod.abyss=v;schedule()}});
 on('fOn','change',()=>{S.M.facies.on=$('fOn').checked;rematch();renderWells();schedule()});
-for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd'],['fSfan','sfan']])on(id,'change',()=>{const v=Math.round(numv(id));if(v>=0&&v<=40){S.M.facies.n=Object.assign({},S.M.facies.n,{[k]:v});schedule()}});
+for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd'],['fSfan','sfan'],['fRim','rim']])on(id,'change',()=>{const v=Math.round(numv(id));if(v>=0&&v<=40){S.M.facies.n=Object.assign({},S.M.facies.n,{[k]:v});schedule()}});
 on('fReg','change',()=>{S.M.facies.regime=$('fReg').value;schedule()});
 on('fSand','change',()=>{S.M.facies.sandView=$('fSand').checked;schedule()});
 on('fArr','change',()=>{S.M.facies.arrows=$('fArr').checked;schedule()});
@@ -3381,6 +3415,7 @@ on('fReset','click',()=>{S.M.facies.edits={};S.M.facies.extra=[];S.sel=null;sche
 function addFobj(type,x,y){const d=diag(),az=+S.M.az||180,a=az*Math.PI/180,o={type,x:Math.round(x),y:Math.round(y),seed:1+Math.floor(Math.random()*99999)};
   if(type==='lobe'||type==='fan')Object.assign(o,{az,L:Math.round(d*(type==='lobe'?.09:.07)),open:70});
   else if(type==='sfan')Object.assign(o,{az,L:Math.round(d*.2),open:50});
+  else if(type==='reefrim'){const P=[];for(let i=0;i<=10;i++){const q=(i/10-.5)*d*.3;P.push([Math.round(x+Math.cos(a)*q),Math.round(y-Math.sin(a)*q)])}Object.assign(o,{path:P,lag:Math.round(d*.06),sl:Math.round(d*.04),w:Math.round(d*.004),np:1,patch:4,nb:2,tg:4})}
   else if(type==='platform'||type==='ponded'||type==='carbmud')Object.assign(o,{a:Math.round(d*(type==='platform'?.03:.02)),e:.6,rot:0});
   else if(type==='afan')Object.assign(o,{az,L:Math.round(d*.04),open:110,m:3});else if(type==='arrow')Object.assign(o,{az,L:Math.round(d*.07)});
   else if(type==='ribbon'||type==='contourite'){const P=[];for(let i=0;i<=8;i++){const q=(i/8-.5)*d*(type==='ribbon'?.2:.28);P.push([Math.round(x+Math.cos(a)*q),Math.round(y-Math.sin(a)*q)])}Object.assign(o,type==='ribbon'?{path:P,w:Math.round(d*.007)}:{path:P,W:Math.round(d*.06),n:6})}
