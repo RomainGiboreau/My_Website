@@ -113,4 +113,63 @@ test('ranking CSV: one row per distribution, skipped ones carry the reason', () 
   assert.equal(rows.length, 1 + D.ORDER.length); assert.ok(rows[0].startsWith('rank,distribution')); assert.ok(rows.some(r => /skipped: needs strictly positive/.test(r)));
   assert.ok(rows.slice(1).every(r => r.split(',').length >= 16 || /skipped/.test(r)));
 });
+const QP = [.99, .95, .9, .85, .8, .75, .7, .6, .5, .4, .3, .25, .2, .15, .1, .05, .03, .02, .01, .005, .001];
+const run_ok = f => { const m = R.fromFile(JSON.parse(JSON.stringify(f))).model, r = R.run(m); return !r.err && isFinite(r.gcos) };
+test('contract A: decimal comma, thousands separators, European numbers, with the detected delimiter / decimal mark reported (regression: 1,5 per line gave two columns)', () => {
+  let t = D.table('1,5\n2,5\n3,5\n4,5'); assert.equal(t.cols.length, 1); assert.deepEqual(t.cols[0].values, [1.5, 2.5, 3.5, 4.5]); assert.equal(t.decimal, 'comma');
+  t = D.table('1,5 2,5 3,5'); assert.deepEqual(t.cols[0].values, [1.5, 2.5, 3.5]);
+  t = D.table('1,5;2,5;3,5'); assert.deepEqual(t.cols[0].values, [1.5, 2.5, 3.5]);
+  t = D.table('1 234,5\n2 345,5\n10,25'); assert.deepEqual(t.cols[0].values, [1234.5, 2345.5, 10.25]);
+  t = D.table('1,234.5\n2,345.5\n7'); assert.deepEqual(t.cols[0].values, [1234.5, 2345.5, 7]);
+  t = D.table('1.234,5\n2.345,5\n7,5'); assert.deepEqual(t.cols[0].values, [1234.5, 2345.5, 7.5]);
+  t = D.table('depth;phi\n100;0,55\n200;0,25'); assert.deepEqual(t.cols.map(c => c.name), ['depth', 'phi']); assert.deepEqual(t.cols[1].values, [.55, .25]); assert.equal(t.delimiter, 'semicolon');
+  t = D.table('100 0,55\n200 0,25\n300 0,31'); assert.equal(t.cols.length, 2); assert.deepEqual(t.cols[1].values, [.55, .25, .31]); assert.equal(t.delimiter, 'whitespace');
+  t = D.table('name,size,x\nA,1.5,10\nB,2.5,20'); assert.equal(t.delimiter, 'comma'); assert.deepEqual(t.cols[0].values, [1.5, 2.5]);
+  t = D.table('1,234\n2,345\n3,456'); assert.deepEqual(t.cols[0].values, [1234, 2345, 3456]); assert.ok(t.ambiguous, 'ambiguity must be reported');
+  t = D.table('1,234\n2,5\n3,456'); assert.deepEqual(t.cols[0].values, [1.234, 2.5, 3.456]); assert.equal(t.decimal, 'comma');
+  t = D.table('+5 −3 1E+3 1e-3'); assert.deepEqual(t.cols[0].values, [5, -3, 1000, .001]);
+  assert.deepEqual(D.parseNumber('<0,1'), { value: null, kind: 'below', limit: .1 }); assert.equal(D.parseNumber('n.d.').kind, 'missing'); assert.equal(D.parseNumber('abc').kind, 'text');
+});
+test('contract A: every skipped entry is counted with its reason and its first line numbers', () => {
+  const t = D.table('size\n1.5\nn.d.\n<0.1\nabc\n2.5\n\n-\n3.5');
+  assert.deepEqual(t.cols[0].values, [1.5, 2.5, 3.5]); assert.equal(t.read, 7); assert.equal(t.skipped, 4);
+  assert.equal(t.reasons.missing.n, 2); assert.equal(t.reasons.below.n, 1); assert.equal(t.reasons.text.n, 1); assert.deepEqual(t.reasons.missing.lines, [3, 8]); assert.deepEqual(t.reasons.text.lines, [5]);
+  const f = D.table('1 2 x 4 n.d.'); assert.deepEqual(f.cols[0].values, [1, 2, 4]); assert.equal(f.skipped, 2); assert.equal(f.reasons.text.n, 1); assert.equal(f.reasons.missing.n, 1);
+  assert.match(D.loadMessage(t, t.cols[0]), /7 rows read, 4 skipped/);
+});
+test('contract D: exported file carries summary v2 with the 21 quantiles of the SELECTED fit (regression: gamma sample, best fit Weibull, only P90/P50/P10 read back as lognormal)', () => {
+  const x = sample('gamma', 400, 801, { shape: 1.2, scale: 40 }), res = D.fitAll(x);
+  for (const id of [res[0].id, 'lognormal', 'gamma', 'weibull']) {
+    const r = res.find(q => q.id === id), t = D.p90p50p10(r.id, r.p), f = D.prospectFile('T', t.p90, t.p50, t.p10, { id: r.id, p: r.p }), s = f.summary, d = D.DIST[r.id];
+    assert.equal(f.format, 'prospect-risk'); assert.equal(f.version, 1); assert.equal(s.version, 2); assert.equal(s.quantiles.length, 21);
+    assert.deepEqual(s.quantiles.map(q => q[0]), QP, 'same exceedance probabilities as Prospect risking');
+    for (let i = 0; i < 21; i++) { rel(s.quantiles[i][1], d.inv(r.p, 1 - s.quantiles[i][0]), 1e-9, r.id + ' q' + i); if (i) assert.ok(s.quantiles[i][1] > s.quantiles[i - 1][1]) }
+    rel(s.mean, d.mean(r.p), 1e-12); assert.equal(s.dist.family, r.id); assert.ok(/^Distribution fitting, \d{4}-\d\d-\d\d$/.test(s.computedBy));
+    assert.deepEqual(Object.keys(s).sort(), Object.keys(R.summary(R.run(Object.assign(R.defaults(), f)))).sort(), 'same keys as the summary written by Prospect risking');
+    rel(s.p90, f.vol.p90, 1e-4); assert.ok(run_ok(f), 'valid for R.run'); }
+  assert.equal(D.exportWarning('lognormal'), ''); assert.match(D.exportWarning('weibull'), /not lognormal.*quantiles/);
+});
+test('contract D: a fit giving non-positive volumes refuses to export', () => {
+  assert.throws(() => D.prospectFile('x', 1, 2, 3, { id: 'normal', p: { mu: 1, sigma: 3 } }));
+});
+test('KS p-value with fitted parameters: asymptotic p never rejects (regression), bootstrap p is calibrated (Lilliefors type, seeded)', () => {
+  let asy = 0, bks = 0, bad = 0; const T = 120;
+  for (let k = 0; k < T; k++) { const x = sample('lognormal', 30, 5000 + k, { mu: 1, sigma: .6 }), r = D.fitAll(x).find(q => q.id === 'lognormal'); if (r.ksp < .05) asy++;
+    const b = D.bootGof('lognormal', r.p, 30, { ks: r.ks, ad: r.ad }, { nsim: 99, seed: 9 + k }); if (b.ksp < .05) bks++; if (b.adp < .05) bad++ }
+  console.log('     rejection rates at 0.05 (n = 30, true lognormal, ' + T + ' trials): asymptotic KS ' + asy / T + ', bootstrap KS ' + bks / T + ', bootstrap AD ' + bad / T);
+  assert.ok(asy / T < .02, 'asymptotic rejections ' + asy); assert.ok(bks / T < .13, 'bootstrap KS rejection rate ' + bks / T); assert.ok(bad / T < .13, 'bootstrap AD rejection rate ' + bad / T);
+  assert.ok(bks / T > .005 && bad / T > .005, 'bootstrap should reject sometimes');
+  const x = sample('lognormal', 200, 77, { mu: 0, sigma: 1 }), n = D.fitAll(x).find(q => q.id === 'normal'), b = D.bootGof('normal', n.p, 200, { ks: n.ks, ad: n.ad }, { nsim: 99, seed: 1 }); assert.ok(b.ksp <= .02 && b.adp <= .02); assert.equal(b.nsim, 99);
+  assert.deepEqual(b, D.bootGof('normal', n.p, 200, { ks: n.ks, ad: n.ad }, { nsim: 99, seed: 1 }), 'seeded');
+});
+test('AIC ranking marks the models that are not comparable (triangular by moments, beta with data-derived bounds)', () => {
+  const res = D.fitAll(sample('lognormal', 300, 31)); for (const r of res.filter(q => q.ok)) assert.equal(!!r.nc, r.id === 'triangular' || r.id === 'beta', r.id); assert.ok(/not comparable/i.test(D.NC_NOTE));
+});
+test('bootstrap confidence intervals on P90 / P50 / P10 (nonparametric, refit, seeded)', () => {
+  const x = sample('lognormal', 300, 91, { mu: 3, sigma: .5 }), r = D.fitAll(x).find(q => q.id === 'lognormal'), ci = D.bootQuantiles('lognormal', x, { nsim: 200, seed: 4 });
+  assert.equal(ci.nsim, 200); const t = D.p90p50p10('lognormal', r.p);
+  for (const k of ['p90', 'p50', 'p10']) { assert.ok(ci[k].lo < ci[k].hi); assert.ok(ci[k].lo <= t[k] * 1.02 && ci[k].hi >= t[k] * .98, k) }
+  const tru = { p90: Math.exp(3 - 1.28155 * .5), p50: Math.exp(3), p10: Math.exp(3 + 1.28155 * .5) }; for (const k of ['p90', 'p50', 'p10']) assert.ok(ci[k].lo < tru[k] * 1.05 && ci[k].hi > tru[k] * .95, 'covers truth ' + k);
+  assert.deepEqual(ci, D.bootQuantiles('lognormal', x, { nsim: 200, seed: 4 }));
+});
 console.log(`\n${n} tests passed`);
