@@ -19,8 +19,8 @@ All work is on `main`; check `git status -sb` and `git worktree list` first. Tes
 ### Review fixes: progress (one agent per tool, worktree `../My_Website_fix_<tool>`, branch `fix-<tool>`, merge, push once per wave)
 - Wave 1 merged and pushed: logcorr, source, digitizer (plot), las-checker, risking, fdp.
 - Wave 2 merged and pushed: portfolio, wellpos, distfit, gridding, variogram, hull.
-- Wave 3: burial, bht, compaction, biomarkers done on their branches; trcycles and rockeval were still running — CHECK `git worktree list`
-  and `git branch --list 'fix-*'`: merge any `fix-*` branch that is finished (run its test + site_check first), then remove the worktree and branch.
+- Wave 3 merged and pushed: burial, bht, compaction, biomarkers, rockeval, trcycles (no fix-* branch or worktree should remain: check anyway with
+  `git worktree list` and `git branch --list "fix-*"`).
 - Wave 4 TO DO: chromatogram, ternary, clustering, gridattr, mapdigitizer (continuous), discretemap.
 - Wave 5 TO DO: logdigitizer, zmap-checker, mcda (move engine into a core block + add scripts/mcda_test.mjs), maturity (small), cvd (only if accurate viridis/cividis tables
   can be obtained from an open source), psec (no change needed).
