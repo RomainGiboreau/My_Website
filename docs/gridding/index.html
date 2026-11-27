@@ -113,7 +113,7 @@ table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .er
   <label><input type="checkbox" id="skipNaN" checked>Skip empty nodes</label>
   <button class="pri" id="bCopy" title="Copy x, y, value as tab-separated text, ready to paste into Excel">Copy XYZ</button>
   <button id="bCsv">XYZ CSV</button><button id="bMat" title="One row per y (top = ymax), one column per x">Matrix CSV</button>
-  <button id="bGrd" title="Surfer ASCII grid (DSAA); empty nodes = 1.70141e38">Surfer .grd</button>
+  <button id="bGrd" title="Surfer ASCII grid (DSAA); empty nodes = 1.70141e38">Surfer .grd</button><button id="bZmap" title="ZMAP+ grid, null 1.0E+30, read back by the ZMAP checker">ZMAP+</button>
   <button id="bAsc" title="ESRI ASCII grid; needs dx = dy">ESRI .asc</button><button id="bPng">PNG</button>
   <span class="msg" id="exportMsg"></span>
   <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: your data never leave it. Paste or open a table with at least three columns (X, Y, value). Duplicate locations are averaged. Interpolation is done in coordinates centred and scaled by the longest extent; results are in your units.">?</span>
@@ -121,11 +121,12 @@ table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .er
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout l3">
 <aside class="side">
- <section class="panel"><h2><span class="n">1</span>Point cloud<span class="tt" tabindex="0" data-tip="Paste a table with X, Y and the value to map (tab, semicolon, comma or space separated; decimal comma accepted; an optional header row names the columns), or open a text/CSV file, or drop it on the page. Lines starting with # are ignored.">?</span><i class="chev"></i></h2>
+ <section class="panel"><h2><span class="n">1</span>Point cloud<span class="tt" tabindex="0" data-tip="Paste a table with X, Y and the value to map (tab, semicolon, comma or space separated; decimal comma accepted; an optional header row names the columns), or open a text/CSV file, or drop it on the page. Lines starting with # are ignored. Values equal to a null value (field below) are excluded; skipped rows are counted and listed.">?</span><i class="chev"></i></h2>
   <div class="body"><textarea id="paste" rows="3" placeholder="X&#9;Y&#9;Depth&#10;12.5&#9;40.2&#9;1834.1&#10;…" spellcheck="false"></textarea>
   <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,.xyz,text/*" hidden>
   <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
   <div class="g3"><span>X</span><select id="cx"></select><span>Y</span><select id="cy"></select><span>Value</span><select id="cz"></select></div>
+  <div class="pg"><span>Null value(s)</span><input type="text" id="nullv" value="-999, -999.25, -9999, 9999, 1e30, 1.70141e38" title="Values of the mapped variable equal to one of these are excluded (not used as data). Empty the field to exclude nothing."></div>
   <div class="msg" id="dataMsg">No data yet.</div>
   <div style="margin-top:8px;font-weight:600;font-size:.82rem">Secondary variables <span class="tt" tabindex="0" data-tip="Optional, for kriging with external drift and cokriging. Tick extra columns of the table (secondary known at the data points only), or, better, give a secondary map X Y S1 [S2…] (e.g. a seismic attribute) known over the whole area: it is interpolated onto the data points and onto the grid nodes. Up to 4 variables.">?</span></div>
   <div id="secCols" class="row" style="flex-wrap:wrap;gap:4px 10px"></div>
@@ -166,24 +167,18 @@ table.cvt tr.best td{background:rgba(74,90,78,.18);font-weight:600}table.cvt .er
   <div class="msg" id="exMsg"></div></div>
  </section>
  <section class="panel"><h2><span class="n">4</span>Display<span class="tt" tabindex="0" data-tip="Colour range is automatic unless min/max are typed. Contours use a nice interval unless one is given. Points can be coloured by their own value with the same scale: a point whose colour clashes with the surface under it is a point the interpolation does not honour.">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="pg"><span>Show</span><select id="vsel"><option value="z">Interpolated value</option><option value="std" disabled>Kriging std error</option></select><span>Colour map</span><select id="cmap"><option value="viridis">Viridis</option><option value="rainbow">Rainbow</option><option value="terrain">Terrain</option><option value="RdBu">Blue–red</option><option value="gray">Grey</option></select>
+  <div class="body"><div class="pg"><span>Show</span><select id="vsel"><option value="z">Interpolated value</option><option value="std" disabled>Kriging std error (see note)</option></select><span>Colour map</span><select id="cmap"><option value="viridis">Viridis</option><option value="rainbow">Rainbow</option><option value="terrain">Terrain</option><option value="RdBu">Blue–red</option><option value="gray">Grey</option></select>
    <span>Min / max</span><span style="display:flex;gap:4px"><input type="text" id="rmin" placeholder="auto"><input type="text" id="rmax" placeholder="auto"></span><span>Contour interval</span><input type="text" id="cint" placeholder="auto"></div>
   <div class="row"><label class="inl"><input type="checkbox" id="rev">Reverse</label><label class="inl"><input type="checkbox" id="showC">Contours</label><label class="inl"><input type="checkbox" id="smooth" checked>Smooth</label></div>
-  <div class="row"><label class="inl"><input type="checkbox" id="showP" checked>Points</label><label class="inl"><input type="checkbox" id="pcol" checked>by value</label><label class="inl">size <input type="range" id="psz" min="1" max="10" value="5" style="width:70px"></label></div></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="showP" checked>Points</label><label class="inl"><input type="checkbox" id="pcol" checked>by value</label><label class="inl">size <input type="range" id="psz" min="1" max="10" value="5" style="width:70px"></label></div>
+  <div class="note">The kriging standard error assumes that the variogram is known and the field stationary: it ignores the uncertainty of the fitted variogram and is optimistic. Use it to compare data coverage, not as a confidence interval.</div></div>
  </section>
- <section class="panel"><h2><span class="n">5</span>Compare methods<span class="tt" tabindex="0" data-tip="5-fold cross-validation with the current parameters: the points are split in 5 random groups; each group is predicted from the other four. RMSE, MAE and bias are in the units of the value. Lowest RMSE is highlighted. This measures how well each method predicts at unsampled locations; with clustered or line-wise sampling it is optimistic, because neighbours of held-out points are often still in the training set.">?</span><i class="chev"></i></h2>
+ <section class="panel"><h2><span class="n">5</span>Compare methods<span class="tt" tabindex="0" data-tip="5-fold cross-validation with the current parameters: the points are split in 5 random groups; each group is predicted from the other four. RMSE, MAE and bias are in the units of the value. Lowest RMSE is highlighted; methods that cannot predict every point (TIN outside the hull) are ranked on the points predicted by all methods. This measures how well each method predicts at unsampled locations; with clustered or line-wise sampling it is optimistic, because neighbours of held-out points are often still in the training set.">?</span><i class="chev"></i></h2>
   <div class="body"><div class="row"><button id="bCV">Run cross-validation</button></div><div id="cvOut"></div></div>
  </section>
 </aside>
 </div>
-<script>
-const $=id=>document.getElementById(id);
-const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-const toN=s=>{const t=String(s).trim().replace(',','.');return t!==''&&isFinite(+t)?+t:NaN};
-function fmt(v){if(!isFinite(v))return'—';const a=Math.abs(v);return(a!==0&&(a<1e-3||a>=1e7))?v.toExponential(4):String(+v.toPrecision(7))}
-let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2800)}
-let banT=null;function banner(m,err){const b=$('banner');b.textContent=m;b.className='banner'+(err?' err':'');b.hidden=false;clearTimeout(banT);banT=setTimeout(()=>{b.hidden=true},err?9000:5000)}
-document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+<script id="gridding-core">
 function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
 // =====================================================================
@@ -345,6 +340,7 @@ const VMODELS={
   exponential:(h,c0,c,a)=>h<=0?0:c0+c*(1-Math.exp(-3*h/a)),
   gaussian:(h,c0,c,a)=>h<=0?0:c0+c*(1-Math.exp(-3*h*h/(a*a))),
   matern:(h,c0,c,a)=>{if(h<=0)return 0;const u=4.744*h/a;return c0+c*(1-(1+u)*Math.exp(-u))}};   // Matérn ν = 3/2, range a = distance at 95 % of the sill
+const VSIMPLE=['spherical','exponential','matern','gaussian'];
 const VNAMES={spherical:'Spherical',exponential:'Exponential',gaussian:'Gaussian',matern:'Matérn 3/2'};
 const KVAR={ok:'ok',sk:'sk',uk1:'uk',uk2:'uk',ked:'ked',cok:'cok'},KDEG={ok:0,sk:0,uk1:1,uk2:2,ked:0,cok:0};
 const isKrig=m=>m in KVAR;
@@ -396,11 +392,13 @@ function looScore(T,vm,k){const kn=new KNN(T.X,T.Y),B=newBuf(k),n=T.n,step=Math.
   for(let i=0;i<n;i+=step){const r=krigAt(T,kn,T.X[i],T.Y[i],k,v,'ok',0,0,B,i);if(isFinite(r[0])){const e=r[0]-T.Z[i];se+=e*e;c++}}
   return c?Math.sqrt(se/c):Infinity}
 function autoVariogram(T,model,k){                      // fits every candidate model by weighted LS, then picks the one with the lowest leave-one-out error
-  const ev=empVario(T.X,T.Y,T.Z,T.n,false);if(ev.pts.length<4)throw new Error('Too few point pairs to estimate a variogram: use more data, or switch to a manual variogram.');
+  const ev=empVario(T.X,T.Y,T.Z,T.n,false);if(ev.pts.length<4)throw new Error(`Too few point pairs to estimate a variogram automatically (${T.n} points; at least about ${KRIG_MIN_AUTO} are needed). Use more data, a manual variogram, or another method.`);
   const names=model==='auto'?Object.keys(VMODELS):[model],cand=names.map(mn=>{const f=fitWLS(ev.pts,VMODELS[mn],ev.dmax);return{model:mn,...f}});
   for(const c of cand)c.loo=looScore(T,c,k);
   cand.sort((a,b)=>(a.loo-b.loo)||(a.sse-b.sse));
-  return{best:cand[0],cand,emp:ev.pts,dmax:ev.dmax}}
+  let tie=null;const near=cand.filter(c=>c.loo<=1.03*cand[0].loo);       // differences below 3 % of the leave-one-out error are noise: take the simplest model
+  if(near.length>1){near.sort((a,b)=>VSIMPLE.indexOf(a.model)-VSIMPLE.indexOf(b.model));const ch=near[0];cand.splice(cand.indexOf(ch),1);cand.unshift(ch);tie={n:near.length}}
+  return{best:cand[0],cand,emp:ev.pts,dmax:ev.dmax,tie}}
 
 // ---- Secondary variables: regression on [1 (+ x,y), S1..Sm] (global OLS), used for the variogram residuals (external drift) and for cokriging
 function extFit(T,pd){const ns=T.S.length,np=pd===1?3:1,p=np+ns,A=new Float64Array(p*p),b=new Float64Array(p),f=new Float64Array(p+6);
@@ -441,16 +439,17 @@ function krigPrep(method,tr,P){
   if((isKed||isCok)&&!ns)throw new Error('This method needs at least one secondary variable: define one in section 1 (extra column or secondary map).');
   const k=Math.max(K.k,deg===2?20:0,isKed?8+3*(ns+(deg?3:1)):0),mz=tr.Z.reduce((a,v)=>a+v,0)/tr.n;let an=null,T=tr;
   const zfit=t=>isKed?{...t,Z:(extFit(t,deg)||{resid:t.Z}).resid}:isCok?{...t,Z:t.Z.map(z=>z-mz)}:deg?{...t,Z:polyResidual(t,deg)}:(method==='sk'?{...t,Z:t.Z.map(z=>z-K.mean)}:t);
-  if(K.aniso.mode==='manual'&&K.aniso.ratio>1.0001)an={ang:K.aniso.angle*Math.PI/180,ratio:K.aniso.ratio};
+  K.anisoMsg='';
+  if(K.aniso.mode==='manual'){const ma=manualAniso(K.aniso.ratio);K.anisoMsg=ma.msg;if(ma.f)an={ang:K.aniso.angle*Math.PI/180,ratio:ma.f}}
   else if(K.aniso.mode==='auto'){const v0=autoVariogram(zfit(tr),'spherical',k).best,d=detectAniso(zfit(tr),v0);
     if(d&&d.ratio>=1.25){       // kept only if it lowers the leave-one-out error by at least 5 % (directional variograms of smooth fields can be misleading)
       const [U,V]=applyAniso(tr.X,tr.Y,d),va=autoVariogram(zfit({...tr,X:U,Y:V}),'spherical',k).best;d.loo0=v0.loo;d.loo1=va.loo;if(va.loo<0.95*v0.loo)an=d}
     K.anisoInfo=d}
   if(an){const [U,V]=applyAniso(tr.X,tr.Y,an);T={...tr,X:U,Y:V}}
-  const Tz=zfit(T);let vm,cand=null,emp,dmax;
-  if(K.vmode==='auto'){const f=autoVariogram(Tz,K.model,k);vm=f.best;cand=f.cand;emp=f.emp;dmax=f.dmax}
+  const Tz=zfit(T);let vm,cand=null,emp,dmax,tie=null;
+  if(K.vmode==='auto'){const f=autoVariogram(Tz,K.model,k);vm=f.best;cand=f.cand;emp=f.emp;dmax=f.dmax;tie=f.tie}
   else{const ev=empVario(Tz.X,Tz.Y,Tz.Z,Tz.n,false);vm={...K.vario};emp=ev.pts;dmax=ev.dmax}
-  vm={...vm,emp,dmax};let cok=null;
+  vm={...vm,emp,dmax,tie};let cok=null;
   if(isCok){const ft=extFit(tr,0);if(!ft)throw new Error('The secondary variables are collinear: remove one.');const n=tr.n,sp=new Float64Array(n);
     for(let i=0;i<n;i++){let e=ft.beta[0];for(let q=0;q<ns;q++)e+=ft.beta[1+q]*tr.S[q][i];sp[i]=e}
     let ms=0;for(let i=0;i<n;i++)ms+=sp[i];ms/=n;let vs=0,cz=0,vz=0;for(let i=0;i<n;i++){vs+=(sp[i]-ms)**2;cz+=(sp[i]-ms)*(tr.Z[i]-mz);vz+=(tr.Z[i]-mz)**2}
@@ -464,8 +463,8 @@ function krigMain(method,tr,QX,QY,P){
     for(let q=0;q<nq;q++){let e=c.beta[0];for(let j=0;j<pr.ns;j++)e+=c.beta[1+j]*P.qS[j][q];const r=cokAt(pr.T,kn,QU[q],QV[q],pr.k,vm,c.mz,B,c.rho,(e-c.ms)/c.ss);z[q]=r[0];v[q]=r[1]}
     note=`secondary correlation ρ = ${c.rho0.toFixed(2)}${Math.abs(c.rho0)>0.98?' (capped at 0.98)':''}`}
   else{for(let q=0;q<nq;q++){if(method==='ked')for(let j=0;j<pr.ns;j++)qs[j]=P.qS[j][q];const r=krigAt(pr.T,kn,QU[q],QV[q],pr.k,vm,variant,pr.deg,K.mean,B,-1,qs);z[q]=r[0];v[q]=r[1]}
-    if(method==='ked')note='external drift: '+S.secNames.join(', ')}
-  return{z,v,vario:pr.vm,cand:pr.cand,aniso:pr.an,anisoInfo:K.anisoInfo,note}}
+    if(method==='ked')note='external drift: '+(P.secNames||[]).join(', ')}
+  return{z,v,vario:pr.vm,cand:pr.cand,aniso:pr.an,anisoInfo:K.anisoInfo,anisoMsg:K.anisoMsg,note}}
 
 // ---- Local polynomial regression (moving least squares, tricube weights)
 function lpPredict(tr,QX,QY,P){
@@ -491,34 +490,165 @@ function predictAt(method,tr,QX,QY,P,G){
 const METHODS={ok:'Ordinary kriging',sk:'Simple kriging',uk1:'Universal kriging (linear drift)',uk2:'Universal kriging (quadratic drift)',ked:'Universal kriging — external drift (secondary variables)',cok:'Collocated cokriging (secondary variables)',idw:'Inverse distance (IDW)',nn:'Nearest neighbour',tin:'Linear (Delaunay TIN)',lp:'Local polynomial regression',rbf:'Spline — thin-plate / RBF',mincurv:'Spline — minimum curvature'};
 
 // =====================================================================
+//  Decoding numbers and tables (shared contract A), null values (C), geometry checks, cross-validation summary, ZMAP+ writer
+// =====================================================================
+function parseNumber(text,opt){
+  opt=opt||{};let t=String(text==null?'':text).replace(/[   ]/g,' ').trim().replace(/^"(.*)"$/,'$1').trim().replace(/[−–]/g,'-');
+  if(t===''||/^(-+|n\.?d\.?|na|n\/a|nan|null|none)$/i.test(t))return{value:null,kind:'missing'};
+  if(t[0]==='<'){const r=parseNumber(t.slice(1),opt);return{value:null,kind:'below',limit:r.kind==='ok'?r.value:null}}
+  let s=1;if(t[0]==='+')t=t.slice(1).trim();else if(t[0]==='-'){s=-1;t=t.slice(1).trim()}
+  let ex='';const em=t.match(/^(.*?)([eE][-+]?\d+)$/);if(em){t=em[1];ex=em[2]}
+  let m=null,amb=false;
+  if(/^\d+$/.test(t))m=t;
+  else if(/^\d{1,3}( \d{3})+$/.test(t))m=t.replace(/ /g,'');
+  else if(/^\d{1,3}( \d{3})+[.,]\d+$/.test(t))m=t.replace(/ /g,'').replace(',','.');
+  else if(/^\d*\.\d+$|^\d+\.$/.test(t))m=t;
+  else if(/^\d{1,3}(,\d{3})+\.\d+$/.test(t))m=t.replace(/,/g,'');
+  else if(/^\d{1,3}(\.\d{3})+,\d+$/.test(t))m=t.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(,\d{3}){2,}$/.test(t))m=t.replace(/,/g,'');
+  else if(/^\d{1,3}(\.\d{3}){2,}$/.test(t))m=t.replace(/\./g,'');
+  else if(/^[1-9]\d{0,2},\d{3}$/.test(t)){if(opt.decimalComma)m=t.replace(',','.');else{m=t.replace(',','');amb=true}}
+  else if(/^\d*,\d+$/.test(t))m=t.replace(',','.');
+  if(m==null)return{value:null,kind:'text'};
+  const v=s*Number(m+ex);return isFinite(v)?{value:v,kind:'ok',amb}:{value:null,kind:'text'}}
+function detectDelimiter(lines){
+  const L=lines.map(l=>l.trim()).filter(l=>l);if(!L.length)return null;
+  const decC=L.some(l=>/\d,\d{1,2}(?!\d)/.test(l)),anyWs=L.some(l=>/\S\s+\S/.test(l)),
+    cands=[['\t',l=>l.split('\t')],[';',l=>l.split(';')],['ws',l=>l.split(/\s+/)],[',',l=>l.split(',')]];
+  for(const [name,f] of cands){
+    if(name===','&&decC&&anyWs)continue;
+    const cnt=L.map(l=>f(l).length),freq=new Map();for(const c of cnt)freq.set(c,(freq.get(c)||0)+1);
+    let mode=0,mf=0;for(const [c,k] of freq)if(k>mf||(k===mf&&c>mode)){mode=c;mf=k}
+    const rest=cnt.slice(1).filter(c=>c===mode).length;
+    if(mode>=2&&(mf/L.length>=0.9||(L.length>=3&&cnt[0]!==mode&&rest/(L.length-1)>=0.9)))return name}
+  return null}
+function splitLine(l,sep){const a=sep==='ws'?l.trim().split(/\s+/):l.split(sep);return a.map(s=>s.trim().replace(/^"(.*)"$/,'$1'))}
+function tableDecimalComma(rows,sep){
+  for(const r of rows)for(const c of r){if(typeof c!=='string')continue;if(sep===';'&&c.includes(','))return true;const m=c.trim().match(/^[-+−]?\d*,(\d+)$/);if(m&&m[1].length!==3)return true}
+  return false}
+function parseTable(text){
+  const raw=String(text).replace(/^﻿/,'').replace(/\r/g,'').split('\n'),lines=[],lineNos=[];
+  raw.forEach((l,i)=>{l=l.trim();if(l&&!/^(#|\/\/)/.test(l)){lines.push(l);lineNos.push(i+1)}});
+  if(!lines.length)return null;
+  const sep=detectDelimiter(lines);if(!sep)return{err:'Cannot find a consistent column layout: at least 3 columns (X, Y, value) separated by tab, semicolon, space or comma are needed.'};
+  let rows=lines.map(l=>splitLine(l,sep));
+  const freq=new Map();for(const r of rows)freq.set(r.length,(freq.get(r.length)||0)+1);let nc=0,mf=0;for(const [c,k] of freq)if(k>mf||(k===mf&&c>nc)){nc=c;mf=k}
+  if(nc<3)return{err:'At least 3 columns (X, Y, value) are needed.'};
+  let head=null,ln=lineNos.slice();if(rows[0].slice(0,3).some(s=>parseNumber(s).kind==='text')){head=rows.shift();ln.shift()}
+  while(head&&head.length<nc)head.push('col '+(head.length+1));
+  const decComma=tableDecimalComma(rows,sep);
+  return{head:head||Array.from({length:nc},(_,i)=>'col '+(i+1)),rows,nc,sep,lineNos:ln,decComma,hasHead:!!head}}
+function guessCols(head){
+  const find=re=>head.findIndex(h=>re.test(String(h).replace(/\[.*?\]|\(.*?\)/g,'').trim()));
+  let x=find(/^(x|lon|long|longitude|east|easting|e)$/i),y=find(/^(y|lat|latitude|north|northing|n)$/i);
+  if(x<0||y<0||x===y){x=0;y=1}let z=head.findIndex((_,i)=>i!==x&&i!==y);return[x,y,Math.max(0,z)]}
+// ---- null values (shared contract C)
+const DEFAULT_NULLS='-999, -999.25, -9999, 9999, 1e30, 1.70141e38';
+function parseNullList(t){const list=[],bad=[];for(let tok of String(t==null?'':t).split(/[\s;]+/)){tok=tok.replace(/,+$/,'');if(!tok)continue;const r=parseNumber(tok,{decimalComma:false});if(r.kind==='ok')list.push(r.value);else bad.push(tok)}return{list,bad}}
+const isNullVal=(v,list)=>{for(const s of list)if(v===s||Math.abs(v-s)<=1e-9*Math.abs(s))return true;return false};
+const looksLikeNull=v=>{const a=Math.abs(v),t=String(a);return a>=1e19||/^9{3,}(\.0*)?$/.test(t)||/^9{2,}\.99?$/.test(t)};
+// decodes the rows of a table into points [x,y,z,[secondary values]]; every skipped row is counted with the reason and the first line numbers
+function decodeRows(rows,o){
+  const R={n:rows.length,pts:[],skip:{},nulls:{},amb:0,cand:{}},nl=o.nulls||[],opt={decimalComma:!!o.decComma},sec=o.sec||[];
+  const add=(k,i)=>{const e=R.skip[k]||(R.skip[k]={n:0,lines:[]});e.n++;if(e.lines.length<5)e.lines.push(o.lineNos?o.lineNos[i]:i+1)};
+  const why=r=>r.kind==='text'?'non-numeric':r.kind==='missing'?'missing':'below detection limit';
+  rows.forEach((r,i)=>{
+    const a=parseNumber(r[o.cx],opt),b=parseNumber(r[o.cy],opt),c=parseNumber(r[o.cz],opt);
+    for(const q of [a,b,c])if(q.kind!=='ok'){add(why(q),i);return}
+    if(a.amb||b.amb||c.amb)R.amb++;
+    if(isNullVal(c.value,nl)){const k=nl.find(s=>c.value===s||Math.abs(c.value-s)<=1e-9*Math.abs(s));R.nulls[k]=(R.nulls[k]||0)+1;add('null value',i);return}
+    const sv=[];for(const j of sec){const q=parseNumber(r[j],opt);if(q.kind!=='ok'){add('secondary '+why(q),i);return}
+      if(isNullVal(q.value,nl)){R.nulls[q.value]=(R.nulls[q.value]||0)+1;add('secondary null value',i);return}sv.push(q.value)}
+    if(looksLikeNull(c.value))R.cand[c.value]=(R.cand[c.value]||0)+1;
+    R.pts.push([a.value,b.value,c.value,sv])});
+  R.skipped=R.n-R.pts.length;return R}
+function describeLoad(R){
+  const parts=Object.entries(R.skip).map(([k,e])=>`${k} ${e.n} (line${e.lines.length>1?'s':''} ${e.lines.join(', ')}${e.n>e.lines.length?', …':''})`);
+  const t=`${R.n} rows read, ${R.skipped} skipped`+(parts.length?': '+parts.join('; '):'');
+  const w=[];for(const [v,n] of Object.entries(R.nulls))w.push(`${n} value${n>1?'s':''} equal to the null value ${v} ${n>1?'were':'was'} excluded`);
+  for(const [v,n] of Object.entries(R.cand))if(n>=3)w.push(`warning: ${v} appears ${n} times and may be a null value that is not in the list (not excluded)`);
+  if(R.amb)w.push(`${R.amb} value${R.amb>1?'s':''} like 1,234 read as thousands separator (no decimal comma elsewhere in the table)`);
+  return{text:t,notes:w}}
+// ---- geometry
+function collinearity(X,Y){   // width / length of the point cloud (standard deviation across / along its main axis): 0 = all on a line
+  const n=X.length;let mx=0,my=0;for(let i=0;i<n;i++){mx+=X[i];my+=Y[i]}mx/=n;my/=n;
+  let sxx=0,syy=0,sxy=0;for(let i=0;i<n;i++){const a=X[i]-mx,b=Y[i]-my;sxx+=a*a;syy+=b*b;sxy+=a*b}
+  const th=0.5*Math.atan2(2*sxy,sxx-syy),c=Math.cos(th),s=Math.sin(th);let al=0,pe=0;
+  for(let i=0;i<n;i++){const a=X[i]-mx,b=Y[i]-my,u=a*c+b*s,v=-a*s+b*c;al+=u*u;pe+=v*v}
+  return al>0?Math.sqrt(pe/al):0}
+const KRIG_MIN_AUTO=25;   // the automatic variogram needs >= 10 point pairs in at least 4 of 20 lag classes: found to work from about 22-25 points on scattered data (never below 16); fewer: manual variogram or another method
+const MIN_POINTS=4;
+// ---- manual anisotropy: the ratio is minor/major range (<= 1, as in the Variogram tool); returns the internal major/minor factor (>= 1) or null, with a message
+function manualAniso(r){
+  if(!(r>0)||!isFinite(r))return{f:null,msg:'Manual anisotropy ignored: the ratio must be a number above 0 (minor/major range, 1 = isotropic).'};
+  if(Math.abs(r-1)<1e-4)return{f:null,msg:'Manual anisotropy ratio 1: isotropic, no anisotropy applied.'};
+  if(r<1)return{f:1/r,msg:`Manual anisotropy applied: minor/major range ${r.toPrecision(3)}.`};
+  return{f:r,msg:`Manual anisotropy applied: a ratio above 1 was read as major/minor and inverted to minor/major ${(1/r).toPrecision(3)} (enter minor/major, at most 1).`}}
+// ---- cross-validation summary: methods evaluated on different subsets are ranked on the points that every method predicted
+function cvSummary(items,z){
+  const n=z.length;let mean=0;for(let i=0;i<n;i++)mean+=z[i];mean/=n;let vt=0;for(let i=0;i<n;i++)vt+=(z[i]-mean)**2;
+  const ok=items.filter(it=>!it.err&&it.pred),common=new Uint8Array(n).fill(1);
+  for(const it of ok)for(let i=0;i<n;i++)if(!isFinite(it.pred[i]))common[i]=0;
+  let nc=0;for(let i=0;i<n;i++)nc+=common[i];
+  const rows=items.map(it=>{if(it.err||!it.pred)return{m:it.m,err:it.err||'no prediction'};
+    let se=0,ae=0,b=0,c=0,sc=0;for(let i=0;i<n;i++){if(!isFinite(it.pred[i]))continue;const e=it.pred[i]-z[i];se+=e*e;ae+=Math.abs(e);b+=e;c++;if(common[i])sc+=e*e}
+    if(!c)return{m:it.m,err:'no point could be predicted'};
+    return{m:it.m,n:c,cov:c/n,rmse:Math.sqrt(se/c),mae:ae/c,bias:b/c,r2:1-se/(vt*c/n),rmseCommon:nc?Math.sqrt(sc/nc):NaN}});
+  const good=rows.filter(r=>!r.err),unequal=good.some(r=>r.n!==good[0].n)&&nc>=3,key=r=>unequal?r.rmseCommon:r.rmse;
+  let best=-1,bv=Infinity;rows.forEach((r,i)=>{if(!r.err&&key(r)<bv){bv=key(r);best=i}});
+  let note='';if(unequal){const part=good.filter(r=>r.n<n).map(r=>`${r.m} ${r.n}/${n}`);
+    note=`Methods were evaluated on different points (${part.join(', ')}; the others are outside their domain). They are ranked on the ${nc} points predicted by every method (column "RMSE common"), not on their own subset.`}
+  return{rows,best,unequal,nCommon:nc,note}}
+// ---- ZMAP+ writer (same layout as the Grid attributes tool, read back by the ZMAP checker in the test script)
+const NULL_ZMAP_TXT='1.0000000E+30',fnumZ=v=>String(+(+v).toPrecision(12));
+function validRange(z){let mn=Infinity,mx=-Infinity;for(const v of z)if(v===v&&Math.abs(v)<1e29){if(v<mn)mn=v;if(v>mx)mx=v}return[mn,mx]}
+// g = {nx,ny,dx,dy,x0,y0,z}: z[j*nx+i], j = 0 is the southern row (this tool's grids); ZMAP+ is written column by column from the north-west node
+function writeZmap(g,o){o=o||{};const npl=o.npl||5,width=o.width||20,nr=g.ny,nc=g.nx;
+  const [mn,mx]=validRange(g.z),sc=Math.max(Math.abs(isFinite(mn)?mn:0),Math.abs(isFinite(mx)?mx:0))||1;
+  const dec=o.dec!=null?o.dec:Math.max(0,Math.min(15,Math.ceil(10-Math.log10(sc))));
+  const label=String(o.label||'GRID').replace(/[,@\r\n]/g,'_').slice(0,40)||'GRID';
+  const xmax=g.x0+(nc-1)*g.dx,ymax=g.y0+(nr-1)*g.dy;
+  const out=['!','! '+label+' - written by Map interpolation','!',`@${label}, GRID, ${npl}`,`${width}, ${NULL_ZMAP_TXT}, , ${dec}, 1`,`${nr}, ${nc}, ${fnumZ(g.x0)}, ${fnumZ(xmax)}, ${fnumZ(g.y0)}, ${fnumZ(ymax)}`,'0.0, 0.0, 0.0','@'];
+  for(let c=0;c<nc;c++){let s='',k=0;for(let r=0;r<nr;r++){const v=g.z[(nr-1-r)*nc+c];s+=(isFinite(v)&&Math.abs(v)<1e29?v.toFixed(dec):NULL_ZMAP_TXT).padStart(width);if(++k===npl||r===nr-1){out.push(s);s='';k=0}}}
+  return out.join('\r\n')+'\r\n'}
+window.GRD={rng,luSolve,KNN,delaunay,VMODELS,VNAMES,KVAR,krigAt,krigPrep,krigMain,newBuf,floorVm,autoVariogram,empVario,predictAt,METHODS,isKrig,
+  parseNumber,detectDelimiter,parseTable,guessCols,tableDecimalComma,parseNullList,isNullVal,decodeRows,describeLoad,collinearity,manualAniso,cvSummary,writeZmap,DEFAULT_NULLS,KRIG_MIN_AUTO,MIN_POINTS,minCurvGrid,rbfPredict,tinPredict,idwPredict};
+
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const toN=s=>{const r=parseNumber(s,{decimalComma:true});return r.kind==='ok'?r.value:NaN};
+function fmt(v){if(!isFinite(v))return'—';const a=Math.abs(v);return(a!==0&&(a<1e-3||a>=1e7))?v.toExponential(4):String(+v.toPrecision(7))}
+let toastT=null;function toast(m){const e=$('exportMsg');e.textContent=m;clearTimeout(toastT);toastT=setTimeout(()=>{e.textContent=''},2800)}
+let banT=null;function banner(m,err){const b=$('banner');b.textContent=m;b.className='banner'+(err?' err':'');b.hidden=false;clearTimeout(banT);banT=setTimeout(()=>{b.hidden=true},err?9000:5000)}
+document.querySelectorAll('.panel h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+
+// =====================================================================
 //  Data
 // =====================================================================
 const S={table:null,raw:[],pts:null,norm:null,grid:null,cmap:'viridis',view:{s:1,tx:0,ty:0},vario:null,cv:null};
-function parseTable(text){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(l=>l&&!/^(#|\/\/)/.test(l));if(!lines.length)return null;
-  const has=c=>lines.some(l=>l.includes(c));let sep;
-  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=3))sep=',';else sep=/\s+/;
-  let rows=lines.map(l=>l.split(sep).map(s=>s.trim().replace(/^"|"$/g,'')));
-  const nc=Math.max(...rows.map(r=>r.length));if(nc<3)return{err:'At least 3 columns (X, Y, value) are needed.'};
-  let head=null;if(rows[0].slice(0,3).some(s=>isNaN(toN(s)))){head=rows.shift()}
-  return{head:head||Array.from({length:nc},(_,i)=>'col '+(i+1)),rows,nc}}
-function guessCols(head){
-  const find=re=>head.findIndex(h=>re.test(h.trim()));
-  let x=find(/^(x|lon|long|longitude|east|easting|e)$/i),y=find(/^(y|lat|latitude|north|northing|n)$/i);
-  if(x<0||y<0||x===y){x=0;y=1}let z=head.findIndex((_,i)=>i!==x&&i!==y);return[x,y,Math.max(0,z)]}
 function fillColSelects(){const t=S.table,[x,y,z]=guessCols(t.head);
   for(const [id,v] of [['cx',x],['cy',y],['cz',z]])$(id).innerHTML=t.head.map((h,i)=>`<option value="${i}"${i===v?' selected':''}>${esc(h)}</option>`).join('');fillSecCols()}
+function clearData(){      // a failed load must not leave stale results (contract B)
+  S.pts=null;S.grid=null;S.cv=null;S.vario=null;S.bbox=null;RC=null;SEGS=[];
+  for(const id of ['cvOut','vTbl','exMsg','anMsg','gMsg'])$(id).innerHTML='';$('vCan').hidden=true;draw()}
 function buildPoints(){
   const t=S.table;if(!t)return;const cx=+$('cx').value,cy=+$('cy').value,cz=+$('cz').value;
   const sel=S.secMap?[]:[...document.querySelectorAll('#secCols input:checked')].map(e=>+e.value);
-  const pts=[];let dropS=0;for(const r of t.rows){const x=toN(r[cx]),y=toN(r[cy]),z=toN(r[cz]);if(isFinite(x)&&isFinite(y)&&isFinite(z)){const sv=sel.map(i=>toN(r[i]));if(sv.some(v=>!isFinite(v))){dropS++;continue}pts.push([x,y,z,sv])}}
+  const nl=parseNullList($('nullv').value),R=decodeRows(t.rows,{cx,cy,cz,sec:sel,nulls:nl.list,decComma:t.decComma,lineNos:t.lineNos}),pts=R.pts,dl=describeLoad(R);
+  const info=dl.text+(nl.bad.length?' · not understood in the null list: '+nl.bad.join(', '):'')+(dl.notes.length?' · '+dl.notes.join(' · '):'');
   const m=$('dataMsg');m.className='msg';
-  if(pts.length<4){m.textContent=`Only ${pts.length} valid point(s): at least 4 are needed.`;m.className='msg err';S.pts=null;return}
-  if(pts.length>20000){m.textContent='More than 20 000 points: please thin the data.';m.className='msg err';S.pts=null;return}
+  const fail=s=>{clearData();m.textContent=s+' '+info;m.className='msg err'};
+  if(pts.length<MIN_POINTS){fail(`Only ${pts.length} valid point(s): at least ${MIN_POINTS} are needed.`);return}
+  if(pts.length>20000){fail('More than 20 000 points: please thin the data.');return}
   let x0=1e300,x1=-1e300,y0=1e300,y1=-1e300;for(const p of pts){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])}
-  const sc=Math.max(x1-x0,y1-y0);if(!(sc>0)){m.textContent='All points are at the same location.';m.className='msg err';return}
+  const sc=Math.max(x1-x0,y1-y0);if(!(sc>0)){fail('All points are at the same location.');return}
   const tol=sc*1e-9,mp=new Map();for(const p of pts){const k=Math.round(p[0]/tol)+'|'+Math.round(p[1]/tol),e=mp.get(k);if(e){e.s+=p[2];e.n++;p[3].forEach((v,j)=>e.sv[j]+=v)}else mp.set(k,{x:p[0],y:p[1],s:p[2],n:1,sv:p[3].slice()})}
   const u=[...mp.values()].map(e=>[e.x,e.y,e.s/e.n,e.sv.map(v=>v/e.n)]),dup=pts.length-u.length;
+  if(u.length<MIN_POINTS){fail(`Only ${u.length} distinct location(s): at least ${MIN_POINTS} are needed.`);return}
+  const cl=collinearity(Float64Array.from(u,p=>p[0]),Float64Array.from(u,p=>p[1]));
+  if(cl<1e-6){fail('All points lie on one straight line: a surface cannot be interpolated from a single profile.');return}
   S.pts=u;S.names=[t.head[cx],t.head[cy],t.head[cz]];S.norm={cx:(x0+x1)/2,cy:(y0+y1)/2,S:sc};
   let zmin=1e300,zmax=-1e300,zs=0;for(const p of u){zmin=Math.min(zmin,p[2]);zmax=Math.max(zmax,p[2]);zs+=p[2]}
   S.zmean=zs/u.length;S.grid=null;S.cv=null;S.vario=null;
@@ -526,10 +656,16 @@ function buildPoints(){
   if(S.secMap){const src=secSource(),N=S.norm,V=secInterp(src.X,src.Y,src.V,Float64Array.from(u,p=>(p[0]-N.cx)/N.S),Float64Array.from(u,p=>(p[1]-N.cy)/N.S));u.forEach((p,i)=>{p[3]=V.map(a=>a[i])});S.secNames=S.secMap.names.slice()}
   else if(sel.length)S.secNames=sel.map(i=>t.head[i]);
   for(let j=0;j<S.secNames.length;j++){let mu=0;for(const p of u)mu+=p[3][j];mu/=u.length;let vv=0;for(const p of u)vv+=(p[3][j]-mu)**2;S.secMu.push(mu);S.secSd.push(Math.sqrt(vv/u.length)||1)}
-  if(S.secNames.length)secTxt=` · secondary: ${S.secNames.map(esc).join(', ')}${dropS?` (${dropS} row(s) without a valid secondary value dropped)`:''}`;
-  m.textContent=`${u.length} points${dup?` (${dup} duplicate location(s) averaged)`:''} · x ${fmt(x0)} → ${fmt(x1)} · y ${fmt(y0)} → ${fmt(y1)} · ${esc(S.names[2])} ${fmt(zmin)} → ${fmt(zmax)}${secTxt}`;
+  if(S.secNames.length)secTxt=` · secondary: ${S.secNames.join(', ')}`;
+  const warn=[];if(cl<0.02)warn.push(`warning: the points are nearly collinear (width/length ${cl.toExponential(1)}): most of the map will be outside the convex hull of the data`);
+  if(u.length<KRIG_MIN_AUTO)warn.push(`${u.length} points: enough for IDW, TIN or splines, but automatic kriging needs about ${KRIG_MIN_AUTO} (use a manual variogram)`);
+  m.textContent=`${u.length} points${dup?` (${dup} duplicate location(s) averaged)`:''} · x ${fmt(x0)} → ${fmt(x1)} · y ${fmt(y0)} → ${fmt(y1)} · ${S.names[2]} ${fmt(zmin)} → ${fmt(zmax)}${secTxt} · ${info}${warn.length?' · '+warn.join(' · '):''}`;
+  if(warn.length||R.skipped)m.className='msg';
   setGridDefaults(x0,x1,y0,y1);S.bbox=[x0,x1,y0,y1];fit();$('cvOut').innerHTML='';$('vCan').hidden=true;schedPreview()}
-function loadText(text){const t=parseTable(text);if(!t||t.err){$('dataMsg').textContent=t?t.err:'Empty input.';$('dataMsg').className='msg err';return false}S.table=t;fillColSelects();buildPoints();return true}
+function loadText(text){const t=parseTable(text);
+  if(!t||t.err){clearData();S.table=null;for(const id of ['cx','cy','cz','secCols'])$(id).innerHTML='';const m=$('dataMsg');m.textContent=(t?t.err:'Empty input.')+' The previous data were removed.';m.className='msg err';return false}
+  S.table=t;fillColSelects();buildPoints();return true}
+$('nullv').addEventListener('change',()=>{buildPoints();if(S.secMap&&$('secPaste').value.trim())setSecText($('secPaste').value)});
 $('paste').addEventListener('input',()=>{clearTimeout(S.pt);S.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
 ['cx','cy','cz'].forEach(i=>$(i).onchange=()=>{fillSecCols();buildPoints()});
 $('bOpen').onclick=()=>$('file').click();
@@ -544,10 +680,12 @@ function fillSecCols(){const t=S.table,box=$('secCols');if(!t){box.innerHTML='';
   box.innerHTML=t.head.map((h,i)=>used.has(i)?'':`<label class="inl"><input type="checkbox" value="${i}"${old.has(i)?' checked':''}>${esc(h)}</label>`).join('')||'<span class="msg">No extra column in the table.</span>';
   box.querySelectorAll('input').forEach(e=>e.onchange=buildPoints)}
 function parseSec(text){const t=parseTable(text);if(!t||t.err)return{err:t?t.err:'Empty input.'};
-  const[x,y]=guessCols(t.head),cols=t.head.map((_,i)=>i).filter(i=>i!==x&&i!==y).slice(0,4),X=[],Y=[],V=cols.map(()=>[]);
-  for(const r of t.rows){const a=toN(r[x]),b=toN(r[y]),v=cols.map(i=>toN(r[i]));if(!isFinite(a)||!isFinite(b)||v.some(q=>!isFinite(q)))continue;X.push(a);Y.push(b);v.forEach((q,j)=>V[j].push(q))}
-  if(X.length<4)return{err:'Fewer than 4 valid rows in the secondary map.'};if(X.length>30000)return{err:'More than 30 000 secondary points: please thin them.'};
-  return{names:cols.map(i=>t.head[i]),X:Float64Array.from(X),Y:Float64Array.from(Y),V:V.map(a=>Float64Array.from(a)),n:X.length}}
+  const[x,y]=guessCols(t.head),cols=t.head.map((_,i)=>i).filter(i=>i!==x&&i!==y).slice(0,4),X=[],Y=[],V=cols.map(()=>[]),nl=parseNullList($('nullv').value).list,opt={decimalComma:t.decComma};let skipped=0,nulls=0;
+  for(const r of t.rows){const a=parseNumber(r[x],opt),b=parseNumber(r[y],opt),v=cols.map(i=>parseNumber(r[i],opt));if(a.kind!=='ok'||b.kind!=='ok'||v.some(q=>q.kind!=='ok')){skipped++;continue}
+    if(v.some(q=>isNullVal(q.value,nl))){skipped++;nulls++;continue}X.push(a.value);Y.push(b.value);v.forEach((q,j)=>V[j].push(q.value))}
+  const cnt=`${t.rows.length} rows read, ${skipped} skipped${nulls?` (${nulls} with a null value)`:''}`;
+  if(X.length<4)return{err:'Fewer than 4 valid rows in the secondary map. '+cnt};if(X.length>30000)return{err:'More than 30 000 secondary points: please thin them.'};
+  return{names:cols.map(i=>t.head[i]),X:Float64Array.from(X),Y:Float64Array.from(Y),V:V.map(a=>Float64Array.from(a)),n:X.length,cnt}}
 function secSource(){const N=S.norm;
   if(S.secMap){const m=S.secMap;return{X:m.X.map(v=>(v-N.cx)/N.S),Y:m.Y.map(v=>(v-N.cy)/N.S),V:m.V}}
   return{X:Float64Array.from(S.pts,p=>(p[0]-N.cx)/N.S),Y:Float64Array.from(S.pts,p=>(p[1]-N.cy)/N.S),V:S.secNames.map((_,j)=>Float64Array.from(S.pts,p=>p[3][j]))}}
@@ -559,7 +697,7 @@ function secStd(arrs){return arrs.map((a,j)=>a.map(v=>(v-S.secMu[j])/S.secSd[j])
 function setSecText(text){const m=$('secMsg');m.className='msg';
   if(!text.trim()){S.secMap=null;m.textContent='';if(S.table)buildPoints();return}
   const r=parseSec(text);if(r.err){S.secMap=null;m.textContent=r.err;m.className='msg err';if(S.table)buildPoints();return}
-  S.secMap=r;m.textContent=`Secondary map: ${r.n} points · ${r.names.map(esc).join(', ')} · interpolated (TIN) onto the data points and the grid nodes. The table's own extra columns are then ignored.`;if(S.table)buildPoints()}
+  S.secMap=r;m.textContent=`Secondary map: ${r.n} points (${r.cnt}) · ${r.names.map(esc).join(', ')} · interpolated (TIN) onto the data points and the grid nodes. The table's own extra columns are then ignored.`;if(S.table)buildPoints()}
 $('secPaste').addEventListener('input',()=>{clearTimeout(S.st);S.st=setTimeout(()=>setSecText($('secPaste').value),350)});
 $('bSecOpen').onclick=()=>$('secFile').click();
 $('secFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('secPaste').value=r.result.length>2e6?r.result.slice(0,2e6):r.result;setSecText(r.result)};r.readAsText(f);e.target.value=''};
@@ -583,7 +721,7 @@ function setGridDefaults(x0,x1,y0,y1){const f=v=>String(+v.toPrecision(8)),d=Mat
   gUpd();syncDefaults()}
 function syncDefaults(){const sc=S.norm?S.norm.S:1;if(S.pts){const n=S.pts.length,sp=0.5*Math.sqrt(1*0.6/n);$('rbfc').value=String(+(sp*sc).toPrecision(2))}}
 function gridSpec(){const v=['gx0','gx1','gy0','gy1','gdx','gdy'].map(i=>toN($(i).value));if(v.some(x=>!isFinite(x)))return{err:'Fill in xmin, xmax, ymin, ymax, dx and dy.'};
-  const[x0,x1,y0,y1,dx,dy]=v;if(dx<=0||dy<=0)return{err:'dx and dy must be positive.'};if(x1<=x0||y1<=y0)return{err:'max must be larger than min.'};
+  const[x0,x1,y0,y1,dx,dy]=v;if(dx<=0||dy<=0)return{err:'dx and dy must be positive.'};if(x1<=x0)return{err:'xmax must be larger than xmin.'};if(y1<=y0)return{err:'ymax must be larger than ymin.'};
   const nx=Math.floor((x1-x0)/dx+1e-9)+1,ny=Math.floor((y1-y0)/dy+1e-9)+1;if(nx<3||ny<3)return{err:'The grid needs at least 3 × 3 nodes.'};if(nx*ny>250000)return{err:`Too many nodes (${nx} × ${ny}); increase dx, dy.`};
   return{x0,y0,dx,dy,nx,ny}}
 function gUpd(){const g=gridSpec(),m=$('gMsg');m.className='msg'+(g.err?' err':'');m.textContent=g.err||`${g.nx} × ${g.ny} = ${g.nx*g.ny} nodes`;return g}
@@ -597,7 +735,7 @@ function methodInfo(){const t={nn:'Each node takes the value of the closest data
   mincurv:'Iterative minimum-curvature surface on the grid (Briggs 1974) with optional internal tension (Smith & Wessel 1990, 0 = pure minimum curvature, towards 1 = membrane). Works with many points; data are snapped to the nearest node.',
   ked:'Universal kriging with external drift (KED): the local mean is a linear function of the secondary variable(s) (e.g. a seismic attribute known on a map): m(u) = a0 + a1·S1(u) + …, estimated inside each kriging system. The variogram is fitted on the residuals of a global regression on the secondaries. The secondaries must be known at every node: give a secondary map, or the extra columns of the table are interpolated (TIN) to the nodes, which adds little. Optional linear x,y trend.',
   cok:'Collocated simple cokriging with the Markov model 1 (Xu et al. 1992): the secondary value at the target is used as one extra datum, with a cross-covariance proportional to the primary one and the correlation estimated from the data. Several secondaries are first combined into their linear regression on the primary. Needs a secondary smoother than the primary and a stable correlation; the correlation is capped at 0.98.',
-  ok:'Ordinary kriging: best linear unbiased estimate with an unknown but locally constant mean, using the k nearest points and a variogram fitted automatically (spherical, exponential, gaussian, Matérn 3/2: the one with the lowest leave-one-out error wins) or entered by hand. Also gives the kriging standard error.',
+  ok:'Ordinary kriging: best linear unbiased estimate with an unknown but locally constant mean, using the k nearest points and a variogram fitted automatically (spherical, exponential, gaussian, Matérn 3/2: the one with the lowest leave-one-out error wins) or entered by hand. Also gives the kriging standard error (which assumes a known variogram and a stationary field). When the best models are within 3 % of each other in leave-one-out error, the simplest is kept.',
   sk:'Simple kriging: the mean is known (sample mean by default, or the value you type) and the estimate reverts to it far from data. Needs a stationary field around that mean; with a regional trend it is biased. Solved with the covariance C = sill − γ.',
   uk1:'Universal kriging with a linear drift (a + bx + cy) modelled inside the kriging system. The variogram is fitted on the residuals of a global linear trend, which is the right thing to do when the field has a regional dip.',
   uk2:'Universal kriging with a quadratic drift (6 terms). Needs more neighbours (at least 20 are used) and well-spread data: with few points it can oscillate.',
@@ -613,20 +751,20 @@ function readParams(){
     mc:{tension:Math.min(0.95,Math.max(0,toN($('mct').value)||0)),iters:Math.max(50,+$('mci').value||400)},
     lp:{k:+$('lpk').value||24,deg:+$('lpd').value||1},
     krig:{k:+$('krk').value||16,kedpoly:$('kedpoly').checked,model:$('krm').value,vmode:$('vmode').value,mean:(isFinite(toN($('skm').value))?toN($('skm').value)-(S.zmean||0):0),
-      aniso:{mode:$('kan').value,ratio:toN($('kar').value)||1,angle:toN($('kaa').value)||0}}};
+      aniso:{mode:$('kan').value,ratio:toN($('kar').value),angle:toN($('kaa').value)||0}},secNames:S.secNames||[]};
   if(P.krig.vmode==='manual'){const sc=S.norm.S;P.krig.vario={model:$('krm').value==='auto'?'spherical':$('krm').value,c0:Math.max(0,toN($('krn').value)||0),c:Math.max(1e-12,toN($('krs').value)||1),a:Math.max(1e-9,(toN($('krr').value)||sc/3)/sc)}}
   return P}
 ['krn','krs','krr'].forEach(i=>$(i).addEventListener('input',()=>{$('vmode').value='manual';schedPreview()}));
 ['vmode','krm','krk','kan','kar','kaa','skm'].forEach(i=>$(i).addEventListener('change',()=>{togAux();schedPreview()}));
 let pvT=null;function schedPreview(){clearTimeout(pvT);pvT=setTimeout(previewVario,350)}
 function previewVario(){const mv=$('method').value;if(!S.pts||!isKrig(mv)){return}
-  try{const P=readParams(),pr=krigPrep(mv,normTrain(S.pts),P);showVario(pr.vm,pr.cand,pr.an,P.krig.anisoInfo,P.krig.vmode==='auto')}catch(e){$('anMsg').textContent=e.message;$('anMsg').className='msg err'}}
-function showVario(vm,cand,an,info,fill){
+  try{const P=readParams(),pr=krigPrep(mv,normTrain(S.pts),P);showVario(pr.vm,pr.cand,pr.an,P.krig.anisoInfo,P.krig.vmode==='auto',P.krig.anisoMsg)}catch(e){$('anMsg').textContent=e.message;$('anMsg').className='msg err'}}
+function showVario(vm,cand,an,info,fill,amsg){
   const sc=S.norm.S;if(fill){$('krn').value=String(+vm.c0.toPrecision(4));$('krs').value=String(+vm.c.toPrecision(4));$('krr').value=String(+(vm.a*sc).toPrecision(4))}
   S.vario=vm;drawVario(vm);
-  $('vTbl').innerHTML=cand?`<table class="cvt"><thead><tr><th>Model</th><th>Range</th><th>Nugget</th><th>Sill</th><th>LOO RMSE</th></tr></thead><tbody>`+cand.map((c,i)=>`<tr${i===0?' class="best"':''}><td>${VNAMES[c.model]}</td><td>${fmt(+(c.a*sc).toPrecision(3))}</td><td>${fmt(+c.c0.toPrecision(3))}</td><td>${fmt(+c.c.toPrecision(3))}</td><td>${fmt(+c.loo.toPrecision(3))}</td></tr>`).join('')+'</tbody></table>':'';
+  $('vTbl').innerHTML=cand?`<table class="cvt"><thead><tr><th>Model</th><th>Range</th><th>Nugget</th><th>Sill</th><th>LOO RMSE</th></tr></thead><tbody>`+cand.map((c,i)=>`<tr${i===0?' class="best"':''}><td>${VNAMES[c.model]}</td><td>${fmt(+(c.a*sc).toPrecision(3))}</td><td>${fmt(+c.c0.toPrecision(3))}</td><td>${fmt(+c.c.toPrecision(3))}</td><td>${fmt(+c.loo.toPrecision(3))}</td></tr>`).join('')+'</tbody></table>'+(vm.tie?`<div class="msg">The ${vm.tie.n} best models are within 3 % of each other in leave-one-out error: the difference is noise, so the simplest of them (${VNAMES[vm.model]}) is used. A Gaussian model with a near-zero nugget is numerically unstable.</div>`:''):'';
   const m=$('anMsg');m.className='msg';
-  m.textContent=an?`Anisotropy applied: ratio ${an.ratio.toFixed(2)}, major axis ${(an.ang*180/Math.PI).toFixed(0)}° from the x axis.`:(info?`Anisotropy tested: ratio ${info.ratio.toFixed(2)}, ${info.loo1!==undefined?'no leave-one-out gain ('+info.loo0.toPrecision(3)+' → '+info.loo1.toPrecision(3)+')':'below 1.25'}: ignored.`:($('kan').value==='auto'?'Anisotropy tested: none detected.':''))}
+  m.textContent=amsg?amsg:an?`Anisotropy applied: minor/major range ${(1/an.ratio).toFixed(2)}, major axis ${(an.ang*180/Math.PI).toFixed(0)}° from the x axis.`:(info?`Anisotropy tested: minor/major ${(1/info.ratio).toFixed(2)}, ${info.loo1!==undefined?'no leave-one-out gain ('+info.loo0.toPrecision(3)+' → '+info.loo1.toPrecision(3)+')':'above 0.80 (major/minor below 1.25)'}: ignored.`:($('kan').value==='auto'?'Anisotropy tested: none detected.':''))}
 
 // =====================================================================
 //  Run
@@ -657,7 +795,7 @@ function run(){
     const res=predictAt(method,tr,QX,QY,P,G),z=res.z;for(let k=0;k<z.length;k++)z[k]+=S.zmean;
     let v=null;if(res.v){v=new Float64Array(res.v.length);for(let k=0;k<v.length;k++)v[k]=Math.sqrt(res.v[k])}
     applyMask(g,z,v);
-    if(res.vario)showVario(res.vario,res.cand,res.aniso,res.anisoInfo,P.krig.vmode==='auto');
+    if(res.vario)showVario(res.vario,res.cand,res.aniso,res.anisoInfo,P.krig.vmode==='auto',res.anisoMsg);
     S.grid={...g,z,v,method,ms:performance.now()-t0};
     let ok=0,mn=Infinity,mx=-Infinity;for(let k=0;k<z.length;k++)if(isFinite(z[k])){ok++;if(z[k]<mn)mn=z[k];if(z[k]>mx)mx=z[k]}
     S.grid.ok=ok;S.grid.zmin=mn;S.grid.zmax=mx;
@@ -675,23 +813,20 @@ $('bRun').onclick=run;
 $('bCV').onclick=async()=>{
   if(!S.pts){banner('Load a point cloud first.',true);return}
   const g=gridSpec();if(g.err){banner(g.err,true);return}
-  const out=$('cvOut'),P=readParams(),N=S.norm,n=S.pts.length,K=Math.min(5,n),r=rng(99),perm=Array.from({length:n},(_,i)=>i);
+  const out=$('cvOut'),P=readParams(),N=S.norm,n=S.pts.length,K=Math.min(5,n),r=rng(99),perm=Array.from({length:n},(_,i)=>i),zobs=Float64Array.from(S.pts,p=>p[2]);
   for(let i=n-1;i>0;i--){const j=Math.floor(r()*(i+1));[perm[i],perm[j]]=[perm[j],perm[i]]}
-  const G={x0:(g.x0-N.cx)/N.S,y0:(g.y0-N.cy)/N.S,dx:g.dx/N.S,dy:g.dy/N.S,nx:g.nx,ny:g.ny},rows=[];$('bCV').disabled=true;
+  const G={x0:(g.x0-N.cx)/N.S,y0:(g.y0-N.cy)/N.S,dx:g.dx/N.S,dy:g.dy/N.S,nx:g.nx,ny:g.ny},items=[];$('bCV').disabled=true;
   const ids=['nn','idw','tin','lp','rbf','mincurv','ok','sk','uk1','uk2'].concat(S.secNames.length?['ked','cok']:[]);
   for(const meth of ids){
-    out.innerHTML=`<div class="msg">Computing ${esc(METHODS[meth])}…</div>`+tbl(rows);await new Promise(r=>setTimeout(r,20));
+    out.innerHTML=`<div class="msg">Computing ${esc(METHODS[meth])}…</div>`+tbl(cvSummary(items,zobs));await new Promise(r=>setTimeout(r,20));
     const pred=new Float64Array(n).fill(NaN);let err=null;
     try{for(let f=0;f<K;f++){const te=[],trn=[];perm.forEach((id,i)=>(i%K===f?te:trn).push(id));
       const tr=normTrain(trn.map(i=>S.pts[i])),QX=Float64Array.from(te,i=>(S.pts[i][0]-N.cx)/N.S),QY=Float64Array.from(te,i=>(S.pts[i][1]-N.cy)/N.S);
       const zm=S.zmean,Pf=S.secNames.length?{...P,qS:secStd(S.secNames.map((_,j)=>Float64Array.from(te,i=>S.pts[i][3][j])))}:P;const res=predictAt(meth,tr,QX,QY,Pf,G);te.forEach((id,q)=>{pred[id]=res.z[q]+zm})}}catch(e){err=e.message}
-    if(err){rows.push({m:METHODS[meth],err});continue}
-    let se=0,ae=0,b=0,c=0,sy=0,syy=0;for(let i=0;i<n;i++)if(isFinite(pred[i])){const e=pred[i]-S.pts[i][2];se+=e*e;ae+=Math.abs(e);b+=e;c++}
-    let mean=0;for(const p of S.pts)mean+=p[2];mean/=n;let vt=0;for(const p of S.pts)vt+=(p[2]-mean)**2;
-    rows.push({m:METHODS[meth],rmse:Math.sqrt(se/c),mae:ae/c,bias:b/c,r2:1-se/(vt*c/n),cov:c/n})}
-  S.cv=rows;out.innerHTML=tbl(rows);$('bCV').disabled=false;
-  function tbl(rows){const ok=rows.filter(x=>x.rmse!=null),best=ok.length?Math.min(...ok.map(x=>x.rmse)):0;
-    return`<table class="cvt"><thead><tr><th>Method</th><th>RMSE</th><th>MAE</th><th>Bias</th><th>R²</th></tr></thead><tbody>`+rows.map(x=>x.err?`<tr><td>${esc(x.m)}</td><td colspan="4" class="err">${esc(x.err)}</td></tr>`:`<tr${x.rmse===best?' class="best"':''}><td>${esc(x.m)}${x.cov<1?` <small>(${Math.round(x.cov*100)} % covered)</small>`:''}</td><td>${fmt(+x.rmse.toPrecision(4))}</td><td>${fmt(+x.mae.toPrecision(4))}</td><td>${fmt(+x.bias.toPrecision(3))}</td><td>${x.r2.toFixed(3)}</td></tr>`).join('')+'</tbody></table>'}
+    items.push(err?{m:METHODS[meth],err}:{m:METHODS[meth],pred})}
+  const sm=cvSummary(items,zobs);S.cv=sm.rows;out.innerHTML=tbl(sm);$('bCV').disabled=false;
+  function tbl(sm){const cs=sm.unequal?6:5;
+    return(sm.note?`<div class="msg">${esc(sm.note)}</div>`:'')+`<table class="cvt"><thead><tr><th>Method</th><th>n</th><th>RMSE</th>${sm.unequal?'<th>RMSE common</th>':''}<th>MAE</th><th>Bias</th><th>R²</th></tr></thead><tbody>`+sm.rows.map((x,i)=>x.err?`<tr><td>${esc(x.m)}</td><td colspan="${cs}" class="err">${esc(x.err)}</td></tr>`:`<tr${i===sm.best?' class="best"':''}><td>${esc(x.m)}</td><td>${x.n}/${n}</td><td>${fmt(+x.rmse.toPrecision(4))}</td>${sm.unequal?`<td>${fmt(+x.rmseCommon.toPrecision(4))}</td>`:''}<td>${fmt(+x.mae.toPrecision(4))}</td><td>${fmt(+x.bias.toPrecision(3))}</td><td>${x.r2.toFixed(3)}</td></tr>`).join('')+'</tbody></table>'}
   banner('Cross-validation done (5 folds).')};
 
 // =====================================================================
@@ -798,6 +933,7 @@ $('bCopy').onclick=async()=>{if(!need())return;const t=xyz('\t');try{await navig
 $('bCsv').onclick=()=>{if(need())dl(xyz(','),'grid_xyz.csv','text/csv')};
 $('bMat').onclick=()=>{if(need())dl(matrix(),'grid_matrix.csv','text/csv')};
 $('bGrd').onclick=()=>{if(need())dl(grd(),'grid.grd','text/plain')};
+$('bZmap').onclick=()=>{if(!need())return;const g=S.grid,f=curField(),lb=(($('vsel').value==='std'?'STDERR_':'')+(S.names?S.names[2]:'GRID')).toUpperCase().replace(/[^A-Z0-9_]/g,'_');dl(writeZmap({nx:g.nx,ny:g.ny,dx:g.dx,dy:g.dy,x0:g.x0,y0:g.y0,z:f},{label:lb}),'grid.zmap','text/plain')};
 $('bAsc').onclick=()=>{if(!need())return;const t=asc();if(t)dl(t,'grid.asc','text/plain')};
 $('bPng').onclick=()=>{if(!need())return;cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='map.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('map.png downloaded.')})};
 
@@ -882,6 +1018,6 @@ window.DG={S,run,predictAt,normTrain,autoVariogram,empVario,delaunay,get CVrows(
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. Grid scattered points: kriging variants, IDW, splines, TIN and nearest neighbour, with secondary variables, cross-validation and map export.","method":["Input: a table with X, Y and a value. Duplicate locations are averaged. Interpolation is done in coordinates centred and scaled by the longest extent; results are in your units.","Methods: ordinary kriging, simple kriging, universal kriging (linear or quadratic drift, or external drift from a secondary variable), collocated cokriging, inverse distance, splines (thin-plate, cubic, multiquadric RBF, and minimum curvature), local polynomial regression, linear Delaunay TIN, nearest neighbour.","Variogram for the kriging methods: automatic fit (best of four models by leave-one-out: spherical, exponential, Gaussian, Matérn 3/2-like) or manual.","Secondary variables (up to 4): extra columns known at the data points only, or a secondary map X Y S1 [S2…] known over the whole area, which is interpolated onto the data points and onto the grid nodes.","Extrapolation limit: blanks the nodes outside the convex hull of the data, or farther than a given distance from any data point.","Cross-validation: 5 folds with the current parameters (random groups; each group predicted from the other four). RMSE, MAE and bias in the units of the value; the lowest RMSE is highlighted. With clustered or line-wise sampling it is optimistic, because neighbours of held-out points are often still in the training set."],"sources":[["Ordinary and simple kriging (best linear unbiased estimate from a variogram or a covariance)","Matheron, G. (1963), Principles of geostatistics, Economic Geology 58(8), 1246–1266, <a href=\"https://doi.org/10.2113/gsecongeo.58.8.1246\" target=\"_blank\" rel=\"noopener\">doi:10.2113/gsecongeo.58.8.1246</a>; Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>","published (metadata verified)"],["Universal kriging with a linear or quadratic drift, residual variogram","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>","published (metadata verified)"],["Kriging with an external drift (secondary variable)","Hudson, G. & Wackernagel, H. (1994), Mapping temperature using kriging with external drift: theory and an example from Scotland, International Journal of Climatology 14(1), 77–91, <a href=\"https://doi.org/10.1002/joc.3370140107\" target=\"_blank\" rel=\"noopener\">doi:10.1002/joc.3370140107</a>","published (metadata verified)"],["Collocated cokriging, Markov model 1 (cross-covariance proportional to the primary one)","Xu, W., Tran, T. T., Srivastava, R. M. & Journel, A. G. (1992), Integrating seismic data in reservoir modeling: the collocated cokriging alternative, SPE 24742, SPE Annual Technical Conference and Exhibition, <a href=\"https://doi.org/10.2118/24742-MS\" target=\"_blank\" rel=\"noopener\">doi:10.2118/24742-MS</a>; Almeida, A. S. & Journel, A. G. (1994), Joint simulation of multiple variables with a Markov-type coregionalization model, Mathematical Geology 26(5), 565–588, <a href=\"https://doi.org/10.1007/BF02089242\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF02089242</a>; Wackernagel, H. (2003), Multivariate Geostatistics, 3rd ed., Springer, <a href=\"https://doi.org/10.1007/978-3-662-05294-5\" target=\"_blank\" rel=\"noopener\">doi:10.1007/978-3-662-05294-5</a>","published (metadata verified)"],["Variogram models spherical, exponential, Gaussian (sill, range, nugget)","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Webster, R. & Oliver, M. A. (2007), Geostatistics for Environmental Scientists, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9780470517277\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470517277</a>","published (metadata verified)"],["Matérn model with smoothness ν = 3/2 and its 95 % range, u = 4.744·h/a","Matérn family: Stein, M. L. (1999), Interpolation of Spatial Data: Some Theory for Kriging, Springer, <a href=\"https://doi.org/10.1007/978-1-4612-1494-6\" target=\"_blank\" rel=\"noopener\">doi:10.1007/978-1-4612-1494-6</a>; Handcock, M. S. & Stein, M. L. (1993), A Bayesian analysis of kriging, Technometrics 35(4), 403–410, <a href=\"https://doi.org/10.1080/00401706.1993.10485354\" target=\"_blank\" rel=\"noopener\">doi:10.1080/00401706.1993.10485354</a>. The constant 4.744 is derived on the page: it solves (1 + u)·e^−u = 0.05 (value 0.0499)","published (metadata verified); constant derived"],["Variogram fit by weighted least squares with weights N/γ² (Cressie-type)","Cressie, N. (1985), Fitting variogram models by weighted least squares, Mathematical Geology 17(5), 563–586, <a href=\"https://doi.org/10.1007/BF01032109\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01032109</a>","published (metadata verified)"],["Choice of the automatic variogram model by leave-one-out error","Leave-one-out cross-validation of kriging: Dubrule, O. (1983), Cross validation of kriging in a unique neighborhood, Mathematical Geology 15(6), 687–699, <a href=\"https://doi.org/10.1007/BF01033232\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01033232</a>. Ranking the four models by this error is the page’s own choice","published (metadata verified); the ranking rule is on the page"],["Inverse distance weighting (k nearest points, power p, smoothing ε)","Shepard, D. (1968), A two-dimensional interpolation function for irregularly-spaced data, Proceedings of the 23rd ACM National Conference, 517–524, <a href=\"https://doi.org/10.1145/800186.810616\" target=\"_blank\" rel=\"noopener\">doi:10.1145/800186.810616</a>","published (metadata verified)"],["Thin-plate spline r² ln r (minimum bending energy), smoothing λ","Duchon, J. (1977), Splines minimizing rotation-invariant semi-norms in Sobolev spaces, Lecture Notes in Mathematics 571, 85–100, <a href=\"https://doi.org/10.1007/BFb0086566\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BFb0086566</a>; Bookstein, F. L. (1989), Principal warps: thin-plate splines and the decomposition of deformations, IEEE Transactions on Pattern Analysis and Machine Intelligence 11(6), 567–585, <a href=\"https://doi.org/10.1109/34.24792\" target=\"_blank\" rel=\"noopener\">doi:10.1109/34.24792</a>; Wahba, G. (1990), Spline Models for Observational Data, SIAM, <a href=\"https://doi.org/10.1137/1.9781611970128\" target=\"_blank\" rel=\"noopener\">doi:10.1137/1.9781611970128</a>","published (metadata verified)"],["Cubic radial basis function r³","Micchelli, C. A. (1986), Interpolation of scattered data: distance matrices and conditionally positive definite functions, Constructive Approximation 2(1), 11–22, <a href=\"https://doi.org/10.1007/BF01893414\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01893414</a>","published (metadata verified)"],["Multiquadric radial basis function","Hardy, R. L. (1971), Multiquadric equations of topography and other irregular surfaces, Journal of Geophysical Research 76(8), 1905–1915, <a href=\"https://doi.org/10.1029/JB076i008p01905\" target=\"_blank\" rel=\"noopener\">doi:10.1029/JB076i008p01905</a>","published (metadata verified)"],["Minimum-curvature surface on the grid, with internal tension","Briggs, I. C. (1974), Machine contouring using minimum curvature, Geophysics 39(1), 39–48, <a href=\"https://doi.org/10.1190/1.1440410\" target=\"_blank\" rel=\"noopener\">doi:10.1190/1.1440410</a>; Smith, W. H. F. & Wessel, P. (1990), Gridding with continuous curvature splines in tension, Geophysics 55(3), 293–305, <a href=\"https://doi.org/10.1190/1.1442837\" target=\"_blank\" rel=\"noopener\">doi:10.1190/1.1442837</a>","published (metadata verified)"],["Local polynomial regression (moving least squares, tricube weights)","Cleveland, W. S. (1979), Robust locally weighted regression and smoothing scatterplots, Journal of the American Statistical Association 74(368), 829–836, <a href=\"https://doi.org/10.1080/01621459.1979.10481038\" target=\"_blank\" rel=\"noopener\">doi:10.1080/01621459.1979.10481038</a>; Cleveland, W. S. & Devlin, S. J. (1988), Locally weighted regression: an approach to regression analysis by local fitting, Journal of the American Statistical Association 83(403), 596–610, <a href=\"https://doi.org/10.1080/01621459.1988.10478639\" target=\"_blank\" rel=\"noopener\">doi:10.1080/01621459.1988.10478639</a>","published (metadata verified)"],["Linear interpolation in a Delaunay triangulation (TIN)","Lee, D. T. & Schachter, B. J. (1980), Two algorithms for constructing a Delaunay triangulation, International Journal of Computer and Information Sciences 9(3), 219–242, <a href=\"https://doi.org/10.1007/BF00977785\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF00977785</a>; Bowyer, A. (1981), Computing Dirichlet tessellations, The Computer Journal 24(2), 162–166, <a href=\"https://doi.org/10.1093/comjnl/24.2.162\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.162</a>; Watson, D. F. (1981), Computing the n-dimensional Delaunay tessellation with application to Voronoi polytopes, The Computer Journal 24(2), 167–172, <a href=\"https://doi.org/10.1093/comjnl/24.2.167\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.167</a>","published (metadata verified)"],["Nearest neighbour (each node takes the value of the closest point: Voronoi / Thiessen polygons)","Thiessen, A. H. (1911), Precipitation averages for large areas, Monthly Weather Review 39(7), 1082–1089, <a href=\"https://doi.org/10.1175/1520-0493(1911)39%3C1082b:PAFLA%3E2.0.CO;2\" target=\"_blank\" rel=\"noopener\">doi:10.1175/1520-0493(1911)39&lt;1082b:PAFLA&gt;2.0.CO;2</a>","published (metadata verified)"],["Extrapolation limit: nodes outside the convex hull of the data","Andrew, A. M. (1979), Another efficient algorithm for convex hulls in two dimensions, Information Processing Letters 9(5), 216–219, <a href=\"https://doi.org/10.1016/0020-0190(79)90072-3\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0020-0190(79)90072-3</a>","published (metadata verified)"],["Five-fold cross-validation, RMSE, MAE and bias","Cross-validation: Stone, M. (1974), Cross-validatory choice and assessment of statistical predictions, Journal of the Royal Statistical Society B 36(2), 111–133, <a href=\"https://doi.org/10.1111/j.2517-6161.1974.tb00994.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.2517-6161.1974.tb00994.x</a>. The random split into 5 groups is the page’s choice","published (metadata verified); the split is on the page"],["Contour lines on the grid (marching squares)","Case table of the 2D version of Lorensen, W. E. & Cline, H. E. (1987), Marching cubes: a high resolution 3D surface construction algorithm, ACM SIGGRAPH Computer Graphics 21(4), 163–169, <a href=\"https://doi.org/10.1145/37402.37422\" target=\"_blank\" rel=\"noopener\">doi:10.1145/37402.37422</a>","published (metadata verified)"],["Coordinates centred and scaled by the longest extent; duplicates averaged; colour scales; Surfer ASCII and Esri ASCII export layouts","Numerical and format conventions of the page; the vendor file formats have no scientific publication and no vendor document is used as a source","on the page (no publication)"]],"validation":["No validation against an independent implementation is recorded for this page."],"limits":["A point whose colour clashes with the surface under it is a point the interpolation does not honour (points can be coloured by their own value with the surface scale)."],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Grid scattered points: kriging variants, IDW, splines, TIN and nearest neighbour, with secondary variables, cross-validation and map export.","method":["Input: a table with X, Y and a value (tab, semicolon, space or comma separated; decimal comma, thousands separators, 1e-3 notation and a unicode minus are read; a comma followed by exactly three digits is read as a thousands separator unless a decimal comma is used elsewhere in the table). After every load the page shows how many rows were read and skipped, with the reason (non-numeric, missing, below detection limit, null value) and the first line numbers. A failed load removes the previous data, grid and results. Null values (default -999, -999.25, -9999, 9999, 1e30, 1.70141e38, editable, can be emptied) are excluded from the mapped variable and from the secondary variables and counted; a repeated value that looks like a null value but is not in the list gives a warning only. Points that are all on one straight line are refused; nearly collinear points give a warning. Duplicate locations are averaged. Interpolation is done in coordinates centred and scaled by the longest extent; results are in your units.","Methods: ordinary kriging, simple kriging, universal kriging (linear or quadratic drift, or external drift from a secondary variable), collocated cokriging, inverse distance, splines (thin-plate, cubic, multiquadric RBF, and minimum curvature), local polynomial regression, linear Delaunay TIN, nearest neighbour.","Variogram for the kriging methods: automatic fit (best of four models by leave-one-out: spherical, exponential, Gaussian, Matérn 3/2-like; when the best models are within 3 % of each other in leave-one-out error the difference is noise and the simplest is kept, in the order spherical, exponential, Matérn, Gaussian) or manual. The automatic fit needs at least about 25 scattered points (10 point pairs in at least 4 of 20 lag classes); below that the page says so and a manual variogram or another method must be used. Manual anisotropy: the ratio is minor/major range, at most 1, as in the Variogram tool; a value above 1 is read as major/minor and inverted with a message; 1, 0 or a non-number is ignored with a message. The kriging standard error assumes a known variogram and a stationary field.","Secondary variables (up to 4): extra columns known at the data points only, or a secondary map X Y S1 [S2…] known over the whole area, which is interpolated onto the data points and onto the grid nodes.","Export: XYZ text or CSV, matrix CSV, Surfer ASCII, ZMAP+ (20-character fields, null 1.0E+30, read back by the ZMAP checker reader in the test script) and Esri ASCII.","Extrapolation limit: blanks the nodes outside the convex hull of the data, or farther than a given distance from any data point.","Cross-validation: 5 folds with the current parameters (random groups; each group predicted from the other four). RMSE, MAE and bias in the units of the value; the lowest RMSE is highlighted. The number of points predicted by each method is shown; when a method cannot predict every point (Delaunay TIN outside the convex hull) the methods are ranked on the points predicted by all of them (column RMSE common). With clustered or line-wise sampling it is optimistic, because neighbours of held-out points are often still in the training set."],"sources":[["Ordinary and simple kriging (best linear unbiased estimate from a variogram or a covariance)","Matheron, G. (1963), Principles of geostatistics, Economic Geology 58(8), 1246–1266, <a href=\"https://doi.org/10.2113/gsecongeo.58.8.1246\" target=\"_blank\" rel=\"noopener\">doi:10.2113/gsecongeo.58.8.1246</a>; Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>","published (metadata verified)"],["Universal kriging with a linear or quadratic drift, residual variogram","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>","published (metadata verified)"],["Kriging with an external drift (secondary variable)","Hudson, G. & Wackernagel, H. (1994), Mapping temperature using kriging with external drift: theory and an example from Scotland, International Journal of Climatology 14(1), 77–91, <a href=\"https://doi.org/10.1002/joc.3370140107\" target=\"_blank\" rel=\"noopener\">doi:10.1002/joc.3370140107</a>","published (metadata verified)"],["Collocated cokriging, Markov model 1 (cross-covariance proportional to the primary one)","Xu, W., Tran, T. T., Srivastava, R. M. & Journel, A. G. (1992), Integrating seismic data in reservoir modeling: the collocated cokriging alternative, SPE 24742, SPE Annual Technical Conference and Exhibition, <a href=\"https://doi.org/10.2118/24742-MS\" target=\"_blank\" rel=\"noopener\">doi:10.2118/24742-MS</a>; Almeida, A. S. & Journel, A. G. (1994), Joint simulation of multiple variables with a Markov-type coregionalization model, Mathematical Geology 26(5), 565–588, <a href=\"https://doi.org/10.1007/BF02089242\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF02089242</a>; Wackernagel, H. (2003), Multivariate Geostatistics, 3rd ed., Springer, <a href=\"https://doi.org/10.1007/978-3-662-05294-5\" target=\"_blank\" rel=\"noopener\">doi:10.1007/978-3-662-05294-5</a>","published (metadata verified)"],["Variogram models spherical, exponential, Gaussian (sill, range, nugget)","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Webster, R. & Oliver, M. A. (2007), Geostatistics for Environmental Scientists, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9780470517277\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470517277</a>","published (metadata verified)"],["Matérn model with smoothness ν = 3/2 and its 95 % range, u = 4.744·h/a","Matérn family: Stein, M. L. (1999), Interpolation of Spatial Data: Some Theory for Kriging, Springer, <a href=\"https://doi.org/10.1007/978-1-4612-1494-6\" target=\"_blank\" rel=\"noopener\">doi:10.1007/978-1-4612-1494-6</a>; Handcock, M. S. & Stein, M. L. (1993), A Bayesian analysis of kriging, Technometrics 35(4), 403–410, <a href=\"https://doi.org/10.1080/00401706.1993.10485354\" target=\"_blank\" rel=\"noopener\">doi:10.1080/00401706.1993.10485354</a>. The constant 4.744 is derived on the page: it solves (1 + u)·e^−u = 0.05 (value 0.0499)","published (metadata verified); constant derived"],["Variogram fit by weighted least squares with weights N/γ² (Cressie-type)","Cressie, N. (1985), Fitting variogram models by weighted least squares, Mathematical Geology 17(5), 563–586, <a href=\"https://doi.org/10.1007/BF01032109\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01032109</a>","published (metadata verified)"],["Choice of the automatic variogram model by leave-one-out error","Leave-one-out cross-validation of kriging: Dubrule, O. (1983), Cross validation of kriging in a unique neighborhood, Mathematical Geology 15(6), 687–699, <a href=\"https://doi.org/10.1007/BF01033232\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01033232</a>. Ranking the four models by this error is the page’s own choice","published (metadata verified); the ranking rule is on the page"],["Inverse distance weighting (k nearest points, power p, smoothing ε)","Shepard, D. (1968), A two-dimensional interpolation function for irregularly-spaced data, Proceedings of the 23rd ACM National Conference, 517–524, <a href=\"https://doi.org/10.1145/800186.810616\" target=\"_blank\" rel=\"noopener\">doi:10.1145/800186.810616</a>","published (metadata verified)"],["Thin-plate spline r² ln r (minimum bending energy), smoothing λ","Duchon, J. (1977), Splines minimizing rotation-invariant semi-norms in Sobolev spaces, Lecture Notes in Mathematics 571, 85–100, <a href=\"https://doi.org/10.1007/BFb0086566\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BFb0086566</a>; Bookstein, F. L. (1989), Principal warps: thin-plate splines and the decomposition of deformations, IEEE Transactions on Pattern Analysis and Machine Intelligence 11(6), 567–585, <a href=\"https://doi.org/10.1109/34.24792\" target=\"_blank\" rel=\"noopener\">doi:10.1109/34.24792</a>; Wahba, G. (1990), Spline Models for Observational Data, SIAM, <a href=\"https://doi.org/10.1137/1.9781611970128\" target=\"_blank\" rel=\"noopener\">doi:10.1137/1.9781611970128</a>","published (metadata verified)"],["Cubic radial basis function r³","Micchelli, C. A. (1986), Interpolation of scattered data: distance matrices and conditionally positive definite functions, Constructive Approximation 2(1), 11–22, <a href=\"https://doi.org/10.1007/BF01893414\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01893414</a>","published (metadata verified)"],["Multiquadric radial basis function","Hardy, R. L. (1971), Multiquadric equations of topography and other irregular surfaces, Journal of Geophysical Research 76(8), 1905–1915, <a href=\"https://doi.org/10.1029/JB076i008p01905\" target=\"_blank\" rel=\"noopener\">doi:10.1029/JB076i008p01905</a>","published (metadata verified)"],["Minimum-curvature surface on the grid, with internal tension","Briggs, I. C. (1974), Machine contouring using minimum curvature, Geophysics 39(1), 39–48, <a href=\"https://doi.org/10.1190/1.1440410\" target=\"_blank\" rel=\"noopener\">doi:10.1190/1.1440410</a>; Smith, W. H. F. & Wessel, P. (1990), Gridding with continuous curvature splines in tension, Geophysics 55(3), 293–305, <a href=\"https://doi.org/10.1190/1.1442837\" target=\"_blank\" rel=\"noopener\">doi:10.1190/1.1442837</a>","published (metadata verified)"],["Local polynomial regression (moving least squares, tricube weights)","Cleveland, W. S. (1979), Robust locally weighted regression and smoothing scatterplots, Journal of the American Statistical Association 74(368), 829–836, <a href=\"https://doi.org/10.1080/01621459.1979.10481038\" target=\"_blank\" rel=\"noopener\">doi:10.1080/01621459.1979.10481038</a>; Cleveland, W. S. & Devlin, S. J. (1988), Locally weighted regression: an approach to regression analysis by local fitting, Journal of the American Statistical Association 83(403), 596–610, <a href=\"https://doi.org/10.1080/01621459.1988.10478639\" target=\"_blank\" rel=\"noopener\">doi:10.1080/01621459.1988.10478639</a>","published (metadata verified)"],["Linear interpolation in a Delaunay triangulation (TIN)","Lee, D. T. & Schachter, B. J. (1980), Two algorithms for constructing a Delaunay triangulation, International Journal of Computer and Information Sciences 9(3), 219–242, <a href=\"https://doi.org/10.1007/BF00977785\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF00977785</a>; Bowyer, A. (1981), Computing Dirichlet tessellations, The Computer Journal 24(2), 162–166, <a href=\"https://doi.org/10.1093/comjnl/24.2.162\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.162</a>; Watson, D. F. (1981), Computing the n-dimensional Delaunay tessellation with application to Voronoi polytopes, The Computer Journal 24(2), 167–172, <a href=\"https://doi.org/10.1093/comjnl/24.2.167\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/24.2.167</a>","published (metadata verified)"],["Nearest neighbour (each node takes the value of the closest point: Voronoi / Thiessen polygons)","Thiessen, A. H. (1911), Precipitation averages for large areas, Monthly Weather Review 39(7), 1082–1089, <a href=\"https://doi.org/10.1175/1520-0493(1911)39%3C1082b:PAFLA%3E2.0.CO;2\" target=\"_blank\" rel=\"noopener\">doi:10.1175/1520-0493(1911)39&lt;1082b:PAFLA&gt;2.0.CO;2</a>","published (metadata verified)"],["Extrapolation limit: nodes outside the convex hull of the data","Andrew, A. M. (1979), Another efficient algorithm for convex hulls in two dimensions, Information Processing Letters 9(5), 216–219, <a href=\"https://doi.org/10.1016/0020-0190(79)90072-3\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0020-0190(79)90072-3</a>","published (metadata verified)"],["Five-fold cross-validation, RMSE, MAE and bias","Cross-validation: Stone, M. (1974), Cross-validatory choice and assessment of statistical predictions, Journal of the Royal Statistical Society B 36(2), 111–133, <a href=\"https://doi.org/10.1111/j.2517-6161.1974.tb00994.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.2517-6161.1974.tb00994.x</a>. The random split into 5 groups is the page’s choice","published (metadata verified); the split is on the page"],["Contour lines on the grid (marching squares)","Case table of the 2D version of Lorensen, W. E. & Cline, H. E. (1987), Marching cubes: a high resolution 3D surface construction algorithm, ACM SIGGRAPH Computer Graphics 21(4), 163–169, <a href=\"https://doi.org/10.1145/37402.37422\" target=\"_blank\" rel=\"noopener\">doi:10.1145/37402.37422</a>","published (metadata verified)"],["Coordinates centred and scaled by the longest extent; duplicates averaged; colour scales; Surfer ASCII and Esri ASCII export layouts","Numerical and format conventions of the page; the vendor file formats have no scientific publication and no vendor document is used as a source","on the page (no publication)"]],"validation":["Self-check script (scripts/gridding_test.mjs): ordinary kriging against a hand-solved 6-point system with a Lagrange multiplier written independently in the script (estimate and variance), exactness at the data points, exact reproduction of a plane by universal kriging with linear drift and by the thin-plate spline, number and table decoding, null values, row counting, collinearity, manual anisotropy ratio, variogram model tie rule, cross-validation ranking on a common subset, ZMAP+ round trip read back by the ZMAP checker reader. No comparison with another gridding program is recorded.","Changes of 26 November 2026 that alter what a user sees: a manual anisotropy ratio below 1 is now applied (before it was ignored and a ratio above 1 was applied silently); values equal to a null value are no longer used as data; an automatic variogram whose models are within 3 % now keeps the simplest one (the Gaussian model is no longer chosen on noise); the cross-validation ranking no longer favours TIN evaluated on its own subset."],"limits":["Minimum curvature snaps the data to grid nodes: on a plane z = 3 + 2x − 5y the error inside the data hull is about slope × cell / 2 (0.05 for 200 points, cell 1/40 of the extent, slope 5) and far from the data (corners outside the hull) the surface is an extrapolation that can be several times larger; it does not come from the number of iterations. Mask the extrapolation (convex hull, default) or use a smaller cell.","The kriging standard error assumes that the variogram is known (it is fitted from the same data) and that the field is stationary: it is optimistic and is not a confidence interval.","The leave-one-out and 5-fold cross-validation are optimistic for clustered or line-wise sampling. The cross-validation residual map is not implemented.","A point whose colour clashes with the surface under it is a point the interpolation does not honour (points can be coloured by their own value with the surface scale)."],"date":"26 November 2026"});
 </script>
 </body></html>
