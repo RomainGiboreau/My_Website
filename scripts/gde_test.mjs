@@ -1132,6 +1132,34 @@ test('rift stages: three synthetic synrift intervals on one area with the same w
   for (const k of ['riftearly', 'riftmid']) { const fo = mods[k].facies; assert.ok(fo.filter(o => o.type === 'afan').length >= 6 && fo.filter(o => o.type === 'lobe').length >= 6, k + ': fan deltas along the faults'); }
   const fl = mods.riftlate.facies; assert.ok(fl.filter(o => o.type === 'fairway').length >= 2 && fl.filter(o => o.type === 'fan').length >= 3, 'late: turbidite channels and sandy lobes');
 });
+// ---------- verdict of the wells check (review fix): green only when every well is matched AND honoured ----------
+test('verdict: 5 wells on the default shelf system, 3 unmatched -> amber "2 of 5 wells honoured, 3 not matched to a class"', () => {
+  const M = G.makeModel('shelf', {}), r = G.parseWells('W1 0 0 delta plain\nW2 1000 0 shelf\nW3 2000 0 delta front\nW4 3000 0 slope\nW5 4000 0 delta plain');
+  const v = G.verdictOf(G.build(M, r.wells).check);
+  assert.equal(v.state, 'warn'); assert.equal(v.head, '2 of 5 wells honoured, 3 not matched to a class'); assert.equal(v.N, 5); assert.equal(v.un, 3);
+});
+test('verdict: 3 wells with 2 unmatched is never green; red when a matched well is not honoured; green only when all are matched and honoured', () => {
+  const M = G.makeModel('shelf', {}), r = G.parseWells('W1 0 0 delta plain\nW2 1000 0 delta front\nW3 3000 0 slope');
+  const v = G.verdictOf(G.build(M, r.wells).check);
+  assert.notEqual(v.state, 'pass'); assert.equal(v.head, '1 of 3 wells honoured, 2 not matched to a class');
+  const mk = (b, h, pair) => ({ b, honoured: h, pair: pair || null });
+  assert.equal(G.verdictOf([mk(1, true), mk(2, true)]).state, 'pass');
+  assert.equal(G.verdictOf([mk(1, true), mk(2, false)]).state, 'bad');
+  assert.equal(G.verdictOf([mk(1, true), mk(-1, false)]).state, 'warn');
+  assert.equal(G.verdictOf([mk(1, false), mk(-1, false)]).state, 'bad');
+  assert.equal(G.verdictOf([]).state, 'none'); assert.equal(G.verdictOf([mk(1, true)]).head, 'The well is honoured');
+});
+test('howHonoured / leaveOneOut / suggestSystem', () => {
+  assert.equal(G.howHonoured({ b: 2, honoured: true, warped: true }).how, 'warping');
+  assert.equal(G.howHonoured({ b: 2, honoured: true }).how, 'belts');
+  assert.equal(G.howHonoured({ b: -1, honoured: false }).how, 'unmatched');
+  assert.equal(G.howHonoured({ b: -1, ft: 'lobe', honoured: true, fobj: 'a' }, { facies: [{ id: 'a', well: true }] }).txt, 'object created at the well');
+  const ex = G.examples.delta, loo = G.leaveOneOut(ex.M, G.build(ex.M, ex.wells).wells);
+  assert.ok(loo.length >= 2 && loo.every(o => typeof o.hit === 'boolean' && o.predicted), 'one result per matched well');
+  const r = G.parseWells('W1 0 0 delta plain\nW2 1000 0 delta front\nW3 3000 0 prodelta\nW4 5000 0 distributary mouth bar');
+  const s = G.suggestSystem(r.wells, 'shelf'); assert.ok(s && s.count > s.curCount, JSON.stringify(s));
+  assert.equal(G.suggestSystem(G.parseWells('A 0 0 shoreface\nB 1 1 slope').wells, 'shelf'), null);
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
