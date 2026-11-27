@@ -121,6 +121,61 @@ test('Pr/n-C17: arrows keep the directions of the figure (maturation to lower le
   assert.ok(A.reducing.x[1] > A.reducing.x[0] && A.reducing.y[1] < A.reducing.y[0]);
 });
 
+// ---- review fixes (26 Nov 2026): decoding, column mapping, domain of Rc, mixed units, failed load
+const PN = (t, o) => BM.parseNumber(t, o);
+test("parseNumber: plain, thousands, European, decimal comma, exponent, unicode minus", () => {
+  const ok = [["1234.5", 1234.5], ["1,234.5", 1234.5], ["1 234.5", 1234.5], ["1.234,5", 1234.5], ["1 234,5", 1234.5], ["1,5", 1.5], ["0,55", 0.55], ["1e-3", 1e-3], ["1E+30", 1e30], ["−3.5", -3.5], ["+2", 2], ["1,234,567", 1234567]];
+  for (const [t, v] of ok) { const r = PN(t); assert.equal(r.kind, "ok", t); near(r.value, v, 1e-9 * Math.max(1, Math.abs(v)), t); }
+});
+test("parseNumber: missing, below detection, text", () => {
+  for (const t of ["", "-", "n.d.", "nd", "NA", "NaN", "null"]) assert.equal(PN(t).kind, "missing", t);
+  const b = PN("<0,1"); assert.equal(b.kind, "below"); assert.equal(b.value, null); near(b.limit, 0.1, 1e-12);
+  assert.equal(PN("<0.1").kind, "below"); assert.equal(PN("abc").kind, "text"); assert.equal(PN("1.2.3").kind, "text");
+});
+test("parseNumber: 1,234 is thousands by default, decimal only when the file uses a decimal comma", () => {
+  assert.equal(PN("1,234").value, 1234); assert.ok(PN("1,234").ambiguous);
+  assert.equal(PN("1,234", { decimalComma: true }).value, 1.234);
+  assert.equal(BM.detectDecimalComma(["1,234", "0,55"]), true); assert.equal(BM.detectDecimalComma(["1,234", "2,500"]), false);
+});
+test("detectDelimiter: never splits 100 0,55 on the comma; semicolon, tab, comma files", () => {
+  assert.equal(BM.detectDelimiter(["Depth Value", "100 0,55", "200 0,60", "300 0,65"]), " ");
+  assert.equal(BM.detectDelimiter(["a;b;c", "1;2,5;3", "4;5,5;6"]), ";");
+  assert.equal(BM.detectDelimiter(["a\tb\tc", "1\t2\t3"]), "\t");
+  assert.equal(BM.detectDelimiter(["a,b,c", "1,2.5,3", "4,5.5,6"]), ",");
+  const t = BM.parseTable("Sample Depth Pr Ph\nA 100 0,55 1,2\nB 200 0,60 1,3\nC 300 0,65 1,4", 2); assert.equal(t.nc, 4); assert.equal(t.rows[0][2], "0,55");
+});
+const mapOf = (heads) => { const spec = [["pc27", BM.RE.pc27], ["pc28", BM.RE.pc28], ["pc29", BM.RE.pc29], ["p_st27", BM.RE.st27], ["p_st28", BM.RE.st28], ["p_st29", BM.RE.st29], ["p_st29s", BM.RE.st29s], ["p_st29bbr", BM.RE.st29bbr], ["p_st29bbs", BM.RE.st29bbs]]; return BM.detectMap(heads, spec); };
+test("columns: %C27 %C28 %C29 and C27 C28 C29 map to the sterane percentages, not to nothing", () => {
+  for (const H of [["%C27", "%C28", "%C29"], ["C27", "C28", "C29"], ["C27 sterane", "C28 sterane", "C29 sterane"]]) {
+    const m = mapOf(H); assert.deepEqual([m.pc27, m.pc28, m.pc29], [0, 1, 2], H.join());
+  }
+});
+test("columns: St27/St28/St29 and 20R / aaa / area forms are peaks; C29 20S, C29 aaa 20S, beta-beta forms are distinct", () => {
+  let m = mapOf(["St27", "St28", "St29"]); assert.deepEqual([m.p_st27, m.p_st28, m.p_st29], [0, 1, 2]);
+  m = mapOf(["C27 aaa 20R", "C28 aaa 20R", "C29 aaa 20R"]); assert.deepEqual([m.p_st27, m.p_st28, m.p_st29], [0, 1, 2]);
+  m = mapOf(["C27 20R area", "C28 20R area", "C29 20R area", "C29 20S", "C29 αββ 20R", "C29 αββ 20S"]);
+  assert.deepEqual([m.p_st27, m.p_st28, m.p_st29, m.p_st29s, m.p_st29bbr, m.p_st29bbs], [0, 1, 2, 3, 4, 5]);
+  m = mapOf(["C29 aaa 20S", "C29 aaa 20R"]); assert.deepEqual([m.p_st29s, m.p_st29], [0, 1]);
+});
+test("Rc: value only inside the calibrated domain (Ro 0.65-1.35), forced on request", () => {
+  assert.ok(Number.isNaN(BM.rc(0.15))); assert.ok(Number.isNaN(BM.rc(5.45)));
+  near(BM.rc(0.15, true), 0.49, 1e-12); near(BM.rc(5.45, true), 3.67, 1e-12); near(BM.rc(1, false), 1.0, 1e-12);
+  near(BM.rc(BM.RC.lo), 0.65, 1e-12); near(BM.rc(BM.RC.hi), 1.35, 1e-12);
+});
+test("mixed units: each row summing to 0.9-1.1 is converted to percent, percent rows are left", () => {
+  const a = BM.normPct([0.3, 0.2, 0.5]); assert.ok(a.scaled); near(a.vals[0], 30, 1e-9); near(a.vals[2], 50, 1e-9);
+  const b = BM.normPct([30, 20, 50]); assert.ok(!b.scaled); assert.deepEqual(b.vals, [30, 20, 50]);
+  assert.ok(!BM.normPct([0.3, NaN, 0.5]).scaled);
+});
+test("failed load clears the previous dataset (contract B)", () => {
+  const good = BM.tryLoad("Sample\tPr\tPh\nA\t1\t2\nB\t3\t4"); assert.ok(good.table && !good.err);
+  for (const bad of ["", "Sample\tPr\tPh", "single"]) { const r = BM.tryLoad(bad); assert.ok(r.err, bad); assert.equal(r.table, null); }
+});
+test("sentinels: null list parsing and matching", () => {
+  const L = BM.parseNulls("-999, -999.25, 1e30"); assert.equal(L.length, 3);
+  assert.ok(BM.isNull(-999.25, L)); assert.ok(BM.isNull(1e30, L)); assert.ok(!BM.isNull(-998, L)); assert.equal(BM.parseNulls("").length, 0);
+});
+
 let fail = 0;
 for (const [n, f] of tests) { try { f(); console.log('ok   ' + n); } catch (e) { fail++; console.log('FAIL ' + n + '\n     ' + e.message); } }
 console.log(`${tests.length - fail}/${tests.length} passed`);
