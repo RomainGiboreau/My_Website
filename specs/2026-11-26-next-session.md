@@ -1,4 +1,53 @@
-# Next session — handoff (26 Nov 2026)
+# Next session — handoff (updated 27 Nov 2026)
+
+## START HERE (state at the end of the 26-27 Nov session)
+
+Reply to the user in French. Push once per batch (several pushes within seconds make the GitHub Pages deploy fail: concurrency).
+All work is on `main`; check `git status -sb` and `git worktree list` first. Tests: every `node scripts/<tool>_test.mjs`, plus
+`node scripts/site_check.mjs` (31 tool pages: shared Method & sources script parses, Tools menu complete, nav complete) and `mkdocs build` (0 WARNING).
+
+### What exists now
+- 31 tools under `docs/<tool>/index.html` (self-contained pages, pure logic in a `<script id="...-core">` block, test in `scripts/<tool>_test.mjs`,
+  "Method & sources" data object at the end of each page). New this session: risking, portfolio, fdp, wellpos (Contact and well POS; the folder was
+  renamed because `docs/contact/` collided with the site's Contact page), distfit, psec, cvd, burial, logcorr, gridattr, logdigitizer.
+- All tool pages are sourced with scientific publications only (verified in Crossref/OpenAlex/PMC; statuses: published (read) / published (metadata verified) /
+  to verify / on the page (no publication) / de-facto format (no publication)). No vendor documents, no GitHub READMEs as sources.
+- Expert reviews of all 31 tools were done on 26 Nov (cores are right; defects are at the edges). The fix plan is `specs/2026-11-26-review-fixes.md`:
+  shared contracts A (number/table decoding), B (no stale results after a failed load), C (null sentinels), D (interchange files v2: prospect-risk summary
+  with 21 quantiles, fdp-link with marginalValue / npvCurve) and a per-tool defect list with reproductions.
+
+### Review fixes: progress (one agent per tool, worktree `../My_Website_fix_<tool>`, branch `fix-<tool>`, merge, push once per wave)
+- Wave 1 merged and pushed: logcorr, source, digitizer (plot), las-checker, risking, fdp.
+- Wave 2 merged and pushed: portfolio, wellpos, distfit, gridding, variogram, hull.
+- Wave 3: burial, bht, compaction, biomarkers done on their branches; trcycles and rockeval were still running — CHECK `git worktree list`
+  and `git branch --list 'fix-*'`: merge any `fix-*` branch that is finished (run its test + site_check first), then remove the worktree and branch.
+- Wave 4 TO DO: chromatogram, ternary, clustering, gridattr, mapdigitizer (continuous), discretemap.
+- Wave 5 TO DO: logdigitizer, zmap-checker, mcda (move engine into a core block + add scripts/mcda_test.mjs), maturity (small), cvd (only if accurate viridis/cividis tables
+  can be obtained from an open source), psec (no change needed).
+- Wave 6 LAST (the user asked for it last): gdemap. Fix the verdict banner (never a green "All N wells honoured" while some wells are unmatched or ✗; show how each well
+  is honoured: belts / local warping / object created at the well; optional leave-one-out), suggest the system matching the wells, and correct "85 tests" to the real count.
+  The user is testing GDE and thinking about it: ask before large GDE changes.
+- Method for a wave: `git worktree add ../My_Website_fix_<tool> -b fix-<tool> main`, one agent per tool whose prompt says: read specs/2026-11-26-review-fixes.md
+  (rules + contracts + its tool section), work only in its worktree, regression test first, update Method & sources, site_check, commit, never push, report in French.
+  Then merge all branches, rerun all tests + site_check + `mkdocs build`, push once, remove worktrees and branches.
+- Practical lessons: heredocs mangle backslashes (use the Write tool or index-based replacement with indexOf/slice, mind CRLF); the 5-hour usage limit can kill
+  agents mid-run: resume them with SendMessage (their work is saved); `git push` several times in a few seconds makes the Pages deploy fail.
+
+### Decisions / inputs still needed from the user
+- BHT single-BHT correction: no published equation could be read (Harrison et al. 1983, Oklahoma Geological Survey Special Publication 83-1: equation not in any
+  open source found). The constant +18.3 °C correction is labelled "unreliable, indicative only". If the user supplies the report, implement and test it.
+- PDFs wanted to move statuses to "published (read)": Saaty 1987 (RI table), Brans & Vincke 1985, Cui & Blockley 1990, Rose 2001, White 1993, Otis & Schneidermann 1997,
+  Sales 1997, Kaiser 2006, Jarvie et al. 2007, Nielsen et al. 2017, Burnham 2019, Radke & Welte 1983 / Radke 1988, Waples et al. 2004, Sclater & Christie 1980 (φ0, c table),
+  Lai et al. 2026, Harris et al. 2014, Wilson 1973, Dyer & Huntley 1999, Blair & McPherson 1994, Burchette & Wright 1992, Douglas-Peucker 1973, Machado 2009, IEC 61966-2-1, CIE 15,
+  Wong 2011, ISO 19125-1, CWLS LAS 1.2 / 3.0 and an official copy of LAS 2.0; Hughes et al. 1995 and Huang & Meinschein 1979 (biomarker charts still "memory (schematic)");
+  Espitalié 1977/1985. Not findable online: Horner 1951, Allen & Allen 2013, Berndt & Clifford 1994, Kolmogorov 1933, several book chapters (Galloway 1975, Coleman & Wright 1975...).
+- The Resources page still lists commercial tools and GitHub repositories: the user's "nothing corporate" rule was applied to the tool pages only; ask whether to apply it there.
+- The CWLS LAS standard is an association specification, not a peer-reviewed paper: kept as the public reference of the format unless the user objects.
+- ZMAP checker rules were never compared with real Petrel / Landmark files: ask the user for a few real exports.
+- Ideas not done: SCOPE-CO2-like storage capacity tool, POS map on a structure (POS-Gridder idea), cross-validation residual map in Map interpolation, GDE items below.
+- Optional: add a `concurrency:` group to `.github/workflows/deploy.yml` so overlapping deploys queue instead of failing.
+
+## Earlier handoff content (25-26 Nov, partly superseded by the above)
 
 State: everything is merged and pushed on `main` (last commit c5334b1). All tests pass
 (`node scripts/<x>_test.mjs`: gde 99, las 51, discrete 33, split 5, maturity 19, zmap 36), `mkdocs build` 0 WARNING.
