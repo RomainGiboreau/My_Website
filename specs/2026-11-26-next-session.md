@@ -23,7 +23,7 @@ All work is on `main`; check `git status -sb` and `git worktree list` first. Tes
   `git worktree list` and `git branch --list "fix-*"`).
 - Wave 4 merged and pushed (27 Nov): chromatogram, ternary, clustering, gridattr, mapdigitizer, discretemap.
 - Wave 5 merged and pushed (27 Nov): logdigitizer, zmap-checker, mcda, maturity, cvd (52-point viridis/cividis from matplotlib), psec unchanged.
-- Wave 6 LAST (the user asked for it last): gdemap. Fix the verdict banner (never a green "All N wells honoured" while some wells are unmatched or ✗; show how each well
+- Wave 6 merged and pushed (27 Nov): gdemap verdict banner, how-honoured list, leave-one-out, suggested system. OPEN: after switching to another system, the starting key lines do not follow it (to check with real wells). Original item: gdemap. Fix the verdict banner (never a green "All N wells honoured" while some wells are unmatched or ✗; show how each well
   is honoured: belts / local warping / object created at the well; optional leave-one-out), suggest the system matching the wells, and correct "85 tests" to the real count.
   The user is testing GDE and thinking about it: ask before large GDE changes.
 - Method for a wave: `git worktree add ../My_Website_fix_<tool> -b fix-<tool> main`, one agent per tool whose prompt says: read specs/2026-11-26-review-fixes.md
