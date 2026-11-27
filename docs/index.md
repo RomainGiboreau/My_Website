@@ -278,7 +278,7 @@ Ranking options against several criteria, and risking prospects. [Background not
 
     [**MCDA AHP**](mcda-ahp/index.html)
 
-    Pairwise comparison of criteria on the Saaty scale: eigenvector weights, consistency ratio, weights file.
+    Pairwise comparison of criteria on the Saaty scale: eigenvector weights, consistency ratio, weights file; applies the weights to one grid per criterion to give a 0 to 1 preference map with weight sensitivity.
 
 -   [![MCDA PROMETHEE](assets/tools/mcda-promethee.webp){ loading=lazy }](mcda-promethee/index.html)
 
