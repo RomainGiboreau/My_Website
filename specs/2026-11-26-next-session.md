@@ -22,8 +22,7 @@ All work is on `main`; check `git status -sb` and `git worktree list` first. Tes
 - Wave 3 merged and pushed: burial, bht, compaction, biomarkers, rockeval, trcycles (no fix-* branch or worktree should remain: check anyway with
   `git worktree list` and `git branch --list "fix-*"`).
 - Wave 4 merged and pushed (27 Nov): chromatogram, ternary, clustering, gridattr, mapdigitizer, discretemap.
-- Wave 5 TO DO: logdigitizer, zmap-checker, mcda (move engine into a core block + add scripts/mcda_test.mjs), maturity (small), cvd (only if accurate viridis/cividis tables
-  can be obtained from an open source), psec (no change needed).
+- Wave 5 merged and pushed (27 Nov): logdigitizer, zmap-checker, mcda, maturity, cvd (52-point viridis/cividis from matplotlib), psec unchanged.
 - Wave 6 LAST (the user asked for it last): gdemap. Fix the verdict banner (never a green "All N wells honoured" while some wells are unmatched or ✗; show how each well
   is honoured: belts / local warping / object created at the well; optional leave-one-out), suggest the system matching the wells, and correct "85 tests" to the real count.
   The user is testing GDE and thinking about it: ask before large GDE changes.
