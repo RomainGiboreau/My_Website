@@ -210,6 +210,24 @@ test('performance: 1000 x 1000 grid, one attribute each (soft limit 6 s)', () =>
   console.log('     ' + times.join(', '));
 });
 
+// ---- depth positive down (review fix)
+test('depth positive downward: applyZ(depth=true) gives the true dip azimuth and curvature sign; looksLikeDepth warns', () => {
+  const d = mk(12, 12, 10, 10, (x, y) => 2000 + 0.5 * x);            // depth grows eastward: surface dips WEST (270 as a raw elevation), real dip is toward the deeper side = east (90)
+  const raw = GA.aspect(d); near(raw[at(d, 5, 5)], 270, 1e-9, 'raw (wrong for a depth)');
+  assert.equal(GA.looksLikeDepth(d), true, 'all-positive grid flagged');
+  const f = GA.applyZ(d, 1, true), A = GA.aspect(f);
+  near(A[at(f, 5, 5)], 90, 1e-9, 'aspect after depth sign');
+  assert.equal(GA.looksLikeDepth(f), false, 'negative values are not flagged');
+  assert.equal(GA.applyZ(d, 0.3048, false).z[0], d.z[0] * 0.3048);
+  assert.equal(GA.applyZ(d, 0.3048, true).z[0], -d.z[0] * 0.3048);
+  const bowl = mk(21, 21, 10, 10, (x, y) => 1000 + 0.002 * ((x - 100) ** 2 + (y - 100) ** 2));   // depth bowl = structural high? values grow outward => as depth it is a dome (crest, positive)
+  near(GA.curvatures(GA.applyZ(bowl, 1, true)).mean[at(bowl, 10, 10)], 0.004, 1e-12, 'convex-up crest after sign flip');
+});
+test('scaleDistance text shows both cell sizes', () => {
+  assert.equal(GA.scaleDistTxt(4, 25, 25), '4 cells (100 map units)');
+  assert.equal(GA.scaleDistTxt(4, 25, 10), '4 cells (100 × 40 map units, x × y)');
+});
+
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
