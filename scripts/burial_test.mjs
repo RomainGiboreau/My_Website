@@ -189,6 +189,33 @@ test('invalid input is reported, not thrown: base shallower than top, unknown li
   assert.ok(BH.parseColumn('A,0,100,10,0,granite', L0).errs.length > 0);
 });
 
+// ---- review fixes (26 Nov 2026): reference depth, plausibility warnings, bottom-water temperature
+const thm = { on: true, q0: 60, Ts0: 10, kmode: 'geo', table: [] };
+test('depths are below the sediment surface: a column shifted by 1000 m warns, and the reference offset restores the unshifted result', () => {
+  const ref = BH.run(model([U('Y', 0, 1000, 50, 0, 'shale'), U('O', 1000, 2000, 100, 50, 'sandstone')], { thermal: thm }));
+  const sh = [U('Y', 1000, 2000, 50, 0, 'shale'), U('O', 2000, 3000, 100, 50, 'sandstone')];
+  const bad = BH.run(model(sh, { thermal: thm }));
+  assert.ok(bad.warnings.some(w => /top of the first unit/i.test(w)), 'warning when top of first unit is not 0');
+  assert.ok(Math.abs(bad.el[1].base[0] - ref.el[1].base[0]) > 1, 'the unshifted and shifted runs do differ without offset');
+  const fixed = BH.run(model(sh, { thermal: thm, refOffset: 1000 }));
+  assert.ok(!fixed.warnings.some(w => /top of the first unit/i.test(w)), 'no warning with offset');
+  const l = ref.times.length - 1, tz = R => R.pts.find(p => p.el === 1 && p.s === 0).T[l];
+  close(fixed.el[1].base[0], ref.el[1].base[0], 1e-6, 'old base at max burial'); close(tz(fixed), tz(ref), 1e-9, 'base temperature');
+  assert.equal(ref.warnings.filter(w => /top of the first unit/i.test(w)).length, 0);
+});
+test('zero-duration unit and absurd depth produce warnings', () => {
+  assert.ok(BH.run(model([U('A', 0, 500, 10, 10, 'shale')])).warnings.some(w => /zero duration/i.test(w)));
+  assert.ok(BH.run(model([U('A', 0, 50000, 100, 0, 'shale')])).warnings.some(w => /implausibl|deeper than/i.test(w)));
+  assert.equal(BH.run(model([U('A', 0, 500, 20, 0, 'shale')])).warnings.length, 0);
+});
+test('bottom-water temperature is used for the surface temperature when there is water depth', () => {
+  const rows = d => [U('A', 0, 1000, 50, 0, 'shale', d)];
+  const th = Tb => ({ on: true, q0: 60, Ts0: 20, Tb, kmode: 'geo', table: [] });
+  const dry = BH.run(model(rows(0), { thermal: th(4) })), deep = BH.run(model(rows(1000), { thermal: th(4) })), none = BH.run(model(rows(1000), { thermal: th(NaN) }));
+  const l = dry.times.length - 1;
+  close(dry.Ts[l], 20, 1e-9, 'no water: Ts'); close(deep.Ts[l], 4, 1e-9, 'deep water: Tb'); close(none.Ts[l], 20, 1e-9, 'no Tb given: Ts');
+});
+
 let fail = 0;
 for (const [name, fn] of tests) { try { fn(); console.log('ok   ', name); } catch (e) { fail++; console.log('FAIL ', name, '\n     ', e.message); } }
 console.log(`\n${tests.length - fail}/${tests.length} checks passed`);
