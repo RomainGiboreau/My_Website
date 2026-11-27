@@ -1200,6 +1200,173 @@ test('transport arrows carry a process; carbonate and clastic maps get wave/tide
   const b = (o) => mod.beltAt(o.x + Math.sin(o.az * Math.PI / 180) * .5 * o.L, o.y + Math.cos(o.az * Math.PI / 180) * .5 * o.L);
   assert.ok(b(pr) >= b(q), 'gravity-flow arrow lies more distal than the wave/tide arrow');
 });
+// ---------- delta forms (river / wave / tide) ----------
+const dobj = (rg, extra) => Object.assign({ id: 'd', type: 'lobe', x: 20000, y: 30000, az: 180, L: 14000, open: 60, seed: 4, regime: rg }, extra || {});
+const kinds = g => g.parts.map(p => p.kind);
+const cnt = (a, k) => a.filter(x => x === k).length;
+test('delta regime: forced, generic, or auto from the single-system template', () => {
+  assert.equal(G.deltaRegime({ template: 'delta' }, {}), 'river');
+  assert.equal(G.deltaRegime({ template: 'wavedelta' }, { regime: 'auto' }), 'wave');
+  assert.equal(G.deltaRegime({ template: 'estuary' }, {}), 'tide');
+  assert.equal(G.deltaRegime({ template: 'estuary' }, { regime: 'river' }), 'river');
+  assert.equal(G.deltaRegime({ template: 'estuary' }, { regime: 'generic' }), null);
+  assert.equal(G.deltaRegime({ template: 'margin' }, {}), null);
+  assert.equal(G.normFacies({ regime: 'tide' }).regime, 'tide');
+  assert.equal(G.normFacies({ regime: 'bogus' }).regime, undefined);
+});
+test('river-dominated delta: bird-foot fingers, each with a levee strip and a mouth bar, interdistributary bay, channels reach the tips', () => {
+  const g = G.faciesShape(dobj('river')), k = kinds(g), ch = g.lines.filter(l => l.kind === 'chan');
+  assert.ok(g.ring.length > 100 && g.ring.every(p => Number.isFinite(p[0]) && Number.isFinite(p[1])));
+  assert.ok(cnt(k, 'bar') >= 3 && cnt(k, 'bar') === cnt(k, 'levee') && cnt(k, 'bay') === 1);
+  assert.equal(ch.length, cnt(k, 'bar') + 1);                       // trunk + one channel per finger
+  const apex = [20000, 30000], reach = ch.slice(1).map(l => Math.hypot(l.pts.at(-1)[0] - apex[0], l.pts.at(-1)[1] - apex[1]) / 14000);
+  assert.ok(reach.every(r => r > .65 && r < 1.05), reach.join());   // elongate: the channels run to the tips
+  const bay = g.parts.find(p => p.kind === 'bay'), a = Math.abs(G.sArea(g.ring)), b = Math.abs(G.sArea(bay.ring));
+  assert.ok(b > a * 1.0, 'bays lie between the fingers (the bay region is wider than the finger envelope)');
+});
+test('wave-dominated delta: smooth arcuate front, a single channel, beach ridges parallel to the coast, longshore drift arrows', () => {
+  const g = G.faciesShape(dobj('wave')), ridges = g.lines.filter(l => l.kind === 'ridge');
+  assert.equal(g.lines.filter(l => l.kind === 'chan').length, 1);
+  assert.ok(ridges.length >= 8 && kinds(g).includes('beach'));
+  // arcuate: the front is at an almost constant distance from the apex (idealised arc, <= 12 % variation over the opening)
+  const d = g.ring.slice(1).map(p => Math.hypot(p[0] - 20000, p[1] - 30000)), mx = Math.max(...d);
+  assert.ok(d.filter(v => v > .85 * mx).length > .4 * d.length);
+  // ridges parallel to the front: each ridge point keeps a stable ratio to the front radius (nearly concentric)
+  const rr = ridges[0].pts.map(p => Math.hypot(p[0] - 20000, p[1] - 30000)); assert.ok((Math.max(...rr) - Math.min(...rr)) / Math.max(...rr) < .15);
+  assert.equal(g.info.drift.length, 2);
+});
+test('tide-dominated delta: funnels flare seaward, tidal bars elongate along the flow (perpendicular to the coast), mud flat behind', () => {
+  const g = G.faciesShape(dobj('tide')), k = kinds(g), fun = g.parts.filter(p => p.kind === 'funnel');
+  assert.ok(fun.length >= 3 && cnt(k, 'tbar') >= fun.length && cnt(k, 'flat') === 1);
+  // flare: the funnel is wider at the sea end than at the landward end (rings from a strip: compare the extents across the axis near both ends)
+  const f = fun[0].ring, mx = f.reduce((s, p) => s + p[0], 0) / f.length, my = f.reduce((s, p) => s + p[1], 0) / f.length;
+  let sxx = 0, sxy = 0, syy = 0; for (const p of f) { const x = p[0] - mx, y = p[1] - my; sxx += x * x; sxy += x * y; syy += y * y; }
+  const th = .5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(th), uy = Math.sin(th), S = f.map(p => (p[0] - mx) * ux + (p[1] - my) * uy), Tn = f.map(p => -(p[0] - mx) * uy + (p[1] - my) * ux);
+  const s0 = Math.min(...S), s1 = Math.max(...S), wid = (a, b) => { const q = Tn.filter((v, i) => S[i] >= a && S[i] <= b); return Math.max(...q) - Math.min(...q) };
+  const e0 = wid(s0, s0 + .15 * (s1 - s0)), e1 = wid(s1 - .15 * (s1 - s0), s1);
+  assert.ok(Math.max(e0, e1) > 2.5 * Math.min(e0, e1), `funnel ends ${e0} vs ${e1}`);
+  const bar = g.parts.filter(p => p.kind === 'tbar').map(p => { const xs = p.ring.map(q => q[0]), ys = p.ring.map(q => q[1]); return (Math.max(...ys) - Math.min(...ys)) / (Math.max(...xs) - Math.min(...xs)) });
+  assert.ok(bar.filter(r => r > 1.2).length >= 2, 'bars elongate along the flow (az 180: north-south), perpendicular to the coast');
+});
+test('delta forms: examples build, honour every well, carry their process arrows (wave purple drift, flood / ebb pairs for tides)', () => {
+  for (const k of ['deltariver', 'deltawave', 'deltatide']) {
+    const ex = G.examples[k], mod = G.build(ex.M, ex.wells), lobe = mod.facies.find(o => o.type === 'lobe');
+    assert.ok(ex.wells.length >= 4 && mod.check.every(c => c.honoured), k + ' wells');
+    assert.equal(lobe.regime, { deltariver: 'river', deltawave: 'wave', deltatide: 'tide' }[k]);
+    assert.ok(G.EXGROUPS.some(g => g[1].includes(k)) && G.EXNAMES[k], k + ' in the selector');
+  }
+  let mod = G.build(G.examples.deltatide.M, G.examples.deltatide.wells), A = mod.facies.filter(o => o.type === 'arrow');
+  const fl = A.filter(o => o.proc === 'flood'), eb = A.filter(o => o.proc === 'ebb');
+  assert.ok(fl.length >= 3 && fl.length === eb.length);
+  assert.ok(fl.every((o, i) => Math.abs((((o.az - eb[i].az) % 360) + 360) % 360 - 180) < .5), 'flood opposite to ebb');
+  mod = G.build(G.examples.deltawave.M, G.examples.deltawave.wells);
+  assert.ok(mod.facies.filter(o => o.proc === 'wave' && /^drift/.test(o.id)).length === 2);
+  mod = G.build(G.examples.deltariver.M, G.examples.deltariver.wells);
+  assert.ok(!mod.facies.some(o => o.proc === 'flood' || o.proc === 'ebb' || /^drift/.test(o.id)), 'flood / ebb only for the tide-dominated delta');
+});
+test('delta forms: generating the shape is fast (< 40 ms each), exports carry the parts as polygons', () => {
+  for (const rg of ['river', 'wave', 'tide']) { const t0 = performance.now(); for (let i = 0; i < 5; i++) G.faciesShape(dobj(rg, { seed: i })); assert.ok((performance.now() - t0) / 5 < 40, rg); }
+  const ex = G.examples.deltatide, mod = G.build(ex.M, ex.wells), F = G.faciesFeatures(mod);
+  assert.ok(F.polys.some(p => /funnel/.test(p.id)) && F.polys.some(p => /tbar/.test(p.id)));
+});
+// ---------- detailed submarine fan and sand-content view ----------
+test('submarine fan (detailed): canyon, sinuous leveed channel with overbank fines, transition, distributaries, lobes with sand axis and fringes, abandoned channel', () => {
+  const o = { id: 's', type: 'sfan', x: 25000, y: 39000, az: 180, L: 30000, open: 50, seed: 3 }, g = G.faciesShape(o), k = g.parts.map(p => p.kind), L = g.lines.map(l => l.kind);
+  assert.ok(g.ring && g.ring.length > 10 && L.includes('canyon') && L.includes('abandoned'));
+  const ch = g.lines.find(l => l.kind === 'schan').pts, len = ch.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - ch[i][0], p[1] - ch[i][1]), 0), chord = Math.hypot(ch.at(-1)[0] - ch[0][0], ch.at(-1)[1] - ch[0][1]);
+  assert.ok(len / chord > 1.05, 'sinuous channel ' + len / chord);
+  const nd = L.filter(x => x === 'dist').length;
+  assert.ok(nd >= 2 && k.filter(x => x === 'lobe').length === nd && L.filter(x => x === 'sandaxis').length === nd, 'one lobe and one sand axis per distributary');
+  assert.ok(k.includes('levee') && k.includes('overbank') && k.includes('cltrans') && k.filter(x => x === 'fringe').length >= nd);
+  assert.equal(G.faciesShape(Object.assign({}, o, { ab: 0 })).lines.some(l => l.kind === 'abandoned'), false);
+  // the lobes lie beyond the channel (down the fan axis, az 180 = towards decreasing y)
+  const lobeY = g.parts.filter(p => p.kind === 'lobe').map(p => p.ring.reduce((s, q) => s + q[1], 0) / p.ring.length), endY = ch.at(-1)[1];
+  assert.ok(lobeY.every(y => y < endY));
+  const t0 = performance.now(); for (let i = 0; i < 5; i++) G.faciesShape(Object.assign({}, o, { seed: i })); assert.ok((performance.now() - t0) / 5 < 40);
+});
+test('sand content view: low / intermediate / high classes (blue, pale yellow, orange); unknown = not represented; parts rank overbank < levee < channel-lobe < sand lobe', () => {
+  assert.deepEqual([.05, .45, .9].map(v => G.sandClass(v).k), ['low', 'mid', 'high']);
+  assert.equal(G.sandClass(null), null); assert.equal(G.sandClass(undefined), null);
+  assert.deepEqual(G.SAND.map(q => q.color), ['#5b8fd0', '#f3e9a0', '#e8892a']);
+  const P = G.PARTS; assert.ok(P.overbank[3] < P.levee[3] && P.levee[3] < P.cltrans[3] && P.cltrans[3] <= P.lobe[3]);
+  for (const k of ['reef', 'sandbank', 'tongue', 'oobank', 'storm', 'shelter']) assert.equal(P[k][3], null, k + ' is carbonate: not represented');
+  assert.equal(G.normFacies({ sandView: true }).sandView, true); assert.equal(G.normFacies({}).sandView, undefined);
+  const M = G.makeModel('fan', {}); M.facies.sandView = true; assert.equal(G.openModel(G.saveModel(M, [])).M.facies.sandView, true);
+});
+test('detailed fan: example builds and honours its wells; with the option on, a margin gets one detailed fan per canyon-fed feeder instead of the fairway and fan', () => {
+  const ex = G.examples.subfan, mod = G.build(ex.M, ex.wells);
+  assert.ok(mod.facies.some(o => o.type === 'sfan') && !mod.facies.some(o => o.type === 'fan') && mod.check.every(c => c.honoured));
+  assert.ok(G.EXGROUPS.some(g => g[1].includes('subfan')) && G.EXNAMES.subfan);
+  const m = G.examples.margin.M, a = G.build(m, []).facies, nf = a.filter(o => o.type === 'fairway').length;
+  assert.ok(nf >= 1 && !a.some(o => o.type === 'sfan'));
+  const m2 = JSON.parse(JSON.stringify(m)); m2.facies.n.sfan = 1; const b = G.build(m2, []).facies;
+  assert.equal(b.filter(o => o.type === 'sfan').length, nf);
+  assert.ok(!b.some(o => /^fairway\d/.test(o.id)) && !b.some(o => /^fan\d/.test(o.id)));
+});
+// ---------- carbonate platform: scalloped reef rim, pass, patch reefs, sand banks, slope tongues ----------
+const rimObj = (extra) => Object.assign({ id: 'r', type: 'reefrim', path: [[30000, 0], [30000, 20000], [30000, 40000]], lag: 12000, sl: 4000, w: 600, np: 1, patch: 6, nb: 3, tg: 6, seed: 5 }, extra || {});
+test('reef-rimmed margin: scalloped (not smooth) rim, cut by a pass, patch reefs and sand banks on the lagoon side, debris tongues on the slope side', () => {
+  const g = G.faciesShape(rimObj()), w = 600, X0 = 30000;
+  assert.equal(g.rings.length, 2, 'one pass cuts the rim in two segments');
+  const gapLo = Math.max(...g.rings[0].map(p => p[1])), gapHi = Math.min(...g.rings[1].map(p => p[1])), lo = gapLo < gapHi ? [gapLo, gapHi] : [Math.max(...g.rings[1].map(p => p[1])), Math.min(...g.rings[0].map(p => p[1]))];
+  assert.ok(lo[1] - lo[0] > 3 * w, 'pass gap ' + (lo[1] - lo[0]));
+  const outer = g.rings.flat().filter(p => p[0] > X0 + .25 * w).map(p => p[0] - X0), mean = outer.reduce((s, v) => s + v, 0) / outer.length, sd = Math.sqrt(outer.reduce((s, v) => s + (v - mean) ** 2, 0) / outer.length);
+  assert.ok(sd > .2 * w && Math.max(...outer) - Math.min(...outer) > .9 * w, `scalloped outer edge: sd ${sd}`);
+  const cx = p => p.ring.reduce((s, q) => s + q[0], 0) / p.ring.length, of = k => g.parts.filter(p => p.kind === k);
+  assert.ok(of('reef').length >= 4 && of('reef').every(p => cx(p) < X0), 'patch reefs behind the rim (lagoon = left of a north-going line has basin on the right)');
+  assert.ok(of('sandbank').length === 3 && of('sandbank').every(p => cx(p) < X0));
+  assert.ok(of('tongue').length === 6 && of('tongue').every(p => cx(p) > X0 + w), 'tongues on the basin side');
+  const nopass = G.faciesShape(rimObj({ np: 0 })); assert.equal(nopass.rings.length, 1);
+  const t0 = performance.now(); for (let i = 0; i < 5; i++) G.faciesShape(rimObj({ seed: i })); assert.ok((performance.now() - t0) / 5 < 40);
+});
+test('carbonate platform example: the margin line gets its reef rim, pass arrows (wave / tide purple, both ways) and gravity arrows down the slope, wells honoured', () => {
+  const ex = G.examples.carbplat, mod = G.build(ex.M, ex.wells), rim = mod.facies.find(o => o.type === 'reefrim');
+  assert.ok(rim && rim.lag > 0 && rim.sl > 0 && mod.check.every(c => c.honoured));
+  assert.ok(G.EXGROUPS.some(g => g[1].includes('carbplat')) && G.EXNAMES.carbplat);
+  const A = mod.facies.filter(o => o.type === 'arrow'), pin = A.find(o => o.id === 'passin0'), pout = A.find(o => o.id === 'passout0'), gr = A.filter(o => /^arrG/.test(o.id));
+  assert.ok(pin && pout && pin.proc === 'wave' && pout.proc === 'wave' && Math.abs((((pin.az - pout.az) % 360) + 360) % 360 - 180) < .5);
+  assert.ok(gr.length >= 1 && gr.every(o => o.proc === 'gravity'));
+  assert.ok(gr.every(o => Math.abs(((o.az - pout.az + 540) % 360) - 180) < 75), 'gravity transfer points down the slope (basinward, like the outflow, within the curvature of the margin)');
+  const m2 = JSON.parse(JSON.stringify(ex.M)); m2.facies.n.rim = 0; assert.ok(!G.build(m2, ex.wells).facies.some(o => o.type === 'reefrim'));
+});
+// ---------- carbonate ramp: banks and passes, wave bases, storm deposits, sheltered area ----------
+test('carbonate ramp zones: oolitic banks in the shoal belt separated by passes, wave bases between the belts, storm deposits in the mid / outer ramp', () => {
+  const ex = G.examples.rampzones, mod = G.build(ex.M, ex.wells), r = mod.facies.find(o => o.type === 'rampzone'), AB = G.allBelts(ex.M);
+  const iS = AB.findIndex(c => /shoal/i.test(c.name)), iM = AB.findIndex(c => /^mid ramp/i.test(c.name)), iO = AB.findIndex(c => /^outer ramp/i.test(c.name));
+  assert.ok(r && iS >= 0 && iM > iS && iO > iM && mod.check.every(c => c.honoured));
+  const cen = p => [p.ring.reduce((s, q) => s + q[0], 0) / p.ring.length, p.ring.reduce((s, q) => s + q[1], 0) / p.ring.length], of = k => r.parts.filter(p => p.kind === k);
+  const banks = of('oobank'); assert.ok(banks.length >= 4);
+  assert.ok(banks.every(p => mod.beltAt(...cen(p)) === iS), 'banks sit in the inner-ramp shoal belt');
+  // elongate along the shore (perpendicular to the transport azimuth 115 deg) and separated by passes (gaps between neighbours)
+  const a = ex.M.az * Math.PI / 180, ux = Math.sin(a), uy = Math.cos(a), T = p => p.ring.map(q => -q[0] * uy + q[1] * ux), Sd = p => p.ring.map(q => q[0] * ux + q[1] * uy);
+  const rng = v => Math.max(...v) - Math.min(...v);
+  assert.ok(banks.every(p => rng(T(p)) > 1.6 * rng(Sd(p))), 'banks are elongate along the coast');
+  const iv = banks.map(p => [Math.min(...T(p)), Math.max(...T(p))]).sort((x, y) => x[0] - y[0]);
+  for (let i = 1; i < iv.length; i++) assert.ok(iv[i][0] - iv[i - 1][1] > 0, 'a pass between banks ' + i);
+  // wave bases: dashed lines on the boundary of the belts, the fair-weather one shoreward of the storm one
+  const fw = r.lines.filter(l => l.kind === 'fwwb'), sw = r.lines.filter(l => l.kind === 'swwb');
+  assert.ok(fw.length >= 1 && sw.length >= 1);
+  for (const [L, ib] of [[fw, iM], [sw, iO]]) { const P = L.flatMap(l => l.pts), ok = P.filter(p => { const b = mod.beltAt(p[0], p[1]); return b === ib || b === ib - 1 }).length; assert.ok(ok >= .75 * P.length, 'wave base on the belt boundary ' + ib + ': ' + ok + '/' + P.length) }
+  const sm = L => L.flatMap(l => l.pts).reduce((s, p) => s + p[0] * ux + p[1] * uy, 0) / L.flatMap(l => l.pts).length;
+  assert.ok(sm(fw) < sm(sw));
+  const st = of('storm'); assert.ok(st.length >= 6 && st.every(p => { const b = mod.beltAt(...cen(p)); return b >= iM }), 'storm deposits in the mid and outer ramp');
+  assert.ok(of('shelter').length === 1, 'sheltered area with n.ramp = 2');
+});
+test('carbonate ramp zones: n.ramp 1 has no sheltered area, 0 none; moving the object moves its parts; fast (< 100 ms); only on the ramp template', () => {
+  const ex = G.examples.rampzones, m1 = JSON.parse(JSON.stringify(ex.M)); m1.facies.n.ramp = 1;
+  assert.ok(!G.build(m1, ex.wells).facies.find(o => o.type === 'rampzone').parts.some(p => p.kind === 'shelter'));
+  m1.facies.n.ramp = 0; assert.ok(!G.build(m1, ex.wells).facies.some(o => o.type === 'rampzone'));
+  const m2 = JSON.parse(JSON.stringify(ex.M)); m2.facies.edits = { ramp0: { dx: 1000, dy: -500 } };
+  const A = G.build(ex.M, ex.wells).facies.find(o => o.type === 'rampzone'), B = G.build(m2, ex.wells).facies.find(o => o.type === 'rampzone');
+  near(B.g.parts[0].ring[0][0] - A.g.parts[0].ring[0][0], 1000, 1e-6); near(B.g.parts[0].ring[0][1] - A.g.parts[0].ring[0][1], -500, 1e-6);
+  const mod = G.build(ex.M, ex.wells, { fast: true }), t0 = performance.now(); G.faciesGen(ex.M, mod); assert.ok(performance.now() - t0 < 100, 'generation ' + (performance.now() - t0));
+  const mc = G.examples.carbmargin.M; mc.facies.n.ramp = 2; assert.ok(!G.build(mc, []).facies.some(o => o.type === 'rampzone'));
+});
+test('transport arrows and process colours stay consistent across the new objects (river blue, wave / tide purple, gravity red; flood / ebb only on tide-dominated deltas)', () => {
+  const procs = { deltariver: ['river', 'wave', 'gravity', 'settle'], deltawave: ['river', 'wave', 'gravity', 'settle'], deltatide: ['river', 'wave', 'gravity', 'settle', 'flood', 'ebb'], carbplat: ['wave', 'gravity', 'settle'] };
+  for (const [k, ok] of Object.entries(procs)) { const ex = G.examples[k], A = G.build(ex.M, ex.wells).facies.filter(o => o.type === 'arrow'); assert.ok(A.every(o => ok.includes(o.proc)), k + ' ' + [...new Set(A.map(o => o.proc))]); }
+  for (const k of ['deltariver', 'deltawave', 'carbplat', 'rampzones', 'subfan']) { const ex = G.examples[k]; assert.ok(!G.build(ex.M, ex.wells).facies.some(o => o.proc === 'flood' || o.proc === 'ebb'), k); }
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
