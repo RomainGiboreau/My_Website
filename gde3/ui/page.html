@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDE map generator (new)</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/gdemap3/">
+<meta name="description" content="Draw a gross depositional environment (GDE) map from the environments interpreted at a few wells in three steps: wells, one depositional system with three sliders (scale, dominant regime, transport direction), result. Belts calibrated with the minimum change, features (lobes, bars, channels with levees, reefs), source to sink chain, PNG, ZMAP+, GeoJSON and IRAP exports. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+main{min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.panel h2 .grow{margin-left:auto}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+select{max-width:100%}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+input[type=range]{accent-color:var(--acc);width:100%}
+.pg{display:grid;grid-template-columns:96px 1fr;gap:5px 8px;align-items:center;font-size:.82rem;margin:8px 0}
+.pg .v{color:var(--mut);font-variant-numeric:tabular-nums;font-size:.78rem}
+.pg .sl{display:flex;flex-direction:column}
+.pg .sl small{color:var(--mut);font-size:.7rem;margin-top:-1px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem;margin:4px 0}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err,.c{color:var(--acc2)}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin:6px 0 0}
+[hidden]{display:none!important}
+.wl{display:flex;flex-direction:column;gap:3px;margin-top:6px;max-height:230px;overflow:auto}
+.wr{display:grid;grid-template-columns:70px 1fr 26px;gap:3px;align-items:center;font-size:.78rem;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.wr input,.wr select{font-size:.76rem;padding:.12rem .3rem;min-width:0;width:100%}
+.wr button{padding:0 .3rem;font-size:.74rem}
+.edit{border-top:1px dashed var(--line);margin-top:8px;padding-top:6px}
+.xm{position:relative}
+.xmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:6px;width:320px;max-width:92vw}
+.top .bar .xmenu button{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:var(--fg);padding:.28rem .5rem;border-radius:4px;font-size:.82rem}
+.top .bar .xmenu button:hover{background:var(--alt)}
+.xmenu button b{font-weight:600;min-width:7.5em}.xmenu button span{color:var(--mut);font-size:.74rem}
+.xmenu .mh{font:600 .68rem Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:7px 6px 1px}
+.verdict{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:center;background:#fff;border:1px solid var(--line);border-left:8px solid var(--vc,#2e7d32);border-radius:10px;padding:10px 16px;margin-bottom:10px}
+.verdict.warn{--vc:#c2924a}.verdict.bad{--vc:#c62828}.verdict.none{--vc:#8c8a80}
+.verdict .ic{grid-row:1/3;font:700 1.6rem "Space Grotesk",sans-serif;color:var(--vc,#2e7d32);width:32px;text-align:center}
+.verdict h2{font:700 1.15rem/1.25 "Space Grotesk",Inter,sans-serif}
+.verdict .sub{color:var(--mut);font-size:.84rem;grid-column:2}
+.verdict .reminder{grid-column:2;font-size:.78rem;color:var(--mut);font-style:italic}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:clamp(440px,70vh,760px);touch-action:none}
+canvas#cv{position:absolute;inset:0;display:block}
+.ro{position:absolute;right:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.76rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.pop{position:absolute;z-index:5;background:var(--card);border:1px solid var(--acc);border-radius:8px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:.8rem;width:230px}
+.pop .row{margin:4px 0}.pop input,.pop select{width:100%}
+.chainw{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}.chainw canvas{display:block;cursor:pointer}
+.tw{margin-top:12px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.tw h3{font:600 .9rem "Space Grotesk",Inter,sans-serif;margin:8px 10px 2px}
+table{border-collapse:collapse;width:100%;font-size:.8rem}
+.tw th,.tw td{padding:4px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tw th{background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+td.l,th.l{text-align:left}
+.yes{color:#2e7d32;font-weight:700}.no{color:#c62828;font-weight:700}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{order:2}}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>GDE map generator (new)</h1>
+ <div class="bar"><span class="xm" id="xm"><button class="pri" id="bExp" aria-haspopup="true" aria-expanded="false" title="Export the map, polygons, grid, lines, wells check or the audit">Export ▾</button>
+  <div class="xmenu" id="xmenu" role="menu" hidden>
+   <button id="bPng" title="The map as drawn with legend, wells, scale bar, coordinates and the source to sink strip (PNG, 2000 px wide)"><b>PNG image</b><span>map, legend, chain strip</span></button>
+   <div class="mh">Polygons <i>(belts and features)</i></div>
+   <button id="bGeo" title="GeoJSON FeatureCollection: belt polygons (with holes), feature polygons, key lines"><b>GeoJSON</b><span>polygons, features, key lines</span></button>
+   <button id="bIrap" title="IRAP Classic lines for Petrel: x y code per vertex, 999 after each closed ring"><b>IRAP lines</b><span>belt polygons, z = belt code</span></button>
+   <div class="mh">Grid</div>
+   <button id="bZmap" title="ZMAP+ grid of belt codes (1 = first belt), legend in ! comment lines"><b>ZMAP+</b><span>belt codes, legend in comments</span></button>
+   <div class="mh">Lines, wells, audit</div>
+   <button id="bLines" title="Key lines as IRAP Classic lines (z = line number)"><b>Key lines</b><span>IRAP lines</span></button>
+   <button id="bWcsv" title="Wells: environment given, class on the map, honoured, how"><b>Wells CSV</b><span>given, on the map, honoured</span></button>
+   <button id="bAudit" title="Inputs, prior and calibrated thresholds, feasible intervals, verdicts, conflicts (JSON)"><b>Audit JSON</b><span>inputs, thresholds, verdicts</span></button>
+  </div></span>
+  <span class="msg" id="exportMsg"></span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel" id="p1"><h2><span class="n">1</span>Wells</h2>
+  <select id="ex" aria-label="Load an example"></select>
+  <textarea id="wTxt" rows="5" aria-label="Wells table" placeholder="name, x, y, environment&#10;W-1, 50000, 15400, Coastal plain" style="margin-top:6px"></textarea>
+  <div class="row"><button class="pri" id="bWApply">Use this table</button><button id="bWAdd" title="Then click on the map where the well is">+ Add on map</button><button id="bWClear">Remove all</button></div>
+  <div class="msg" id="wMsg"></div>
+  <div class="wl" id="wList"></div>
+  <p class="note">x, y in metres (projected). Drag a well on the map to move it; the boundaries follow with the minimum change.</p></section>
+ <section class="panel" id="p2"><h2><span class="n">2</span>System<button class="grow" id="bEdit" aria-expanded="false" aria-controls="editBox">Edit ▾</button></h2>
+  <select id="sSys" aria-label="Depositional system"></select>
+  <div class="note" id="sysNote" style="margin-top:2px"></div>
+  <div class="pg"><span>Scale</span><div class="sl"><input type="range" id="sKm" min="1" max="300" step="1" aria-label="Scale: width of the belts, km"><small id="vKm"></small></div>
+   <span>Dominant regime</span><div class="sl"><input type="range" id="sReg" min="0" max="2" step="1" aria-label="Dominant regime"><small><span id="vReg"></span> <span id="regL"></span></small></div>
+   <span>Transport direction</span><div class="sl"><input type="range" id="sAz" min="0" max="360" step="1" aria-label="Transport azimuth, degrees clockwise from north, towards the distal belts"><small id="vAz"></small></div></div>
+  <div class="edit" id="editBox" hidden>
+   <label class="inl"><input type="checkbox" id="eLines">Show key lines (drag their vertices)</label>
+   <div class="row"><button id="bLReset">Propose the key lines again</button><span class="msg" id="lMsg"></span></div>
+   <label class="inl"><input type="checkbox" id="eFeat">Features (lobes, bars, channels with levees, reefs)</label>
+   <label class="inl"><input type="checkbox" id="eArr">Process arrows</label>
+   <label class="inl"><input type="checkbox" id="eWarp">Local warping for contradictory wells</label>
+   <div class="row"><span style="font-size:.82rem">Seed</span><input type="number" id="sSeed" step="1" min="1" style="width:90px"><button id="bSeed" title="Another, equally likely, set of boundary and feature shapes">New</button></div></div></section>
+</aside>
+<main>
+ <h2 style="font-size:.95rem;margin:0 0 6px;display:flex;align-items:center;gap:8px"><span class="n" style="display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem">3</span>Result</h2>
+ <section class="verdict none" id="verdict" aria-live="polite"></section>
+ <div class="stage" id="stage"><canvas id="cv" role="img" aria-label="Depositional environment map"></canvas><div class="ro" id="ro">—</div>
+  <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pCancel">Cancel</button></div></div></div>
+ <div class="chainw" id="chainw"><canvas id="chain" role="img" aria-label="Source to sink chain of the depositional environments; click a link to highlight its zone on the map"></canvas></div>
+ <div class="tw" id="wtab"><h3>How each well is honoured</h3><table><thead><tr><th class="l">Well</th><th class="l">Environment given → on the map</th><th class="l">Honoured</th></tr></thead><tbody id="tb"></tbody></table></div>
+</main>
+</div>
+<script id="gde3-core">
+/*CORE*/
+</script>
+<script id="rgm-js">
+/*RGM*/
+</script>
+</body></html>

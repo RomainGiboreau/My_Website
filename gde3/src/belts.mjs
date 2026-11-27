@@ -1,6 +1,7 @@
 // Belts on d: prior thresholds from a system record, classification, adjacency validation, matching of well descriptions.
 import { valueNoise } from './rng.mjs';
 import { SYSTEMS } from './systems.mjs';
+import { FEATURE_SHAPES } from './features.mjs';
 
 // effective system for a regime: widths scaled so the finite belts add up to spanM (metres), fringe amplitudes, adjacency set
 export function resolveSystem(sys, { regime, spanM } = {}) {
@@ -62,6 +63,14 @@ export function validateSystem(sys) {
   for (let i = 0; i + 1 < ids.length; i++) if (!has(ids[i], ids[i + 1])) errs.push(`consecutive belts ${ids[i]}|${ids[i + 1]} not allowed to touch`);
   for (const [a, b, f] of sys.fringe || []) if (!has(a, b) || !(f > 0 && f <= 0.3)) errs.push(`fringe ${a}|${b} invalid`);
   for (const [, k] of sys.keyLines) if (!(k >= 0 && k < ids.length - 1)) errs.push('key line threshold out of range');
+  const sets = [sys.features || [], ...Object.values((sys.regimes && sys.regimes.options) || {}).map(o => o.features || [])];
+  for (const fs of sets) for (const f of fs) {
+    const ix = (f.host || []).map(h => ids.indexOf(h)).sort((a, b) => a - b);
+    if (!ix.length || ix.includes(-1)) errs.push('feature ' + f.id + ': unknown host belt');
+    else if (ix.some((v, i) => i && !has(ids[ix[i - 1]], ids[v]))) errs.push('feature ' + f.id + ': host belts are not a run of allowed neighbours');
+    if (!FEATURE_SHAPES.includes(f.shape) || !(f.n >= 0) || !(f.size && f.size.l > 0 && f.size.w > 0) || !(f.pos && f.pos[0] >= 0 && f.pos[1] <= 1 && f.pos[0] < f.pos[1])) errs.push('feature ' + f.id + ': shape, count, size or position');
+    if (!(f.orientation === 'dip' || f.orientation === 'strike' || typeof f.orientation === 'number') || !/^#[0-9a-f]{6}$/i.test(f.color)) errs.push('feature ' + f.id + ': orientation or colour');
+  }
   sys.belts.forEach(b => { if (!/^#[0-9a-f]{6}$/i.test(b.color) || !(b.w > 0)) errs.push('belt ' + b.id + ': colour or width'); });
   return errs;
 }

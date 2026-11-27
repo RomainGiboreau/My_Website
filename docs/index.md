@@ -166,6 +166,12 @@ Gridding, spatial correlation, grouping of point data and depositional environme
 
     k-means, hierarchical, DBSCAN and Gaussian mixture, with silhouette, elbow and PCA.
 
+-   [![GDE map generator (new)](assets/tools/gdemap3.webp){ loading=lazy }](gdemap3/index.html)
+
+    [**GDE map generator (new)**](gdemap3/index.html)
+
+    Rewritten GDE map generator in three steps: wells, one system with three sliders, result. Minimum-change belts, features, verdict, source to sink chain, exports.
+
 -   [![GDE map generator](assets/tools/gdemap.webp){ loading=lazy }](gdemap/index.html)
 
     [**GDE map generator**](gdemap/index.html)

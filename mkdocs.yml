@@ -83,6 +83,7 @@ nav:
           - Convex & concave hulls: hull/index.html
           - Clustering: clustering/index.html
           - GDE map generator: gdemap/index.html
+          - GDE map generator (new): gdemap3/index.html
           - Grid attributes: gridattr/index.html
       - Organic geochemistry:
           - Rock-Eval QC: rockeval/index.html
