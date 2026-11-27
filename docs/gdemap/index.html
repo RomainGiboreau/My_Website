@@ -266,6 +266,7 @@ details.dom{margin:4px 0 6px;font-size:.8rem}details.dom summary{cursor:pointer;
    <span>Fan deltas per fault</span><input type="number" id="fFd" min="0" max="40" step="1" title="Along each synrift fault with a throw: a sand-rich alluvial fan and a small lobe on the hanging-wall side (besides the fault-bounded sources)">
    <span>Transport arrows</span><label class="inl" title="Hollow arrows coloured by process: river transport (blue), wave / tidal reworking (purple), seabed gravity flows (red), settling (dotted). Concept, not a prediction."><input type="checkbox" id="fArr">by process, from the feeders and sources</label>
    <span>Delta form</span><select id="fReg" title="Plan-view form of the deltaic lobes. Auto: from the system (river-dominated delta: bird-foot; wave-dominated delta: arcuate; tide-dominated delta / estuary: funnels and tidal bars), the classical lobe for the margins. River: elongate distributaries with levees, mouth bars at the tips, interdistributary bays. Wave: smooth arcuate front, one main channel, beach ridges parallel to the coast, longshore drift (arrows option). Tide: funnel-shaped distributaries, sand bars perpendicular to the coast, mud tidal flat, flood (blue) and ebb (red) arrows (arrows option). Idealised concept forms, not predictions."><option value="auto">Auto (from the system)</option><option value="generic">Generic lobe</option><option value="river">River-dominated (bird-foot)</option><option value="wave">Wave-dominated (arcuate)</option><option value="tide">Tide-dominated (funnels, bars)</option></select>
+   <span>Detailed submarine fans</span><input type="number" id="fSfan" min="0" max="40" step="1" title="Replaces the canyon fairway and fan of each deep-water system by one detailed fan: canyon, sinuous leveed channel with overbank fines, channel–lobe transition, distributary channels, terminal lobes with sand axis and fringe, abandoned channel (dashed). Idealised."><span>Sand content view</span><label class="inl" title="Qualitative sand content of the clastic objects: low (blue), intermediate (pale yellow), high (orange); the substrate, the eroded areas and the carbonates are not represented (grey). A reading aid on the concept, not a net-to-gross prediction."><input type="checkbox" id="fSand">low / intermediate / high</label>
    <span>Channels per fairway</span><input type="number" id="fChan" min="1" max="16" step="1"><span>Seed</span><span class="two"><input type="number" id="fSeed" step="1" style="flex:1"><button id="fSeedN" title="Another seed: other, equally likely, object shapes and positions">New</button></span></div>
   <div class="lst" id="foList"></div>
   <div class="row"><button id="fReset" title="Remove the moves, deletions and objects added by hand">Reset object edits</button></div>
@@ -1901,6 +1902,7 @@ const FTYPE={
  ribbon:{name:'Sand ribbon / channel bar',color:'#f6e27a',edge:'#8a7a20',poly:true,alias:['channel bar','channel bar sandstone','sand ribbon','shoreline sand ribbon','shoreline sand','shoreline sandstone','shoreface sand ribbon','beach ridge sand','shelf sand ribbon'],home:['fluvdelta','clastshelf','neritic','carbshelf','isslope','lake','alluvial']},
  contourite:{name:'Contourite drift',color:'#c9a640',edge:'#6b5518',poly:true,alias:['contourite','contourite drift','contourite system','sediment drift','drift deposit','contourites'],home:['slope','deep','abyssal','neritic','clastshelf','isslope']},
  carbmud:{name:'Carbonate mudstone',color:'#b9b7e2',edge:'#3e3e78',poly:true,alias:['carbonate mudstone','lime mudstone','calcilutite','carbonate mud','chalk'],home:['slope','deep','abyssal','neritic','clastshelf','carbshelf','isslope']},
+ sfan:{name:'Submarine fan (detailed)',color:'#f0d54c',edge:'#4a4012',poly:true,alias:['detailed submarine fan','submarine fan system','canyon channel lobe system'],home:['slope','deep','abyssal','bypass']},
  arrow:{name:'Sediment transport',color:'#ffffff',edge:'#232220',poly:true,alias:['sediment transport direction'],home:EOD.map(d=>d.key)}};
 const FKEYS=Object.keys(FTYPE);
 function ftypeOf(env){const e=norm(env);if(!e)return null;const s=strip(e);
@@ -2018,7 +2020,7 @@ const LKINDS={chan:{name:'Channel',color:'#5fb0e8',edge:'#1d5f96',casing:true,sa
 // sand-content view (qualitative): low blue, intermediate pale yellow, high orange; no colour = substrate / eroded / not represented (grey)
 const SAND=[{k:'low',name:'Low sand content',color:'#5b8fd0'},{k:'mid',name:'Intermediate sand content',color:'#f3e9a0'},{k:'high',name:'High sand content',color:'#e8892a'}];
 const sandClass=v=>v==null||!isFinite(v)?null:v<.3?SAND[0]:v<.6?SAND[1]:SAND[2];
-const SANDT={lobe:.6,fan:.8,fairway:.85,afan:.8,ribbon:.9,contourite:.45,mtc:.2,river:.7};
+const SANDT={lobe:.5,fan:.8,fairway:.85,afan:.8,ribbon:.9,contourite:.45,mtc:.2,river:.7};
 const REGIMES=['river','wave','tide'];
 // the delta form of a map: forced (river / wave / tide), 'generic' (the classical lobe), or 'auto' = from the single-system template
 function deltaRegime(M,F){const r=(F&&F.regime)||'auto';if(REGIMES.includes(r))return r;if(r==='generic')return null;return({delta:'river',wavedelta:'wave',estuary:'tide'})[M.template]||null}
@@ -2068,7 +2070,35 @@ function deltaShape(o){const rg=o.regime,rnd=mulberry32(((o.seed|0)*2654435761+(
       if(i<n-1){const g=F[i+1],tm=(f.tc+g.tc)/2,r0=.84*Math.min(f.ri,g.ri),p=Q(r0,0,tm),d2=dv(tm);parts.push({kind:'tbar',z:1,ring:lensRing(p[0],p[1],d2[0],d2[1],(.2+.08*rnd())*L,.055*L,rnd)})}
       const pm=Q(.58*f.ri,0,f.tc);info.tide.push({x:pm[0],y:pm[1],az:azOf(dd[0],dd[1]),w:L*.02})})}
   return{ring:smoothRing(ring,1),parts,lines,info}}
-function faciesShape(o){if(Array.isArray(o.ring)&&o.ring.length>=3)return{ring:smoothRing(o.ring.map(q=>[+q[0],+q[1]]),2),lines:[]};switch(o.type){case'lobe':return lobeShape(o,false);case'fan':return lobeShape(o,true);case'platform':return blobShape(o,1);case'ponded':return blobShape(o,2);
+// ---- detailed submarine fan (plan view): canyon in the slope, sinuous channel with levees and overbank fines, channel-lobe transition, distributary channels,
+// terminal lobes (sand axis, fringe), optional abandoned channel (dashed). x, y = canyon head, az = downslope, L = head to lobe front ----
+function sfanShape(o){const rnd=mulberry32(((o.seed|0)*69069+23)>>>0),a=fin(o.az,180)*RAD,ux=Math.sin(a),uy=Math.cos(a),vx=uy,vy=-ux,L=Math.max(1,fin(o.L,30000)),open=clamp(fin(o.open,50),20,120)*RAD,ph=rnd()*6.28;
+  const Q=(s,c)=>[o.x+s*ux+c*vx,o.y+s*uy+c*vy],parts=[],lines=[],sc=.18*L,sl=.5*L,K=60,all=[];
+  const can=[];for(let k=0;k<=12;k++){const s=sc*k/12;can.push(Q(s,.01*L*Math.sin(5*s/L+ph)))}lines.push({pts:can,w:.024*L,kind:'canyon'});
+  const c0=.01*L*Math.sin(5*sc/L+ph),cc=[];
+  for(let k=0;k<=K;k++){const f=k/K;cc.push(Q(sc+(sl-sc)*f,c0*(1-f)+(.011+.017*f)*L*Math.sin(2*Math.PI*f*1.9+ph)*Math.min(1,f*3)))}
+  const ov=smoothRing(stripRing(cc,f=>(.045+.06*f)*L),1);parts.push({kind:'overbank',z:0,ring:ov});all.push(...ov);
+  parts.push({kind:'levee',z:1,ring:smoothRing(stripRing(cc,f=>(.02+.01*f)*L),1)});
+  lines.push({pts:cc,w:.009*L,kind:'schan'});
+  // channel-lobe transition at the end of the channel
+  const e=cc[K],pe=cc[K-4],dl=Math.hypot(e[0]-pe[0],e[1]-pe[1])||1,dx=(e[0]-pe[0])/dl,dy=(e[1]-pe[1])/dl;
+  parts.push({kind:'cltrans',z:1,ring:lensRing(e[0]+.05*L*dx,e[1]+.05*L*dy,dx,dy,.12*L,.08*L,rnd)});
+  // distributary channels fan out from the transition; a terminal lobe (and its fringe) at the end of each, sand axis along the lobe
+  const nd=clamp(Math.round(o.m||3+Math.floor(rnd()*2)),2,5),spread=.9*open,dAng=spread/nd;
+  for(let i=0;i<nd;i++){const ang=-spread/2+dAng*(i+.5),D=(.24+.07*rnd())*L,ca=Math.cos(ang),sa=Math.sin(ang),
+      // local direction = az rotated by ang (towards +c)
+      ex=ux*ca+vx*sa,ey=uy*ca+vy*sa,end=[e[0]+ex*D,e[1]+ey*D],pts=[],pe2=[-ey,ex],php=rnd()*6.28;
+    for(let k=0;k<=16;k++){const f=k/16,w=.014*L*Math.sin(2*Math.PI*f*1.5+php)*Math.sin(Math.PI*f);pts.push([e[0]+(end[0]-e[0])*f+pe2[0]*w,e[1]+(end[1]-e[1])*f+pe2[1]*w])}
+    lines.push({pts,w:.007*L,kind:'dist'});
+    const lw=clamp(1.8*D*dAng,.05*L,.15*L),cx=end[0]+.09*L*ex,cy=end[1]+.09*L*ey,lob=lensRing(cx,cy,ex,ey,.21*L,lw,rnd),fr=lensRing(cx+.03*L*ex,cy+.03*L*ey,ex,ey,.29*L,1.5*lw,rnd);
+    parts.push({kind:'fringe',z:0,ring:fr});parts.push({kind:'lobe',z:1,ring:lob});all.push(...fr);
+    lines.push({pts:[[end[0]-.02*L*ex,end[1]-.02*L*ey],[end[0]+.18*L*ex,end[1]+.18*L*ey]],w:.004*L,kind:'sandaxis'})}
+  // abandoned channel: leaves the active channel at 60 % of its length, towards the flank, dashed, with a small abandoned lobe fringe
+  if(o.ab!==0){const b=cc[Math.round(.6*K)],sg=rnd()<.5?-1:1,pts=[];
+    for(let k=0;k<=14;k++){const f=k/14,s=.6*(sl-sc)+sc+f*.2*L,c=(cc[Math.round(.6*K)][0]-o.x)*vx+(cc[Math.round(.6*K)][1]-o.y)*vy+sg*f*.14*L+.012*L*Math.sin(5*f+ph)*f;pts.push(Q(s,c))}
+    lines.push({pts,w:.006*L,kind:'abandoned'});const q=pts[pts.length-1];parts.push({kind:'fringe',z:0,ring:lensRing(q[0]+.03*L*ux,q[1]+.03*L*uy,ux,uy,.1*L,.07*L,rnd)})}
+  const hull=hullPts(all.concat(can,cc));return{ring:hull.length>=3?smoothRing(hull,1):null,parts,lines}}
+function faciesShape(o){if(Array.isArray(o.ring)&&o.ring.length>=3)return{ring:smoothRing(o.ring.map(q=>[+q[0],+q[1]]),2),lines:[]};switch(o.type){case'lobe':return lobeShape(o,false);case'sfan':return sfanShape(o);case'fan':return lobeShape(o,true);case'platform':return blobShape(o,1);case'ponded':return blobShape(o,2);
   case'mtc':return tongueShape(o);case'fairway':return fairwayShape(o);case'river':return riverShape(o);case'afan':return{ring:lobeShape(o,true).ring,lines:[]};case'carbmud':return blobShape(o,3);
   case'ribbon':return ribbonShape(o);case'contourite':return driftShape(o);case'arrow':return arrowShape(o);default:return{ring:null,lines:[]}}}
 // inside an object: polygon (point in ring), network (within a channel width of a line)
@@ -2084,12 +2114,13 @@ function faciesGen(M,mod){const F=Object.assign(faciesDefaults(),M.facies||{}),n
       if(d.on!==false&&cap.delta)push({id:'lobe'+fi,type:'lobe',x:fin(f.x,0)-ux*.45*dL,y:fin(f.y,0)-uy*.45*dL,az:+(fin(f.az,180)+12*fin(d.asym,0)).toFixed(2),L:2.8*dL,open:clamp(fin(d.open,60)*1.55,75,155),asym:fin(d.asym,0),feeder:fi});
       const v=FE.valleys.find(q=>q.feeder===fi);if(v)push({id:'river'+fi,type:'river',path:v.pts.map(p=>[p[0],p[1]]),w:.35*v.w,feeder:fi});
       const c=FE.canyons.find(q=>q.feeder===fi),fs=FE.sources.find(q=>q.kind==='fan'&&q.feeder===fi);
-      if(c){const P=c.pts.map(p=>[p[0],p[1]]),end=P[P.length-1],fa=(fs?fs.az:fin(f.az,180))*RAD,ext=fs?.3*fs.L:.1*diag;for(let k=1;k<=6;k++)P.push([end[0]+Math.sin(fa)*ext*k/6,end[1]+Math.cos(fa)*ext*k/6]);
+      if(n.sfan>0&&c&&fs){const P0=c.pts[0],az=(Math.atan2(fs.x-P0[0],fs.y-P0[1])/RAD+360)%360;push({id:'sfan'+fi,type:'sfan',x:P0[0],y:P0[1],az:+az.toFixed(2),L:Math.hypot(fs.x-P0[0],fs.y-P0[1])+.75*fs.L,open:clamp(1.3*fs.open,40,100),feeder:fi})}
+      else if(c){const P=c.pts.map(p=>[p[0],p[1]]),end=P[P.length-1],fa=(fs?fs.az:fin(f.az,180))*RAD,ext=fs?.3*fs.L:.1*diag;for(let k=1;k<=6;k++)P.push([end[0]+Math.sin(fa)*ext*k/6,end[1]+Math.cos(fa)*ext*k/6]);
         const S=ptsLen(P);push({id:'fairway'+fi,type:'fairway',path:P,n:clamp(Math.round(fin(F.chan,5)),1,16),w:.2*c.w,cw:c.w,W:clamp(.48*S,5*c.w,.2*diag),cl:.3*c.len,feeder:fi})}
-      if(fs)push({id:'fan'+fi,type:'fan',x:fs.x+Math.sin(fs.az*RAD)*(c?.25*fs.L:0),y:fs.y+Math.cos(fs.az*RAD)*(c?.25*fs.L:0),az:fs.az,L:.6*fs.L,open:clamp(1.3*fs.open,40,110),asym:fs.asym||0,feeder:fi})})}
+      if(fs&&!(n.sfan>0&&c))push({id:'fan'+fi,type:'fan',x:fs.x+Math.sin(fs.az*RAD)*(c?.25*fs.L:0),y:fs.y+Math.cos(fs.az*RAD)*(c?.25*fs.L:0),az:fs.az,L:.6*fs.L,open:clamp(1.3*fs.open,40,110),asym:fs.asym||0,feeder:fi})})}
   else if(linesOn(M))(M.sources||[]).forEach((s,i)=>{if(s.kind==='coast')push({id:'lobeS'+i,type:'lobe',x:s.x-Math.sin(s.az*RAD)*.5*s.L,y:s.y-Math.cos(s.az*RAD)*.5*s.L,az:s.az,L:1.8*s.L,open:clamp(s.open,35,130),asym:s.asym||0});
-    else if(s.kind==='fan')push({id:'fanS'+i,type:'fan',x:s.x,y:s.y,az:s.az,L:.55*s.L,open:clamp(1.2*s.open,40,110),asym:s.asym||0})});
-  else if(M.geom==='radial'){const t=templates[M.template]||{},deep=t.group==='Deep water';push({id:'src',type:deep?'fan':'lobe',x:M.src[0],y:M.src[1],az:M.az,L:(deep?.6:.45)*(+M.span||10000),open:clamp(+M.fan||60,35,130),asym:0})}
+    else if(s.kind==='fan')push(n.sfan>0?{id:'sfanS'+i,type:'sfan',x:s.x,y:s.y,az:s.az,L:1.1*s.L,open:clamp(1.3*s.open,40,100)}:{id:'fanS'+i,type:'fan',x:s.x,y:s.y,az:s.az,L:.55*s.L,open:clamp(1.2*s.open,40,110),asym:s.asym||0})});
+  else if(M.geom==='radial'){const t=templates[M.template]||{},deep=t.group==='Deep water';if(deep&&n.sfan>0)push({id:'src',type:'sfan',x:M.src[0],y:M.src[1],az:M.az,L:.95*(+M.span||10000),open:clamp(1.3*(+M.fan||40),40,100)});else push({id:'src',type:deep?'fan':'lobe',x:M.src[0],y:M.src[1],az:M.az,L:(deep?.6:.45)*(+M.span||10000),open:clamp(+M.fan||60,35,130),asym:0})}
   // fan deltas on the faults: a sand-rich alluvial fan at the fault and a small deltaic lobe at its toe, on the hanging-wall side, at each fault-bounded
   // source and (n.fd per fault) evenly spaced along each synrift fault with a throw or a raised footwall
   const fdPair=(id,x,y,az,L)=>{const a=az*RAD;push({id:'af'+id,type:'afan',x,y,az:+az.toFixed(2),L:.6*L,open:115,asym:0,m:3});
@@ -2168,10 +2199,10 @@ function faciesObjects(M,mod,W){const F=Object.assign(faciesDefaults(),M.facies|
     if(!o||anc(o)>.25*diag){o={id:'w:'+w.name,type:T,well:true,seed:objs.length+1,x:w.x,y:w.y};
       if(T==='platform'||T==='ponded'||T==='carbmud')Object.assign(o,{a:.025*diag,e:.6,rot:0});else if(T==='ribbon')Object.assign(o,{path:[[w.x-.05*diag,w.y],[w.x+.05*diag,w.y]],w:.007*diag,thru:[[w.x,w.y]]});
       else if(T==='contourite')Object.assign(o,{path:[[w.x-.1*diag,w.y],[w.x+.1*diag,w.y]],W:.04*diag,n:5});else if(T==='arrow')Object.assign(o,{az:180,L:.05*diag,y:w.y+.025*diag});else if(T==='mtc')Object.assign(o,{az:180,L:.06*diag,w:.03*diag,x:w.x,y:w.y+.02*diag});
-      else if(T==='lobe'||T==='fan'||T==='afan')Object.assign(o,{az:180,L:.06*diag,open:70,y:w.y+.02*diag});else Object.assign(o,{path:[[w.x,w.y+.05*diag],[w.x,w.y-.05*diag]],w:.004*diag,W:.03*diag,cl:0,n:4});
+      else if(T==='lobe'||T==='fan'||T==='afan'||T==='sfan')Object.assign(o,{az:180,L:T==='sfan'?.14*diag:.06*diag,open:T==='sfan'?50:70,y:w.y+.02*diag});else Object.assign(o,{path:[[w.x,w.y+.05*diag],[w.x,w.y-.05*diag]],w:.004*diag,W:.03*diag,cl:0,n:4});
       o.g=faciesShape(o);objs.push(o);notes.push(`${w.name}: ${FTYPE[T].name.toLowerCase()} created at the well`);if(inFacies(o,w.x,w.y))continue}
     for(let it=0;it<12&&!inFacies(o,w.x,w.y);it++){
-      if(o.type==='lobe'||o.type==='fan'||o.type==='afan'){const dx=w.x-o.x,dy=w.y-o.y,r=Math.hypot(dx,dy),az=Math.atan2(dx,dy)/RAD,da=((az-o.az)%360+540)%360-180;
+      if(o.type==='lobe'||o.type==='fan'||o.type==='afan'||o.type==='sfan'){const dx=w.x-o.x,dy=w.y-o.y,r=Math.hypot(dx,dy),az=Math.atan2(dx,dy)/RAD,da=((az-o.az)%360+540)%360-180;
         if(Math.abs(da)>.3*o.open)o.az=+(o.az+clamp(da-Math.sign(da)*.25*o.open,-15,15)).toFixed(3);if(Math.abs(da)>.4*o.open)o.open=Math.min(150,o.open+8);if(r>.65*o.L)o.L=Math.max(o.L,r/.7)*1.04}
       else if(o.type==='platform'||o.type==='ponded'||o.type==='carbmud'){const dx=w.x-o.x,dy=w.y-o.y,r=Math.hypot(dx,dy),m=Math.min(.35*o.a,Math.max(0,r-.4*o.a));o.x+=dx/r*m;o.y+=dy/r*m;o.a*=1.06}
       else if(o.type==='mtc'){const dx=w.x-o.x,dy=w.y-o.y,r=Math.hypot(dx,dy);o.x+=dx/r*.25*r;o.y+=dy/r*.25*r;o.L*=1.05;o.w*=1.08}
@@ -2370,6 +2401,11 @@ function exDeltaForm(rg){const T={river:['delta',165,[12000,30000],50,32000],wav
     tide:[['Channel',21600,4800,'Tidal-fluvial channel'],['Flat',23200,10200,'Tidal flat'],['Bar',21500,17500,'Tidal bar'],['Ridge',27800,25500,'Tidal sand ridge'],['Offshore',17500,41000,'Offshore shelf']]}[rg];
   return{title:{river:'River-dominated delta, bird-foot form (idealised): elongate distributaries with levees, mouth bars and interdistributary bays, 4 wells',wave:'Wave-dominated delta, arcuate form (idealised): one main channel, beach ridges parallel to the coast, longshore drift, 5 wells',
     tide:'Tide-dominated delta, funnel form (idealised): flared distributaries, tidal sand bars, mud flat, flood / ebb currents, 5 wells'}[rg],view:'facies',M,wells:W.map(([n,x,y,env])=>({name:{river:'Dr',wave:'Dw',tide:'Dt'}[rg]+'-'+n,x,y,env}))}}
+// canyon-fed deep-water system drawn as one detailed submarine fan (canyon, leveed channel, transition, distributaries, lobes, abandoned channel), sand content view available
+function exSubFan(){const M=makeModel('fan',{az:182,src:[25000,39500],fan:40,span:34500,noise:{amp:1800,wl:9000,seed:11},warp:{on:true,R:5000},ext:{xmin:0,xmax:50000,ymin:0,ymax:40000},cell:100,
+    facies:{arrows:true,n:{platform:0,mtc:0,sfan:1}}});
+  return{title:'Submarine fan, detailed plan view (idealised): canyon, sinuous leveed channel, channel–lobe transition, distributary channels, terminal lobes with sand axis, abandoned channel; the sand content view colours it low / intermediate / high, 3 wells',view:'facies',M,
+    wells:[{name:'Sf-1',x:24600,y:28500,env:'Channel-levee complex'},{name:'Sf-2',x:16800,y:17500,env:'Proximal lobes'},{name:'Sf-3',x:30500,y:7000,env:'Distal lobes'}]}}
 const examples={
  delta:{title:'River-dominated delta, 4 wells',M:makeModel('delta',{az:165,src:[12000,30000],fan:50,span:32000,outside:'strike',protrude:9000,noise:{amp:1500,wl:8000,seed:7},warp:{on:true,R:4000},
    ext:{xmin:0,xmax:40000,ymin:0,ymax:30000},cell:100}),
@@ -2388,13 +2424,13 @@ const examples={
    ext:{xmin:0,xmax:30000,ymin:0,ymax:36000},cell:50}),
    wells:[{name:'Lake-1',x:26500,y:24000,env:'Fan delta'},{name:'Lake-2',x:20200,y:15000,env:'Lake shoreline'},{name:'Lake-3',x:15000,y:22000,env:'Littoral'},{name:'Lake-4',x:6000,y:17000,env:'Profundal'}]}};
 // v2 examples built on first use (the synthetic attribute images take a moment)
-for(const [k,fn] of [['atlas',exAtlas],['atlastr',exAtlasTr],['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift],['riftearly',()=>exRiftStage('early')],['riftmid',()=>exRiftStage('mid')],['riftlate',()=>exRiftStage('late')],['deltariver',()=>exDeltaForm('river')],['deltawave',()=>exDeltaForm('wave')],['deltatide',()=>exDeltaForm('tide')]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
+for(const [k,fn] of [['atlas',exAtlas],['atlastr',exAtlasTr],['margin',exMargin],['carbmargin',exCarbMargin],['canyon',exCanyon],['rift',exRift],['riftearly',()=>exRiftStage('early')],['riftmid',()=>exRiftStage('mid')],['riftlate',()=>exRiftStage('late')],['deltariver',()=>exDeltaForm('river')],['deltawave',()=>exDeltaForm('wave')],['deltatide',()=>exDeltaForm('tide')],['subfan',exSubFan]]){let v=null;Object.defineProperty(examples,k,{enumerable:true,get(){return v||(v=fn())}})}
 // the v2 links: #coast opens the passive margin (it replaces the two-delta coast), #rimmed the carbonate margin
 for(const [a,b] of [['coast','margin'],['rimmed','carbmargin']])Object.defineProperty(examples,a,{enumerable:false,get(){return examples[b]}});
 // the examples select: groups in the UI order, short names
-const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','rift']],['Rift stages (one area, the same wells)',['riftearly','riftmid','riftlate']],['Seismic-driven',['canyon']],['Delta forms (facies map)',['deltariver','deltawave','deltatide']],['Single systems',['delta','fan','estuary','ramp','lake']]];
+const EXGROUPS=[['Atlas-style margins (EOD and facies maps)',['atlas','atlastr']],['Margins, source to sink',['margin','carbmargin','rift']],['Rift stages (one area, the same wells)',['riftearly','riftmid','riftlate']],['Seismic-driven',['canyon']],['Delta forms (facies map)',['deltariver','deltawave','deltatide']],['Deep-water fan, detailed (facies map, sand content view)',['subfan']],['Single systems',['delta','fan','estuary','ramp','lake']]];
 const EXNAMES={atlas:'Margin with a marginal plateau, lowstand (8 wells)',atlastr:'Same margin, transgressive interval (7 wells)',margin:'Passive margin, hinterland to basin floor (6 wells)',carbmargin:'Carbonate rimmed margin with pinnacles (4 wells)',rift:'Rift lake: fan-delta bajada and faults (4 wells)',canyon:'Canyon-fed fan with amplitude layers (3 wells)',riftearly:'1 · Early synrift, non-marine (6 wells)',riftmid:'2 · Mid synrift, marine incursion (6 wells)',riftlate:'3 · Late synrift, deep marine (6 wells)',
- deltariver:'River-dominated delta, bird-foot (4 wells)',deltawave:'Wave-dominated delta, arcuate (5 wells)',deltatide:'Tide-dominated delta, funnels and bars (5 wells)',delta:'Delta (4 wells)',fan:'Deep-water fan (3 wells)',estuary:'Estuary (5 wells)',ramp:'Carbonate ramp (4 wells)',lake:'Rift lake (4 wells)'};
+ subfan:'Submarine fan: canyon, leveed channel, lobes (3 wells)',deltariver:'River-dominated delta, bird-foot (4 wells)',deltawave:'Wave-dominated delta, arcuate (5 wells)',deltatide:'Tide-dominated delta, funnels and bars (5 wells)',delta:'Delta (4 wells)',fan:'Deep-water fan (3 wells)',estuary:'Estuary (5 wells)',ramp:'Carbonate ramp (4 wells)',lake:'Rift lake (4 wells)'};
 // verdict of the wells check: green only when ALL wells are matched to a class AND honoured; amber when none is contradicted but some are not matched;
 // red when a matched well is not honoured. Counts every well.
 function verdictOf(C){const N=C.length,mt=C.filter(c=>c.b>=0||!!c.pair||!!c.ft),k=mt.filter(c=>c.honoured).length,un=N-mt.length,bad=mt.length-k;
@@ -2807,7 +2843,8 @@ function hatch(c,a,b){const key=a+b;if(!PAT.has(key)){const p=document.createEle
 // fine grid hatch: no deposit / bypass (areas without record)
 function gridPat(c,bg){const key='grid'+bg;if(!PAT.has(key)){const p=document.createElement('canvas');p.width=p.height=5;const g=p.getContext('2d');g.fillStyle=bg;g.fillRect(0,0,5,5);g.fillStyle='rgba(70,70,66,.55)';g.fillRect(0,0,5,.7);g.fillRect(0,0,.7,5);PAT.set(key,p)}return c.createPattern(PAT.get(key),'repeat')}
 // EOD domain fill: colour (lightened on the facies map, less with the marine palette), grid hatch (bypass), stipple (sand-rich alluvial fans)
-const domCol=(d,lv)=>lv==='facies'?lighten(d.color||'#cccccc',S.M.eod&&S.M.eod.palette==='marine'?.16:.42):(d.color||'#cccccc');
+function svOn(){return!!(S.M&&S.M.facies&&S.M.facies.sandView)}
+const domCol=(d,lv)=>lv==='facies'&&svOn()?'#dedcd6':lv==='facies'?lighten(d.color||'#cccccc',S.M.eod&&S.M.eod.palette==='marine'?.16:.42):(d.color||'#cccccc');
 function domFill(c,d,lv){const col=domCol(d,lv);return d.pat==='grid'?gridPat(c,col):d.pat==='stipple'?fpat(c,'stipple',col,'#7a3d12'):col}
 const curve=pts=>{const c=GDE.curve(pts),o=[];for(let i=0;i<c.length;i+=2)o.push([c[i],c[i+1]]);return o};
 function backdrop(c,L){const l=(S.M.layers||[]).find(q=>q.id===S.bd);if(!l)return 0;
@@ -2942,7 +2979,7 @@ function render(c,W,H,P,opt={}){const L=layout(W,H,{view:opt.view}),e=S.M.ext,mo
     for(const s of [tpl,(M.geom==='lines'?'key lines':M.geom==='radial'?`radial, fan ${fmtN(M.fan)}°`:'linear')+`, seed ${M.noise.seed}`])for(const t of wrapText(c,s,lw))if(ly<H-14){c.fillText(t,lx,ly);ly+=14}}}
 // legend of the EOD and facies maps: the domains present, then the facies objects present
 function atlasLegend(c,lx,ly,lw,lv,PE){const cl=GDE.eodClasses(S.M),used=[...new Set(PE.map(p=>p.code-1))].sort((a,b)=>a-b),mar=S.M.eod&&S.M.eod.palette==='marine',T=new Proxy(GDE.FTYPE,{get:(o,ty)=>mar&&FMAR[ty]?Object.assign({},o[ty],{color:FMAR[ty][0],edge:FMAR[ty][1]}):o[ty]}),O=((S.mod&&S.mod.facies)||[]).filter(o=>lv==='facies'||o.type==='arrow');
-  const hasP=O.some(o=>o.type==='arrow'&&PROC[o.proc]),types=GDE.FKEYS.filter(k=>O.some(o=>o.type===k)&&!(k==='arrow'&&hasP)),DK=detailList(lv),n=used.length+types.length+(DK.length?DK.length+1:0)+(types.length?1:0)+(hasP?7:0),rh=Math.max(13,Math.min(19,(L0H-ly-150)/Math.max(1,n))),fs=rh<17?11:12;
+  const hasP=O.some(o=>o.type==='arrow'&&PROC[o.proc]),types=GDE.FKEYS.filter(k=>O.some(o=>o.type===k)&&!(k==='arrow'&&hasP)&&!(svOn()&&lv==='facies'&&k!=='arrow')),DK=detailList(lv),n=used.length+types.length+(DK.length?DK.length+1:0)+(types.length?1:0)+(hasP?7:0),rh=Math.max(13,Math.min(19,(L0H-ly-150)/Math.max(1,n))),fs=rh<17?11:12;
   const row=(draw,txt,col)=>{draw();c.fillStyle=col||'#232220';c.font=fs+'px Inter,system-ui,sans-serif';const ws=wrapText(c,txt,lw-26);ws.forEach((t,i)=>c.fillText(t,lx+24,ly+i*(fs+2)));ly+=rh+(ws.length-1)*(fs+2)};
   for(const i of used){const d=cl[i];row(()=>{c.fillStyle=domFill(c,d,lv);c.fillRect(lx,ly,18,13);c.strokeStyle='rgba(35,34,32,.6)';c.lineWidth=1;c.strokeRect(lx+.5,ly+.5,17,12)},d.name)}
   if(types.length){c.fillStyle='#5c5a52';c.font=`600 ${fs-1}px Inter,system-ui,sans-serif`;c.fillText('FACIES OBJECTS',lx,ly+3);ly+=rh-2}
@@ -2961,13 +2998,14 @@ const GRCOL={gravel:'#8d6e3f',sand:'#d9b44a',silt:'#a9a59a',clay:'#6f7f90'};
 function arrowGlyph(c,x,y,proc){const pc=PROC[proc];c.save();c.fillStyle=pc[1];c.strokeStyle='#232220';c.lineWidth=1.1;if(proc==='settle')c.setLineDash([2,2]);
   c.beginPath();c.moveTo(x,y+5);c.lineTo(x+10,y+5);c.lineTo(x+10,y+1);c.lineTo(x+18,y+7);c.lineTo(x+10,y+13);c.lineTo(x+10,y+9);c.lineTo(x,y+9);c.closePath();c.fill();c.stroke();c.restore()}
 // key of the form details (parts and typed lines of the composite objects) present on the facies map
-function detailList(lv){const O=((S.mod&&S.mod.facies)||[]).filter(o=>lv==='facies'&&o.type!=='arrow'),pk=[],lk=[];
+function detailList(lv){if(svOn()&&lv==='facies')return GDE.SAND.map(q=>({t:'sand',q})).concat([{t:'sand',q:{name:'Substrate, not represented',color:'#dedcd6'}}]);const O=((S.mod&&S.mod.facies)||[]).filter(o=>lv==='facies'&&o.type!=='arrow'),pk=[],lk=[];
   for(const o of O){for(const q of o.g.parts||[])if(!pk.includes(q.kind))pk.push(q.kind);for(const l of o.g.lines||[])if(GDE.LKINDS[l.kind]&&l.kind!=='canyon'&&!lk.includes(l.kind))lk.push(l.kind)}
   return pk.map(k=>({t:'part',k})).concat(lk.map(k=>({t:'line',k})))}
 function detailKey(c,lx,ly,lw,rh,fs,DK){if(!DK.length)return ly;
-  c.fillStyle='#5c5a52';c.font=`600 ${fs-1}px Inter,system-ui,sans-serif`;c.textAlign='left';c.fillText('FORM DETAILS',lx,ly+3);ly+=rh-2;
+  c.fillStyle='#5c5a52';c.font=`600 ${fs-1}px Inter,system-ui,sans-serif`;c.textAlign='left';c.fillText(DK[0].t==='sand'?'SAND CONTENT (QUALITATIVE)':'FORM DETAILS',lx,ly+3);ly+=rh-2;
   for(const d of DK){c.save();let nm;
-    if(d.t==='part'){const q=GDE.PARTS[d.k];nm=q[0];c.fillStyle=q[1];c.strokeStyle=q[2];c.lineWidth=.9;c.beginPath();c.ellipse(lx+9,ly+6.5,8,5,0,0,7);c.fill();c.stroke()}
+    if(d.t==='sand'){nm=d.q.name;c.fillStyle=d.q.color;c.strokeStyle='rgba(35,34,32,.6)';c.lineWidth=1;c.fillRect(lx,ly,18,13);c.strokeRect(lx+.5,ly+.5,17,12)}
+    else if(d.t==='part'){const q=GDE.PARTS[d.k];nm=q[0];c.fillStyle=q[1];c.strokeStyle=q[2];c.lineWidth=.9;c.beginPath();c.ellipse(lx+9,ly+6.5,8,5,0,0,7);c.fill();c.stroke()}
     else{const kd=GDE.LKINDS[d.k];nm=kd.name;c.beginPath();c.moveTo(lx,ly+10);c.bezierCurveTo(lx+6,ly,lx+12,ly+13,lx+18,ly+3);
       if(kd.dash){c.setLineDash(kd.dash.map(v=>v*.6));c.strokeStyle=kd.edge;c.lineWidth=kd.lw||1.5;c.stroke()}else if(kd.casing){c.strokeStyle=kd.edge;c.lineWidth=3.6;c.stroke();c.strokeStyle=kd.color;c.lineWidth=2;c.stroke()}else{c.strokeStyle=kd.edge;c.lineWidth=kd.lw||1;c.stroke()}}
     c.restore();c.fillStyle='#232220';c.font=fs+'px Inter,system-ui,sans-serif';c.textAlign='left';c.fillText(nm,lx+24,ly);ly+=rh}
@@ -3244,7 +3282,7 @@ function fpat(c,kind,col,edge){const key=kind+col+edge;if(!FPAT.has(key)){const 
       for(const [x,y,s] of [[2,3,1.1],[9,1,.9],[13,6,1.2],[6,8,1],[1,12,.9],[11,13,1.1],[15,11,.8],[5,14,.8],[8,4,.7]]){g.beginPath();g.arc(x,y,s,0,7);g.fill()}}
     FPAT.set(key,p)}return c.createPattern(FPAT.get(key),'repeat')}
 function fobjAnchor(o){const g=o.g;if((o.type==='ribbon'||o.type==='contourite')&&o.path)return o.path[Math.floor(o.path.length/2)];if(o.type==='arrow'){const a=o.az*Math.PI/180;return[o.x+Math.sin(a)*.5*o.L,o.y+Math.cos(a)*.5*o.L]}if(o.ring&&g.ring){let x=0,y=0;for(const q of g.ring){x+=q[0];y+=q[1]}return[x/g.ring.length,y/g.ring.length]}if(o.type==='fairway'||o.type==='river'){const P=o.type==='river'?(g.lines[0]||{pts:o.path}).pts:o.path;return P[Math.floor(P.length*(o.type==='river'?.45:.5))]}
-  if(o.type==='lobe'||o.type==='fan'||o.type==='afan'||o.type==='mtc'){const a=o.az*Math.PI/180;return[o.x+Math.sin(a)*.5*o.L,o.y+Math.cos(a)*.5*o.L]}return[o.x,o.y]}
+  if(o.type==='lobe'||o.type==='fan'||o.type==='afan'||o.type==='mtc'||o.type==='sfan'){const a=o.az*Math.PI/180;return[o.x+Math.sin(a)*.5*o.L,o.y+Math.cos(a)*.5*o.L]}return[o.x,o.y]}
 // facies objects over the lightened EOD map; labels once per type (and each canyon)
 // marine palette: stronger colours for the objects drawn on dark blues
 const FMAR={carbmud:['#6d70b8','#2e2f63'],lobe:['#f4c430','#5c4510'],fan:['#f0b938','#5c4510'],fairway:['#f0b938','#4a3c10'],ribbon:['#f7e46a','#7a6a10']};
@@ -3253,17 +3291,20 @@ function drawFacies(c,L,opt,only){const O=(S.mod&&S.mod.facies)||[],T0=GDE.FTYPE
   const ring=r=>{const p=new Path2D();r.forEach((q,i)=>i?p.lineTo(L.X(q[0]),L.Y(q[1])):p.moveTo(L.X(q[0]),L.Y(q[1])));p.closePath();return p};
   const pl=pts=>{c.beginPath();pts.forEach((q,i)=>i?c.lineTo(L.X(q[0]),L.Y(q[1])):c.moveTo(L.X(q[0]),L.Y(q[1])))};
   c.lineJoin='round';c.lineCap='round';
-  const drawParts=(g,z)=>{for(const q of g.parts||[]){if((q.z|0)!==z)continue;const d=GDE.PARTS[q.kind];if(!d)continue;const r=ring(q.ring);c.fillStyle=d[1];c.fill(r);c.strokeStyle=d[2];c.lineWidth=.7;c.stroke(r)}};
+  const SV=svOn(),sandCol=v=>{const q=GDE.sandClass(v);return q&&q.color},svDrawn=(ty,g)=>ty==='arrow'||ty==='sfan'||GDE.SANDT[ty]!=null||(g.parts||[]).some(q=>GDE.PARTS[q.kind]&&GDE.PARTS[q.kind][3]!=null),
+    svT=(ty,t)=>SV&&GDE.SANDT[ty]!=null?Object.assign({},t,{color:sandCol(GDE.SANDT[ty]),edge:'rgba(40,40,40,.6)',pat:null}):t;
+  const drawParts=(g,z)=>{for(const q of g.parts||[]){if((q.z|0)!==z)continue;const d=GDE.PARTS[q.kind];if(!d)continue;let fill=d[1],edge=d[2];if(SV){if(d[3]==null)continue;fill=sandCol(d[3]);edge='rgba(40,40,40,.55)'}const r=ring(q.ring);c.fillStyle=fill;c.fill(r);c.strokeStyle=edge;c.lineWidth=.7;c.stroke(r)}};
   const drawLine=(l,ty,t)=>{const kd=GDE.LKINDS[l.kind],w=Math.max(1.1,Math.min(6,l.w*k));
+    if(SV&&kd&&kd.sand&&kd.casing){pl(l.pts);c.strokeStyle='#7a4a10';c.lineWidth=w+1.5;c.stroke();pl(l.pts);c.strokeStyle=sandCol(1);c.lineWidth=w;c.stroke();return}
     if(kd){pl(l.pts);if(kd.dash){c.save();c.setLineDash(kd.dash);c.strokeStyle=kd.edge;c.lineWidth=kd.lw||1.5;c.stroke();c.restore();return}
       if(kd.casing){c.strokeStyle=kd.edge;c.lineWidth=w+1.5;c.stroke();pl(l.pts);c.strokeStyle=kd.color;c.lineWidth=w;c.stroke();return}c.strokeStyle=kd.edge;c.lineWidth=kd.lw||1;c.stroke();return}
     pl(l.pts);c.strokeStyle=t.edge;c.lineWidth=ty==='fan'?.6:.85;c.stroke()};
   const compose=(g,t,ty)=>{drawParts(g,0);
     if(g.rings&&g.rings.length)for(const r of g.rings){const p=ring(r);c.fillStyle=t.color;c.fill(p);c.strokeStyle=t.edge;c.lineWidth=.9;c.stroke(p)}
-    if(g.ring){const p=ring(g.ring);if(ty==='sfan'){c.fillStyle='rgba(240,213,76,.16)';c.fill(p);c.strokeStyle='rgba(74,64,18,.4)';c.lineWidth=.7;c.stroke(p)}
+    if(g.ring){const p=ring(g.ring);if(ty==='sfan'){if(!SV){c.fillStyle='rgba(240,213,76,.16)';c.fill(p)}c.strokeStyle='rgba(74,64,18,.4)';c.lineWidth=.7;c.stroke(p)}
       else{c.fillStyle=t.pat?fpat(c,t.pat,t.color,t.edge):t.color;c.fill(p);c.strokeStyle=t.edge;c.lineWidth=1.1;c.stroke(p)}}
     drawParts(g,1);for(const l of g.lines)drawLine(l,ty,t)};
-  for(const ty of only||['carbmud','contourite','ponded','platform','rampzone','reefrim','mtc','fairway','fan','sfan','afan','river','lobe','ribbon','arrow'])for(const o of O){if(o.type!==ty)continue;const t=T[ty],g=o.g;
+  for(const ty of only||['carbmud','contourite','ponded','platform','rampzone','reefrim','mtc','fairway','fan','sfan','afan','river','lobe','ribbon','arrow'])for(const o of O){if(o.type!==ty)continue;const g=o.g,t=svT(ty,T[ty]);if(SV&&!svDrawn(ty,g))continue;
     if((g.parts&&g.parts.length)||ty==='sfan')compose(g,t,ty);else if(g.rings&&g.rings.length){for(const r of g.rings){const p=ring(r);c.fillStyle=t.color;c.fill(p);c.strokeStyle=t.edge;c.lineWidth=.7;c.stroke(p)}}
     else if(ty==='arrow'){if(g.ring){const p=ring(g.ring),pc=PROC[o.proc];c.fillStyle=pc&&o.proc!=='settle'?pc[1]:'rgba(255,255,255,.92)';c.globalAlpha=pc&&o.proc!=='settle'?.88:1;c.fill(p);c.globalAlpha=1;c.strokeStyle='#232220';c.lineWidth=1.3;if(o.proc==='settle')c.setLineDash([2.5,2.5]);c.stroke(p);c.setLineDash([])}}
     else
@@ -3282,9 +3323,9 @@ function drawFacies(c,L,opt,only){const O=(S.mod&&S.mod.facies)||[],T0=GDE.FTYPE
   const placed=[],wp=((S.mod&&S.mod.check)||[]).map(w=>[L.X(w.x),L.Y(w.y),c.measureText(w.name).width]);
   const lab=(t,x,y,col)=>{const w=c.measureText(t).width/2+3,free=(X,Y)=>!wp.some(q=>X+w>q[0]-10&&X-w<q[0]+q[2]+30&&Math.abs(Y-q[1]+4)<16)&&!placed.some(q=>Math.abs(X-q[0])<w+q[2]&&Math.abs(Y-q[1])<14);
     for(const [dx,dy] of [[0,0],[0,16],[0,-16],[0,30],[0,-30],[w+12,0],[-w-12,0],[0,44]])if(free(x+dx,y+dy)){placed.push([x+dx,y+dy,w]);halo(c,t,x+dx,y+dy,col);return}placed.push([x,y,w]);halo(c,t,x,y,col)};
-  const PL={lobe:'Deltaic lobes',river:'Fluvial channels',fairway:'Turbidite fairways',fan:'Basin-floor fans',platform:'Carbonate platform',mtc:'MTC',ponded:'Ponded area',afan:'Sand-rich alluvial fans',ribbon:'Sand ribbons',contourite:'Contourite drift',carbmud:'Carbonate mudstone'};
+  const PL={lobe:'Deltaic lobes',river:'Fluvial channels',fairway:'Turbidite fairways',fan:'Basin-floor fans',platform:'Carbonate platform',mtc:'MTC',ponded:'Ponded area',afan:'Sand-rich alluvial fans',ribbon:'Sand ribbons',contourite:'Contourite drift',carbmud:'Carbonate mudstone',sfan:'Submarine fan'};
   const size=o=>o.g.ring?Math.abs(GDE.sArea(o.g.ring)):(o.path?o.path.length:1);
-  for(const ty of GDE.FKEYS){const os=O.filter(o=>o.type===ty);if(!os.length||ty==='arrow')continue;const big=os.reduce((a,b)=>size(b)>size(a)?b:a),a=fobjAnchor(big),nm=os.length>1||ty==='platform'?PL[ty]:T[ty].name;
+  for(const ty of GDE.FKEYS){const os=O.filter(o=>o.type===ty);if(!os.length||ty==='arrow'||(SV&&os.every(o=>!svDrawn(ty,o.g))))continue;const big=os.reduce((a,b)=>size(b)>size(a)?b:a),a=fobjAnchor(big),nm=os.length>1||ty==='platform'?PL[ty]:T[ty].name;
     if(ty==='platform'||ty==='mtc'||ty==='ponded'){for(const o of os){const q=fobjAnchor(o);lab(ty==='platform'?'Carbonate platform':PL[ty],L.X(q[0]),L.Y(q[1]),'#1f2f55')}continue}
     lab(nm,L.X(a[0]),L.Y(a[1])+(ty==='river'?0:-2),'#1f2f55')}
   for(const o of O)if(o.type==='fairway'){const cl=o.g.lines.find(l=>l.kind==='canyon');if(cl){const q=cl.pts[Math.floor(cl.pts.length/2)],r=cl.pts[Math.min(cl.pts.length-1,Math.floor(cl.pts.length/2)+2)];
@@ -3309,7 +3350,7 @@ function fedit(id){const F=S.M.facies;F.edits=F.edits||{};return F.edits[id]||(F
 function fobj(id){return((S.mod&&S.mod.facies)||[]).find(o=>o.id===id)}
 function renderEod(){const M=S.M;if(!M)return;$('tbPal').value=(M.eod&&M.eod.palette)||'atlas';const F=M.facies||(M.facies=GDE.faciesDefaults()),E=M.eod||{};
   $('eTitle').value=E.title||'';$('eAbyss').value=E.abyss||0;$('fOn').checked=F.on!==false;
-  for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd']])$(id).value=(F.n||{})[k]??0;$('fChan').value=F.chan||5;$('fReg').value=F.regime||'auto';$('fArr').checked=!!F.arrows;$('fSeed').value=F.seed||1;
+  for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd'],['fSfan','sfan']])$(id).value=(F.n||{})[k]??0;$('fChan').value=F.chan||5;$('fReg').value=F.regime||'auto';$('fSand').checked=!!F.sandView;$('fArr').checked=!!F.arrows;$('fSeed').value=F.seed||1;
   const AB=GDE.allBelts(M),em=GDE.eodMap(M),cl=GDE.eodClasses(M),used=new Set(em);
   $('eodList').innerHTML=cl.map((d,i)=>`<div class="br" data-k="${d.key}"><input type="color" value="${d.color}" aria-label="Colour of ${esc(d.name)}"><input type="text" value="${esc(d.name)}" aria-label="EOD domain name" style="flex:1"${used.has(i)?'':' class="unused"'}></div>`).join('')
     +'<div class="note">Class → domain</div>'+AB.map((c,i)=>`<div class="pg" style="margin:2px 0"><span title="${esc(c.name)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span><select data-c="${esc(c.name)}">${cl.map((d,j)=>`<option value="${d.key}"${em[i]===j?' selected':''}>${esc(d.name)}</option>`).join('')}</select></div>`).join('');
@@ -3328,8 +3369,9 @@ function renderEod(){const M=S.M;if(!M)return;$('tbPal').value=(M.eod&&M.eod.pal
 on('eTitle','change',()=>{S.M.eod=S.M.eod||{};S.M.eod.title=$('eTitle').value.trim();draw()});
 on('eAbyss','change',()=>{const v=numv('eAbyss');if(v>=0){S.M.eod=S.M.eod||{};S.M.eod.abyss=v;schedule()}});
 on('fOn','change',()=>{S.M.facies.on=$('fOn').checked;rematch();renderWells();schedule()});
-for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd']])on(id,'change',()=>{const v=Math.round(numv(id));if(v>=0&&v<=40){S.M.facies.n=Object.assign({},S.M.facies.n,{[k]:v});schedule()}});
+for(const [id,k] of [['fPlat','platform'],['fMtc','mtc'],['fFans','fans'],['fPond','ponded'],['fRib','ribbon'],['fCtr','contourite'],['fCm','carbmud'],['fFd','fd'],['fSfan','sfan']])on(id,'change',()=>{const v=Math.round(numv(id));if(v>=0&&v<=40){S.M.facies.n=Object.assign({},S.M.facies.n,{[k]:v});schedule()}});
 on('fReg','change',()=>{S.M.facies.regime=$('fReg').value;schedule()});
+on('fSand','change',()=>{S.M.facies.sandView=$('fSand').checked;schedule()});
 on('fArr','change',()=>{S.M.facies.arrows=$('fArr').checked;schedule()});
 on('fChan','change',()=>{const v=Math.round(numv('fChan'));if(v>=1&&v<=16){S.M.facies.chan=v;schedule()}});
 on('fSeed','change',()=>{const v=Math.round(numv('fSeed'));if(isFinite(v)){S.M.facies.seed=v;schedule()}});
@@ -3338,6 +3380,7 @@ on('fReset','click',()=>{S.M.facies.edits={};S.M.facies.extra=[];S.sel=null;sche
 // a facies object added by hand where the user clicks (Object tool, facies map)
 function addFobj(type,x,y){const d=diag(),az=+S.M.az||180,a=az*Math.PI/180,o={type,x:Math.round(x),y:Math.round(y),seed:1+Math.floor(Math.random()*99999)};
   if(type==='lobe'||type==='fan')Object.assign(o,{az,L:Math.round(d*(type==='lobe'?.09:.07)),open:70});
+  else if(type==='sfan')Object.assign(o,{az,L:Math.round(d*.2),open:50});
   else if(type==='platform'||type==='ponded'||type==='carbmud')Object.assign(o,{a:Math.round(d*(type==='platform'?.03:.02)),e:.6,rot:0});
   else if(type==='afan')Object.assign(o,{az,L:Math.round(d*.04),open:110,m:3});else if(type==='arrow')Object.assign(o,{az,L:Math.round(d*.07)});
   else if(type==='ribbon'||type==='contourite'){const P=[];for(let i=0;i<=8;i++){const q=(i/8-.5)*d*(type==='ribbon'?.2:.28);P.push([Math.round(x+Math.cos(a)*q),Math.round(y-Math.sin(a)*q)])}Object.assign(o,type==='ribbon'?{path:P,w:Math.round(d*.007)}:{path:P,W:Math.round(d*.06),n:6})}
@@ -3397,7 +3440,7 @@ window.GDEUI={S,compute,render,loadExample,loadModel,applyTable,fullPolys,grid,h
 (()=>{const h=location.hash.slice(1).split('&'),k=h[0],o=Object.fromEntries(h.slice(1).map(s=>s.split('=')));
   if(GDE.examples[k]){if(o.view)S.hashView=o.view;loadExample(k);S.hashView=null;if(Object.keys(o).every(q=>q==='view'))return}else if(k==='blank')$('iBlank').click();else return;if(o.view){setLevel(o.view,true)}
   if(o.bd!=null)S.bd=o.bd||null;if(o.op)S.bdOp=+o.op;if(o.zoom)S.view.z=+o.zoom;if(o.sel){const [a,b]=o.sel.split(':');S.sel={kind:a,i:+b}}if(o.layer)S.layerOpen=o.layer;
-  if(o.tool)setTool(o.tool);renderLayers();renderConcept();compute(false);
+  if(o.tool)setTool(o.tool);if(o.sand&&S.M.facies)S.M.facies.sandView=true;renderLayers();renderConcept();compute(false);
   // &bench=n: n preview (editing) computations, timings in document.body.dataset.perf
   for(let i=0;i<(+o.bench||0);i++)compute(true)})();
 

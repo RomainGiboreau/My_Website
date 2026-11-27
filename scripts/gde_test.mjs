@@ -1269,6 +1269,40 @@ test('delta forms: generating the shape is fast (< 40 ms each), exports carry th
   const ex = G.examples.deltatide, mod = G.build(ex.M, ex.wells), F = G.faciesFeatures(mod);
   assert.ok(F.polys.some(p => /funnel/.test(p.id)) && F.polys.some(p => /tbar/.test(p.id)));
 });
+// ---------- detailed submarine fan and sand-content view ----------
+test('submarine fan (detailed): canyon, sinuous leveed channel with overbank fines, transition, distributaries, lobes with sand axis and fringes, abandoned channel', () => {
+  const o = { id: 's', type: 'sfan', x: 25000, y: 39000, az: 180, L: 30000, open: 50, seed: 3 }, g = G.faciesShape(o), k = g.parts.map(p => p.kind), L = g.lines.map(l => l.kind);
+  assert.ok(g.ring && g.ring.length > 10 && L.includes('canyon') && L.includes('abandoned'));
+  const ch = g.lines.find(l => l.kind === 'schan').pts, len = ch.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - ch[i][0], p[1] - ch[i][1]), 0), chord = Math.hypot(ch.at(-1)[0] - ch[0][0], ch.at(-1)[1] - ch[0][1]);
+  assert.ok(len / chord > 1.05, 'sinuous channel ' + len / chord);
+  const nd = L.filter(x => x === 'dist').length;
+  assert.ok(nd >= 2 && k.filter(x => x === 'lobe').length === nd && L.filter(x => x === 'sandaxis').length === nd, 'one lobe and one sand axis per distributary');
+  assert.ok(k.includes('levee') && k.includes('overbank') && k.includes('cltrans') && k.filter(x => x === 'fringe').length >= nd);
+  assert.equal(G.faciesShape(Object.assign({}, o, { ab: 0 })).lines.some(l => l.kind === 'abandoned'), false);
+  // the lobes lie beyond the channel (down the fan axis, az 180 = towards decreasing y)
+  const lobeY = g.parts.filter(p => p.kind === 'lobe').map(p => p.ring.reduce((s, q) => s + q[1], 0) / p.ring.length), endY = ch.at(-1)[1];
+  assert.ok(lobeY.every(y => y < endY));
+  const t0 = performance.now(); for (let i = 0; i < 5; i++) G.faciesShape(Object.assign({}, o, { seed: i })); assert.ok((performance.now() - t0) / 5 < 40);
+});
+test('sand content view: low / intermediate / high classes (blue, pale yellow, orange); unknown = not represented; parts rank overbank < levee < channel-lobe < sand lobe', () => {
+  assert.deepEqual([.05, .45, .9].map(v => G.sandClass(v).k), ['low', 'mid', 'high']);
+  assert.equal(G.sandClass(null), null); assert.equal(G.sandClass(undefined), null);
+  assert.deepEqual(G.SAND.map(q => q.color), ['#5b8fd0', '#f3e9a0', '#e8892a']);
+  const P = G.PARTS; assert.ok(P.overbank[3] < P.levee[3] && P.levee[3] < P.cltrans[3] && P.cltrans[3] <= P.lobe[3]);
+  for (const k of ['reef', 'sandbank', 'tongue', 'oobank', 'storm', 'shelter']) assert.equal(P[k][3], null, k + ' is carbonate: not represented');
+  assert.equal(G.normFacies({ sandView: true }).sandView, true); assert.equal(G.normFacies({}).sandView, undefined);
+  const M = G.makeModel('fan', {}); M.facies.sandView = true; assert.equal(G.openModel(G.saveModel(M, [])).M.facies.sandView, true);
+});
+test('detailed fan: example builds and honours its wells; with the option on, a margin gets one detailed fan per canyon-fed feeder instead of the fairway and fan', () => {
+  const ex = G.examples.subfan, mod = G.build(ex.M, ex.wells);
+  assert.ok(mod.facies.some(o => o.type === 'sfan') && !mod.facies.some(o => o.type === 'fan') && mod.check.every(c => c.honoured));
+  assert.ok(G.EXGROUPS.some(g => g[1].includes('subfan')) && G.EXNAMES.subfan);
+  const m = G.examples.margin.M, a = G.build(m, []).facies, nf = a.filter(o => o.type === 'fairway').length;
+  assert.ok(nf >= 1 && !a.some(o => o.type === 'sfan'));
+  const m2 = JSON.parse(JSON.stringify(m)); m2.facies.n.sfan = 1; const b = G.build(m2, []).facies;
+  assert.equal(b.filter(o => o.type === 'sfan').length, nf);
+  assert.ok(!b.some(o => /^fairway\d/.test(o.id)) && !b.some(o => /^fan\d/.test(o.id)));
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
