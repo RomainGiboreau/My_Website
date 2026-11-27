@@ -7,6 +7,12 @@ import { makeGrid, signedDist } from '../gde3/src/geometry.mjs';
 import { mulberry32 } from '../gde3/src/rng.mjs';
 import { banner } from '../gde3/src/verdict.mjs';
 import { inRing, featureDefs } from '../gde3/src/features.mjs';
+import { parseWells, fitExtent } from '../gde3/src/wells.mjs';
+import { polygonize, ringArea, geojson, irapPolygons, zmap, nodeGrid, wellsCsv, auditJson } from '../gde3/src/exports.mjs';
+import { chainOf, present } from '../gde3/src/render.mjs';
+import { buildPage, bundle } from './build_gde3.mjs';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { SETS, EXT, setOpts, setWells } from '../gde3/tools/acceptance.mjs';
 
 const tests = [];
@@ -253,6 +259,50 @@ test('features: stability not degraded (same bounds with the features on): 1-5 %
   assert.ok(jump <= BOUNDS.onset, 'onset ' + jump);
 });
 
+// ---------- wells table, exports, chain ----------
+test('wells table: tab / semicolon / comma / space separated, header and bad lines skipped, environment with a slash', () => {
+  const r = parseWells(['name;x;y;env', 'W1, 1000, 2000.5, Coastal plain', 'W2\t3000\t4000\tPlatform margin (reef / shoal)', 'W3 5000 6000 delta front', 'nonsense line', 'W4; 7000,5; 8000; shelf'].join('\n'));
+  assert.deepEqual(r.wells.map(w => [w.name, w.x, w.y, w.env]), [['W1', 1000, 2000.5, 'Coastal plain'], ['W2', 3000, 4000, 'Platform margin (reef / shoal)'], ['W3', 5000, 6000, 'delta front'], ['W4', 7000.5, 8000, 'shelf']]);
+  assert.deepEqual(r.skipped, [5]);
+  const e = fitExtent(r.wells); assert.ok(e.xmin < 1000 && e.xmax > 7000 && e.xmax - e.xmin === e.ymax - e.ymin);
+  assert.equal(fitExtent([]), null);
+});
+test('polygons: belt polygons reproduce the class areas (holes included), frame corners stay square; writers are well formed', () => {
+  const S = SETS.B, m = buildModel({ ...setOpts(S), wells: setWells(S) }), g = makeGrid(EXT, 100), c = m.classGrid(g), P = polygonize(c, g).map(p => ({ ...p, code: p.code + 1, name: m.rs.belts[p.code].name }));
+  const cnt = new Map(), ar = new Map();
+  for (const v of c) cnt.set(v, (cnt.get(v) || 0) + 1);
+  for (const p of P) ar.set(p.code - 1, (ar.get(p.code - 1) || 0) + ringArea(p.outer) + p.holes.reduce((a, h) => a + ringArea(h), 0));
+  for (const [k, n] of cnt) { const r = ar.get(k) / (g.dx * g.dy * n); assert.ok(r > 0.97 && r < 1.03, 'class ' + k + ' area ratio ' + r); }
+  const ir = irapPolygons(P).trim().split('\n'); assert.ok(ir.filter(l => l.startsWith('999.000000')).length >= P.length);
+  const gj = JSON.parse(geojson(P, { features: m.features(), lines: m.keyLines })); assert.equal(gj.features.length, P.length + m.features().length + m.keyLines.length);
+  const G = nodeGrid(m.classAt, EXT, 5000, m.rs.belts.map((b, i) => [i + 1, b.name]), 'T'), z = zmap(G).split('\r\n');
+  assert.ok(z.some(l => l === '@T, GRID, 5') && z.some(l => l.startsWith('21, 21, 0, 100000, 0, 100000')) && z.filter(l => l.startsWith('! ')).length === 7);
+  assert.equal(z.slice(z.lastIndexOf('@') + 1).join(' ').trim().split(/\s+/).length, 21 * 21);
+  const csv = wellsCsv(m).trim().split('\n'); assert.equal(csv.length, 6); assert.ok(csv[1].endsWith(',yes,belts'));
+  const au = JSON.parse(auditJson(m, { system: 'delta' })); assert.equal(au.wells.length, 5); assert.equal(au.thresholds.calibrated.length, 5);
+});
+test('chain strip: every belt in system order, absent belts flagged missing, process per link', () => {
+  const m = buildModel({ system: 'shoreface', km: 60, ext: EXT, az: 0, wells: [] }), g = makeGrid(EXT, 60), ch = chainOf(m, present(m.classGrid(g)));
+  assert.deepEqual(ch.links.map(l => l.name), m.rs.belts.map(b => b.name));
+  const E2 = { xmin: 0, xmax: 20000, ymin: 0, ymax: 20000 }, small = buildModel({ system: 'shoreface', km: 300, ext: E2, az: 0, wells: [] }), c2 = chainOf(small, present(small.classGrid(makeGrid(E2, 40))));
+  assert.ok(c2.links.some(l => l.missing) && c2.links.some(l => !l.missing) && ch.links.every(l => l.process));
+});
+
+// ---------- built page ----------
+const ROOT = new URL('..', import.meta.url);
+test('build: docs/gdemap3/index.html is up to date, its scripts parse, the bundled core gives the same map as the sources', async () => {
+  const page = await buildPage(), cur = readFileSync(new URL('docs/gdemap3/index.html', ROOT), 'utf8').replace(/\r\n/g, '\n');
+  assert.ok(cur === page, 'docs/gdemap3/index.html is out of date: run node scripts/build_gde3.mjs');
+  const js = id => { const k = '<script id="' + id + '">', i = page.indexOf(k) + k.length; return page.slice(i, page.indexOf('</script>', i)); };
+  new Function(js('gde3-core')); new Function(js('rgm-js'));
+  assert.ok(page.includes("['GDE map generator (new)','gdemap3']"), 'Tools menu entry');
+  const sb = { console }; sb.globalThis = sb; vm.runInNewContext(js('gde3-core'), sb);   // no document: the UI is not started
+  const S = SETS.B, o = { ...setOpts(S), wells: setWells(S) }, a = buildModel(o), b = sb.GDE3.buildModel(o);
+  assert.deepEqual(Array.from(b.classGrid(SGRID)), Array.from(a.classGrid(SGRID)));
+  assert.equal(JSON.stringify(b.features()), JSON.stringify(a.features()));
+  assert.ok(typeof bundle === 'function');
+});
+
 // ---------- (4) reproducibility ----------
 test('reproducible: same input + seed = same map and verdicts; another seed = another shoreline', () => {
   const S = SETS.B, o = { ...setOpts(S), wells: setWells(S), warp: { radius: 9000, maxAmp: 4000 } };
@@ -264,7 +314,7 @@ test('reproducible: same input + seed = same map and verdicts; another seed = an
 
 let fail = 0;
 for (const [name, fn] of tests) {
-  try { fn(); console.log('ok   ' + name); } catch (e) { fail++; console.log('FAIL ' + name + '\n' + String(e.stack || e).split('\n').slice(0, 6).join('\n')); }
+  try { await fn(); console.log('ok   ' + name); } catch (e) { fail++; console.log('FAIL ' + name + '\n' + String(e.stack || e).split('\n').slice(0, 6).join('\n')); }
 }
 console.log(fail ? `${fail} failed` : `${tests.length} tests passed`);
 process.exit(fail ? 1 : 0);

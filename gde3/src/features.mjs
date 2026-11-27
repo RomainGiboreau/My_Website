@@ -105,11 +105,22 @@ export const inRing = (ring, x, y) => {
   return c;
 };
 
+// the point of the line at strike coordinate s (perpendicular to the transport azimuth through the extent centre) where the field d equals dT, or null
+export function locateAtD(D, ext, az, s, dT) {
+  const a = (az * Math.PI) / 180, ux = Math.sin(a), uy = Math.cos(a), ex = -uy, ey = ux, cx = (ext.xmin + ext.xmax) / 2, cy = (ext.ymin + ext.ymax) / 2, diag = Math.hypot(ext.xmax - ext.xmin, ext.ymax - ext.ymin);
+  const at = q => [cx + ex * s + ux * q, cy + ey * s + uy * q];
+  let qa = -diag, qb = diag;
+  if (!(D(...at(qa)) < dT && D(...at(qb)) > dT)) return null;
+  for (let q = 0; q < 40; q++) { const mid = (qa + qb) / 2; if (D(...at(mid)) < dT) qa = mid; else qb = mid; }
+  return at((qa + qb) / 2);
+}
+export const dipDirection = (D, x, y, h) => dipAt(D, x, y, h).slice(0, 2);
+
 // m: model { rs, t, D, classAt }; opts { ext, az, seed }. Returns [{ id, name, color, role, host, ring }]
 export function generateFeatures(m, { ext, az = 0, seed = 1 }) {
   const rs = m.rs, defs = featureDefs(rs), S = rs.p[rs.p.length - 1], ids = rs.belts.map(b => b.id), out = [];
-  const a = (az * Math.PI) / 180, ux = Math.sin(a), uy = Math.cos(a), ex = -uy, ey = ux;
-  const cx = (ext.xmin + ext.xmax) / 2, cy = (ext.ymin + ext.ymax) / 2, hw = (Math.abs(ex) * (ext.xmax - ext.xmin) + Math.abs(ey) * (ext.ymax - ext.ymin)) / 2, diag = Math.hypot(ext.xmax - ext.xmin, ext.ymax - ext.ymin);
+  const a = (az * Math.PI) / 180, ex = -Math.cos(a), ey = Math.sin(a);
+  const hw = (Math.abs(ex) * (ext.xmax - ext.xmin) + Math.abs(ey) * (ext.ymax - ext.ymin)) / 2;
   const t = m.t || rs.p;
   defs.forEach((def, di) => {
     const hostIdx = def.host.map(h => ids.indexOf(h)), hs = new Set(hostIdx), a0 = Math.min(...hostIdx), b0 = Math.max(...hostIdx);
@@ -118,12 +129,8 @@ export function generateFeatures(m, { ext, az = 0, seed = 1 }) {
     for (let i = 0; i < def.n; i++) {
       const r = mulberry32(hash(seed, di, i, 7)), nz = valueNoise(hash(seed, di, i), 0.5), noise = (u, v) => nz(u, v);
       const s = (((i + 0.5 + (r() - 0.5) * 0.7) / def.n) * 1.6 - 0.8) * hw, p = def.pos[0] + r() * (def.pos[1] - def.pos[0]), dT = lo + p * (hi - lo);
-      let qa = -diag, qb = diag;
-      const at = q => [cx + ex * s + ux * q, cy + ey * s + uy * q];
-      if (!(m.D(...at(qa)) < dT && m.D(...at(qb)) > dT)) continue;
-      for (let q = 0; q < 40; q++) { const mid = (qa + qb) / 2; if (m.D(...at(mid)) < dT) qa = mid; else qb = mid; }
-      const C = at((qa + qb) / 2);
-      if (!(C[0] > ext.xmin && C[0] < ext.xmax && C[1] > ext.ymin && C[1] < ext.ymax) || !ok(C[0], C[1])) continue;
+      const C = locateAtD(m.D, ext, az, s, dT);
+      if (!C || !(C[0] > ext.xmin && C[0] < ext.xmax && C[1] > ext.ymin && C[1] < ext.ymax) || !ok(C[0], C[1])) continue;
       const [nx, ny] = dipAt(m.D, C[0], C[1], S / 200), theta = def.orientation === 'dip' ? 0 : def.orientation === 'strike' ? Math.PI / 2 : (def.orientation * Math.PI) / 180;
       const dir = rot([nx, ny], theta);
       const push = (role, ring) => out.push({ id: def.id, name: role === 'levee' ? def.name + ' levee' : def.name, color: role === 'levee' ? leveeColor(def) : def.color, role, host: def.host, ring });

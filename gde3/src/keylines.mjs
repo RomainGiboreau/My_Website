@@ -1,5 +1,5 @@
 // Proposed key lines: lines perpendicular to the transport azimuth, spaced like the prior thresholds, with a seeded smooth wobble
-// (and an optional lobe) so the shoreline is not straight. Returns [{ name, k, v, pts }]; every line has its distal side on the right.
+// (and an optional lobe) so the shoreline is not straight. Returns [{ name, k, v, ctrl, pts }]; every line has its distal side on the right.
 import { smooth } from './geometry.mjs';
 import { mulberry32 } from './rng.mjs';
 
@@ -18,6 +18,6 @@ export function proposeKeyLines(rs, ext, { az = 0, seed = 1, wobble = 0.03, lobe
       const o = f * (wobble * diag * (Math.sin(s / (0.35 * diag) * 6.28 + ph[0]) + 0.5 * Math.sin(s / (0.17 * diag) * 6.28 + ph[1])) + lobe * diag * Math.exp(-((s / (0.18 * diag)) ** 2)));
       pts.push([cx + ex * s + ux * (off + o), cy + ey * s + uy * (off + o)]);
     }
-    return { name, k, v: rs.p[k], pts: smooth(pts) };
+    return { name, k, v: rs.p[k], ctrl: pts, pts: smooth(pts) };   // ctrl: the vertices the smooth curve passes through (the draggable ones)
   });
 }

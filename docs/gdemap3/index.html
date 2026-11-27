@@ -1,0 +1,1463 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDE map generator (new)</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/gdemap3/">
+<meta name="description" content="Draw a gross depositional environment (GDE) map from the environments interpreted at a few wells in three steps: wells, one depositional system with three sliders (scale, dominant regime, transport direction), result. Belts calibrated with the minimum change, features (lobes, bars, channels with levees, reefs), source to sink chain, PNG, ZMAP+, GeoJSON and IRAP exports. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+main{min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.panel h2{font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.panel h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem}
+.panel h2 .grow{margin-left:auto}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+select{max-width:100%}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+input[type=range]{accent-color:var(--acc);width:100%}
+.pg{display:grid;grid-template-columns:96px 1fr;gap:5px 8px;align-items:center;font-size:.82rem;margin:8px 0}
+.pg .v{color:var(--mut);font-variant-numeric:tabular-nums;font-size:.78rem}
+.pg .sl{display:flex;flex-direction:column}
+.pg .sl small{color:var(--mut);font-size:.7rem;margin-top:-1px}
+label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem;margin:4px 0}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err,.c{color:var(--acc2)}
+.note{color:var(--mut);font-size:.74rem;line-height:1.4;margin:6px 0 0}
+[hidden]{display:none!important}
+.wl{display:flex;flex-direction:column;gap:3px;margin-top:6px;max-height:230px;overflow:auto}
+.wr{display:grid;grid-template-columns:70px 1fr 26px;gap:3px;align-items:center;font-size:.78rem;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.wr input,.wr select{font-size:.76rem;padding:.12rem .3rem;min-width:0;width:100%}
+.wr button{padding:0 .3rem;font-size:.74rem}
+.edit{border-top:1px dashed var(--line);margin-top:8px;padding-top:6px}
+.xm{position:relative}
+.xmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:6px;width:320px;max-width:92vw}
+.top .bar .xmenu button{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:var(--fg);padding:.28rem .5rem;border-radius:4px;font-size:.82rem}
+.top .bar .xmenu button:hover{background:var(--alt)}
+.xmenu button b{font-weight:600;min-width:7.5em}.xmenu button span{color:var(--mut);font-size:.74rem}
+.xmenu .mh{font:600 .68rem Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:7px 6px 1px}
+.verdict{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:center;background:#fff;border:1px solid var(--line);border-left:8px solid var(--vc,#2e7d32);border-radius:10px;padding:10px 16px;margin-bottom:10px}
+.verdict.warn{--vc:#c2924a}.verdict.bad{--vc:#c62828}.verdict.none{--vc:#8c8a80}
+.verdict .ic{grid-row:1/3;font:700 1.6rem "Space Grotesk",sans-serif;color:var(--vc,#2e7d32);width:32px;text-align:center}
+.verdict h2{font:700 1.15rem/1.25 "Space Grotesk",Inter,sans-serif}
+.verdict .sub{color:var(--mut);font-size:.84rem;grid-column:2}
+.verdict .reminder{grid-column:2;font-size:.78rem;color:var(--mut);font-style:italic}
+.stage{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:clamp(440px,70vh,760px);touch-action:none}
+canvas#cv{position:absolute;inset:0;display:block}
+.ro{position:absolute;right:8px;bottom:8px;background:rgba(245,243,237,.94);border:1px solid var(--line);border-radius:4px;padding:2px 8px;font-size:.76rem;color:var(--mut);z-index:2;font-variant-numeric:tabular-nums}
+.pop{position:absolute;z-index:5;background:var(--card);border:1px solid var(--acc);border-radius:8px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:.8rem;width:230px}
+.pop .row{margin:4px 0}.pop input,.pop select{width:100%}
+.chainw{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}.chainw canvas{display:block;cursor:pointer}
+.tw{margin-top:12px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.tw h3{font:600 .9rem "Space Grotesk",Inter,sans-serif;margin:8px 10px 2px}
+table{border-collapse:collapse;width:100%;font-size:.8rem}
+.tw th,.tw td{padding:4px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tw th{background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+td.l,th.l{text-align:left}
+.yes{color:#2e7d32;font-weight:700}.no{color:#c62828;font-weight:700}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{order:2}}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<div class="top"><h1>GDE map generator (new)</h1>
+ <div class="bar"><span class="xm" id="xm"><button class="pri" id="bExp" aria-haspopup="true" aria-expanded="false" title="Export the map, polygons, grid, lines, wells check or the audit">Export ▾</button>
+  <div class="xmenu" id="xmenu" role="menu" hidden>
+   <button id="bPng" title="The map as drawn with legend, wells, scale bar, coordinates and the source to sink strip (PNG, 2000 px wide)"><b>PNG image</b><span>map, legend, chain strip</span></button>
+   <div class="mh">Polygons <i>(belts and features)</i></div>
+   <button id="bGeo" title="GeoJSON FeatureCollection: belt polygons (with holes), feature polygons, key lines"><b>GeoJSON</b><span>polygons, features, key lines</span></button>
+   <button id="bIrap" title="IRAP Classic lines for Petrel: x y code per vertex, 999 after each closed ring"><b>IRAP lines</b><span>belt polygons, z = belt code</span></button>
+   <div class="mh">Grid</div>
+   <button id="bZmap" title="ZMAP+ grid of belt codes (1 = first belt), legend in ! comment lines"><b>ZMAP+</b><span>belt codes, legend in comments</span></button>
+   <div class="mh">Lines, wells, audit</div>
+   <button id="bLines" title="Key lines as IRAP Classic lines (z = line number)"><b>Key lines</b><span>IRAP lines</span></button>
+   <button id="bWcsv" title="Wells: environment given, class on the map, honoured, how"><b>Wells CSV</b><span>given, on the map, honoured</span></button>
+   <button id="bAudit" title="Inputs, prior and calibrated thresholds, feasible intervals, verdicts, conflicts (JSON)"><b>Audit JSON</b><span>inputs, thresholds, verdicts</span></button>
+  </div></span>
+  <span class="msg" id="exportMsg"></span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel" id="p1"><h2><span class="n">1</span>Wells</h2>
+  <select id="ex" aria-label="Load an example"></select>
+  <textarea id="wTxt" rows="5" aria-label="Wells table" placeholder="name, x, y, environment&#10;W-1, 50000, 15400, Coastal plain" style="margin-top:6px"></textarea>
+  <div class="row"><button class="pri" id="bWApply">Use this table</button><button id="bWAdd" title="Then click on the map where the well is">+ Add on map</button><button id="bWClear">Remove all</button></div>
+  <div class="msg" id="wMsg"></div>
+  <div class="wl" id="wList"></div>
+  <p class="note">x, y in metres (projected). Drag a well on the map to move it; the boundaries follow with the minimum change.</p></section>
+ <section class="panel" id="p2"><h2><span class="n">2</span>System<button class="grow" id="bEdit" aria-expanded="false" aria-controls="editBox">Edit ▾</button></h2>
+  <select id="sSys" aria-label="Depositional system"></select>
+  <div class="note" id="sysNote" style="margin-top:2px"></div>
+  <div class="pg"><span>Scale</span><div class="sl"><input type="range" id="sKm" min="1" max="300" step="1" aria-label="Scale: width of the belts, km"><small id="vKm"></small></div>
+   <span>Dominant regime</span><div class="sl"><input type="range" id="sReg" min="0" max="2" step="1" aria-label="Dominant regime"><small><span id="vReg"></span> <span id="regL"></span></small></div>
+   <span>Transport direction</span><div class="sl"><input type="range" id="sAz" min="0" max="360" step="1" aria-label="Transport azimuth, degrees clockwise from north, towards the distal belts"><small id="vAz"></small></div></div>
+  <div class="edit" id="editBox" hidden>
+   <label class="inl"><input type="checkbox" id="eLines">Show key lines (drag their vertices)</label>
+   <div class="row"><button id="bLReset">Propose the key lines again</button><span class="msg" id="lMsg"></span></div>
+   <label class="inl"><input type="checkbox" id="eFeat">Features (lobes, bars, channels with levees, reefs)</label>
+   <label class="inl"><input type="checkbox" id="eArr">Process arrows</label>
+   <label class="inl"><input type="checkbox" id="eWarp">Local warping for contradictory wells</label>
+   <div class="row"><span style="font-size:.82rem">Seed</span><input type="number" id="sSeed" step="1" min="1" style="width:90px"><button id="bSeed" title="Another, equally likely, set of boundary and feature shapes">New</button></div></div></section>
+</aside>
+<main>
+ <h2 style="font-size:.95rem;margin:0 0 6px;display:flex;align-items:center;gap:8px"><span class="n" style="display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#f5f3ed;font-size:.72rem">3</span>Result</h2>
+ <section class="verdict none" id="verdict" aria-live="polite"></section>
+ <div class="stage" id="stage"><canvas id="cv" role="img" aria-label="Depositional environment map"></canvas><div class="ro" id="ro">—</div>
+  <div class="pop" id="pop" hidden><b>New well</b><div class="row"><input type="text" id="pName" aria-label="Well name"></div><div class="row"><select id="pEnv" aria-label="Environment"></select></div><div class="row"><button class="pri" id="pOk">Add</button><button id="pCancel">Cancel</button></div></div></div>
+ <div class="chainw" id="chainw"><canvas id="chain" role="img" aria-label="Source to sink chain of the depositional environments; click a link to highlight its zone on the map"></canvas></div>
+ <div class="tw" id="wtab"><h3>How each well is honoured</h3><table><thead><tr><th class="l">Well</th><th class="l">Environment given → on the map</th><th class="l">Honoured</th></tr></thead><tbody id="tb"></tbody></table></div>
+</main>
+</div>
+<script id="gde3-core">
+(function () {
+const __M = {};
+__M["gde3/src/systems.mjs"] = (function () {
+// Depositional systems as DATA (no code per system). Belts run proximal -> distal; w = relative width (the last belt is open-ended).
+// adj: pairs of belts allowed to touch (symmetric). fringe: [beltA, beltB, f] = the boundary may interfinger, wobbling by up to
+// f x the narrower of the two belts (f <= 0.3; must be a pair of adj). keyLines: [name, k] = the line sits on the boundary between belt k and k + 1.
+// regimes (optional): parameter name, default, and per option a width multiplier per belt and fringe overrides ("a|b": f).
+// features: generic Feature records (see features.mjs); regimes.options[r].features replaces them. process: belt id -> dominant process (arrows).
+// refs status: published | memory | to verify | inference (a judgement of this page, not read in a source).
+const chain = ids => ids.slice(1).map((id, i) => [ids[i], id]);
+const F = (id, name, color, shape, host, n, pos, l, w, orientation, relation = null) => ({ id, name, color, shape, host, n, pos, size: { l, w }, orientation, relation });
+const B = (id, name, color, w, alias = []) => ({ id, name, color, w, alias });
+
+const SYSTEMS = {
+  shoreface: {
+    name: 'Wave-dominated shoreface–shelf (clastic)',
+    belts: [B('plain', 'Coastal plain', '#b8c978', 1.6, ['coastal', 'alluvial plain', 'strandplain', 'continental', 'backbarrier']),
+      B('shoreface', 'Shoreface', '#f3d955', 0.5, ['upper shoreface', 'lower shoreface', 'beach', 'foreshore', 'barrier island', 'swaley cross stratified sandstone']),
+      B('transition', 'Offshore transition', '#cfe5c6', 0.8, ['transition zone', 'hcs sandstone', 'storm bed', 'tempestite', 'heterolithic shelf']),
+      B('shelf', 'Offshore shelf', '#a9d3ec', 3, ['offshore', 'shelf', 'inner shelf', 'outer shelf', 'open shelf', 'shelf mudstone']),
+      B('slope', 'Slope', '#6c9fcd', 1.1, ['continental slope', 'upper slope']),
+      B('basin', 'Basin', '#3c6aa3', 2, ['basin floor', 'deep basin', 'deep marine'])],
+    adj: chain(['plain', 'shoreface', 'transition', 'shelf', 'slope', 'basin']),
+    fringe: [['shoreface', 'transition', 0.2], ['transition', 'shelf', 0.25]],
+    keyLines: [['Shoreline', 0], ['Shelf edge', 3], ['Toe of slope', 4]],
+    features: [F('channel', 'Fluvial channel', '#6f8f3a', 'ribbon', ['plain'], 3, [0.1, 0.9], 0.45, 0.01, 'dip', 'levees'),
+      F('strand', 'Shoreline sand ribbon', '#d9a21b', 'ribbon', ['shoreface'], 2, [0.3, 0.7], 0.5, 0.016, 'strike'),
+      F('ridge', 'Shelf sand ridge', '#e3bd4f', 'bar', ['transition', 'shelf'], 4, [0.15, 0.6], 0.16, 0.022, 65)],
+    process: { plain: 'river', shoreface: 'wave', transition: 'storm', shelf: 'settling', slope: 'gravity', basin: 'settling' },
+    scale: { kmRange: [10, 300], km: 80 },
+    refs: [
+      { text: 'Walker & Plint (1992), Wave- and storm-dominated shallow marine systems, in Facies Models: Response to Sea Level Change, GAC (shoreface to offshore transition, HCS between fair-weather and storm wave base)', status: 'memory' },
+      { text: 'Hallermeier (1980-81), Coastal Engineering 4, 253-277, doi:10.1016/0378-3839(80)90022-8 (shoreface limits, closure depths)', status: 'published' },
+      { text: 'Shelf about 75 km wide, slope about 20 km (the widths 0.5 / 0.8 / 3 / 1.1 keep the shelf about 3.9 times the slope)', status: 'to verify' }]
+  },
+  delta: {
+    name: 'Delta (river / wave / tide regimes)',
+    belts: [B('plain', 'Delta plain', '#9fc46e', 3, ['upper delta plain', 'lower delta plain', 'distributary channel', 'interdistributary bay', 'crevasse splay']),
+      B('front', 'Delta front', '#f3d34f', 1, ['mouth bar', 'delta front sand', 'distributary mouth bar']),
+      B('prodelta', 'Prodelta', '#c8dcc0', 1.5, ['pro delta', 'prodelta mudstone']),
+      B('shelf', 'Shelf', '#a9d3ec', 2.5, ['offshore shelf', 'offshore', 'open shelf', 'inner shelf']),
+      B('slope', 'Slope', '#6c9fcd', 1.5, ['continental slope', 'upper slope']),
+      B('basin', 'Basin', '#3c6aa3', 2, ['basin floor', 'deep basin', 'deep marine'])],
+    adj: chain(['plain', 'front', 'prodelta', 'shelf', 'slope', 'basin']),
+    fringe: [['plain', 'front', 0.15], ['front', 'prodelta', 0.15]],
+    keyLines: [['Shoreline', 0], ['Shelf edge', 3], ['Toe of slope', 4]],
+    regimes: {
+      param: 'regime', default: 'river',
+      options: {
+        river: { widths: { front: 1, prodelta: 1.3 }, fringe: { 'plain|front': 0.3, 'front|prodelta': 0.3 },
+          features: [F('dchannel', 'Distributary channel', '#5f9b3c', 'ribbon', ['plain', 'front'], 3, [0.1, 0.9], 0.5, 0.012, 'dip', 'levees'),
+            F('foot', 'Bird-foot lobe', '#e6c13c', 'finger', ['front', 'prodelta'], 3, [0.2, 0.5], 0.2, 0.05, 'dip'),
+            F('mbar', 'Mouth bar', '#f0d35a', 'bar', ['front'], 5, [0.3, 0.8], 0.07, 0.03, 'strike')], process: { plain: 'river', front: 'river', prodelta: 'settling' } },
+        wave: { widths: { plain: 0.8, front: 0.7, prodelta: 0.8 }, fringe: { 'plain|front': 0.05, 'front|prodelta': 0.1 },
+          features: [F('dchannel', 'Distributary channel', '#5f9b3c', 'ribbon', ['plain'], 2, [0.2, 0.9], 0.4, 0.012, 'dip', 'levees'),
+            F('arc', 'Arcuate lobe', '#e6c13c', 'lobe', ['front', 'prodelta'], 2, [0.1, 0.5], 0.13, 0.3, 'dip'),
+            F('ridges', 'Beach ridge ribbon', '#d9a21b', 'ribbon', ['front'], 3, [0.2, 0.8], 0.45, 0.012, 'strike')], process: { plain: 'river', front: 'wave', prodelta: 'storm' } },
+        tide: { widths: { front: 1.6, prodelta: 1 }, fringe: { 'plain|front': 0.25, 'front|prodelta': 0.2 },
+          features: [F('tchannel', 'Tidal channel', '#6f9f6a', 'ribbon', ['plain'], 3, [0.2, 0.9], 0.4, 0.01, 'dip', 'levees'),
+            F('funnel', 'Funnel-shaped distributary', '#c7b26a', 'funnel', ['plain', 'front'], 2, [0.5, 0.95], 0.3, 0.1, 'dip'),
+            F('tbar', 'Tidal bar', '#f0d35a', 'bar', ['front'], 6, [0.2, 0.85], 0.12, 0.018, 'dip')], process: { plain: 'river', front: 'tide', prodelta: 'tide' } }
+      },
+      status: 'inference'
+    },
+    process: { plain: 'river', front: 'river', prodelta: 'settling', shelf: 'settling', slope: 'gravity', basin: 'settling' },
+    scale: { kmRange: [10, 300], km: 60 },
+    refs: [
+      { text: 'Galloway (1975), Process framework for describing the morphologic and stratigraphic evolution of deltaic depositional systems, in Deltas: Models for Exploration, Houston Geol. Soc. (river / wave / tide ternary)', status: 'to verify' },
+      { text: 'Galloway & Hobday (1996), Terrigenous Clastic Depositional Systems, 2nd ed., Springer, doi:10.1007/978-3-642-61018-9', status: 'memory' },
+      { text: 'Regime multipliers (front narrower and arcuate under waves, wider with tidal bars, more interfingering under river or tide supply): a judgement, to calibrate on a reference image', status: 'inference' }]
+  },
+  platform: {
+    name: 'Rimmed carbonate platform',
+    belts: [B('flat', 'Tidal flat / sabkha', '#d7c9a3', 1.2, ['supratidal', 'peritidal', 'intertidal flat', 'algal mat']),
+      B('lagoon', 'Platform interior / lagoon', '#9edfd3', 4, ['restricted platform', 'inner platform', 'restricted lagoon', 'shelf lagoon']),
+      B('open', 'Open platform / back-reef', '#b6e3c0', 1, ['back reef', 'backreef', 'open shelf', 'patch reef', 'skeletal sand']),
+      B('margin', 'Platform margin (reef / shoal)', '#e98fb1', 0.25, ['shelf margin', 'barrier reef', 'oolite shoal', 'ooid shoal', 'margin', 'reef crest', 'shelf edge']),
+      B('forereef', 'Fore-reef slope', '#64b3c7', 0.6, ['foreslope', 'fore reef', 'slope', 'reef talus', 'periplatform']),
+      B('basin', 'Basin', '#3c6aa3', 2, ['basin floor', 'deep basin', 'basinal', 'pelagic'])],
+    adj: chain(['flat', 'lagoon', 'open', 'margin', 'forereef', 'basin']),
+    fringe: [['open', 'margin', 0.15]],
+    keyLines: [['Shoreline', 0], ['Platform margin', 3], ['Toe of slope', 4]],
+    features: [F('tchan', 'Tidal channel', '#9aa56a', 'ribbon', ['flat', 'lagoon'], 3, [0.3, 0.9], 0.3, 0.008, 'dip'),
+      F('patch', 'Patch reef', '#e07aa0', 'patch', ['lagoon', 'open'], 6, [0.3, 0.95], 0.035, 0.03, 'dip'),
+      F('bank', 'Oolite sand bank', '#f2e06b', 'bank', ['open'], 3, [0.2, 0.7], 0.2, 0.025, 'strike')],
+    process: { flat: 'tide', lagoon: 'settling', open: 'wave', margin: 'wave', forereef: 'gravity', basin: 'settling' },
+    scale: { kmRange: [10, 300], km: 60 },
+    refs: [
+      { text: 'Harris, Moore & Wilson (1985), Carbonate platforms, Colorado School of Mines Quarterly 80(4) (lagoon tens of km, open shelf 5-10 km, margin sand belt 1-2 km)', status: 'published' },
+      { text: 'Wilson (1975), Carbonate Facies in Geologic History, Springer, doi:10.1007/978-1-4612-6383-8 (belts from basin to supratidal)', status: 'memory' }]
+  }
+};
+return { SYSTEMS };
+})();
+__M["gde3/src/rng.mjs"] = (function () {
+// Seeded random numbers and smooth value noise (same seed = same output).
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// smooth 2D noise in [-1, 1] with wavelength wl; a pure function of (x, y, seed)
+function valueNoise(seed, wl) {
+  const h = (i, j) => {
+    let a = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(seed | 0, 2246822519)) >>> 0;
+    a = Math.imul(a ^ (a >>> 13), 1274126177) >>> 0;
+    return ((a ^ (a >>> 16)) >>> 0) / 2147483648 - 1;
+  };
+  const f = t => t * t * (3 - 2 * t);
+  return (x, y) => {
+    const u = x / wl, v = y / wl, i = Math.floor(u), j = Math.floor(v), fu = f(u - i), fv = f(v - j);
+    const a = h(i, j), b = h(i + 1, j), c = h(i, j + 1), d = h(i + 1, j + 1);
+    return (a * (1 - fu) + b * fu) * (1 - fv) + (c * (1 - fu) + d * fu) * fv;
+  };
+}
+return { mulberry32, valueNoise };
+})();
+__M["gde3/src/features.mjs"] = (function () {
+// ONE generic Feature type: { id, name, color, shape, host, n, pos, size, orientation, relation }
+//   host: belt ids the feature may sit in (a contiguous run of belts, validated in belts.mjs); the polygon is shrunk (lens shapes) or
+//         truncated (ribbons) until every point of it, and of its interior samples, lies in a host belt: host rule by construction.
+//   shape: lobe | finger | funnel | bar | bank | patch | ribbon;  size {l, w}: length and width as fractions of the finite belt span;
+//   orientation: 'dip' | 'strike' | degrees from the dip direction;  relation: null | 'levees' (ribbon gets a levee ring around the channel);
+//   n: how many, spread along strike with a seeded jitter;  pos [p0, p1]: position across the host run (0 = proximal limit, 1 = distal limit).
+// Positions follow the CALIBRATED thresholds (they are given in belt coordinates), so features move continuously when a boundary moves.
+const {mulberry32, valueNoise} = __M["gde3/src/rng.mjs"];
+
+const FEATURE_SHAPES = ['lobe', 'finger', 'funnel', 'bar', 'bank', 'patch', 'ribbon'];
+
+function featureDefs(rs) {
+  const R = rs.sys.regimes, ro = R && rs.regime ? R.options[rs.regime] : null;
+  return (ro && ro.features) || rs.sys.features || [];
+}
+
+function shade(hex, k) {
+  const v = parseInt(hex.slice(1), 16);
+  return '#' + [16, 8, 0].map(s => Math.round(255 - (255 - ((v >> s) & 255)) * k).toString(16).padStart(2, '0')).join('');
+}
+const leveeColor = f => f.leveeColor || shade(f.color, 0.55);
+
+// legend of raster codes: belts keep 0..n-1, every (feature, role) gets the next code
+function featureLegend(defs, nBelts) {
+  const out = [];
+  defs.forEach((f, i) => {
+    if (f.relation === 'levees') out.push({ code: nBelts + out.length, def: i, id: f.id, role: 'levee', name: f.name + ' levee', color: leveeColor(f) });
+    out.push({ code: nBelts + out.length, def: i, id: f.id, role: 'main', name: f.name, color: f.color });
+  });
+  return out;
+}
+
+const rot = (v, a) => [v[0] * Math.cos(a) - v[1] * Math.sin(a), v[0] * Math.sin(a) + v[1] * Math.cos(a)];
+const hash = (...n) => n.reduce((a, v) => (Math.imul(a ^ (v | 0), 0x9e3779b1) + 0x7f4a7c15) >>> 0, 17);
+const PROFILE = {   // half width / (W/2) at t in (0, 1) along the axis
+  lobe: t => Math.sin(Math.PI * t ** 1.5),
+  finger: t => Math.sqrt(Math.sin(Math.PI * t)) * (1 - 0.4 * t),
+  funnel: t => t ** 1.2 * Math.sqrt(Math.max(0, 1 - t ** 8)),
+  bar: t => Math.sin(Math.PI * t) ** 0.8,
+  bank: t => Math.sin(Math.PI * t) ** 0.45
+};
+
+// unit distal direction from the gradient of the field d, and the gradient length
+function dipAt(D, x, y, h) {
+  const gx = D(x + h, y) - D(x - h, y), gy = D(x, y + h) - D(x, y - h), l = Math.hypot(gx, gy) || 1;
+  return [gx / l, gy / l, l / (2 * h)];
+}
+
+function lensRing(def, shape, C, dir, k, S, noise) {
+  const L = k * def.size.l * S, W = k * def.size.w * S, a = dir, b = [-dir[1], dir[0]], N = 28, up = [], dn = [];
+  if (shape === 'patch') {
+    const ring = [];
+    for (let i = 0; i < 36; i++) {
+      const th = (i / 36) * 2 * Math.PI, r = 1 + 0.22 * noise(Math.cos(th) * 3, Math.sin(th) * 3), u = 0.5 * L * r * Math.cos(th), v = 0.5 * W * r * Math.sin(th);
+      ring.push([C[0] + a[0] * u + b[0] * v, C[1] + a[1] * u + b[1] * v]);
+    }
+    return ring;
+  }
+  const prof = PROFILE[shape];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, u = (t - 0.5) * L, hw = 0.5 * W * prof(t) * (1 + 0.12 * noise(t * 5, 0.5));
+    up.push([C[0] + a[0] * u + b[0] * hw, C[1] + a[1] * u + b[1] * hw]);
+    dn.push([C[0] + a[0] * u - b[0] * hw, C[1] + a[1] * u - b[1] * hw]);
+  }
+  return up.concat(dn.reverse());
+}
+
+// ribbon: a centreline marched from C in both directions until a point (or its edges) leaves the host; width tapered at both ends
+function ribbonRings(def, C, theta, D, ok, S, ext, r, widths) {
+  const step = S / 120, lh = 0.5 * def.size.l * S, strike = def.orientation === 'strike', A = strike ? 0.1 : 0.5, lam = (strike ? 0.3 : 0.2) * S, ph = r() * 6.28;
+  const d0 = D(C[0], C[1]), wmax = Math.max(...widths);
+  const inside = (x, y) => x > ext.xmin && x < ext.xmax && y > ext.ymin && y < ext.ymax;
+  const march = sgn => {
+    const pts = []; let [x, y] = C;
+    for (let s = step; s <= lh; s += step) {
+      const [nx, ny, gl] = dipAt(D, x, y, step * 0.5), ang = theta + A * Math.sin((2 * Math.PI * sgn * s) / lam + ph), v = rot([nx, ny], ang);
+      x += sgn * v[0] * step; y += sgn * v[1] * step;
+      if (strike) { const c = Math.max(-step, Math.min(step, (d0 - D(x, y)) / gl)); x += nx * c; y += ny * c; }
+      const px = -v[1], py = v[0];
+      if (!inside(x, y) || !ok(x, y) || !ok(x + px * wmax / 2, y + py * wmax / 2) || !ok(x - px * wmax / 2, y - py * wmax / 2)) break;
+      pts.push([x, y]);
+    }
+    return pts;
+  };
+  const f = march(1), b = march(-1), line = b.reverse().concat([C], f);
+  if (line.length < 0.25 * lh / step) return null;
+  const n = line.length;
+  return widths.map(w => {
+    const L = [], R = [];
+    line.forEach((p, i) => {
+      const q = line[Math.min(n - 1, i + 1)], o = line[Math.max(0, i - 1)], tx = q[0] - o[0], ty = q[1] - o[1], tl = Math.hypot(tx, ty) || 1, u = i / (n - 1), tp = Math.min(1, 4 * u, 4 * (1 - u)) ** 0.7;
+      L.push([p[0] - (ty / tl) * w * tp / 2, p[1] + (tx / tl) * w * tp / 2]);
+      R.push([p[0] + (ty / tl) * w * tp / 2, p[1] - (tx / tl) * w * tp / 2]);
+    });
+    return L.concat(R.reverse());
+  });
+}
+
+const inRing = (ring, x, y) => {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i], b = ring[j];
+    if ((a[1] > y) !== (b[1] > y) && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+};
+
+// the point of the line at strike coordinate s (perpendicular to the transport azimuth through the extent centre) where the field d equals dT, or null
+function locateAtD(D, ext, az, s, dT) {
+  const a = (az * Math.PI) / 180, ux = Math.sin(a), uy = Math.cos(a), ex = -uy, ey = ux, cx = (ext.xmin + ext.xmax) / 2, cy = (ext.ymin + ext.ymax) / 2, diag = Math.hypot(ext.xmax - ext.xmin, ext.ymax - ext.ymin);
+  const at = q => [cx + ex * s + ux * q, cy + ey * s + uy * q];
+  let qa = -diag, qb = diag;
+  if (!(D(...at(qa)) < dT && D(...at(qb)) > dT)) return null;
+  for (let q = 0; q < 40; q++) { const mid = (qa + qb) / 2; if (D(...at(mid)) < dT) qa = mid; else qb = mid; }
+  return at((qa + qb) / 2);
+}
+const dipDirection = (D, x, y, h) => dipAt(D, x, y, h).slice(0, 2);
+
+// m: model { rs, t, D, classAt }; opts { ext, az, seed }. Returns [{ id, name, color, role, host, ring }]
+function generateFeatures(m, { ext, az = 0, seed = 1 }) {
+  const rs = m.rs, defs = featureDefs(rs), S = rs.p[rs.p.length - 1], ids = rs.belts.map(b => b.id), out = [];
+  const a = (az * Math.PI) / 180, ex = -Math.cos(a), ey = Math.sin(a);
+  const hw = (Math.abs(ex) * (ext.xmax - ext.xmin) + Math.abs(ey) * (ext.ymax - ext.ymin)) / 2;
+  const t = m.t || rs.p;
+  defs.forEach((def, di) => {
+    const hostIdx = def.host.map(h => ids.indexOf(h)), hs = new Set(hostIdx), a0 = Math.min(...hostIdx), b0 = Math.max(...hostIdx);
+    const lo = a0 > 0 ? t[a0 - 1] : t[0] - rs.w[0], hi = b0 < t.length ? t[b0] : t[t.length - 1] + rs.w[rs.w.length - 1];
+    const ok = (x, y) => hs.has(m.classAt(x, y));
+    for (let i = 0; i < def.n; i++) {
+      const r = mulberry32(hash(seed, di, i, 7)), nz = valueNoise(hash(seed, di, i), 0.5), noise = (u, v) => nz(u, v);
+      const s = (((i + 0.5 + (r() - 0.5) * 0.7) / def.n) * 1.6 - 0.8) * hw, p = def.pos[0] + r() * (def.pos[1] - def.pos[0]), dT = lo + p * (hi - lo);
+      const C = locateAtD(m.D, ext, az, s, dT);
+      if (!C || !(C[0] > ext.xmin && C[0] < ext.xmax && C[1] > ext.ymin && C[1] < ext.ymax) || !ok(C[0], C[1])) continue;
+      const [nx, ny] = dipAt(m.D, C[0], C[1], S / 200), theta = def.orientation === 'dip' ? 0 : def.orientation === 'strike' ? Math.PI / 2 : (def.orientation * Math.PI) / 180;
+      const dir = rot([nx, ny], theta);
+      const push = (role, ring) => out.push({ id: def.id, name: role === 'levee' ? def.name + ' levee' : def.name, color: role === 'levee' ? leveeColor(def) : def.color, role, host: def.host, ring });
+      if (def.shape === 'ribbon') {
+        const w = def.size.w * S, widths = def.relation === 'levees' ? [w * 3.4, w] : [w], rings = ribbonRings(def, C, theta, m.D, ok, S, ext, r, widths);
+        if (!rings) continue;
+        rings.forEach((ring, q) => push(def.relation === 'levees' && q === 0 ? 'levee' : 'main', ring));
+        continue;
+      }
+      // lens shapes: the largest scale k in [0.35, 1] such that the ring and its inner samples lie in the host run (bisection: continuous in the thresholds)
+      const fits = k => {
+        const ring = lensRing(def, def.shape, C, dir, k, S, noise);
+        return ok(C[0], C[1]) && ring.every(q => ok(q[0], q[1]) && ok(C[0] + 0.5 * (q[0] - C[0]), C[1] + 0.5 * (q[1] - C[1])));
+      };
+      let k = 1;
+      if (!fits(1)) {
+        if (!fits(0.35)) continue;
+        let kl = 0.35, kh = 1;
+        for (let q = 0; q < 12; q++) { const mid = (kl + kh) / 2; if (fits(mid)) kl = mid; else kh = mid; }
+        k = kl;
+      }
+      push('main', lensRing(def, def.shape, C, dir, k, S, noise));
+    }
+  });
+  return out;
+}
+
+// raster codes of the features over a base class grid (cells whose centre lies inside a ring); later features paint over earlier ones
+function rasterize(polys, g, base, legend) {
+  const out = Uint8Array.from(base), code = new Map(legend.map(l => [l.id + '|' + l.role, l.code]));
+  for (const p of polys) {
+    const c = code.get(p.id + '|' + p.role); let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const q of p.ring) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+    const i0 = Math.max(0, Math.floor((x0 - g.ext.xmin) / g.dx - 0.5)), i1 = Math.min(g.nx - 1, Math.ceil((x1 - g.ext.xmin) / g.dx));
+    const j0 = Math.max(0, Math.floor((y0 - g.ext.ymin) / g.dy - 0.5)), j1 = Math.min(g.ny - 1, Math.ceil((y1 - g.ext.ymin) / g.dy));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (inRing(p.ring, g.x(i), g.y(j))) out[j * g.nx + i] = c;
+  }
+  return out;
+}
+return { FEATURE_SHAPES, featureDefs, featureLegend, inRing, locateAtD, dipDirection, generateFeatures, rasterize };
+})();
+__M["gde3/src/belts.mjs"] = (function () {
+// Belts on d: prior thresholds from a system record, classification, adjacency validation, matching of well descriptions.
+const {valueNoise} = __M["gde3/src/rng.mjs"];
+const {SYSTEMS} = __M["gde3/src/systems.mjs"];
+const {FEATURE_SHAPES} = __M["gde3/src/features.mjs"];
+
+// effective system for a regime: widths scaled so the finite belts add up to spanM (metres), fringe amplitudes, adjacency set
+function resolveSystem(sys, { regime, spanM } = {}) {
+  const R = sys.regimes, ro = R ? R.options[regime || R.default] : null;
+  if (R && !ro) throw new Error('unknown regime ' + regime);
+  const w0 = sys.belts.map(b => b.w * ((ro && ro.widths && ro.widths[b.id]) || 1));
+  const k = spanM / w0.slice(0, -1).reduce((a, v) => a + v, 0);
+  const w = w0.map(v => v * k);
+  const fringe = {};
+  for (const [a, b, f] of sys.fringe || []) fringe[a + '|' + b] = (ro && ro.fringe && ro.fringe[a + '|' + b] != null) ? ro.fringe[a + '|' + b] : f;
+  const adj = new Set(sys.adj.flatMap(([a, b]) => [a + '|' + b, b + '|' + a]));
+  const p = []; let s = 0;
+  for (let i = 0; i < w.length - 1; i++) p.push(s += w[i]);
+  return { sys, belts: sys.belts, w, p, fringe, adj, regime: ro ? (regime || R.default) : null };
+}
+
+// fringe half-amplitude of every threshold k (between belts k and k + 1), in d units, from thresholds t:
+// f x the narrower adjacent belt (the first and last belts are open-ended and do not count)
+function fringeAmps(rs, t) {
+  return t.map((_, k) => {
+    const f = Math.min(0.3, rs.fringe[rs.belts[k].id + '|' + rs.belts[k + 1].id] || 0), c = [];
+    if (k >= 1) c.push(t[k] - t[k - 1]);
+    if (k + 1 < t.length) c.push(t[k + 1] - t[k]);
+    return c.length ? f * Math.min(...c) : 0;
+  });
+}
+
+const classify = (d, t) => { let k = 0; while (k < t.length && d >= t[k]) k++; return k; };
+
+// classifier (x, y, d) -> belt index; thresholds wobble by amps[k] x smooth noise (interfingering), amps = 0 gives plain thresholds
+function makeClassifier(t, amps, { seed = 1, wl = 1 } = {}) {
+  const N = t.map((_, k) => (amps && amps[k] > 0 ? valueNoise(seed * 977 + k * 131, wl) : null));
+  return (x, y, d) => { let k = 0; while (k < t.length && d >= t[k] + (N[k] ? amps[k] * N[k](x, y) : 0)) k++; return k; };
+}
+
+// well description -> [first, last] belt index (null if unknown); "A / B" gives two adjacent belts
+const norm = s => ' ' + String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().replace(/ies\b/g, 'y').replace(/s\b/g, '') + ' ';
+function matchBelt(env, belts) {
+  const best = part => {
+    const e = norm(part); if (e.trim() === '') return -1;
+    let hit = -1, len = 0;
+    belts.forEach((b, i) => { for (const nm of [b.name, b.id, ...b.alias]) { const n = norm(nm); if (n.trim() && (e === n || e.includes(n)) && n.length > len) { hit = i; len = n.length; } } });
+    return hit;
+  };
+  for (let i = 0; i < belts.length; i++) if ([belts[i].name, belts[i].id, ...belts[i].alias].some(n => norm(n) === norm(env))) return [i, i];   // names may contain "/"
+  const parts = String(env || '').split(/\s*(?:\/|\+|&)\s*/).filter(s => s.trim());
+  const m = parts.map(best);
+  if (!m.length || m.includes(-1)) return null;
+  const lo = Math.min(...m), hi = Math.max(...m);
+  return hi - lo > 1 ? null : [lo, hi];
+}
+
+// graph checks: the adjacency pairs name existing belts, are a connected chain-compatible graph, fringes are allowed pairs
+function validateSystem(sys) {
+  const ids = sys.belts.map(b => b.id), errs = [];
+  if (new Set(ids).size !== ids.length) errs.push('duplicate belt id');
+  for (const [a, b] of sys.adj) if (!ids.includes(a) || !ids.includes(b)) errs.push(`adjacency ${a}|${b}: unknown belt`);
+  const has = (a, b) => sys.adj.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+  for (let i = 0; i + 1 < ids.length; i++) if (!has(ids[i], ids[i + 1])) errs.push(`consecutive belts ${ids[i]}|${ids[i + 1]} not allowed to touch`);
+  for (const [a, b, f] of sys.fringe || []) if (!has(a, b) || !(f > 0 && f <= 0.3)) errs.push(`fringe ${a}|${b} invalid`);
+  for (const [, k] of sys.keyLines) if (!(k >= 0 && k < ids.length - 1)) errs.push('key line threshold out of range');
+  const sets = [sys.features || [], ...Object.values((sys.regimes && sys.regimes.options) || {}).map(o => o.features || [])];
+  for (const fs of sets) for (const f of fs) {
+    const ix = (f.host || []).map(h => ids.indexOf(h)).sort((a, b) => a - b);
+    if (!ix.length || ix.includes(-1)) errs.push('feature ' + f.id + ': unknown host belt');
+    else if (ix.some((v, i) => i && !has(ids[ix[i - 1]], ids[v]))) errs.push('feature ' + f.id + ': host belts are not a run of allowed neighbours');
+    if (!FEATURE_SHAPES.includes(f.shape) || !(f.n >= 0) || !(f.size && f.size.l > 0 && f.size.w > 0) || !(f.pos && f.pos[0] >= 0 && f.pos[1] <= 1 && f.pos[0] < f.pos[1])) errs.push('feature ' + f.id + ': shape, count, size or position');
+    if (!(f.orientation === 'dip' || f.orientation === 'strike' || typeof f.orientation === 'number') || !/^#[0-9a-f]{6}$/i.test(f.color)) errs.push('feature ' + f.id + ': orientation or colour');
+  }
+  sys.belts.forEach(b => { if (!/^#[0-9a-f]{6}$/i.test(b.color) || !(b.w > 0)) errs.push('belt ' + b.id + ': colour or width'); });
+  return errs;
+}
+
+const systemIds = () => Object.keys(SYSTEMS);
+return { resolveSystem, fringeAmps, classify, makeClassifier, matchBelt, validateSystem, systemIds };
+})();
+__M["gde3/src/geometry.mjs"] = (function () {
+// Polylines, signed distance, regular grid. Points are [x, y]; a line splits the plane in two:
+// signedDist > 0 on the RIGHT of the direction of travel (by convention the distal side).
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+// Catmull-Rom smoothing (passes through the vertices); returns [[x, y], ...]
+function smooth(pts, sub = 8) {
+  const n = pts.length;
+  if (n < 3) return pts.map(p => [p[0], p[1]]);
+  const out = [];
+  for (let i = 0; i < n - 1; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[i], c = pts[i + 1], d = pts[Math.min(n - 1, i + 2)];
+    for (let s = 0; s < sub; s++) {
+      const t = s / sub, t2 = t * t, t3 = t2 * t;
+      out.push([0, 1].map(q => 0.5 * (2 * b[q] + (-a[q] + c[q]) * t + (2 * a[q] - 5 * b[q] + 4 * c[q] - d[q]) * t2 + (-a[q] + 3 * b[q] - 3 * c[q] + d[q]) * t3)));
+    }
+  }
+  out.push([pts[n - 1][0], pts[n - 1][1]]);
+  return out;
+}
+
+const length = pts => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0);
+
+// signed distance to a polyline; first and last segments are extended as rays so the line splits the plane.
+// Nearest point on a vertex: the sign follows the sum of the normals of its two segments.
+function signedDist(pts, x, y) {
+  const n = pts.length;
+  let best = Infinity, sign = 1, vertex = -1;
+  for (let i = 0; i < n - 1; i++) {
+    const [ax, ay] = pts[i], [bx, by] = pts[i + 1], ex = bx - ax, ey = by - ay, L2 = ex * ex + ey * ey;
+    if (!(L2 > 0)) continue;
+    const wx = x - ax, wy = y - ay;
+    let t = (wx * ex + wy * ey) / L2, v = -1;
+    if (t < 0 && i > 0) { t = 0; v = i; } else if (t > 1 && i < n - 2) { t = 1; v = i + 1; }
+    const px = wx - t * ex, py = wy - t * ey, d2 = px * px + py * py;
+    if (d2 < best) { best = d2; vertex = v; if (v < 0) sign = wx * ey - wy * ex >= 0 ? 1 : -1; }
+  }
+  if (vertex >= 0) {
+    let nx = 0, ny = 0;
+    for (let a = vertex - 1; a <= vertex; a++) {
+      const ex = pts[a + 1][0] - pts[a][0], ey = pts[a + 1][1] - pts[a][1], l = Math.hypot(ex, ey);
+      if (l > 0) { nx += ey / l; ny -= ex / l; }
+    }
+    sign = (x - pts[vertex][0]) * nx + (y - pts[vertex][1]) * ny >= 0 ? 1 : -1;
+  }
+  return sign * Math.sqrt(best);
+}
+
+// regular grid of cell centres over ext {xmin, xmax, ymin, ymax}; index k = j * nx + i, j counts upward in y
+function makeGrid(ext, nx, ny = nx) {
+  const dx = (ext.xmax - ext.xmin) / nx, dy = (ext.ymax - ext.ymin) / ny;
+  return { nx, ny, dx, dy, ext, x: i => ext.xmin + (i + 0.5) * dx, y: j => ext.ymin + (j + 0.5) * dy };
+}
+
+function sampleGrid(g, f) {
+  const out = new Float64Array(g.nx * g.ny);
+  for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) out[j * g.nx + i] = f(g.x(i), g.y(j));
+  return out;
+}
+return { clamp, smooth, length, signedDist, makeGrid, sampleGrid };
+})();
+__M["gde3/src/field.mjs"] = (function () {
+// Proximal-distal field d(x, y) from key lines. Each key line carries the value v of d it sits at
+// (the prior threshold of the belt boundary it marks). Landward of the first line d = v0 + signed distance (negative);
+// between two lines d runs linearly in the normalised coordinate a / (a + b) (belts widen where the lines are far apart);
+// beyond the last line d = vL + signed distance. d is continuous and increases from the land side to the distal side.
+const {signedDist} = __M["gde3/src/geometry.mjs"];
+
+function makeField(lines) {
+  const L = lines.slice().sort((p, q) => p.v - q.v);
+  if (!L.length) throw new Error('at least one key line is required');
+  return (x, y) => {
+    let s = signedDist(L[0].pts, x, y);
+    if (s < 0) return L[0].v + s;
+    for (let i = 0; i + 1 < L.length; i++) {
+      const s1 = signedDist(L[i + 1].pts, x, y);
+      if (s1 < 0) return L[i].v + (s / (s - s1)) * (L[i + 1].v - L[i].v);
+      s = s1;
+    }
+    return L[L.length - 1].v + s;
+  };
+}
+return { makeField };
+})();
+__M["gde3/src/keylines.mjs"] = (function () {
+// Proposed key lines: lines perpendicular to the transport azimuth, spaced like the prior thresholds, with a seeded smooth wobble
+// (and an optional lobe) so the shoreline is not straight. Returns [{ name, k, v, ctrl, pts }]; every line has its distal side on the right.
+const {smooth} = __M["gde3/src/geometry.mjs"];
+const {mulberry32} = __M["gde3/src/rng.mjs"];
+
+function proposeKeyLines(rs, ext, { az = 0, seed = 1, wobble = 0.03, lobe = 0 } = {}) {
+  const a = az * Math.PI / 180, ux = Math.sin(a), uy = Math.cos(a), ex = -uy, ey = ux;
+  const cx = (ext.xmin + ext.xmax) / 2, cy = (ext.ymin + ext.ymax) / 2, diag = Math.hypot(ext.xmax - ext.xmin, ext.ymax - ext.ymin);
+  const r = mulberry32(seed), ks = rs.sys.keyLines, ph = [r() * 6.28, r() * 6.28];
+  const pivot = ks.reduce((s, [, k]) => s + rs.p[k], 0) / ks.length;
+  // the lines share the same wobble (a shelf edge follows the shoreline); the total amplitude is capped so that neighbouring lines stay apart
+  const gapMin = Math.min(...ks.slice(1).map(([, k], i) => rs.p[k] - rs.p[ks[i][1]]), Infinity);
+  const amp = wobble * diag + lobe * diag, cap = Math.min(1, isFinite(gapMin) && amp > 0 ? 2 * gapMin / amp : 1);
+  return ks.map(([name, k], li) => {
+    const f = cap * (1 - 0.15 * li), pts = [];
+    for (let i = -6; i <= 6; i++) {
+      const s = (i / 6) * 0.75 * diag, off = rs.p[k] - pivot;
+      const o = f * (wobble * diag * (Math.sin(s / (0.35 * diag) * 6.28 + ph[0]) + 0.5 * Math.sin(s / (0.17 * diag) * 6.28 + ph[1])) + lobe * diag * Math.exp(-((s / (0.18 * diag)) ** 2)));
+      pts.push([cx + ex * s + ux * (off + o), cy + ey * s + uy * (off + o)]);
+    }
+    return { name, k, v: rs.p[k], ctrl: pts, pts: smooth(pts) };   // ctrl: the vertices the smooth curve passes through (the draggable ones)
+  });
+}
+return { proposeKeyLines };
+})();
+__M["gde3/src/calibrate.mjs"] = (function () {
+// Calibration of the belt thresholds on wells. Thresholds t[k] (between belt k and k + 1) must satisfy
+//   well in belts [a, b] at d:  t[a-1] <= d - gap   and   t[b] >= d + gap;      belt k keeps a width >= minW[k].
+// Among the feasible solutions, the one MINIMISING sum(((t - prior) / scale)^2) is returned (a projection of the prior on a convex set,
+// so it varies continuously with the well positions). With c[k] = cumulated minimum widths, s = t - c must be non-decreasing:
+// bounded isotonic regression = weighted pool-adjacent-violators, then clipped to the tightened bounds.
+// Contradictory wells: the smallest set of wells whose removal makes the rest feasible (ties: lowest cost) is excluded and reported.
+
+function calibrate({ d, belts, p, w, gap, minFrac = 0.1, maxExclude = 4 }) {
+  const n1 = p.length, N = d.length;
+  gap = gap || p.map(() => 0);
+  const minW = w.map(v => minFrac * v), c = [0];
+  for (let k = 1; k < n1; k++) c.push(c[k - 1] + minW[k]);
+  const om = p.map((_, k) => 1 / ((w[k] + w[k + 1]) / 2) ** 2);
+  const usable = [];
+  for (let i = 0; i < N; i++) if (belts[i] && Number.isFinite(d[i])) usable.push(i);
+
+  const solve = idx => {
+    const l = new Array(n1).fill(-Infinity), u = new Array(n1).fill(Infinity);
+    for (const i of idx) {
+      const [a, b] = belts[i];
+      if (a > 0) u[a - 1] = Math.min(u[a - 1], d[i] - gap[a - 1]);
+      if (b < n1) l[b] = Math.max(l[b], d[i] + gap[b]);
+    }
+    const L = [], U = new Array(n1);
+    for (let k = 0, m = -Infinity; k < n1; k++) { m = Math.max(m, l[k] - c[k]); L.push(m); }
+    for (let k = n1 - 1, m = Infinity; k >= 0; k--) { m = Math.min(m, u[k] - c[k]); U[k] = m; }
+    const bad = []; for (let k = 0; k < n1; k++) if (L[k] > U[k]) bad.push(k);
+    if (bad.length) return { ok: false, bad };
+    // weighted PAVA on q = p - c
+    const blocks = [];
+    for (let k = 0; k < n1; k++) {
+      blocks.push({ s: om[k] * (p[k] - c[k]), w: om[k], n: 1 });
+      while (blocks.length > 1) {
+        const B = blocks[blocks.length - 1], A = blocks[blocks.length - 2];
+        if (A.s / A.w <= B.s / B.w) break;
+        blocks.splice(-2, 2, { s: A.s + B.s, w: A.w + B.w, n: A.n + B.n });
+      }
+    }
+    const t = []; for (const B of blocks) for (let q = 0; q < B.n; q++) t.push(B.s / B.w);
+    for (let k = 0; k < n1; k++) t[k] = Math.min(U[k], Math.max(L[k], t[k])) + c[k];
+    const cost = t.reduce((a, v, k) => a + om[k] * (v - p[k]) ** 2, 0);
+    return { ok: true, t, cost, lo: L.map((v, k) => v + c[k]), hi: U.map((v, k) => v + c[k]) };
+  };
+
+  // smallest excluded set, ties broken by the lowest cost (closest to the prior)
+  let best = null;
+  const subsets = (arr, k, start = 0, cur = [], out = []) => {
+    if (cur.length === k) { out.push(cur.slice()); return out; }
+    for (let i = start; i < arr.length; i++) { cur.push(arr[i]); subsets(arr, k, i + 1, cur, out); cur.pop(); }
+    return out;
+  };
+  for (let k = 0; k <= Math.min(maxExclude, usable.length) && !best; k++) {
+    for (const ex of subsets(usable, k)) {
+      const s = solve(usable.filter(i => !ex.includes(i)));
+      if (s.ok && (!best || s.cost < best.cost - 1e-12)) best = { ...s, excluded: ex };
+    }
+  }
+  let keep = usable.slice();
+  if (!best) { // greedy fallback for many contradictions: drop the well that clears most infeasible thresholds
+    const ex = [];
+    for (;;) {
+      const s = solve(keep); if (s.ok) { best = { ...s, excluded: ex }; break; }
+      let pick = keep[0], m = Infinity;
+      for (const i of keep) { const r = solve(keep.filter(j => j !== i)); const v = r.ok ? 0 : r.bad.length; if (v < m) { m = v; pick = i; } }
+      keep = keep.filter(i => i !== pick); ex.push(pick);
+    }
+  }
+  keep = usable.filter(i => !best.excluded.includes(i));
+  return { t: best.t, lo: best.lo, hi: best.hi, cost: best.cost, kept: keep, excluded: best.excluded, minW };
+}
+
+// why a well is contradictory: the kept well it cannot coexist with
+function explain(i, d, belts, kept, names, beltNames) {
+  const [a, b] = belts[i];
+  for (const j of kept) {
+    const [a2, b2] = belts[j];
+    if (b2 < a && d[j] >= d[i]) return `${names[i]} (${beltNames[a]}) lies more proximal than ${names[j]} (${beltNames[b2]}) along the proximal-distal direction, although its environment is more distal.`;
+    if (b < a2 && d[i] >= d[j]) return `${names[i]} (${beltNames[b]}) lies more distal than ${names[j]} (${beltNames[a2]}) along the proximal-distal direction, although its environment is more proximal.`;
+  }
+  return `${names[i]} (${beltNames[a]}) does not fit the belt order together with the other wells (minimum belt widths or gaps).`;
+}
+return { calibrate, explain };
+})();
+__M["gde3/src/warp.mjs"] = (function () {
+// Optional local warping of d around contradictory wells: bounded amplitude (|offset| <= maxAmp) and bounded radius (zero beyond radius).
+// Offset = sum(delta_i bump_i) / max(1, sum bump_i), a weighted average so it never exceeds the largest delta; it is switched off
+// near the consistent wells (protect zone, 0.4 radius), so warping can never break a well that the belts already honour.
+const bump = u => (u >= 1 ? 0 : (1 - u * u) ** 2);
+const ramp = u => (u >= 1 ? 1 : u * u * (3 - 2 * u));
+
+// needed offset of d so that a well described as belts [a, b] falls well inside them (margin 35 % of the interval), clipped to +-maxAmp
+function neededOffset(d, [a, b], t, w, maxAmp) {
+  const lo = a > 0 ? t[a - 1] : -Infinity, hi = b < t.length ? t[b] : Infinity;
+  let target;
+  if (isFinite(lo) && isFinite(hi)) { const m = 0.35 * (hi - lo); target = Math.min(hi - m, Math.max(lo + m, d)); }
+  else if (isFinite(lo)) target = Math.max(d, lo + 0.35 * w);
+  else target = Math.min(d, hi - 0.35 * w);
+  return Math.min(maxAmp, Math.max(-maxAmp, target - d));
+}
+
+function makeWarp(targets, protect, { radius, maxAmp }) {
+  if (!targets.length) return null;
+  const Rp = 0.4 * radius;
+  return (x, y) => {
+    let s = 0, f = 0;
+    for (const q of targets) { const b = bump(Math.hypot(x - q.x, y - q.y) / radius); s += q.delta * b; f += b; }
+    if (!f) return 0;
+    let h = 1;
+    for (const q of protect) h *= ramp(Math.hypot(x - q.x, y - q.y) / Rp);
+    return Math.min(maxAmp, Math.max(-maxAmp, (s / Math.max(1, f)) * h));
+  };
+}
+return { neededOffset, makeWarp };
+})();
+__M["gde3/src/verdict.mjs"] = (function () {
+// Per-well verdict and the banner rule (from the old page): green only if ALL wells are matched to a class AND honoured;
+// amber if none is contradicted but some are not matched; red if a matched well is not honoured.
+const HOW = { belts: 'honoured by the calibrated belts', warping: 'honoured by local warping', not: 'not honoured', unmatched: 'not matched to a class' };
+
+function wellVerdict(range, beltPlain, beltWarped) {
+  if (!range) return 'unmatched';
+  const ok = b => b >= range[0] && b <= range[1];
+  return ok(beltPlain) ? 'belts' : ok(beltWarped) ? 'warping' : 'not';
+}
+
+function banner(verdicts) {
+  const N = verdicts.length, un = verdicts.filter(v => v === 'unmatched').length, bad = verdicts.filter(v => v === 'not').length, k = N - un - bad;
+  const state = !N ? 'none' : bad ? 'bad' : un ? 'warn' : 'pass';
+  const head = state === 'pass' ? (N === 1 ? 'The well is honoured' : `All ${N} wells honoured`) : `${k} of ${N} ${N === 1 ? 'well' : 'wells'} honoured` + (un ? `, ${un} not matched to a class` : '');
+  return { state, k, N, un, bad, head };
+}
+return { HOW, wellVerdict, banner };
+})();
+__M["gde3/src/model.mjs"] = (function () {
+// Model = system record + key lines + wells -> thresholds (calibrated, minimum change), optional warping, classifier, verdicts.
+const {SYSTEMS} = __M["gde3/src/systems.mjs"];
+const {resolveSystem, fringeAmps, makeClassifier, matchBelt} = __M["gde3/src/belts.mjs"];
+const {makeField} = __M["gde3/src/field.mjs"];
+const {proposeKeyLines} = __M["gde3/src/keylines.mjs"];
+const {calibrate, explain} = __M["gde3/src/calibrate.mjs"];
+const {neededOffset, makeWarp} = __M["gde3/src/warp.mjs"];
+const {wellVerdict, banner} = __M["gde3/src/verdict.mjs"];
+const {generateFeatures, featureDefs, featureLegend, rasterize} = __M["gde3/src/features.mjs"];
+
+// opts: system (id), regime, km (scale), ext, az, seed, keyLines (default: proposed), wells [{name, x, y, env | b}],
+//       warp {radius, maxAmp} | null, fringe (interfingering, default true)
+function buildModel(opts) {
+  const sys = SYSTEMS[opts.system], seed = opts.seed || 1;
+  const rs = resolveSystem(sys, { regime: opts.regime, spanM: (opts.km || sys.scale.km) * 1000 });
+  const keyLines = opts.keyLines || proposeKeyLines(rs, opts.ext, { az: opts.az || 0, seed, wobble: opts.wobble, lobe: opts.lobe });
+  const F = makeField(keyLines);
+  const wells = (opts.wells || []).map((w, i) => ({ name: w.name || 'W-' + (i + 1), ...w, range: Array.isArray(w.b) ? w.b : typeof w.b === 'number' ? [w.b, w.b] : matchBelt(w.env, rs.belts) }));
+  const d = wells.map(w => F(w.x, w.y));
+  const useFringe = opts.fringe !== false, g0 = 0.005 * rs.p[rs.p.length - 1];   // g0: a well sits at least g0 inside its belt
+  const gap = (useFringe ? fringeAmps(rs, rs.p) : rs.p.map(() => 0)).map(a => Math.max(a, g0));
+  const cal = calibrate({ d, belts: wells.map(w => w.range), p: rs.p, w: rs.w, gap });
+  const amps = useFringe ? fringeAmps(rs, cal.t).map((a, k) => Math.min(a, gap[k])) : null;   // never wider than the room kept for wells
+  const wl = (rs.p[rs.p.length - 1] || 1) / 3;
+  const cls = makeClassifier(cal.t, amps, { seed, wl }), wref = rs.w.slice(1, -1).reduce((a, v) => a + v, 0) / Math.max(1, rs.w.length - 2);
+
+  let warp = null;
+  const wo = opts.warp, bad = cal.excluded;
+  if (wo && bad.length) {
+    const targets = bad.map(i => ({ x: wells[i].x, y: wells[i].y, delta: neededOffset(d[i], wells[i].range, cal.t, wref, wo.maxAmp) }));
+    warp = makeWarp(targets, cal.kept.map(i => wells[i]), wo);
+  }
+  const D = warp ? (x, y) => F(x, y) + warp(x, y) : F;
+  const classPlain = (x, y) => cls(x, y, F(x, y)), classAt = (x, y) => cls(x, y, D(x, y));
+  const names = wells.map(w => w.name), bn = rs.belts.map(b => b.name);
+  const verdicts = wells.map(w => wellVerdict(w.range, classPlain(w.x, w.y), classAt(w.x, w.y)));
+  const conflicts = bad.map(i => ({ well: wells[i].name, msg: explain(i, d, wells.map(w => w.range), cal.kept, names, bn) }));
+  const nB = rs.belts.length, defs = opts.features === false ? [] : featureDefs(rs), legend = featureLegend(defs, nB);
+  const classGrid = g => { const o = new Uint8Array(g.nx * g.ny); for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) o[j * g.nx + i] = classAt(g.x(i), g.y(j)); return o; };
+  let fc = null;   // features are generated on demand (the class grid and the verdicts do not depend on them)
+  const model = { rs, t: cal.t, D, classAt, ext: opts.ext, az: opts.az || 0, seed };
+  const features = () => fc || (fc = defs.length ? generateFeatures(model, { ext: opts.ext, az: opts.az || 0, seed }) : []);
+  return { rs, keyLines, F, D, wells, d, t: cal.t, prior: rs.p, lo: cal.lo, hi: cal.hi, kept: cal.kept, excluded: bad, conflicts, warp: !!warp,
+    classAt, classPlain, verdicts, banner: banner(verdicts), cost: cal.cost,
+    features, featureLegend: legend, fullGrid: g => rasterize(features(), g, classGrid(g), legend),
+    classGrid };
+}
+
+const changedFraction = (a, b) => { let n = 0; for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) n++; return n / a.length; };
+return { buildModel, changedFraction };
+})();
+__M["gde3/src/exports.mjs"] = (function () {
+// Polygons from a class grid, and the export writers (ZMAP+, IRAP lines, GeoJSON, CSV, audit). Pure functions, no DOM.
+// Grid convention (geometry.makeGrid): k = j * nx + i, j counts upward in y.
+
+// ---- polygons: boundary loops of the cells of each class (interior on the left), holes by orientation, light smoothing ----
+const simplifyClosed = (pts, tol) => {   // Douglas-Peucker on a closed ring (split at the two farthest vertices)
+  if (pts.length < 8) return pts;
+  let a = 0, b = 0, best = -1;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > best) { best = d; b = i; } }
+  const dp = (lo, hi) => {
+    const A = pts[lo], B = pts[hi % pts.length], ex = B[0] - A[0], ey = B[1] - A[1], L = Math.hypot(ex, ey) || 1;
+    let m = -1, mi = -1;
+    for (let i = lo + 1; i < hi; i++) { const d = Math.abs((pts[i][0] - A[0]) * ey - (pts[i][1] - A[1]) * ex) / L; if (d > m) { m = d; mi = i; } }
+    return m > tol ? [...dp(lo, mi).slice(0, -1), ...dp(mi, hi)] : [A, B];
+  };
+  return [...dp(a, b).slice(0, -1), ...dp(b, pts.length).slice(0, -1)];
+};
+// Chaikin corner cutting; segments lying on the frame of the grid (both ends on the same side) stay untouched so the map keeps its square corners
+const chaikin = (r, n, W, H) => {
+  const edge = (p, q) => (p[0] === 0 && q[0] === 0) || (p[0] === W && q[0] === W) || (p[1] === 0 && q[1] === 0) || (p[1] === H && q[1] === H);
+  for (let k = 0; k < n; k++) {
+    const o = [];
+    for (let i = 0; i < r.length; i++) {
+      const p = r[i], q = r[(i + 1) % r.length], pr = r[(i + r.length - 1) % r.length];
+      if (edge(p, q)) o.push(p);
+      else { if (edge(pr, p)) o.push(p); o.push([0.75 * p[0] + 0.25 * q[0], 0.75 * p[1] + 0.25 * q[1]], [0.25 * p[0] + 0.75 * q[0], 0.25 * p[1] + 0.75 * q[1]]); }
+    }
+    r = o;
+  }
+  return r;
+};
+const ringArea = r => { let a = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
+const inside = (r, x, y) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > y) !== (b[1] > y) && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+
+// codes: Uint8Array on grid g; returns [{ code, outer: [[x, y]...], holes: [...] }] in map units (rings not closed: last != first)
+function polygonize(codes, g, { tol = 0.6, smooth = 2, minCells = 2 } = {}) {
+  const { nx, ny } = g, byCode = new Map(), key = (x, y) => x * (ny + 2) + y;
+  const add = (c, x0, y0, x1, y1) => { let m = byCode.get(c); if (!m) byCode.set(c, m = new Map()); const k = key(x0, y0); (m.get(k) || m.set(k, []).get(k)).push([x0, y0, x1, y1]); };
+  const at = (i, j) => (i < 0 || j < 0 || i >= nx || j >= ny ? -1 : codes[j * nx + i]);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const c = codes[j * nx + i];
+    if (at(i, j - 1) !== c) add(c, i, j, i + 1, j);
+    if (at(i + 1, j) !== c) add(c, i + 1, j, i + 1, j + 1);
+    if (at(i, j + 1) !== c) add(c, i + 1, j + 1, i, j + 1);
+    if (at(i - 1, j) !== c) add(c, i, j + 1, i, j);
+  }
+  const out = [];
+  for (const [code, m] of byCode) {
+    const rings = [];
+    for (const list of m.values()) for (const e0 of list) {
+      if (e0.used) continue;
+      const ring = []; let e = e0;
+      while (e && !e.used) {
+        e.used = true; ring.push([e[0], e[1]]);
+        const nxt = (m.get(key(e[2], e[3])) || []).filter(q => !q.used);
+        if (nxt.length > 1) { // saddle: turn left first (keeps cells of the class connected through the corner)
+          const dx = e[2] - e[0], dy = e[3] - e[1], cr = q => dx * (q[3] - q[1]) - dy * (q[2] - q[0]);
+          nxt.sort((p, q) => cr(q) - cr(p));
+        }
+        e = nxt[0];
+      }
+      if (ring.length >= 4) rings.push(ring);
+    }
+    const P = rings.map(r => { const s = simplifyClosed(r, tol); return { r: chaikin(s.length >= 3 ? s : r, smooth, nx, ny), a: ringArea(r) }; });
+    for (const o of P.filter(p => p.a > 0 && p.a >= minCells)) {
+      const holes = P.filter(h => h.a < 0 && inside(o.r, h.r[0][0], h.r[0][1])).map(h => h.r);
+      out.push({ code, outer: o.r, holes });
+    }
+  }
+  const T = ([x, y]) => [g.ext.xmin + x * g.dx, g.ext.ymin + y * g.dy];
+  return out.map(p => ({ code: p.code, outer: p.outer.map(T), holes: p.holes.map(h => h.map(T)) }));
+}
+
+// ---- writers ----
+const f6 = v => (Math.round(v * 1e6) / 1e6).toFixed(6), rp = v => Math.round(v * 100) / 100;
+const closeRing = r => (r.length && (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1]) ? [...r, r[0]] : r);
+const orient = (r, ccw) => ((ringArea(r) > 0) === ccw ? r : r.slice().reverse());
+const oneLine = s => String(s == null ? '' : s).replace(/[\r\n\t]+/g, ' ').trim();
+
+// polygons: [{ code, name, outer, holes }] -> IRAP Classic lines: x y z per vertex (z = code), 999 after each closed ring
+function irapPolygons(P) {
+  const L = [];
+  for (const p of P) for (const r of [p.outer, ...p.holes]) { for (const q of closeRing(r)) L.push(`${f6(q[0])} ${f6(q[1])} ${f6(p.code)}`); L.push('999.000000 999.000000 999.000000'); }
+  return L.join('\n') + '\n';
+}
+function irapLines(lines) {
+  const L = [];
+  lines.forEach((l, i) => { for (const q of l.pts) L.push(`${f6(q[0])} ${f6(q[1])} ${f6(i + 1)}`); L.push('999.000000 999.000000 999.000000'); });
+  return L.join('\n') + '\n';
+}
+function geojson(P, { lines = [], features = [] } = {}) {
+  const F = P.map(p => ({ type: 'Feature', properties: { kind: 'belt', code: p.code, class: oneLine(p.name), area: rp(Math.abs(ringArea(p.outer)) - p.holes.reduce((a, h) => a + Math.abs(ringArea(h)), 0)) },
+    geometry: { type: 'Polygon', coordinates: [orient(p.outer, true), ...p.holes.map(h => orient(h, false))].map(r => closeRing(r).map(q => [rp(q[0]), rp(q[1])])) } }));
+  for (const f of features) F.push({ type: 'Feature', properties: { kind: 'feature', id: f.id, class: oneLine(f.name), role: f.role, host: f.host.join(',') }, geometry: { type: 'Polygon', coordinates: [closeRing(orient(f.ring, true)).map(q => [rp(q[0]), rp(q[1])])] } });
+  lines.forEach((l, i) => F.push({ type: 'Feature', properties: { kind: 'keyline', name: l.name, code: i + 1 }, geometry: { type: 'LineString', coordinates: l.pts.map(q => [rp(q[0]), rp(q[1])]) } }));
+  return '{"type":"FeatureCollection","features":[\n' + F.map(f => JSON.stringify(f)).join(',\n') + '\n]}\n';
+}
+
+// ZMAP+ of belt codes (code = belt index + 1) on the node grid nodes xmin, xmin + cell ... <= xmax; legend in ! lines
+function nodeGrid(classAt, ext, cell, legend, name = 'GDE') {
+  const nx = Math.max(2, Math.floor((ext.xmax - ext.xmin) / cell + 1e-9) + 1), ny = Math.max(2, Math.floor((ext.ymax - ext.ymin) / cell + 1e-9) + 1), codes = new Int16Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) codes[j * nx + i] = classAt(ext.xmin + i * cell, ext.ymin + j * cell) + 1;
+  return { name, nx, ny, x0: ext.xmin, y0: ext.ymin, dx: cell, dy: cell, codes, legend };
+}
+const crd = v => String(Math.round(v * 1000) / 1000);
+function zmap(G) {
+  const nm = String(G.name || 'GDE').replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '') || 'GDE';
+  const L = ['! GDE map generator v3: belt codes'].concat((G.legend || []).map(([c, n]) => `! ${c} = ${oneLine(n)}`));
+  L.push(`@${nm}, GRID, 5`, '15, 1.0E+30, , 7, 1', `${G.ny}, ${G.nx}, ${crd(G.x0)}, ${crd(G.x0 + (G.nx - 1) * G.dx)}, ${crd(G.y0)}, ${crd(G.y0 + (G.ny - 1) * G.dy)}`, '0.0, 0.0, 0.0', '@');
+  for (let i = 0; i < G.nx; i++) {   // column by column from the upper-left node (ymax) downwards
+    let line = '', n = 0;
+    for (let j = G.ny - 1; j >= 0; j--) { line += (+G.codes[j * G.nx + i]).toFixed(7).padStart(15); if (++n === 5) { L.push(line); line = ''; n = 0; } }
+    if (n) L.push(line);
+  }
+  return L.join('\r\n') + '\r\n';
+}
+
+const csvq = s => { s = oneLine(s); return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+const HOW_TXT = { belts: 'belts', warping: 'warping', not: 'not honoured', unmatched: 'not matched' };
+// wells: model.wells with verdicts: name, x, y, environment given, belt on the map
+function wellsCsv(m) {
+  const bn = m.rs.belts.map(b => b.name), L = ['name,x,y,environment_given,class_on_map,honoured,how'];
+  m.wells.forEach((w, i) => { const c = m.classAt(w.x, w.y), v = m.verdicts[i]; L.push([csvq(w.name), crd(w.x), crd(w.y), csvq(w.env || (w.range ? bn[w.range[0]] : '')), csvq(bn[c]), v === 'belts' || v === 'warping' ? 'yes' : v === 'not' ? 'no' : '', HOW_TXT[v]].join(',')); });
+  return L.join('\n') + '\n';
+}
+function auditJson(m, inputs) {
+  const bn = m.rs.belts.map(b => b.name);
+  return JSON.stringify({
+    tool: 'GDE map generator v3 (concept map, not a prediction)', date: '2026-11-27', inputs,
+    belts: bn, thresholds: { prior: m.prior.map(Math.round), calibrated: m.t.map(Math.round), feasible_lo: m.lo.map(v => (isFinite(v) ? Math.round(v) : null)), feasible_hi: m.hi.map(v => (isFinite(v) ? Math.round(v) : null)), unit: 'metres along the proximal-distal field d' },
+    wells: m.wells.map((w, i) => ({ name: w.name, x: w.x, y: w.y, environment: w.env || null, class_on_map: bn[m.classAt(w.x, w.y)], d: Math.round(m.d[i]), verdict: m.verdicts[i], kept_in_calibration: m.kept.includes(i) })),
+    conflicts: m.conflicts, banner: m.banner, warping: m.warp, features: m.features().length
+  }, null, 1) + '\n';
+}
+return { ringArea, polygonize, oneLine, irapPolygons, irapLines, geojson, nodeGrid, zmap, wellsCsv, auditJson };
+})();
+__M["gde3/src/render.mjs"] = (function () {
+// Drawing on a Canvas 2D context (screen and PNG use the same code): vector belts from polygonize, features, wells with honoured marks,
+// key lines, process arrows, legend, scale bar, coordinates, and the Source -> sink chain strip. No DOM access.
+const {locateAtD, dipDirection} = __M["gde3/src/features.mjs"];
+
+const FONT = 'Inter, system-ui, sans-serif', INK = '#232220', MUT = '#5c5a52';
+const MARK = { belts: ['✓', '#2e7d32'], warping: ['✓', '#2e7d32'], not: ['✗', '#c62828'], unmatched: ['?', '#8c8a80'] };
+const PROC = { river: ['River flow', '#2a6fb0', 0], wave: ['Wave reworking', '#7b4fa8', 0], tide: ['Tidal reworking', '#7b4fa8', 0], storm: ['Storm reworking', '#7b4fa8', 0], gravity: ['Gravity flows', '#c0392b', 0], settling: ['Settling', '#8c8a80', 1] };
+
+const processOf = rs => {
+  const R = rs.sys.regimes, ro = R && rs.regime ? R.options[rs.regime] : null;
+  return { ...(rs.sys.process || {}), ...((ro && ro.process) || {}) };
+};
+const niceStep = r => { const p = Math.pow(10, Math.floor(Math.log10(r))), f = r / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; };
+const fmtN = v => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-US') : String(Math.round(v * 100) / 100));
+const lum = hex => { const v = parseInt(hex.slice(1), 16); return (0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255; };
+
+// layout of the map rectangle in a W x H canvas (legend column on the right when legendW > 0); metres per pixel equal on both axes
+function layoutFor(W, H, ext, legendW = 0) {
+  const left = 62, right = 16, top = 34, bottom = 44, aw = W - left - right - legendW, ah = H - top - bottom, ew = ext.xmax - ext.xmin, eh = ext.ymax - ext.ymin;
+  const k = Math.max(1e-9, Math.min(aw / ew, ah / eh)), px0 = left, py0 = top, px1 = px0 + ew * k, py1 = py0 + eh * k;
+  return { px0, py0, px1, py1, k, legendX: px1 + 24, legendW, W, H, X: x => px0 + (x - ext.xmin) * k, Y: y => py1 - (y - ext.ymin) * k, ix: px => ext.xmin + (px - px0) / k, iy: py => ext.ymin + (py1 - py) / k };
+}
+
+function present(codes, n) { const s = new Set(); for (let i = 0; i < codes.length; i++) s.add(codes[i]); return s; }
+
+function ringPath(c, L, ring) { ring.forEach((q, i) => (i ? c.lineTo(L.X(q[0]), L.Y(q[1])) : c.moveTo(L.X(q[0]), L.Y(q[1])))); c.closePath(); }
+
+function arrow(c, x0, y0, x1, y1, col, dotted) {
+  const a = Math.atan2(y1 - y0, x1 - x0), hl = 11, hw = 8;
+  c.save(); c.lineJoin = 'round'; c.strokeStyle = col; c.fillStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2;
+  if (dotted) c.setLineDash([2, 4]);
+  const L = Math.hypot(x1 - x0, y1 - y0) - hl, ux = Math.cos(a), uy = Math.sin(a);
+  c.beginPath(); c.moveTo(x0 + uy * 3, y0 - ux * 3); c.lineTo(x0 + ux * L + uy * 3, y0 + uy * L - ux * 3); c.lineTo(x0 + ux * L + uy * hw, y0 + uy * L - ux * hw); c.lineTo(x1, y1);
+  c.lineTo(x0 + ux * L - uy * hw, y0 + uy * L + ux * hw); c.lineTo(x0 + ux * L - uy * 3, y0 + uy * L + ux * 3); c.lineTo(x0 - uy * 3, y0 + ux * 3); c.closePath(); c.fill(); c.stroke(); c.restore();
+}
+
+const halo = (c, t, x, y, col = INK) => { c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = 'rgba(255,255,255,.9)'; c.strokeText(t, x, y); c.fillStyle = col; c.fillText(t, x, y); };
+
+// st: { model, polys (belt polygons from polygonize), ext, wells (positions to draw; default model.wells), showLines, arrows, title, hl (belt index to highlight) }
+function drawMap(c, W, H, st, o = {}) {
+  const m = st.model, ext = st.ext, B = m.rs.belts, nB = B.length, leg = o.legend === false ? 0 : Math.min(230, Math.max(150, W * 0.26)), L = layoutFor(W, H, ext, leg);
+  const feats = m.features(), codes = st.codes, pres = present(codes, nB);
+  c.save(); c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
+  c.save(); c.beginPath(); c.rect(L.px0, L.py0, L.px1 - L.px0, L.py1 - L.py0); c.clip();
+  c.fillStyle = B[nB - 1].color; c.fillRect(L.px0, L.py0, L.px1 - L.px0, L.py1 - L.py0);
+  c.lineJoin = 'round';
+  for (const p of st.polys) {
+    const col = B[p.code] ? B[p.code].color : '#ccc'; c.beginPath(); ringPath(c, L, p.outer); p.holes.forEach(h => ringPath(c, L, h));
+    c.fillStyle = col; c.fill('evenodd'); c.strokeStyle = col; c.lineWidth = 1; c.stroke();
+  }
+  for (const f of feats) { c.beginPath(); ringPath(c, L, f.ring); c.fillStyle = f.color; c.fill(); c.strokeStyle = 'rgba(35,34,32,.55)'; c.lineWidth = 0.8; c.stroke(); }
+  if (st.arrows) {
+    const proc = processOf(m.rs), S = m.rs.p[m.rs.p.length - 1], t = m.t, az = st.az || 0;
+    B.forEach((b, k) => {
+      const pr = PROC[proc[b.id]]; if (!pr || !pres.has(k)) return;
+      const lo = k > 0 ? t[k - 1] : t[0] - m.rs.w[0], hi = k < t.length ? t[k] : t[t.length - 1] + m.rs.w[k], dT = (lo + hi) / 2;
+      for (const sf of [-0.3, 0.3]) {
+        const P = locateAtD(m.D, ext, az, sf * S * 1.6, dT); if (!P || P[0] < ext.xmin || P[0] > ext.xmax || P[1] < ext.ymin || P[1] > ext.ymax) continue;
+        const [dx, dy] = dipDirection(m.D, P[0], P[1], S / 200), len = Math.max(26, Math.min(60, (hi - lo) * L.k * 0.55)) / L.k;
+        arrow(c, L.X(P[0] - dx * len / 2), L.Y(P[1] - dy * len / 2), L.X(P[0] + dx * len / 2), L.Y(P[1] + dy * len / 2), pr[1], pr[2]);
+      }
+    });
+  }
+  if (st.hl != null) {   // veil everything but the highlighted belt
+    const pa = new Path2D(), bg = new Path2D(); bg.rect(L.px0, L.py0, L.px1 - L.px0, L.py1 - L.py0);
+    for (const p of st.polys) if (p.code === st.hl) for (const r of [p.outer, ...p.holes]) { r.forEach((q, i) => (i ? pa.lineTo(L.X(q[0]), L.Y(q[1])) : pa.moveTo(L.X(q[0]), L.Y(q[1])))); pa.closePath(); }
+    bg.addPath(pa); c.fillStyle = 'rgba(255,255,255,.62)'; c.fill(bg, 'evenodd'); c.strokeStyle = INK; c.lineWidth = 2; c.stroke(pa);
+  }
+  if (st.showLines) {
+    c.setLineDash([7, 5]); c.strokeStyle = '#1d3f8a'; c.lineWidth = 1.6;
+    for (const l of st.keyLines || m.keyLines) { c.beginPath(); l.pts.forEach((q, i) => (i ? c.lineTo(L.X(q[0]), L.Y(q[1])) : c.moveTo(L.X(q[0]), L.Y(q[1])))); c.stroke(); }
+    c.setLineDash([]);
+    for (const l of st.keyLines || m.keyLines) for (const q of l.handles || []) { c.fillStyle = '#fff'; c.strokeStyle = '#1d3f8a'; c.lineWidth = 1.6; c.fillRect(L.X(q[0]) - 4, L.Y(q[1]) - 4, 8, 8); c.strokeRect(L.X(q[0]) - 4, L.Y(q[1]) - 4, 8, 8); }
+  }
+  c.restore();
+  // wells
+  c.font = '600 12px ' + FONT; c.textBaseline = 'middle'; c.textAlign = 'left';
+  (st.wells || m.wells).forEach((w, i) => {
+    const x = L.X(w.x), y = L.Y(w.y), mk = MARK[m.verdicts[i]] || MARK.unmatched;
+    c.fillStyle = '#fff'; c.strokeStyle = INK; c.lineWidth = 1.8; c.beginPath(); c.arc(x, y, 5.5, 0, 2 * Math.PI); c.fill(); c.stroke();
+    c.fillStyle = INK; c.beginPath(); c.arc(x, y, 1.6, 0, 2 * Math.PI); c.fill();
+    c.font = '600 12px ' + FONT; halo(c, w.name, x + 9, y - 9); const tw = c.measureText(w.name).width;
+    c.font = '700 13px ' + FONT; halo(c, mk[0], x + 12 + tw, y - 9, mk[1]);
+  });
+  // title, north arrow, scale bar
+  c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.fillStyle = INK; c.font = '600 14px "Space Grotesk",' + FONT;
+  c.fillText(st.title || '', L.px0, L.py0 - 12);
+  const nx = L.px1 - 22, ny = L.py0 + 14; c.fillStyle = INK; c.beginPath(); c.moveTo(nx, ny); c.lineTo(nx + 6, ny + 16); c.lineTo(nx, ny + 12); c.lineTo(nx - 6, ny + 16); c.closePath(); c.fill();
+  c.font = '700 11px ' + FONT; c.textAlign = 'center'; halo(c, 'N', nx, ny + 28);
+  const sl = niceStep((L.px1 - L.px0) / L.k / 5), sp = sl * L.k, bx = L.px0 + 14, by = L.py1 - 16;
+  c.fillStyle = 'rgba(255,255,255,.85)'; c.fillRect(bx - 6, by - 20, sp + 12, 30);
+  for (let q = 0; q < 4; q++) { c.fillStyle = q % 2 ? '#fff' : '#111'; c.fillRect(bx + (q * sp) / 4, by, sp / 4, 5); }
+  c.strokeStyle = '#111'; c.lineWidth = 1; c.strokeRect(bx, by, sp, 5); c.fillStyle = INK; c.font = '500 11px ' + FONT; c.fillText(sl >= 1000 ? sl / 1000 + ' km' : sl + ' m', bx + sp / 2, by - 7);
+  // frame, coordinates
+  c.strokeStyle = INK; c.lineWidth = 1; c.strokeRect(L.px0 + 0.5, L.py0 + 0.5, L.px1 - L.px0, L.py1 - L.py0);
+  c.font = '11px ' + FONT; c.fillStyle = MUT;
+  const tx = niceStep((ext.xmax - ext.xmin) / ((L.px1 - L.px0) / 110)), ty = niceStep((ext.ymax - ext.ymin) / ((L.py1 - L.py0) / 70));
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  for (let v = Math.ceil(ext.xmin / tx) * tx; v <= ext.xmax + 1e-9; v += tx) { const x = L.X(v); c.beginPath(); c.moveTo(x, L.py1); c.lineTo(x, L.py1 + 5); c.stroke(); c.fillText(fmtN(v), x, L.py1 + 7); }
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for (let v = Math.ceil(ext.ymin / ty) * ty; v <= ext.ymax + 1e-9; v += ty) { const y = L.Y(v); c.beginPath(); c.moveTo(L.px0, y); c.lineTo(L.px0 - 5, y); c.stroke(); c.fillText(fmtN(v), L.px0 - 7, y); }
+  c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText('X', (L.px0 + L.px1) / 2, L.py1 + 24);
+  c.save(); c.translate(12, (L.py0 + L.py1) / 2); c.rotate(-Math.PI / 2); c.textBaseline = 'middle'; c.fillText('Y', 0, 0); c.restore();
+  if (leg) drawLegend(c, L, st, pres);
+  c.restore();
+  return L;
+}
+
+function drawLegend(c, L, st, pres) {
+  const m = st.model, B = m.rs.belts, lx = Math.min(L.W - L.legendW + 6, L.legendX), lw = L.legendW - 12; let ly = L.py0;
+  c.textAlign = 'left'; c.textBaseline = 'top'; c.fillStyle = INK; c.font = '600 13px "Space Grotesk",' + FONT; c.fillText('Environments', lx, ly); ly += 18;
+  c.font = '11px ' + FONT; c.fillStyle = MUT; c.fillText('proximal → distal; grey = absent', lx, ly); ly += 17;
+  const wrapText = (t, x, y, maxW, lh) => { let line = '', yy = y; for (const w of t.split(' ')) { const tst = line ? line + ' ' + w : w; if (c.measureText(tst).width > maxW && line) { c.fillText(line, x, yy); line = w; yy += lh; } else line = tst; } c.fillText(line, x, yy); return yy + lh; };
+  c.font = '12px ' + FONT;
+  B.forEach((b, i) => {
+    const has = pres.has(i); c.fillStyle = has ? b.color : '#ecebe5'; c.fillRect(lx, ly, 18, 13); c.strokeStyle = 'rgba(35,34,32,.5)'; c.strokeRect(lx + 0.5, ly + 0.5, 17, 12);
+    c.fillStyle = has ? INK : '#8c8a80'; ly = wrapText(b.name, lx + 24, ly, lw - 26, 14) + 5;
+  });
+  const fl = m.featureLegend.filter(l => m.features().some(p => p.id === l.id && p.role === l.role));
+  if (fl.length) {
+    ly += 4; c.fillStyle = MUT; c.font = '600 11px ' + FONT; c.fillText('FEATURES', lx, ly); ly += 15; c.font = '12px ' + FONT;
+    for (const l of fl) { c.fillStyle = l.color; c.fillRect(lx, ly, 18, 11); c.strokeStyle = 'rgba(35,34,32,.55)'; c.strokeRect(lx + 0.5, ly + 0.5, 17, 10); c.fillStyle = INK; ly = wrapText(l.name, lx + 24, ly, lw - 26, 14) + 4; }
+  }
+  ly += 6; c.fillStyle = '#fff'; c.strokeStyle = INK; c.lineWidth = 1.8; c.beginPath(); c.arc(lx + 9, ly + 7, 5, 0, 2 * Math.PI); c.fill(); c.stroke();
+  c.fillStyle = INK; c.font = '12px ' + FONT; c.fillText('Well', lx + 24, ly); c.fillStyle = '#2e7d32'; c.font = '700 12px ' + FONT; c.fillText('✓', lx + 62, ly);
+  c.fillStyle = MUT; c.font = '11px ' + FONT; c.fillText('honoured', lx + 76, ly + 1); ly += 17;
+  c.fillStyle = '#c62828'; c.font = '700 12px ' + FONT; c.fillText('✗', lx + 62, ly); c.fillStyle = MUT; c.font = '11px ' + FONT; c.fillText('not honoured', lx + 76, ly + 1); ly += 22;
+  if (st.arrows) {
+    const proc = processOf(m.rs), used = [...new Set(B.filter((b, i) => pres.has(i)).map(b => proc[b.id]).filter(Boolean))];
+    for (const p of used) { const pr = PROC[p]; arrow(c, lx, ly + 6, lx + 26, ly + 6, pr[1], pr[2]); c.fillStyle = INK; c.font = '12px ' + FONT; c.fillText(pr[0], lx + 34, ly); ly += 17; }
+  }
+  if (st.showLines) { c.setLineDash([7, 5]); c.strokeStyle = '#1d3f8a'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(lx, ly + 7); c.lineTo(lx + 18, ly + 7); c.stroke(); c.setLineDash([]); c.fillStyle = INK; c.font = '12px ' + FONT; c.fillText('Key line (basin →)', lx + 24, ly); ly += 17; }
+  c.fillStyle = MUT; c.font = 'italic 11px ' + FONT; wrapText('Concept map, not a prediction.', lx, ly + 4, lw, 14);
+}
+
+// ---- Source -> sink chain: every belt of the system in order, greyed when absent from the map; the dominant process under each link ----
+function chainOf(m, pres) {
+  const proc = processOf(m.rs);
+  return { links: m.rs.belts.map((b, i) => ({ k: i, name: b.name, color: b.color, missing: !pres.has(i), process: proc[b.id] || null })) };
+}
+function drawChain(c, W, x0, y0, ch, hl) {
+  const pad = 10, bh = 26; let x = x0 + pad, y = y0 + 8, any = false; const hits = [];
+  c.save(); c.textBaseline = 'top'; c.textAlign = 'left'; c.fillStyle = INK; c.font = '600 13px "Space Grotesk",' + FONT; c.fillText('Source → sink', x, y);
+  const tw = c.measureText('Source → sink').width; c.fillStyle = MUT; c.font = '11px ' + FONT;
+  c.fillText('concept map, not a prediction · belts of the system, proximal → distal, grey = not on this map · click a link to highlight its zone', x + tw + 10, y + 2); y += 24;
+  for (const l of ch.links) {
+    c.font = (l.missing ? 'italic ' : '') + '11.5px ' + FONT;
+    const w = Math.min(150, Math.max(78, c.measureText(l.name).width + 16));
+    if (x + w > x0 + W - pad && any) { x = x0 + pad; y += 56; }
+    if (any) { c.fillStyle = '#8c8a80'; c.font = '14px ' + FONT; c.fillText('›', x - 14, y + 4); }
+    const on = hl === l.k && !l.missing;
+    c.beginPath(); c.roundRect(x, y, w, bh, 6); c.fillStyle = l.missing ? '#f1f0ea' : l.color; c.fill();
+    if (l.missing) { c.setLineDash([4, 3]); c.strokeStyle = '#a9a79d'; c.lineWidth = 1.2; } else { c.strokeStyle = on ? INK : 'rgba(35,34,32,.45)'; c.lineWidth = on ? 2.6 : 1; }
+    c.stroke(); c.setLineDash([]);
+    c.fillStyle = l.missing ? '#8c8a80' : lum(l.color) > 0.58 ? INK : '#fff'; c.font = (l.missing ? 'italic ' : '') + '11.5px ' + FONT; c.textBaseline = 'middle';
+    let t = l.name; while (t.length > 3 && c.measureText(t).width > w - 10) t = t.slice(0, -2); if (t !== l.name) t = t.trim() + '…';
+    c.fillText(t, x + 7, y + bh / 2 + 0.5); c.textBaseline = 'top';
+    const pr = l.process && PROC[l.process]; c.font = '10px ' + FONT;
+    if (l.missing) { c.fillStyle = '#a9a79d'; c.fillText('missing link', x, y + bh + 4); } else if (pr) { c.fillStyle = pr[1]; c.fillText(pr[0].toLowerCase(), x, y + bh + 4); }
+    hits.push({ x, y, w, h: bh + 16, l }); x += w + 18; any = true;
+  }
+  c.restore();
+  return { h: y + bh + 24 - y0, hits };
+}
+
+// PNG: the map with legend, scale bar and coordinates, then the chain strip; returns the canvas drawn on (create(W, H) makes a canvas)
+function renderPng(create, st, W = 2000) {
+  const Hm = Math.round(W * 0.6), probe = create(10, 10).getContext('2d'), ch = chainOf(st.model, present(st.codes, st.model.rs.belts.length)), hc = Math.ceil(drawChain(probe, W, 0, 0, ch).h);
+  const cv = create(W, Hm + hc), c = cv.getContext('2d');
+  drawMap(c, W, Hm, { ...st, arrows: st.arrows }, {}); c.fillStyle = '#fff'; c.fillRect(0, Hm, W, hc); drawChain(c, W, 0, Hm, ch, null);
+  return cv;
+}
+return { MARK, processOf, layoutFor, present, drawMap, chainOf, drawChain, renderPng };
+})();
+__M["gde3/src/wells.mjs"] = (function () {
+// Wells table: "name, x, y, environment" (tab, semicolon, comma or space separated; a header line or a bad line is skipped and reported).
+const NUM = '(-?\\d+(?:[.,]\\d+)?(?:e[+-]?\\d+)?)';
+const RE = [new RegExp('^\\s*([^\\t;]+?)\\s*[\\t;]\\s*' + NUM + '\\s*[\\t;]\\s*' + NUM + '\\s*[\\t;]\\s*(.+?)\\s*$', 'i'),
+  new RegExp('^\\s*([^,]+?)\\s*,\\s*' + NUM + '\\s*,\\s*' + NUM + '\\s*,\\s*(.+?)\\s*$', 'i'),
+  new RegExp('^\\s*(\\S+)\\s+' + NUM + '\\s+' + NUM + '\\s+(.+?)\\s*$', 'i')];
+
+function parseWells(text) {
+  const wells = [], skipped = [];
+  String(text || '').split(/\r?\n/).forEach((line, i) => {
+    if (!line.trim()) return;
+    for (const re of RE) {
+      const m = re.exec(line);
+      if (m) { wells.push({ name: m[1].trim(), x: parseFloat(m[2].replace(',', '.')), y: parseFloat(m[3].replace(',', '.')), env: m[4].trim() }); return; }
+    }
+    if (i > 0 || /\d/.test(line)) skipped.push(i + 1);   // the first line is allowed to be a header
+  });
+  return { wells, skipped };
+}
+
+const wellsToText = wells => wells.map(w => [w.name, Math.round(w.x), Math.round(w.y), w.env].join(', ')).join('\n');
+
+// map extent (square, metres) around the wells with a margin; null when there are no wells
+function fitExtent(wells, margin = 0.45) {
+  if (!wells.length) return null;
+  const xs = wells.map(w => w.x), ys = wells.map(w => w.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const half = Math.max(x1 - x0, y1 - y0, 1000) * (0.5 + margin), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  return { xmin: Math.round(cx - half), xmax: Math.round(cx + half), ymin: Math.round(cy - half), ymax: Math.round(cy + half) };
+}
+return { parseWells, wellsToText, fitExtent };
+})();
+__M["gde3/tools/acceptance.mjs"] = (function () {
+// Three synthetic acceptance well sets (documented in gde3/README.md). Wells are placed from (environment, x, position in the prior belt):
+// y is found so that the field d lies at that fraction of the belt's PRIOR extent (0 = proximal limit, 1 = distal limit); a fraction
+// above 1 makes the well pull the thresholds away from the prior (the calibration has to move a boundary).
+const {buildModel} = __M["gde3/src/model.mjs"];
+
+const EXT = { xmin: 0, xmax: 100000, ymin: 0, ymax: 100000 };
+const W = 100000;
+
+// wells: [environment, x (fraction of the width), position in the prior belt]; moved = index of the well that is moved in the tests
+const SETS = {
+  A: { title: 'Shoreface-shelf, straight shoreline', system: 'shoreface', km: 60, wobble: 0, lobe: 0, moved: 2,
+    wells: [['Coastal plain', 0.50, 0.5], ['Shoreface', 0.30, 0.5], ['Offshore transition', 0.65, 1.2], ['Offshore shelf', 0.40, 0.5], ['Slope', 0.55, 0.5]] },
+  B: { title: 'Wave-dominated delta, lobate shoreline', system: 'delta', regime: 'wave', km: 60, wobble: 0.02, lobe: 0.08, moved: 2,
+    wells: [['Delta plain', 0.50, 0.5], ['Delta front', 0.35, 0.5], ['Prodelta', 0.65, 1.2], ['Shelf', 0.45, 0.5], ['Slope', 0.55, 0.5]] },
+  C: { title: 'Rimmed carbonate platform, straight margin', system: 'platform', km: 60, wobble: 0, lobe: 0, moved: 2,
+    wells: [['Tidal flat / sabkha', 0.50, 0.5], ['Platform interior / lagoon', 0.35, 0.5], ['Open platform / back-reef', 0.65, 1.1], ['Platform margin (reef / shoal)', 0.45, 0.8], ['Fore-reef slope', 0.55, 0.5]] }
+};
+
+function setOpts(S) { return { system: S.system, regime: S.regime, km: S.km, ext: EXT, az: 0, seed: 7, wobble: S.wobble, lobe: S.lobe }; }
+
+// resolved wells [{ name, x, y, env }] for a set
+function setWells(S) {
+  const m0 = buildModel({ ...setOpts(S), wells: [] }), rs = m0.rs, ids = rs.belts.map(b => b.name);
+  return S.wells.map(([env, xf, f], i) => {
+    const k = ids.indexOf(env), lo = k > 0 ? rs.p[k - 1] : rs.p[0] - rs.w[0], hi = k < rs.p.length ? rs.p[k] : rs.p[k - 1] + rs.w[k];
+    const target = lo + f * (hi - lo), x = xf * W;
+    let a = 0, b = W;
+    for (let q = 0; q < 50; q++) { const mid = (a + b) / 2; if (m0.F(x, mid) < target) a = mid; else b = mid; }
+    return { name: 'W' + (i + 1), x: Math.round(x), y: Math.round((a + b) / 2), env };
+  });
+}
+return { EXT, SETS, setOpts, setWells };
+})();
+__M["gde3/ui/app.mjs"] = (function () {
+// UI of the GDE map generator v3: three steps (1 wells, 2 system, 3 result). All state in S; every change recomputes the whole model (fast enough).
+const {SYSTEMS} = __M["gde3/src/systems.mjs"];
+const {buildModel} = __M["gde3/src/model.mjs"];
+const {makeGrid, smooth, signedDist} = __M["gde3/src/geometry.mjs"];
+const {matchBelt} = __M["gde3/src/belts.mjs"];
+const {HOW} = __M["gde3/src/verdict.mjs"];
+const {polygonize, irapPolygons, irapLines, geojson, nodeGrid, zmap, wellsCsv, auditJson} = __M["gde3/src/exports.mjs"];
+const {drawMap, layoutFor, chainOf, drawChain, renderPng, present} = __M["gde3/src/render.mjs"];
+const {parseWells, wellsToText, fitExtent} = __M["gde3/src/wells.mjs"];
+const {SETS, EXT, setOpts, setWells} = __M["gde3/tools/acceptance.mjs"];
+
+const NGRID = 100;   // default grid of the screen map
+const $ = id => document.getElementById(id);
+const EXAMPLES = { A: SETS.A, B: SETS.B, C: SETS.C };
+const SYSLIST = Object.keys(SYSTEMS);
+
+function init() {
+  const S = { system: 'shoreface', regime: 'river', km: 60, az: 0, seed: 7, wobble: 0.03, lobe: 0, ext: { ...EXT }, wells: [], keyLines: null, features: true, arrows: false, warp: false, showLines: false, hl: null, adding: false, ms: 0 };
+  let M = null, G = null, codes = null, polys = null, L = null, drag = null, raf = 0, chainHits = [];
+  const msg = (id, t, err) => { const e = $(id); e.textContent = t || ''; e.classList.toggle('err', !!err); };
+  const regimeIds = () => (SYSTEMS[S.system].regimes ? Object.keys(SYSTEMS[S.system].regimes.options) : []);
+
+  // ---------- model ----------
+  function compute() {
+    const t0 = performance.now(), ext = S.ext, span = Math.max(ext.xmax - ext.xmin, ext.ymax - ext.ymin);
+    const sys = SYSTEMS[S.system], opts = { system: S.system, regime: sys.regimes ? S.regime : undefined, km: S.km, ext, az: S.az, seed: S.seed, wobble: S.wobble, lobe: S.lobe, wells: S.wells, features: S.features, keyLines: S.keyLines || undefined, warp: S.warp ? { radius: 0.2 * span, maxAmp: 0.25 * S.km * 1000 } : null };
+    M = buildModel(opts); G = makeGrid(ext, NGRID); codes = M.classGrid(G); polys = polygonize(codes, G, { tol: 0.9, smooth: 3 }); M.features();
+    S.ms = performance.now() - t0; window.GDE3APP = { S, get model() { return M; }, ms: S.ms };
+    draw(); drawResult();
+  }
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; compute(); }); };
+  const stState = () => ({ model: M, polys, codes, ext: S.ext, az: S.az, arrows: S.arrows, showLines: S.showLines, keyLines: S.showLines ? handlesOf(M.keyLines) : null, hl: S.hl, title: sysTitle() });
+  const handlesOf = ls => ls.map(l => ({ ...l, handles: l.ctrl || [] }));
+  const sysTitle = () => SYSTEMS[S.system].name + (SYSTEMS[S.system].regimes ? ', ' + S.regime + '-dominated' : '') + ' · ' + S.km + ' km · azimuth ' + S.az + '°';
+
+  // ---------- drawing ----------
+  function fitCanvas(cv, w, h) { const d = window.devicePixelRatio || 1; cv.style.width = w + 'px'; cv.style.height = h + 'px'; cv.width = Math.round(w * d); cv.height = Math.round(h * d); const c = cv.getContext('2d'); c.setTransform(d, 0, 0, d, 0, 0); return c; }
+  function draw() {
+    if (!M) return;
+    const st = $('stage'), w = st.clientWidth, h = st.clientHeight; if (!w || !h) return;
+    const c = fitCanvas($('cv'), w, h), wells = drag && drag.k === 'well' ? S.wells : undefined;
+    L = drawMap(c, w, h, { ...stState(), wells }, {});
+    $('ro').textContent = 'recompute ' + Math.round(S.ms) + ' ms · grid ' + NGRID + ' × ' + NGRID;
+  }
+  function drawResult() {
+    const b = M.banner, v = $('verdict'), icon = { pass: '✓', warn: '!', bad: '✗', none: '·' }[b.state];
+    v.className = 'verdict ' + (b.state === 'pass' ? '' : b.state);
+    const subs = [];
+    if (b.state === 'none') subs.push('No well yet: the map is the concept alone (prior belt widths). Add wells in step 1 to calibrate it.');
+    else if (!M.conflicts.length) subs.push(M.cost > 0 ? 'Boundaries moved by the minimum needed to honour the wells.' : 'The wells fall in the belts of the concept: no boundary had to move.');
+    for (const c of M.conflicts) subs.push('<span class="c">' + esc(c.msg) + '</span>');
+    v.innerHTML = '<span class="ic">' + icon + '</span><h2>' + esc(b.head) + '</h2><div class="sub">' + subs.join('<br>') + '</div><div class="reminder">Concept map, not a prediction.</div>';
+    const tb = $('tb'); tb.innerHTML = '';
+    const bn = M.rs.belts.map(x => x.name);
+    M.wells.forEach((w, i) => {
+      const vd = M.verdicts[i], ok = vd === 'belts' || vd === 'warping', tr = document.createElement('tr');
+      tr.innerHTML = '<td class="l">' + esc(w.name) + '</td><td class="l">' + esc(w.env || '—') + ' → ' + esc(bn[M.classAt(w.x, w.y)]) + '</td><td class="l ' + (ok ? 'yes' : vd === 'not' ? 'no' : '') + '">' + (ok ? '✓ ' : vd === 'not' ? '✗ ' : '? ') + HOW[vd] + '</td>';
+      tb.appendChild(tr);
+    });
+    $('wtab').hidden = !M.wells.length;
+    drawChainDom();
+  }
+  function drawChainDom() {
+    const w = $('chainw'), W = Math.max(300, w.clientWidth), cn = $('chain'), ch = chainOf(M, present(codes, M.rs.belts.length)), probe = document.createElement('canvas').getContext('2d');
+    const h = Math.ceil(drawChain(probe, W, 0, 0, ch, S.hl).h), c = fitCanvas(cn, W, h); c.fillStyle = '#fff'; c.fillRect(0, 0, W, h); chainHits = drawChain(c, W, 0, 0, ch, S.hl).hits;
+  }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+  // ---------- step 1: wells ----------
+  function renderWells() {
+    const box = $('wList'); box.innerHTML = '';
+    const bn = SYSTEMS[S.system].belts.map(b => b.name);
+    S.wells.forEach((w, i) => {
+      const row = document.createElement('div'), r = matchBelt(w.env, SYSTEMS[S.system].belts);
+      row.className = 'wr';
+      const opts = bn.map((n, k) => '<option value="' + k + '"' + (r && r[0] === k && r[1] === k ? ' selected' : '') + '>' + esc(n) + '</option>').join('');
+      row.innerHTML = '<input type="text" value="' + esc(w.name) + '" aria-label="Well name"><select aria-label="Environment of ' + esc(w.name) + '">' + (r && r[0] === r[1] ? '' : '<option value="-1" selected>' + esc(w.env || '?') + (r ? '' : ' (not matched)') + '</option>') + opts + '</select><button title="Remove this well" aria-label="Remove ' + esc(w.name) + '">✕</button>';
+      const [inp, sel, btn] = row.children;
+      inp.onchange = () => { w.name = inp.value || w.name; schedule(); };
+      sel.onchange = () => { if (+sel.value >= 0) { w.env = bn[+sel.value]; schedule(); } };
+      btn.onclick = () => { S.wells.splice(i, 1); renderWells(); schedule(); };
+      box.appendChild(row);
+    });
+    $('wTxt').value = wellsToText(S.wells);
+  }
+  function applyTable(text, fit) {
+    const { wells, skipped } = parseWells(text);
+    S.wells = wells;
+    if (fit && wells.length) { S.ext = fitExtent(wells); S.km = Math.max(1, Math.min(300, Math.round((0.6 * (S.ext.xmax - S.ext.xmin)) / 1000))); S.keyLines = null; syncSystem(); }
+    const un = wells.filter(w => !matchBelt(w.env, SYSTEMS[S.system].belts)).length;
+    msg('wMsg', wells.length + ' wells read' + (skipped.length ? ', line ' + skipped.join(', ') + ' skipped' : '') + (un ? ', ' + un + ' environment(s) not matched to a belt of this system' : '') + '.', skipped.length || un);
+    renderWells(); compute();
+  }
+  $('bWApply').onclick = () => applyTable($('wTxt').value, true);
+  $('bWClear').onclick = () => { S.wells = []; renderWells(); msg('wMsg', ''); compute(); };
+  $('bWAdd').onclick = () => { S.adding = !S.adding; $('bWAdd').classList.toggle('on', S.adding); $('cv').style.cursor = S.adding ? 'crosshair' : ''; msg('wMsg', S.adding ? 'Click on the map where the well is.' : ''); };
+
+  // ---------- step 2: system ----------
+  function loadSystemUI() {
+    $('sSys').innerHTML = SYSLIST.map(id => '<option value="' + id + '">' + esc(SYSTEMS[id].name) + '</option>').join('');
+    $('ex').innerHTML = '<option value="">Load an example…</option>' + Object.entries(EXAMPLES).map(([k, e]) => '<option value="' + k + '">' + k + '. ' + esc(e.title) + '</option>').join('');
+  }
+  function syncSystem() {
+    const sys = SYSTEMS[S.system], rg = regimeIds();
+    $('sSys').value = S.system; $('sKm').value = S.km; $('vKm').textContent = S.km + ' km'; $('sAz').value = S.az; $('vAz').textContent = S.az + '°';
+    $('sReg').disabled = !rg.length; $('sReg').max = Math.max(0, rg.length - 1); $('sReg').value = Math.max(0, rg.indexOf(S.regime));
+    $('vReg').textContent = rg.length ? S.regime : 'n/a for this system'; $('regL').hidden = !rg.length;
+    $('regL').textContent = rg.length ? '(' + rg.join(' · ') + ')' : ''; $('sSeed').value = S.seed; $('eFeat').checked = S.features; $('eArr').checked = S.arrows; $('eWarp').checked = S.warp; $('eLines').checked = S.showLines;
+    $('sysNote').textContent = sys.refs[0].text.split(' (')[0];
+  }
+  const sysChanged = () => { S.keyLines = null; syncSystem(); renderWells(); compute(); };
+  $('sSys').onchange = () => { S.system = $('sSys').value; if (SYSTEMS[S.system].regimes && !regimeIds().includes(S.regime)) S.regime = SYSTEMS[S.system].regimes.default; if (!SYSTEMS[S.system].regimes) S.regime = 'river'; S.km = SYSTEMS[S.system].scale.km; S.lobe = 0; sysChanged(); };
+  $('sKm').oninput = () => { S.km = +$('sKm').value; S.keyLines = null; syncSystem(); schedule(); };
+  $('sAz').oninput = () => { S.az = +$('sAz').value; S.keyLines = null; syncSystem(); schedule(); };
+  $('sReg').oninput = () => { const r = regimeIds(); if (r.length) { S.regime = r[+$('sReg').value]; S.keyLines = null; syncSystem(); schedule(); } };
+  $('bEdit').onclick = () => { const o = $('editBox').hidden; $('editBox').hidden = !o; $('bEdit').setAttribute('aria-expanded', o); };
+  $('sSeed').onchange = () => { S.seed = Math.max(1, Math.round(+$('sSeed').value) || 1); S.keyLines = null; compute(); };
+  $('bSeed').onclick = () => { S.seed = 1 + Math.floor(Math.random() * 9999); S.keyLines = null; syncSystem(); compute(); };
+  $('eFeat').onchange = () => { S.features = $('eFeat').checked; compute(); };
+  $('eArr').onchange = () => { S.arrows = $('eArr').checked; draw(); };
+  $('eWarp').onchange = () => { S.warp = $('eWarp').checked; compute(); };
+  $('eLines').onchange = () => { S.showLines = $('eLines').checked; draw(); };
+  $('bLReset').onclick = () => { S.keyLines = null; msg('lMsg', 'Key lines proposed again.'); compute(); };
+  $('ex').onchange = () => {
+    const e = EXAMPLES[$('ex').value]; if (!e) return;
+    Object.assign(S, { system: e.system, regime: e.regime || 'river', km: e.km, az: 0, seed: 7, wobble: e.wobble, lobe: e.lobe, ext: { ...EXT }, keyLines: null, hl: null });
+    S.wells = setWells(e); syncSystem(); renderWells(); msg('wMsg', 'Example ' + $('ex').value + ': ' + e.title + '. Well 3 sits beyond the prior limit of its belt: drag it and watch the boundary move.'); compute();
+  };
+
+  // ---------- canvas interaction ----------
+  const pos = e => { const r = $('cv').getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const world = p => [L.ix(p[0]), L.iy(p[1])];
+  function linesOK(lines) {   // adjacent key lines may not cross: every point of the proximal one lies on the proximal side of the next
+    const s = lines.slice().sort((a, b) => a.v - b.v);
+    for (let i = 0; i + 1 < s.length; i++) for (let q = 0; q < s[i].pts.length; q += 3) if (signedDist(s[i + 1].pts, s[i].pts[q][0], s[i].pts[q][1]) >= 0) return false;
+    return true;
+  }
+  $('cv').addEventListener('pointerdown', e => {
+    if (!M || !L) return; const p = pos(e), w = world(p);
+    if (S.adding) { openPop(p, w); return; }
+    const bn = M.wells.findIndex(q => Math.hypot(L.X(q.x) - p[0], L.Y(q.y) - p[1]) < 11);
+    if (bn >= 0) { drag = { k: 'well', i: bn }; $('cv').setPointerCapture(e.pointerId); return; }
+    if (S.showLines) {
+      const lines = S.keyLines || M.keyLines;
+      for (let li = 0; li < lines.length; li++) { const vi = (lines[li].ctrl || []).findIndex(q => Math.hypot(L.X(q[0]) - p[0], L.Y(q[1]) - p[1]) < 10); if (vi >= 0) { if (!S.keyLines) S.keyLines = M.keyLines.map(l => ({ ...l, ctrl: l.ctrl.map(q => q.slice()) })); drag = { k: 'line', li, vi }; $('cv').setPointerCapture(e.pointerId); return; } }
+    }
+  });
+  $('cv').addEventListener('pointermove', e => {
+    if (!L) return; const p = pos(e), w = world(p);
+    $('ro').textContent = 'x ' + Math.round(w[0]) + '  y ' + Math.round(w[1]) + ' · ' + Math.round(S.ms) + ' ms';
+    if (!drag) { const near = M.wells.some(q => Math.hypot(L.X(q.x) - p[0], L.Y(q.y) - p[1]) < 11); $('cv').style.cursor = S.adding ? 'crosshair' : near ? 'grab' : ''; return; }
+    if (drag.k === 'well') { const q = S.wells[drag.i]; q.x = Math.min(S.ext.xmax, Math.max(S.ext.xmin, w[0])); q.y = Math.min(S.ext.ymax, Math.max(S.ext.ymin, w[1])); schedule(); }
+    else { const l = S.keyLines[drag.li], old = l.ctrl[drag.vi].slice(), oldPts = l.pts; l.ctrl[drag.vi] = [w[0], w[1]]; l.pts = smooth(l.ctrl);
+      if (!linesOK(S.keyLines)) { l.ctrl[drag.vi] = old; l.pts = oldPts; msg('lMsg', 'Key lines may not cross.', true); } else { msg('lMsg', ''); schedule(); } }
+  });
+  const end = () => { if (drag && drag.k === 'well') renderWells(); drag = null; };
+  $('cv').addEventListener('pointerup', end); $('cv').addEventListener('pointercancel', end);
+  // new well popup
+  function openPop(p, w) {
+    const pop = $('pop'); pop.hidden = false; pop.style.left = Math.min(p[0], $('stage').clientWidth - 240) + 'px'; pop.style.top = Math.min(p[1], $('stage').clientHeight - 150) + 'px';
+    $('pName').value = 'W-' + (S.wells.length + 1); $('pEnv').innerHTML = SYSTEMS[S.system].belts.map(b => '<option>' + esc(b.name) + '</option>').join('');
+    // preselect the belt the map shows at that point
+    $('pEnv').selectedIndex = M.classAt(w[0], w[1]); pop.dataset.x = w[0]; pop.dataset.y = w[1];
+  }
+  $('pOk').onclick = () => { const pop = $('pop'); S.wells.push({ name: $('pName').value || 'W', x: +pop.dataset.x, y: +pop.dataset.y, env: $('pEnv').value }); pop.hidden = true; S.adding = false; $('bWAdd').classList.remove('on'); $('cv').style.cursor = ''; msg('wMsg', ''); renderWells(); compute(); };
+  $('pCancel').onclick = () => { $('pop').hidden = true; S.adding = false; $('bWAdd').classList.remove('on'); $('cv').style.cursor = ''; msg('wMsg', ''); };
+  $('chain').addEventListener('click', e => {
+    const r = $('chain').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, h = chainHits.find(q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
+    if (!h || h.l.missing) return; S.hl = S.hl === h.l.k ? null : h.l.k; draw(); drawChainDom();
+  });
+
+  // ---------- exports ----------
+  function save(name, data, mime) { const a = document.createElement('a'), u = URL.createObjectURL(new Blob([data], { type: mime || 'text/plain' })); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 2000); }
+  const base = () => 'gde3_' + S.system + (SYSTEMS[S.system].regimes ? '_' + S.regime : '');
+  const exportPolys = () => { const g = makeGrid(S.ext, 200), c = M.classGrid(g); return polygonize(c, g).map(p => ({ ...p, code: p.code + 1, name: M.rs.belts[p.code].name })); };
+  const lines = () => (S.keyLines || M.keyLines).map(l => ({ name: l.name, pts: l.pts }));
+  const X = {
+    bPng: () => renderPng((w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }, stState(), 2000).toBlob(b => save(base() + '.png', b, 'image/png')),
+    bZmap: () => { const cell = (S.ext.xmax - S.ext.xmin) / 100; save(base() + '.zmap', zmap(nodeGrid(M.classAt, S.ext, cell, M.rs.belts.map((b, i) => [i + 1, b.name]), base().toUpperCase())), 'text/plain'); },
+    bGeo: () => save(base() + '.geojson', geojson(exportPolys(), { lines: lines(), features: M.features() }), 'application/geo+json'),
+    bIrap: () => save(base() + '_polygons.irap', irapPolygons(exportPolys()), 'text/plain'),
+    bLines: () => save(base() + '_keylines.irap', irapLines(lines()), 'text/plain'),
+    bWcsv: () => save(base() + '_wells.csv', wellsCsv(M), 'text/csv'),
+    bAudit: () => save(base() + '_audit.json', auditJson(M, { system: S.system, regime: SYSTEMS[S.system].regimes ? S.regime : null, km: S.km, azimuth: S.az, seed: S.seed, extent: S.ext, features: S.features, warping: S.warp, custom_key_lines: !!S.keyLines }), 'application/json')
+  };
+  for (const [id, fn] of Object.entries(X)) $(id).onclick = () => { try { fn(); msg('exportMsg', 'Exported.'); } catch (err) { msg('exportMsg', 'Export failed: ' + err.message, true); } $('xmenu').hidden = true; $('bExp').setAttribute('aria-expanded', 'false'); };
+  $('bExp').onclick = e => { e.stopPropagation(); const o = $('xmenu').hidden; $('xmenu').hidden = !o; $('bExp').setAttribute('aria-expanded', o); };
+  document.addEventListener('click', e => { if (!$('xm').contains(e.target)) { $('xmenu').hidden = true; $('bExp').setAttribute('aria-expanded', 'false'); } });
+  window.addEventListener('resize', () => { draw(); if (M) drawChainDom(); });
+
+  loadSystemUI(); syncSystem(); renderWells(); $('ex').value = 'A'; $('ex').onchange();
+}
+
+if (typeof document !== 'undefined') init();
+return { init };
+})();
+globalThis.GDE3 = Object.assign({}, ...Object.values(__M));
+})();
+
+</script>
+<script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;white-space:normal;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:normal;width:12em;min-width:9em}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete|to verify/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published (read)</b> the content for the number or method concerned was read in the publication or standard; <b>published (metadata verified)</b> the reference exists and its citation (authors, year, title, journal, volume, pages) was checked in Crossref or another scholarly metadata service, but its content was not re-read; <b>to verify</b> a citation that could not be verified, with what is missing; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap'],['Well-log digitizer','logdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap'],['GDE map generator (new)','gdemap3'],['Grid attributes','gridattr']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec'],['Burial history (1D)','burial'],['Log correlation (DTW)','logcorr']]],
+      ['Decision support',[['MCDA AHP','mcda-ahp'],['MCDA PROMETHEE','mcda-promethee'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp'],['Contact and well POS','wellpos'],['Distribution fitting','distfit']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you type or load leaves your machine. Draws a first-pass gross depositional environment (GDE) map from the environments interpreted at a few wells and ONE depositional system chosen among three (wave-dominated shoreface–shelf, delta with river / wave / tide regimes, rimmed carbonate platform). Three steps: wells (pasted table or clicks), system (one choice and three sliders: scale, dominant regime, transport direction), result (map, verdict, how each well is honoured, source → sink chain, exports). This is a <b>concept map, not a prediction<\/b>: it draws the geometry a geologist would sketch by hand, with logical neighbours, and says which wells it honours. It is the new, rewritten version of the GDE map generator; the previous version stays online.","method":["<b>Systems are data.<\/b> Each system is a record: belts from proximal to distal with relative widths and colours, the <em>adjacency graph<\/em> (which belts may touch), the interfingering allowed between neighbours, the key lines, the features and the references. Adding or tuning a system is editing a record, not code.","<b>Key lines and proximal–distal field.<\/b> The shoreline, shelf (or platform) edge and toe of slope are smooth curves (draggable under Edit). Between two lines the distance field d runs linearly in the normalised coordinate, so belts widen where the lines are far apart; d increases from land to basin and is continuous.","<b>Belts on d, calibrated with the minimum change.<\/b> The belt boundaries are thresholds on d. Each well imposes bounds on the thresholds around it; among all threshold sets that honour the wells (and keep every belt a minimum width) the one closest to the concept widths is taken: a projection on a convex set, computed by pool-adjacent-violators on bounds. This solution varies <b>continuously<\/b> with the well positions, which is why moving a well changes the map by a small, bounded area.","<b>Contradictory wells.<\/b> If no map honours all wells, the smallest set of wells whose removal makes the rest feasible is excluded and reported with the reason (which kept well it cannot coexist with); the map is not rearranged for it. The optional local warping bends d around that well with a bounded amplitude and radius and never moves a boundary near a consistent well.","<b>Features.<\/b> One generic type, {host, shape, size, orientation, relation}: lobes (arcuate, bird-foot, funnel), bars, banks, patch reefs, ribbons (channels with levees, shoreline sand ribbons). A feature may only be placed in its allowed host belts: lens shapes are shrunk, ribbons truncated, until every point of them lies in a host belt. They are positioned in belt coordinates, so they follow a boundary that moves. The delta regime slider selects the feature set (river: distributary channels, bird-foot lobes, mouth bars; wave: arcuate lobes, beach-ridge ribbons; tide: tidal bars, funnel-shaped distributaries).","<b>Verdict.<\/b> Green only if every well is matched to a belt and honoured; amber if some are not matched; red if a matched well is not honoured. Each well is reported as honoured by the calibrated belts, by local warping, or not honoured.","<b>Source → sink chain.<\/b> The belts of the system in order, greyed when absent from the current map, with the dominant process of each (river, wave, tide, storm, gravity flows, settling); optional process arrows on the map.","<b>Exports.<\/b> PNG (map, legend, wells, scale bar, coordinates, chain strip); belt and feature polygons as GeoJSON and IRAP Classic lines (grid boundaries traced and lightly smoothed); ZMAP+ grid of belt codes; key lines; wells CSV; audit JSON with the inputs, prior and calibrated thresholds, feasible intervals and verdicts. Reproducible: the same input and seed give the same map."],"sources":[["Wave-dominated shoreface–shelf (clastic)","Walker & Plint (1992), Wave- and storm-dominated shallow marine systems, in Facies Models: Response to Sea Level Change, GAC (shoreface to offshore transition, HCS between fair-weather and storm wave base)","memory"],["Wave-dominated shoreface–shelf (clastic)","Hallermeier (1980-81), Coastal Engineering 4, 253-277, doi:10.1016/0378-3839(80)90022-8 (shoreface limits, closure depths)","published"],["Wave-dominated shoreface–shelf (clastic)","Shelf about 75 km wide, slope about 20 km (the widths 0.5 / 0.8 / 3 / 1.1 keep the shelf about 3.9 times the slope)","to verify"],["Delta (river / wave / tide regimes)","Galloway (1975), Process framework for describing the morphologic and stratigraphic evolution of deltaic depositional systems, in Deltas: Models for Exploration, Houston Geol. Soc. (river / wave / tide ternary)","to verify"],["Delta (river / wave / tide regimes)","Galloway & Hobday (1996), Terrigenous Clastic Depositional Systems, 2nd ed., Springer, doi:10.1007/978-3-642-61018-9","memory"],["Delta (river / wave / tide regimes)","Regime multipliers (front narrower and arcuate under waves, wider with tidal bars, more interfingering under river or tide supply): a judgement, to calibrate on a reference image","inference"],["Rimmed carbonate platform","Harris, Moore & Wilson (1985), Carbonate platforms, Colorado School of Mines Quarterly 80(4) (lagoon tens of km, open shelf 5-10 km, margin sand belt 1-2 km)","published"],["Rimmed carbonate platform","Wilson (1975), Carbonate Facies in Geologic History, Springer, doi:10.1007/978-1-4612-6383-8 (belts from basin to supratidal)","memory"],["Minimum-change calibration","Projection of the prior thresholds on the order-restricted feasible set by weighted pool-adjacent-violators (isotonic regression with bounds), Barlow, Bartholomew, Bremner & Brunk (1972), Statistical Inference under Order Restrictions, Wiley","memory"],["Delta regime multipliers and feature sets","Judgement of this page (shapes after the concept reference images, which are AI-generated illustrations, not scientific sources); to calibrate on published examples","inference"],["Feature sizes and positions","Plausible orders of magnitude as fractions of the belt span; no published statistics were applied","inference"],["Interfingering amplitudes","Fraction of the narrower neighbouring belt, capped at 0.3; a judgement","inference"]],"validation":["Self-check script scripts/gde3_test.mjs (22 tests). Logic: on every output of every system and regime (random key-line shapes, seeds, well sets, with and without warping) belts touch only the neighbours allowed by the adjacency graph and are ordered proximal → distal; features lie in their host belts (every ring point, inner samples and every covered cell). Reproducibility: same input and seed give the same map, features and verdicts.","Wells: consistent well sets sampled from a truth map (thresholds jittered by ±40 % from the concept) are always honoured by the belts, with no conflict; the calibration is checked to be the minimum change (no feasible perturbation is closer to the concept); a contradictory well is always reported and changes at most 5 % of the cells.","Stability on the three acceptance sets (the examples of this page), share of cells whose class changes when one well is moved by 5 % of the map width: 4.9 % (set A), 5.1 % (B), 3.3 % (C); with the features on, 5.3 %, 6.7 % and 3.3 %. Sweep of ±4 % in steps of 0.1 %: worst step 0.4 % with or without features. Bounds in the test: 8 % for the 5 % move, 3.5 % for a sweep step. The previous version moves 13 % of the cells in the same test on set A.","Examples with wells: A shoreface–shelf, B wave-dominated delta with a lobate shoreline, C rimmed carbonate platform; in each, well 3 lies beyond the concept limit of its belt, so a boundary has to move."],"limits":["A concept map: belt widths and feature sizes are generic proportions, not measurements. The wells calibrate the boundaries between the belts they constrain; the rest stays the concept.","Three systems only (shoreface–shelf, delta, rimmed platform); fans, ramps, margins, fluvial and lacustrine systems are not yet in this version. Use the previous GDE map generator for them.","No attribute layers, faults, sources of sediment as objects, EOD or facies atlas levels, leave-one-out or model file: not carried over yet.","The map is planar, projected coordinates in metres are assumed (the scale bar says metres or km). Belts are parallel to the key lines, so complete deltaic radial geometry is represented by lobes and key-line shape, not by a radial coordinate.","Exported polygons are traced from a 200 × 200 grid and smoothed; neighbouring polygons are simplified independently, so slivers of the order of half a cell can appear between them. Features are exported as separate polygons and may overlap the belt polygons.","The wells are matched to belts by name and aliases; an environment that matches no belt is reported as not matched, never guessed. Features are not used as constraints: a well in a feature is only checked against its belt."],"date":"27 November 2026"})
+
+</script>
+</body></html>
