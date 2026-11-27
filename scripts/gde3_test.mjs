@@ -6,6 +6,7 @@ import { validateSystem, resolveSystem, matchBelt, classify } from '../gde3/src/
 import { makeGrid, signedDist } from '../gde3/src/geometry.mjs';
 import { mulberry32 } from '../gde3/src/rng.mjs';
 import { banner } from '../gde3/src/verdict.mjs';
+import { inRing, featureDefs } from '../gde3/src/features.mjs';
 import { SETS, EXT, setOpts, setWells } from '../gde3/tools/acceptance.mjs';
 
 const tests = [];
@@ -153,11 +154,11 @@ test('verdict: a warped well is "honoured by warping", without warping "not hono
 });
 
 // ---------- (2) stability on the 3 acceptance sets ----------
-const sweep = (S, wells, wi, axis, from, to, step) => {
+const sweep = (S, wells, wi, axis, from, to, step, gf = m => m.classGrid(SGRID)) => {
   const out = [];
   for (let s = from; s <= to + 1e-9; s += step) {
     const m = buildModel({ ...setOpts(S), wells: wells.map((w, i) => (i === wi ? { ...w, [axis]: w[axis] + s * 100000 } : w)) });
-    out.push({ s, g: m.classGrid(SGRID), ok: m.excluded.length === 0 });
+    out.push({ s, g: gf(m), ok: m.excluded.length === 0 });
   }
   return out;
 };
@@ -184,6 +185,72 @@ test('stability: onset of a contradiction (a well crossing its neighbour) is rep
   for (let i = 1; i < sw.length; i++) if (sw[i].ok !== sw[i - 1].ok) { flips++; jump = Math.max(jump, changedFraction(sw[i - 1].g, sw[i].g)); }
   console.log(`   onset: ${flips} switch(es) consistent <-> contradictory, change at the switch ${pct(jump)}`);
   assert.ok(sw.some(q => !q.ok) && jump <= BOUNDS.onset);
+});
+
+// ---------- features (generic Feature type) ----------
+const FGRID = m => m.fullGrid(SGRID);
+test('features: records valid for every system and regime, every one has a feature set; shapes / hosts are data', () => {
+  for (const id of SYS) {
+    const regs = SYSTEMS[id].regimes ? Object.keys(SYSTEMS[id].regimes.options) : [undefined];
+    for (const regime of regs) {
+      const defs = featureDefs(resolveSystem(SYSTEMS[id], { regime, spanM: 60000 }));
+      assert.ok(defs.length >= 3, id + '/' + regime);
+      for (const f of defs) assert.deepEqual(Object.keys(f).sort(), ['color', 'host', 'id', 'n', 'name', 'orientation', 'pos', 'relation', 'shape', 'size']);
+    }
+  }
+  const bad = JSON.parse(JSON.stringify(SYSTEMS.platform)); bad.features[0].host = ['flat', 'open'];   // not a run of neighbours
+  assert.ok(validateSystem(bad).some(e => /run of allowed neighbours/.test(e)));
+  bad.features[0].host = ['nowhere']; assert.ok(validateSystem(bad).some(e => /unknown host/.test(e)));
+});
+test('features: host rule (every ring point, inner samples and every covered cell lie in a host belt), regimes differ', () => {
+  let n = 0; const sets = {};
+  for (const id of SYS) {
+    const regs = SYSTEMS[id].regimes ? Object.keys(SYSTEMS[id].regimes.options) : [undefined];
+    for (const regime of regs) for (let seed = 1; seed <= 10; seed++) {
+      const r = mulberry32(seed * 17 + id.length), rs = resolveSystem(SYSTEMS[id], { regime, spanM: 60000 });
+      const m = buildModel({ system: id, regime, km: 40 + 30 * r(), ext: EXT, az: 360 * r(), seed, wobble: 0.04 * r(), lobe: 0.1 * r(), wells: randomWells(rs, r, 3 + Math.floor(r() * 5), i => i % rs.belts.length), warp: seed % 3 ? { radius: 12000, maxAmp: 5000 } : null });
+      const ids = m.rs.belts.map(b => b.id), polys = m.features(); sets[id + '/' + regime] = (sets[id + '/' + regime] || 0) + polys.length;
+      for (const p of polys) {
+        const hs = new Set(p.host.map(h => ids.indexOf(h)));
+        assert.ok(p.ring.length >= 8 && p.ring.every(q => Number.isFinite(q[0] + q[1])));
+        for (const q of p.ring) { assert.ok(hs.has(m.classAt(q[0], q[1])), id + '/' + regime + '/' + seed + ': ' + p.id + ' ring point outside its host'); n++; }
+      }
+      const base = m.classGrid(SGRID), full = m.fullGrid(SGRID), L = new Map(m.featureLegend.map(l => [l.code, l]));
+      for (let k = 0; k < full.length; k++) if (full[k] !== base[k]) { const l = L.get(full[k]); assert.ok(l, 'code'); assert.ok(m.features().some(p => p.id === l.id && p.host.some(h => ids.indexOf(h) === base[k])), id + ': cell of ' + l.id + ' over belt ' + base[k]); }
+    }
+  }
+  console.log('   ' + n + ' ring points checked; features per system/regime over the seeds: ' + Object.entries(sets).map(([k, v]) => k + ' ' + v).join(', '));
+  assert.ok(Object.values(sets).every(v => v >= 20));
+  const O = { ...setOpts(SETS.B), wells: setWells(SETS.B) }, ids = r => buildModel({ ...O, regime: r }).features().map(p => p.id).join();
+  assert.notEqual(ids('river'), ids('wave')); assert.notEqual(ids('wave'), ids('tide'));
+});
+test('features: no feature without allowed host: a feature whose host belt is absent from the map is skipped, not misplaced', () => {
+  const m = buildModel({ system: 'platform', ext: EXT, az: 0, km: 60, wells: [], seed: 3 }), ids = m.rs.belts.map(b => b.id);
+  for (const p of m.features()) assert.ok(p.ring.every(q => p.host.includes(ids[m.classAt(q[0], q[1])])));
+  const tiny = buildModel({ system: 'platform', ext: { xmin: 0, xmax: 1000, ymin: 0, ymax: 1000 }, az: 0, km: 60, wells: [], seed: 3 });   // whole map inside the first belt
+  assert.ok(tiny.features().every(p => p.host.includes('flat')));
+});
+test('features: reproducible (same input + seed = same polygons; other seed = other polygons)', () => {
+  const S = SETS.B, o = { ...setOpts(S), wells: setWells(S) }, a = buildModel(o), b = buildModel(o), c = buildModel({ ...o, seed: 8 });
+  assert.deepEqual(a.features(), b.features()); assert.notDeepEqual(a.features(), c.features());
+  assert.deepEqual(Array.from(a.fullGrid(GRID)), Array.from(b.fullGrid(GRID)));
+});
+test('features: stability not degraded (same bounds with the features on): 1-5 % moves, sweep steps, onset of a contradiction', () => {
+  for (const [key, S] of Object.entries(SETS)) {
+    const wells = setWells(S), base = buildModel({ ...setOpts(S), wells }), g0 = FGRID(base);
+    let w5 = 0;
+    for (let wi = 0; wi < wells.length; wi++) for (const axis of ['x', 'y']) for (const sg of [-1, 1]) for (const p of [0.03, 0.05]) {
+      const m = buildModel({ ...setOpts(S), wells: wells.map((w, i) => (i === wi ? { ...w, [axis]: w[axis] + sg * p * 100000 } : w)) });
+      if (m.excluded.length) continue;
+      if (p === 0.05) w5 = Math.max(w5, changedFraction(g0, FGRID(m)));
+    }
+    const ms = maxStep(sweep(S, wells, S.moved, 'y', -0.04, 0.04, 0.001, FGRID));
+    console.log('   set ' + key + ' with features: 5 % move ' + pct(w5) + ', sweep max step ' + pct(ms) + ', features ' + base.features().length);
+    assert.ok(w5 <= BOUNDS.move5, key + ' 5% move ' + w5); assert.ok(ms <= BOUNDS.step, key + ' step ' + ms);
+  }
+  const S = SETS.A, sw = sweep(S, setWells(S), 3, 'y', -0.5, 0.0, 0.005, FGRID); let jump = 0;
+  for (let i = 1; i < sw.length; i++) if (sw[i].ok !== sw[i - 1].ok) jump = Math.max(jump, changedFraction(sw[i - 1].g, sw[i].g));
+  assert.ok(jump <= BOUNDS.onset, 'onset ' + jump);
 });
 
 // ---------- (4) reproducibility ----------

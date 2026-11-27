@@ -6,6 +6,7 @@ import { proposeKeyLines } from './keylines.mjs';
 import { calibrate, explain } from './calibrate.mjs';
 import { neededOffset, makeWarp } from './warp.mjs';
 import { wellVerdict, banner } from './verdict.mjs';
+import { generateFeatures, featureDefs, featureLegend, rasterize } from './features.mjs';
 
 // opts: system (id), regime, km (scale), ext, az, seed, keyLines (default: proposed), wells [{name, x, y, env | b}],
 //       warp {radius, maxAmp} | null, fringe (interfingering, default true)
@@ -34,9 +35,15 @@ export function buildModel(opts) {
   const names = wells.map(w => w.name), bn = rs.belts.map(b => b.name);
   const verdicts = wells.map(w => wellVerdict(w.range, classPlain(w.x, w.y), classAt(w.x, w.y)));
   const conflicts = bad.map(i => ({ well: wells[i].name, msg: explain(i, d, wells.map(w => w.range), cal.kept, names, bn) }));
+  const nB = rs.belts.length, defs = opts.features === false ? [] : featureDefs(rs), legend = featureLegend(defs, nB);
+  const classGrid = g => { const o = new Uint8Array(g.nx * g.ny); for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) o[j * g.nx + i] = classAt(g.x(i), g.y(j)); return o; };
+  let fc = null;   // features are generated on demand (the class grid and the verdicts do not depend on them)
+  const model = { rs, t: cal.t, D, classAt, ext: opts.ext, az: opts.az || 0, seed };
+  const features = () => fc || (fc = defs.length ? generateFeatures(model, { ext: opts.ext, az: opts.az || 0, seed }) : []);
   return { rs, keyLines, F, D, wells, d, t: cal.t, prior: rs.p, lo: cal.lo, hi: cal.hi, kept: cal.kept, excluded: bad, conflicts, warp: !!warp,
     classAt, classPlain, verdicts, banner: banner(verdicts), cost: cal.cost,
-    classGrid: g => { const o = new Uint8Array(g.nx * g.ny); for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) o[j * g.nx + i] = classAt(g.x(i), g.y(j)); return o; } };
+    features, featureLegend: legend, fullGrid: g => rasterize(features(), g, classGrid(g), legend),
+    classGrid };
 }
 
 export const changedFraction = (a, b) => { let n = 0; for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) n++; return n / a.length; };
