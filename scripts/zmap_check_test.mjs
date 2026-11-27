@@ -203,6 +203,15 @@ test('R10: check does not modify the parsed file', () => {
   const k0 = Object.keys(z).join(); Z.check(z); assert.equal(Object.keys(z).join(), k0);
 });
 
+// ---- synthetic header variants described on the page (no real files compared: see the page's limits)
+test('variant: CRLF line endings pass', () => { const { f } = run(CLEAN.replace(/\n/g, '\r\n')); assert.deepEqual([...ew(f).map(x => x.rule)], []); });
+test('variant: CR-only line endings are read', () => { const { z } = run(CLEAN.replace(/\n/g, '\r')); assert.equal(z.nrows, 3); assert.equal(z.ncols, 4); });
+test('variant: second line with 3 or 6 fields is an error', () => { has(CLEAN.replace('15, 1.0E+30, , 7, 1', '15, 1.0E+30, '), 'hdr.l2'); has(CLEAN.replace('15, 1.0E+30, , 7, 1', '15, 1.0E+30, , 7, 1, 9'), 'hdr.l2'); });
+test('variant: first line without grid keyword is not read as a grid', () => { has(CLEAN.replace('@EXAMPLE, GRID, 4', '@EXAMPLE'), 'file.nongrid'); });
+test('variant: no "!" comment lines still passes', () => { const { f } = run(CLEAN.replace(/^(!.*\n)+/, '')); assert.deepEqual([...ew(f).map(x => x.rule)], []); });
+test('variant: null value written 1.0E30 is the same null', () => { const { z } = run(CLEAN.replace(/1\.0E\+30/g, '1.0E30')); assert.ok(Z.isNull(z, Z.value(z, 1, 1))); });
+test('variant: trailing blank lines after the data do not matter', () => { const { f } = run(CLEAN + '\n\n'); assert.deepEqual([...ew(f).map(x => x.rule)], []); });
+
 // ---- batch
 test('batch: same name, different geometry', () => {
   const r = rules(Z.checkBatch([Z.parse(CLEAN, 'a'), Z.parse(CLEAN.replace('0.0, 200.0', '0.0, 100.0'), 'b')]));
