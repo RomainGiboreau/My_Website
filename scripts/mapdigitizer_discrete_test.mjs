@@ -320,6 +320,111 @@ test('polyCsv: header, one row per vertex (ring not repeated), ring types, quote
   assert.equal(L[6], '1,2,hole,2,"Lobe, sandy",3,8,1');
 });
 
+// ---------- accuracy on a synthetic map with known polygons (anti-aliased, then JPEG-like compression) ----------
+// Truth: 4 classes drawn from analytic shapes. The map is rendered with 4 x 4 supersampling (anti-aliased boundaries) and
+// optionally passed through a JPEG-like codec written here: YCbCr, 4:2:0 chroma subsampling, 8 x 8 DCT, standard IJG
+// quantisation tables at a given quality (the entropy coding of JPEG is lossless, so it does not change the pixels).
+const W = 320, H = 240;
+const CLS = [[235, 225, 150], [200, 60, 50], [60, 120, 200], [70, 160, 90]];   // 0 background, 1 ellipse, 2 rectangle, 3 ring (annulus)
+const truthAt = (x, y) => {
+  if (((x - 100) / 60) ** 2 + ((y - 90) / 40) ** 2 <= 1) return 1;
+  if (x >= 190 && x < 290 && y >= 40 && y < 120) return 2;
+  const r = Math.hypot(x - 220, y - 175);
+  if (r <= 48 && r > 20) return 3;
+  return 0;
+};
+function renderMap() {
+  const d = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let r = 0, g = 0, b = 0;
+    for (let v = 0; v < 4; v++) for (let u = 0; u < 4; u++) { const c = CLS[truthAt(x + (u + .5) / 4, y + (v + .5) / 4)]; r += c[0]; g += c[1]; b += c[2]; }
+    const o = 4 * (y * W + x); d[o] = r / 16; d[o + 1] = g / 16; d[o + 2] = b / 16; d[o + 3] = 255;
+  }
+  return d;
+}
+const QL = [16,11,10,16,24,40,51,61,12,12,14,19,26,58,60,55,14,13,16,24,40,57,69,56,14,17,22,29,51,87,80,62,18,22,37,56,68,109,103,77,24,35,55,64,81,104,113,92,49,64,78,87,103,121,120,101,72,92,95,98,112,100,103,99];
+const QC = [17,18,24,47,99,99,99,99,18,21,26,66,99,99,99,99,24,26,56,99,99,99,99,99,47,66,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99];
+function dct8(blk, Q) {   // blk: 64 level-shifted values; forward DCT, quantise + dequantise, inverse DCT
+  const C = (k, n) => Math.cos((2 * n + 1) * k * Math.PI / 16) * (k ? 1 : Math.SQRT1_2) / 2;
+  const F = new Float64Array(64);
+  for (let v = 0; v < 8; v++) for (let u = 0; u < 8; u++) { let s = 0; for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) s += blk[y * 8 + x] * C(u, x) * C(v, y); F[v * 8 + u] = Math.round(s / Q[v * 8 + u]) * Q[v * 8 + u]; }
+  const o = new Float64Array(64);
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { let s = 0; for (let v = 0; v < 8; v++) for (let u = 0; u < 8; u++) s += F[v * 8 + u] * C(u, x) * C(v, y); o[y * 8 + x] = s; }
+  return o;
+}
+function jpegLike(d, q) {
+  const sc = q < 50 ? 5000 / q : 200 - 2 * q, mk = T => T.map(t => Math.min(255, Math.max(1, Math.floor((t * sc + 50) / 100))));
+  const QY = mk(QL), QCc = mk(QC), Y = new Float64Array(W * H), Cb = new Float64Array(W * H), Cr = new Float64Array(W * H);
+  for (let k = 0; k < W * H; k++) { const r = d[4 * k], g = d[4 * k + 1], b = d[4 * k + 2];
+    Y[k] = .299 * r + .587 * g + .114 * b; Cb[k] = -.168736 * r - .331264 * g + .5 * b; Cr[k] = .5 * r - .418688 * g - .081312 * b; }
+  const proc = (P, w, h, Q) => { const o = new Float64Array(w * h);
+    for (let by = 0; by < h; by += 8) for (let bx = 0; bx < w; bx += 8) { const blk = new Float64Array(64);
+      for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) blk[y * 8 + x] = P[Math.min(h - 1, by + y) * w + Math.min(w - 1, bx + x)] - 128;
+      const r = dct8(blk, Q); for (let y = 0; y < 8 && by + y < h; y++) for (let x = 0; x < 8 && bx + x < w; x++) o[(by + y) * w + bx + x] = r[y * 8 + x] + 128; }
+    return o; };
+  const sub = P => { const w = W / 2, h = H / 2, o = new Float64Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) o[y * w + x] = (P[2 * y * W + 2 * x] + P[2 * y * W + 2 * x + 1] + P[(2 * y + 1) * W + 2 * x] + P[(2 * y + 1) * W + 2 * x + 1]) / 4; return o; };
+  const y2 = proc(Y, W, H, QY), cb2 = proc(sub(Cb), W / 2, H / 2, QCc), cr2 = proc(sub(Cr), W / 2, H / 2, QCc);
+  const out = new Uint8ClampedArray(W * H * 4), cl = v => Math.max(0, Math.min(255, Math.round(v)));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = y * W + x, c = (y >> 1) * (W / 2) + (x >> 1), o = 4 * k;
+    out[o] = cl(y2[k] + 1.402 * cr2[c]); out[o + 1] = cl(y2[k] - .344136 * cb2[c] - .714136 * cr2[c]); out[o + 2] = cl(y2[k] + 1.772 * cb2[c]); out[o + 3] = 255; }
+  return out;
+}
+// the page's polygon pipeline (extractPolys) with the default settings: tol 12, window 2, minimum share 30 %, identity geometry
+function runPolys(d, tol = 12, win = 2, minf = 30) {
+  const labs = CLS.map(c => MDD.lab(...c)), cache = new Map(), tol2 = tol * tol;
+  const m = (r, g, b) => { const k = (r << 16) | (g << 8) | b; let c = cache.get(k); if (c === undefined) { const q = MDD.nearest(MDD.lab(r, g, b), labs); c = q.d2 <= tol2 ? q.i : -1; cache.set(k, c); } return c; };
+  let L = MDD.pixLabels(d, W, H, { x0: 0, y0: 0, nx: W, ny: H, step: 1 }, m, null);
+  const raw = L.slice();
+  L = MDD.modeFilter(L, W, H, win, Math.max(1, Math.ceil(minf / 100 * (2 * win + 1) ** 2)), CLS.length);
+  const F = MDD.fillHoles(L, W, H, 64, Math.max(400, .01 * W * H));
+  const R = MDD.polygonize(F.L, W, H, { minArea: 25, tol: 1.5 });
+  const P = MDD.toMap(R.polys, p => p, CLS.map((c, i) => ({ code: i, name: 'c' + i })));
+  return { raw, L: F.L, P };
+}
+function accuracy(d, opt) {
+  const r = runPolys(d, ...(opt || []));
+  let n = 0, okRaw = 0, okPix = 0, unRaw = 0, unPix = 0, bnd = 0, bndOk = 0;
+  const area = [0, 0, 0, 0], tru = [0, 0, 0, 0];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const k = y * W + x, t = truthAt(x + .5, y + .5); n++; tru[t]++;
+    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => truthAt(x + .5 + a * 1.5, y + .5 + b * 1.5) !== t);
+    if (r.raw[k] === t) okRaw++; if (r.raw[k] < 0) unRaw++;
+    if (r.L[k] === t) okPix++; if (r.L[k] < 0) unPix++;
+    if (edge) { bnd++; if (r.L[k] === t) bndOk++; }
+  }
+  for (const p of r.P) area[p.code] += p.area;
+  return { rawOk: okRaw / n, rawUn: unRaw / n, ok: okPix / n, un: unPix / n, bndOk: bndOk / bnd, area, tru, areaErr: area.map((a, i) => (a - tru[i]) / tru[i]), P: r.P };
+}
+const MAP = renderMap();
+const JPEG = {}; for (const q of [95, 75, 50]) JPEG[q] = jpegLike(MAP, q);
+const ACC = { 'PNG (anti-aliased)': accuracy(MAP) }; for (const q of [95, 75, 50]) ACC['JPEG q' + q] = accuracy(JPEG[q]);
+if (process.env.ACC_VERBOSE) for (const [k, a] of Object.entries(ACC)) console.log(k, `rawOk ${(100 * a.rawOk).toFixed(2)} rawUn ${(100 * a.rawUn).toFixed(2)} ok ${(100 * a.ok).toFixed(2)} un ${(100 * a.un).toFixed(2)} bnd ${(100 * a.bndOk).toFixed(1)} areaErr ${a.areaErr.map(e => (100 * e).toFixed(2)).join('/')} npoly ${a.P.length}`);
+test('accuracy: the JPEG-like codec is lossy but keeps the map (sanity of the test bench)', () => {
+  let diff = 0; for (let k = 0; k < W * H; k++) diff += Math.abs(JPEG[50][4 * k] - MAP[4 * k]);
+  assert.ok(diff / (W * H) > .5, 'codec must change pixels'); assert.ok(diff / (W * H) < 12, 'but not destroy the map');
+});
+test('accuracy: PNG with anti-aliased boundaries: >= 99 % of pixels correct, class areas within 2 %, ring hole kept', () => {
+  const a = ACC['PNG (anti-aliased)'];
+  assert.ok(a.ok >= .99, 'ok ' + a.ok); assert.ok(a.un <= .005, 'unclassified ' + a.un);
+  a.areaErr.forEach((e, i) => assert.ok(Math.abs(e) < .02, `class ${i} area error ${e}`));
+  assert.ok(a.P.reduce((s, p) => s + p.holes.length, 0) >= 1, 'ring hole kept');
+});
+test('accuracy: JPEG q95 / q75 / q50: >= 98 % of pixels correct, class areas within 3 %, few unclassified pixels', () => {
+  for (const q of [95, 75, 50]) { const a = ACC['JPEG q' + q];
+    assert.ok(a.ok >= .98, `q${q} ok ${a.ok}`); assert.ok(a.un <= .01, `q${q} unclassified ${a.un}`);
+    a.areaErr.forEach((e, i) => assert.ok(Math.abs(e) < .03, `q${q} class ${i} area error ${e}`)); }
+});
+test('accuracy: the majority filter does not make the pixel classification worse than the raw colour match', () => {
+  for (const k of Object.keys(ACC)) assert.ok(ACC[k].ok >= ACC[k].rawOk - 1e-9, `${k}: ${ACC[k].ok} vs ${ACC[k].rawOk}`);
+});
+
+test('ambig: a node whose second class holds >= 35 % of the matching pixels is ambiguous; a clean node is not', () => {
+  assert.equal(MDD.ambig([15, 10], 25), true);
+  assert.equal(MDD.ambig([24, 1], 25), false);
+  assert.equal(MDD.ambig([25, 0, 0], 25), false);
+  assert.equal(MDD.ambig([0, 0], 0), false);
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
