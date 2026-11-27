@@ -139,12 +139,14 @@ td.l,th.l{text-align:left}
   <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
   <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
   <div class="pg"><span>Top (A)</span><select id="ca"></select><span>Left (B)</span><select id="cb"></select><span>Right (C)</span><select id="cc"></select><span>Group</span><select id="cg"></select></div>
+  <label class="inl"><input type="checkbox" id="zer">Treat missing / below detection (empty, n.d., &lt;1) as 0</label>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
  <section class="panel"><h2><span class="n">2</span>Axes<i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Preset</span><select id="pre"><option value="">custom</option><option value="Sand|Silt|Clay">sand / silt / clay</option><option value="Quartz|Feldspar|Lithics">Q / F / L</option><option value="Vitrinite|Inertinite|Liptinite">vitrinite / inertinite / liptinite</option><option value="Clay|Quartz + feldspar|Carbonate">clay / QF / carbonate</option></select>
   <span>A label</span><input id="la" value="A"><span>B label</span><input id="lb" value="B"><span>C label</span><input id="lc" value="C"></div>
   <div class="pg"><span>Grid (%)</span><select id="gs"><option value="10" selected>10</option><option value="20">20</option><option value="25">25</option></select><span>Marker size</span><select id="ms"><option value="3">small</option><option value="4.5" selected>medium</option><option value="6.5">large</option></select></div>
   <label class="inl"><input type="checkbox" id="cen" checked>Group centres (◆ geometric mean, ◇ arithmetic mean)</label>
+  <div class="msg err" id="labMsg"></div>
   <div class="msg" id="runMsg"></div></div></section>
 </aside>
 <main>
@@ -153,6 +155,85 @@ td.l,th.l{text-align:left}
  <div class="card" style="margin-top:12px"><h3>Group statistics<span class="tt" tabindex="0" data-tip="Closed compositions, in %. n = number of samples. Geometric mean needs strictly positive parts in every sample of the group.">?</span></h3><div class="tw" id="resT"></div></div>
 </main></div>
 
+<script id="tern-core">
+// Pure core of the ternary diagram: closure, coordinates, number/table decoding, column guess, row building, group centres.
+window.TERN=(function(){
+const S3=Math.sqrt(3)/2;
+const xy=(a,b,c)=>{const s=a+b+c;a/=s;c/=s;return[c+a/2,a*S3]};      // b is implied (b = 1 - a - c)
+const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+// ---- numbers (shared contract A). kinds: ok, missing, below (value null, limit kept), text
+function parseNumber(text,o){
+  if(typeof text==='number')return isFinite(text)?{value:text,kind:'ok'}:{value:null,kind:'missing'};
+  let s=String(text==null?'':text).replace(/[−–]/g,'-').replace(/[  ]/g,' ').trim();
+  if(/^(|-+|n\.?d\.?|na|n\/a|nan|null)$/i.test(s))return{value:null,kind:'missing'};
+  if(s[0]==='<'){const q=parseNumber(s.slice(1),o);return{value:null,kind:'below',limit:q.kind==='ok'?q.value:null}}
+  s=s.replace(/\s+/g,'');
+  const dc=!!(o&&o.decComma);
+  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))return{value:+s.replace(/\./g,'').replace(',','.'),kind:'ok'};
+  if(/^[-+]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)){
+    if(/^[-+]?\d{1,3},\d{3}$/.test(s)){const amb=true;return dc?{value:+s.replace(',','.'),kind:'ok',ambiguous:amb}:{value:+s.replace(',',''),kind:'ok',ambiguous:amb}}
+    return{value:+s.replace(/,/g,''),kind:'ok'}}
+  if(/^[-+]?\d*,\d+$/.test(s))return{value:+s.replace(',','.'),kind:'ok'};
+  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?{value:+s,kind:'ok'}:{value:null,kind:'text'}}
+// ---- delimiter and table (shared contract A)
+function splitLine(l,sep){
+  if(sep==='ws')return l.split(/\s+/).map(s=>s.trim().replace(/^"|"$/g,''));
+  if(sep==='\t')return l.split('\t').map(s=>s.trim().replace(/^"|"$/g,''));
+  const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}
+function detectDelimiter(lines){
+  const valid=sep=>{const k=lines.map(l=>splitLine(l,sep).length),f={};k.forEach(v=>f[v]=(f[v]||0)+1);let best=0,bn=0;for(const v in f)if(f[v]>bn){bn=f[v];best=+v}return best>=2&&bn>=0.8*lines.length};
+  if(lines.some(l=>l.includes('\t'))&&valid('\t'))return'\t';
+  if(lines.some(l=>l.includes(';'))&&valid(';'))return';';
+  const dp=lines.some(l=>/\d,\d{1,2}(?!\d)/.test(l)),wsv=valid('ws'),cv=valid(',');
+  if(cv&&(!dp||!wsv))return',';
+  if(wsv)return'ws';
+  if(cv)return',';
+  return lines.some(l=>l.includes('\t'))?'\t':lines.some(l=>l.includes(';'))?';':'ws'}
+function parseTable(text,minCols){
+  minCols=minCols||2;const ln=[];
+  const lines=[];text.replace(/\r/g,'').split('\n').forEach((l,i)=>{l=l.replace(/\s+$/,'');if(l.trim()&&!/^(#|\/\/)/.test(l.trim())){lines.push(l);ln.push(i+1)}});
+  if(!lines.length)return{err:'Empty input.'};
+  const sep=detectDelimiter(lines);
+  let rows=lines.map(l=>splitLine(l,sep)),rl=ln.slice();const nc=Math.max(...rows.map(r=>r.length));if(nc<minCols)return{err:`At least ${minCols} columns are needed.`};
+  const isNum=s=>{const k=parseNumber(s).kind;return k==='ok'||k==='missing'||k==='below'};
+  const numFrac=r=>r.filter(s=>s!==''&&isNum(s)).length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;
+  if(numFrac(rows[0])<0.5){head=rows.shift();rl.shift();if(rows.length>1&&numFrac(rows[0])<0.34&&rows[0].every(s=>s===''||parseNumber(s).kind==='text')){units=rows.shift();rl.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  // decimal comma: ";" file, or some cell "d,dd" with a number of digits other than three after the comma
+  let decComma=sep===';',ambig=0;
+  for(const r of rows)for(const c of r){const s=c.replace(/\s+/g,'');if(/^[-+]?\d*,\d+$/.test(s)&&!/,\d{3}$/.test(s))decComma=true}
+  for(const r of rows)for(const c of r)if(/^[-+]?\d{1,3},\d{3}$/.test(c.replace(/\s+/g,'')))ambig++;
+  return{head,units,rows,nc,sep:sep==='ws'?' ':sep,ln:rl,decComma,ambig}}
+// ---- column guess: apex names must match the whole header (units in brackets and %/wt/vol suffixes ignored)
+const headKey=h=>normName(String(h).replace(/\(.*?\)|\[.*?\]/g,'')).replace(/(pct|percent|wt|vol|mol)$/,'');
+const RA=/^(a|top|q|quartz|sand|vit|vitrinite|clay)$/,RB=/^(b|left|f|feldspar|silt|iner|inertinite)$/,RC=/^(c|right|l|lithics|clay|lip|liptinite|carbonate)$/,RG=/^(group|class|facies|lith|lithology|well|unit|name|type|cluster|label)$/;
+function guessCols(head){
+  const K=head.map(headKey),f=(re,skip)=>K.findIndex((k,i)=>re.test(k)&&!(skip||[]).includes(i));
+  const a=f(RA),b=f(RB,[a]),c=f(RC,[a,b]),g=f(RG,[a,b,c]),idx=[a,b,c],guessed=idx.map(v=>v<0);let k=0;
+  for(let i=0;i<3;i++)if(idx[i]<0){while(idx.includes(k)||k===g)k++;idx[i]=k++}
+  return{a:idx[0],b:idx[1],c:idx[2],g,guessed:[...guessed,false]}}
+// ---- rows: closure, skip reasons counted with first line numbers, optional "missing / below detection = 0"
+function buildRows(t,cols,opts){
+  const zero=!!(opts&&opts.zero),rows=[],gm=new Map(),reasons={},zeroed={missing:0,below:0};let open=0,skipped=0;
+  const skip=(why,line)=>{skipped++;const e=reasons[why]||(reasons[why]={count:0,lines:[]});e.count++;if(e.lines.length<5)e.lines.push(line)};
+  t.rows.forEach((r,ri)=>{
+    const v=[],z={missing:0,below:0},pn=[cols.a,cols.b,cols.c].map(c=>parseNumber(r[c],{decComma:t.decComma}));let why=null;
+    for(const q of pn){if(q.kind==='ok'){if(q.value<0){why='negative';break}v.push(q.value)}
+      else if(q.kind==='text'){why='non-numeric';break}
+      else if(zero){v.push(0);z[q.kind]++}
+      else{why=q.kind==='missing'?'missing':'below detection';break}}
+    if(!why&&v[0]+v[1]+v[2]<=0)why='zero sum';
+    if(why){skip(why,t.ln?t.ln[ri]:ri+1);return}zeroed.missing+=z.missing;zeroed.below+=z.below;
+    const s=v[0]+v[1]+v[2];if(Math.abs(s-100)>1&&Math.abs(s-1)>0.01)open++;
+    const p=v.map(q=>100*q/s),gn=cols.g>=0?(r[cols.g]||'').trim()||'(blank)':'all';if(!gm.has(gn))gm.set(gn,gm.size);const[X,Y]=xy(...p);rows.push({v,p,g:gm.get(gn),gn,X,Y})});
+  return{rows,groups:[...gm.keys()],read:t.rows.length,skipped,reasons,zeroed,open}}
+function groupStats(rows,groups){
+  return groups.map((gn,gi)=>{const R=rows.filter(r=>r.g===gi),n=R.length,am=[0,1,2].map(k=>R.reduce((a,r)=>a+r.p[k],0)/n);
+    let gm=null;if(R.every(r=>r.p.every(q=>q>0))){const l=[0,1,2].map(k=>Math.exp(R.reduce((a,r)=>a+Math.log(r.p[k]),0)/n)),s=l[0]+l[1]+l[2];gm=l.map(q=>100*q/s)}return{gn,n,am,gm}})}
+return{S3,xy,parseNumber,detectDelimiter,parseTable,guessCols,buildRows,groupStats}})();
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -170,17 +251,7 @@ function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t
 const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
 document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
 // ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
-function parseTable(text,minCols){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
-  const has=c=>lines.some(l=>l.includes(c));let sep;
-  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
-  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
-  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
-  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
-  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
-  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
-  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
-  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
+const parseTable=TERN.parseTable;
 const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
 // ---- plotting engine ----------------------------------------------------------------
 const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
@@ -248,22 +319,30 @@ function tcrit(df){if(df<1)return NaN;if(df>120)return 1.96;if(TT[df])return TT[
 //  Ternary diagram.  Closure: p_i = 100 x_i / (a+b+c).  Cartesian coordinates in a triangle with side 1:
 //  B = (0,0) bottom left, C = (1,0) bottom right, A = (1/2, sqrt(3)/2) top:   X = c + a/2 ,  Y = a sqrt(3)/2   (with a+b+c = 1)
 // =====================================================================================
-const D={table:null,rows:[],groups:[]};
-const S3=Math.sqrt(3)/2;
-const xy=(a,b,c)=>{const s=a+b+c;a/=s;c/=s;return[c+a/2,a*S3]};      // b is implied (b = 1 - a - c)
-function guess(h){const a=gcol(h,/^(a|top|q|quartz|sand|vit|vitrinite|clay)/),b=gcol(h,/^(b|left|f|feldspar|silt|iner|inertinite)/,[a]),c=gcol(h,/^(c|right|l|lithics|clay|lip|liptinite|carbonate)/,[a,b]),g=gcol(h,/^(group|class|facies|lith|well|unit|name|type|cluster|label)/,[a,b,c]);
-  const idx=[a,b,c];let k=0;for(let i=0;i<3;i++)if(idx[i]<0){while(idx.includes(k))k++;idx[i]=k++}return[...idx,g]}
-function loadText(text){const t=parseTable(text,3);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;const g=guess(t.head);fillSel(['ca','cb','cc','cg'],t.head,g,[0,0,0,1]);
-  if($('la').value==='A'&&$('lb').value==='B'&&$('lc').value==='C'){$('la').value=t.head[g[0]];$('lb').value=t.head[g[1]];$('lc').value=t.head[g[2]]}build();return true}
-function build(){const t=D.table;if(!t)return;const ca=+$('ca').value,cb=+$('cb').value,cc=+$('cc').value,cg=+$('cg').value,m=new Map();let bad=0,open=0;D.rows=[];
-  for(const r of t.rows){const v=[toN(r[ca]),toN(r[cb]),toN(r[cc])];if(v.some(q=>!isFinite(q)||q<0)||v[0]+v[1]+v[2]<=0){bad++;continue}const s=v[0]+v[1]+v[2];if(Math.abs(s-100)>1&&Math.abs(s-1)>0.01)open++;
-    const p=v.map(q=>100*q/s),g=cg>=0?(r[cg]||'').trim()||'(blank)':'all';if(!m.has(g))m.set(g,m.size);const[X,Y]=xy(...p);D.rows.push({v,p,g:m.get(g),gn:g,X,Y})}
-  D.groups=[...m.keys()];
-  $('dataMsg').className='msg';$('dataMsg').textContent=`${D.rows.length} sample(s) · ${D.groups.length} group(s)`+(bad?` · ${bad} row(s) skipped (negative, empty or non-numeric)`:'');
-  $('runMsg').textContent=open?`${open} row(s) did not sum to 100 (or 1): closed to 100.`:'';if(!D.rows.length){$('dataMsg').className='msg err';$('dataMsg').textContent='No valid row.';return}
-  stats();draw();table()}
-function stats(){D.st=D.groups.map((gn,gi)=>{const R=D.rows.filter(r=>r.g===gi),n=R.length,am=[0,1,2].map(k=>R.reduce((a,r)=>a+r.p[k],0)/n);
-  let gm=null;if(R.every(r=>r.p.every(q=>q>0))){const l=[0,1,2].map(k=>Math.exp(R.reduce((a,r)=>a+Math.log(r.p[k]),0)/n)),s=l[0]+l[1]+l[2];gm=l.map(q=>100*q/s)}return{gn,n,am,gm}})}
+const D={table:null,rows:[],groups:[],st:[],edited:false};
+const S3=TERN.S3,xy=TERN.xy;
+function clearAll(){D.table=null;D.rows=[];D.groups=[];D.st=[];const cv=$('cv');cv.getContext('2d').clearRect(0,0,cv.width,cv.height);cv._hits=[];$('legend').innerHTML='';$('resT').innerHTML='';$('runMsg').textContent='';$('labMsg').textContent=''}
+function colName(i){const t=D.table;return t&&i>=0&&t.head[i]!=null?t.head[i]:''}
+function autoLabels(){return['ca','cb','cc'].map((id,k)=>{const n=colName(+$(id).value);return!n||/^col \d+$/.test(n)?'ABC'[k]:n})}
+function labWarn(){const w=$('labMsg');if(!D.edited||!D.table){w.textContent='';return}const a=autoLabels(),cur=['la','lb','lc'].map(i=>$(i).value);
+  w.textContent=a.some((v,k)=>v!==cur[k])?'The axis labels were edited by hand and differ from the selected columns ('+a.join(' / ')+'): check them before exporting the PNG.':''}
+function syncLabels(){if(!D.edited){const a=autoLabels();$('la').value=a[0];$('lb').value=a[1];$('lc').value=a[2]}labWarn()}
+function loadText(text){const t=parseTable(text,3);if(t.err){clearAll();$('dataMsg').textContent=t.err+' The previous data were cleared.';$('dataMsg').className='msg err';return false}
+  D.table=t;D.guess=TERN.guessCols(t.head);const g=D.guess;fillSel(['ca','cb','cc','cg'],t.head,[g.a,g.b,g.c,g.g],[0,0,0,1]);syncLabels();return build()}
+function build(){const t=D.table;if(!t)return false;const cols={a:+$('ca').value,b:+$('cb').value,c:+$('cc').value,g:+$('cg').value},R=TERN.buildRows(t,cols,{zero:$('zer').checked});
+  D.rows=R.rows;D.groups=R.groups;const used=R.rows.length;
+  const why=Object.entries(R.reasons).map(([k,e])=>k+' '+e.count+' (line'+(e.lines.length>1?'s ':' ')+e.lines.join(', ')+(e.count>e.lines.length?', …':'')+')');
+  let msg=R.read+' rows read, '+R.skipped+' skipped'+(why.length?': '+why.join('; '):'')+'.';
+  if(R.zeroed.missing||R.zeroed.below)msg+=' '+(R.zeroed.missing+R.zeroed.below)+' missing / below-detection value(s) set to 0.';
+  if(t.ambig)msg+=' '+t.ambig+' value(s) written like 1,234 were read as '+(t.decComma?'decimal commas (1.234)':'thousands separators (1234)')+'.';
+  const nm=i=>i>=0?'"'+colName(i)+'" (col '+(i+1)+')':'none';
+  let map='Columns used: A = '+nm(cols.a)+', B = '+nm(cols.b)+', C = '+nm(cols.c)+', group = '+nm(cols.g)+'.';
+  if(D.guess&&(D.guess.guessed[0]||D.guess.guessed[1]||D.guess.guessed[2]))map+=' No column name matched an apex: columns taken by position, check the selectors.';
+  const dm=$('dataMsg');dm.style.whiteSpace='pre-line';
+  if(!used){clearAll();D.table=t;dm.className='msg err';dm.textContent='No valid row. '+msg+'\n'+map+' The previous data were cleared.';return false}
+  D.st=TERN.groupStats(D.rows,D.groups);
+  dm.className='msg';dm.textContent=used+' sample(s) · '+D.groups.length+' group(s) · '+msg+'\n'+map;
+  $('runMsg').textContent=R.open?R.open+' row(s) did not sum to 100 (or 1): closed to 100.':'';labWarn();draw();table();return true}
 const pc=i=>PAL[i%PAL.length];
 function draw(){const cv=$('cv');if(!D.rows.length)return;const dpr=window.devicePixelRatio||1,W=cv.clientWidth||700,H=cv.clientHeight||560;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
   const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#fff';x.fillRect(0,0,W,H);
@@ -294,13 +373,13 @@ function table(){const f=v=>fmt(v);const L=[$('la').value,$('lb').value,$('lc').
 $('bCsv').onclick=()=>{if(!D.rows.length)return;const L=[`group,${csvCell($('la').value,',')}_in,${csvCell($('lb').value,',')}_in,${csvCell($('lc').value,',')}_in,A_pct,B_pct,C_pct,X,Y`];
   for(const r of D.rows)L.push([csvCell(r.gn,','),...r.v.map(v=>+v.toPrecision(8)),...r.p.map(v=>+v.toPrecision(8)),+r.X.toPrecision(8),+r.Y.toPrecision(8)].join(','));download('ternary.csv',L.join('\n')+'\n','text/csv;charset=utf-8')};
 $('bPng').onclick=()=>pngOf($('cv'),'ternary.png');document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b)pngOf($(b.dataset.png),'ternary.png')});
-wireData(loadText);['ca','cb','cc','cg'].forEach(i=>$(i).addEventListener('change',build));['la','lb','lc'].forEach(i=>$(i).addEventListener('input',()=>{if(D.rows.length){draw();table()}}));['gs','ms','cen'].forEach(i=>$(i).addEventListener('change',draw));
-$('pre').addEventListener('change',()=>{const v=$('pre').value;if(!v)return;const a=v.split('|');$('la').value=a[0];$('lb').value=a[1];$('lc').value=a[2];if(D.rows.length){draw();table()}});
+wireData(loadText);['ca','cb','cc'].forEach(i=>$(i).addEventListener('change',()=>{syncLabels();build()}));$('cg').addEventListener('change',build);$('zer').addEventListener('change',build);['la','lb','lc'].forEach(i=>$(i).addEventListener('input',()=>{D.edited=true;labWarn();if(D.rows.length){draw();table()}}));['gs','ms','cen'].forEach(i=>$(i).addEventListener('change',draw));
+$('pre').addEventListener('change',()=>{const v=$('pre').value;if(!v)return;const a=v.split('|');D.edited=true;$('la').value=a[0];$('lb').value=a[1];$('lc').value=a[2];labWarn();if(D.rows.length){draw();table()}});
 window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(draw,150)});
 // ---- example (synthetic): three populations of sand / silt / clay (Dirichlet-like, log-normal perturbation of a centre)
 function example(){const r=rng(11),gs=()=>{let s=0;for(let i=0;i<6;i++)s+=r();return(s-3)/Math.sqrt(0.5)},L=['Sand\tSilt\tClay\tFacies'];
   for(const [n,c,k] of [['Channel',[75,15,10],40],['Overbank',[20,50,30],40],['Prodelta',[5,35,60],40]])for(let i=0;i<k;i++){const v=c.map(q=>q*Math.exp(0.25*gs())),s=v[0]+v[1]+v[2];L.push(v.map(q=>(100*q/s).toFixed(1)).join('\t')+'\t'+n)}
-  $('paste').value=L.join('\n');$('la').value='A';$('lb').value='B';$('lc').value='C';loadText($('paste').value)}
+  $('paste').value=L.join('\n');D.edited=false;loadText($('paste').value)}
 $('bExample').onclick=example;
 window.DG={xy,stats};
 
@@ -382,6 +461,6 @@ window.DG={xy,stats};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. Ternary plots by group with arithmetic and compositional (geometric) centres.","method":["Each row is closed to a sum of 100 % (a + b + c = 100). Coordinates: X = c + a/2, Y = a·√3/2, with A at the top, B at the bottom left and C at the bottom right.","Group centres: the arithmetic mean of the closed compositions, and the geometric mean (compositional centre of Aitchison: geometric mean of each part, closed again), which is undefined when a part is zero in at least one sample of the group."],"sources":[["Closure to 100 % and compositional centre (geometric mean of each part, closed again)","Aitchison J. (1982) The statistical analysis of compositional data. Journal of the Royal Statistical Society, Series B 44(2), 139–160 (with discussion), doi 10.1111/j.2517-6161.1982.tb01195.x; Aitchison J. (1986) <i>The Statistical Analysis of Compositional Data</i>, Chapman &amp; Hall, London (reprinted by Blackburn Press, 2003), doi 10.1007/978-94-009-4109-0. Both verified in Crossref; not re-read","published (metadata verified)"],["Barycentric coordinates X = c + a/2, Y = a·√3/2 (A top, B bottom left, C bottom right)","Elementary geometry of the equilateral triangle, derived on the page","derived"],["Arithmetic mean of the closed compositions as a group centre","Plain mean on the page; shown beside the compositional centre because the two differ for skewed groups","on the page (no publication)"],["Colours, tick-label placement, group symbols","Choices of the site author","on the page (no publication)"]],"validation":["Group means identical to numpy."],"limits":[],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Ternary plots by group with arithmetic and compositional (geometric) centres.","method":["Each row is closed to a sum of 100 % (a + b + c = 100). Coordinates: X = c + a/2, Y = a·√3/2, with A at the top, B at the bottom left and C at the bottom right.","Group centres: the arithmetic mean of the closed compositions, and the geometric mean (compositional centre of Aitchison: geometric mean of each part, closed again), which is undefined when a part is zero in at least one sample of the group."],"sources":[["Closure to 100 % and compositional centre (geometric mean of each part, closed again)","Aitchison J. (1982) The statistical analysis of compositional data. Journal of the Royal Statistical Society, Series B 44(2), 139–160 (with discussion), doi 10.1111/j.2517-6161.1982.tb01195.x; Aitchison J. (1986) <i>The Statistical Analysis of Compositional Data</i>, Chapman &amp; Hall, London (reprinted by Blackburn Press, 2003), doi 10.1007/978-94-009-4109-0. Both verified in Crossref; not re-read","published (metadata verified)"],["Barycentric coordinates X = c + a/2, Y = a·√3/2 (A top, B bottom left, C bottom right)","Elementary geometry of the equilateral triangle, derived on the page","derived"],["Arithmetic mean of the closed compositions as a group centre","Plain mean on the page; shown beside the compositional centre because the two differ for skewed groups","on the page (no publication)"],["Colours, tick-label placement, group symbols","Choices of the site author","on the page (no publication)"]],"validation":["Group means identical to numpy.","Regression test scripts/ternary_test.mjs: coordinates ((50,30,20) gives X 0.45, Y 0.433; (20,30,50) gives 0.6, 0.1732), closure, Aitchison centre of (50,30,20) and (20,30,50) = 33.913 / 32.173 / 33.913, zero part suppresses the geometric centre, column guess, number and delimiter decoding, skipped-row counts.","Changed on 26 November 2026: apex columns are matched on the whole header (a column called Age is no longer taken as A) and the columns used are listed after every load; axis labels follow the selected columns at every load unless you edited them by hand (then a warning is shown if they differ); a failed load clears the previous data instead of leaving it on screen; decimal commas and thousands separators are decoded and the delimiter is detected so that 60,5 is not split on the comma."],"limits":["Rows with an empty field, n.d. or a value such as <1 are skipped and counted by reason with the first line numbers; tick the option to treat them as 0 (this makes the geometric centre undefined for the group, and a below-detection limit is not substituted by a fraction of itself).","Null sentinels such as -999 are not recognised as such: they are skipped as negative values and counted.","A value written 1,234 is ambiguous: it is read as thousands (1234) unless the file uses decimal commas elsewhere; the load message says when this happened."],"date":"26 November 2026"});
 </script>
 </body></html>
