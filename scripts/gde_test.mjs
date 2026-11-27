@@ -1329,6 +1329,44 @@ test('carbonate platform example: the margin line gets its reef rim, pass arrows
   assert.ok(gr.every(o => Math.abs(((o.az - pout.az + 540) % 360) - 180) < 75), 'gravity transfer points down the slope (basinward, like the outflow, within the curvature of the margin)');
   const m2 = JSON.parse(JSON.stringify(ex.M)); m2.facies.n.rim = 0; assert.ok(!G.build(m2, ex.wells).facies.some(o => o.type === 'reefrim'));
 });
+// ---------- carbonate ramp: banks and passes, wave bases, storm deposits, sheltered area ----------
+test('carbonate ramp zones: oolitic banks in the shoal belt separated by passes, wave bases between the belts, storm deposits in the mid / outer ramp', () => {
+  const ex = G.examples.rampzones, mod = G.build(ex.M, ex.wells), r = mod.facies.find(o => o.type === 'rampzone'), AB = G.allBelts(ex.M);
+  const iS = AB.findIndex(c => /shoal/i.test(c.name)), iM = AB.findIndex(c => /^mid ramp/i.test(c.name)), iO = AB.findIndex(c => /^outer ramp/i.test(c.name));
+  assert.ok(r && iS >= 0 && iM > iS && iO > iM && mod.check.every(c => c.honoured));
+  const cen = p => [p.ring.reduce((s, q) => s + q[0], 0) / p.ring.length, p.ring.reduce((s, q) => s + q[1], 0) / p.ring.length], of = k => r.parts.filter(p => p.kind === k);
+  const banks = of('oobank'); assert.ok(banks.length >= 4);
+  assert.ok(banks.every(p => mod.beltAt(...cen(p)) === iS), 'banks sit in the inner-ramp shoal belt');
+  // elongate along the shore (perpendicular to the transport azimuth 115 deg) and separated by passes (gaps between neighbours)
+  const a = ex.M.az * Math.PI / 180, ux = Math.sin(a), uy = Math.cos(a), T = p => p.ring.map(q => -q[0] * uy + q[1] * ux), Sd = p => p.ring.map(q => q[0] * ux + q[1] * uy);
+  const rng = v => Math.max(...v) - Math.min(...v);
+  assert.ok(banks.every(p => rng(T(p)) > 1.6 * rng(Sd(p))), 'banks are elongate along the coast');
+  const iv = banks.map(p => [Math.min(...T(p)), Math.max(...T(p))]).sort((x, y) => x[0] - y[0]);
+  for (let i = 1; i < iv.length; i++) assert.ok(iv[i][0] - iv[i - 1][1] > 0, 'a pass between banks ' + i);
+  // wave bases: dashed lines on the boundary of the belts, the fair-weather one shoreward of the storm one
+  const fw = r.lines.filter(l => l.kind === 'fwwb'), sw = r.lines.filter(l => l.kind === 'swwb');
+  assert.ok(fw.length >= 1 && sw.length >= 1);
+  for (const [L, ib] of [[fw, iM], [sw, iO]]) { const P = L.flatMap(l => l.pts), ok = P.filter(p => { const b = mod.beltAt(p[0], p[1]); return b === ib || b === ib - 1 }).length; assert.ok(ok >= .75 * P.length, 'wave base on the belt boundary ' + ib + ': ' + ok + '/' + P.length) }
+  const sm = L => L.flatMap(l => l.pts).reduce((s, p) => s + p[0] * ux + p[1] * uy, 0) / L.flatMap(l => l.pts).length;
+  assert.ok(sm(fw) < sm(sw));
+  const st = of('storm'); assert.ok(st.length >= 6 && st.every(p => { const b = mod.beltAt(...cen(p)); return b >= iM }), 'storm deposits in the mid and outer ramp');
+  assert.ok(of('shelter').length === 1, 'sheltered area with n.ramp = 2');
+});
+test('carbonate ramp zones: n.ramp 1 has no sheltered area, 0 none; moving the object moves its parts; fast (< 100 ms); only on the ramp template', () => {
+  const ex = G.examples.rampzones, m1 = JSON.parse(JSON.stringify(ex.M)); m1.facies.n.ramp = 1;
+  assert.ok(!G.build(m1, ex.wells).facies.find(o => o.type === 'rampzone').parts.some(p => p.kind === 'shelter'));
+  m1.facies.n.ramp = 0; assert.ok(!G.build(m1, ex.wells).facies.some(o => o.type === 'rampzone'));
+  const m2 = JSON.parse(JSON.stringify(ex.M)); m2.facies.edits = { ramp0: { dx: 1000, dy: -500 } };
+  const A = G.build(ex.M, ex.wells).facies.find(o => o.type === 'rampzone'), B = G.build(m2, ex.wells).facies.find(o => o.type === 'rampzone');
+  near(B.g.parts[0].ring[0][0] - A.g.parts[0].ring[0][0], 1000, 1e-6); near(B.g.parts[0].ring[0][1] - A.g.parts[0].ring[0][1], -500, 1e-6);
+  const mod = G.build(ex.M, ex.wells, { fast: true }), t0 = performance.now(); G.faciesGen(ex.M, mod); assert.ok(performance.now() - t0 < 100, 'generation ' + (performance.now() - t0));
+  const mc = G.examples.carbmargin.M; mc.facies.n.ramp = 2; assert.ok(!G.build(mc, []).facies.some(o => o.type === 'rampzone'));
+});
+test('transport arrows and process colours stay consistent across the new objects (river blue, wave / tide purple, gravity red; flood / ebb only on tide-dominated deltas)', () => {
+  const procs = { deltariver: ['river', 'wave', 'gravity', 'settle'], deltawave: ['river', 'wave', 'gravity', 'settle'], deltatide: ['river', 'wave', 'gravity', 'settle', 'flood', 'ebb'], carbplat: ['wave', 'gravity', 'settle'] };
+  for (const [k, ok] of Object.entries(procs)) { const ex = G.examples[k], A = G.build(ex.M, ex.wells).facies.filter(o => o.type === 'arrow'); assert.ok(A.every(o => ok.includes(o.proc)), k + ' ' + [...new Set(A.map(o => o.proc))]); }
+  for (const k of ['deltariver', 'deltawave', 'carbplat', 'rampzones', 'subfan']) { const ex = G.examples[k]; assert.ok(!G.build(ex.M, ex.wells).facies.some(o => o.proc === 'flood' || o.proc === 'ebb'), k); }
+});
 let fail = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ', name); }
