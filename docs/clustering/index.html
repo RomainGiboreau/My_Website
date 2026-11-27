@@ -144,12 +144,12 @@ td.l,th.l{text-align:left}
   <div class="pg"><span title="Values equal to one of these are not used as data (counted in the message below). Separate with commas; empty the box to keep every value.">Null values</span><input type="text" id="nulls" value="-999, -999.25, -9999, 9999, 1e30, 1.70141e38" spellcheck="false"></div>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
  <section class="panel"><h2><span class="n">2</span>Method<span class="tt" tabindex="0" data-tip="k-means: Lloyd iterations from k-means++ starts, best of 10 runs, spherical clusters in the scaled space. Hierarchical: agglomerative; Ward minimises the variance increase, single/complete/average use Euclidean distances. DBSCAN: density-based, no k, noise points get no cluster (grey crosses). Gaussian mixture: EM from a k-means start, diagonal or full covariance, soft assignments (tooltip shows the probability). Scaling matters: without it, the feature with the largest unit decides.">?</span><i class="chev"></i></h2>
-  <div class="body"><div class="pg"><span>Algorithm</span><select id="alg"><option value="km">k-means</option><option value="hc">Hierarchical</option><option value="db">DBSCAN</option><option value="gm">Gaussian mixture</option></select>
+  <div class="body"><div class="pg"><span>Algorithm</span><select id="alg"><option value="km">k-means</option><option value="hc">Hierarchical</option><option value="db">DBSCAN</option><option value="gm" selected>Gaussian mixture</option></select>
   <span class="o-k">Clusters k</span><input type="number" id="k" value="3" min="1" max="20" step="1" class="o-k">
   <span class="o-hc">Linkage</span><select id="link" class="o-hc"><option value="ward">Ward</option><option value="average">Average</option><option value="complete">Complete</option><option value="single">Single</option></select>
   <span class="o-db">eps (scaled units)</span><input type="number" id="eps" value="0.5" min="0.001" step="0.05" class="o-db">
   <span class="o-db">min points</span><input type="number" id="minpts" value="5" min="1" step="1" class="o-db">
-  <span class="o-gm">Covariance</span><select id="cov" class="o-gm"><option value="diag">diagonal</option><option value="full">full</option></select>
+  <span class="o-gm">Covariance</span><select id="cov" class="o-gm"><option value="diag">diagonal</option><option value="full" selected>full</option></select>
   <span class="o-db">suggested eps</span><span class="o-db"><button id="bEps" type="button" title="Knee of the k-distance plot: the distance at which points start to be isolated. Click to use it.">–</button></span>
   <span>Scaling</span><select id="scal"><option value="z">z-score</option><option value="mm">min–max</option><option value="none">none</option></select>
   <span>Seed</span><input type="number" id="seed" value="1" step="1"></div>
