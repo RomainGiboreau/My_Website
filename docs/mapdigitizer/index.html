@@ -95,8 +95,11 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
   <button id="bCsv">XYZ CSV</button>
   <button id="bMat" title="Matrix CSV: one row per y (top = ymax), one column per x">Matrix CSV</button>
   <button id="bGrd" title="Surfer ASCII grid (DSAA), empty nodes = 1.70141e38">Surfer .grd</button>
+  <button id="bZmapGrid" title="ZMAP+ grid, null 1.0E+30; the header comments keep the calibration, legend and parameters">ZMAP+</button>
+  <select id="zsign" title="Sign of the values written in the ZMAP+ file" aria-label="ZMAP+ value sign"><option value="pos">values as read</option><option value="neg">multiply by -1</option></select>
+  <button id="bAudit" title="JSON: source file, calibration, legend ticks, tolerance, window, counts, reading uncertainty">Audit JSON</button>
   <span class="msg" id="exportMsg"></span>
-  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the images are never uploaded. The value of each grid node is read from its colour by matching it to the colour bar (CIE Lab distance), then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes.">?</span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser: the images are never uploaded. The value of each grid node is read from its colour by matching it to the colour bar (CIE Lab distance), then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes. Nodes at the colour of an end of the bar are flagged possibly saturated (exported as flag = saturated in the XYZ files).">?</span>
  </div>
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
@@ -130,12 +133,12 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
    <span>dx</span><input type="text" id="gdx"><span>dy</span><input type="text" id="gdy"></div>
   <div class="msg" id="gMsg"></div></div>
  </section>
- <section class="panel"><h2><span class="n">5</span>Extract<span class="tt" tabindex="0" data-tip="Colour tolerance: maximum CIE Lab distance between a pixel and its closest legend colour (about 2 is barely visible, 10 is clearly different). Window: half-size in pixels of the square around each node whose matching pixels are median-filtered; it removes isolines and labels. Min. matching: share of window pixels that must match the legend, otherwise the node stays empty. “Unmatched pixels” tints in red every pixel of the map whose colour is not in the legend at the current tolerance.">?</span><i class="chev"></i></h2>
-  <div class="body"><label class="inl">Colour tolerance <input type="range" id="tol" min="2" max="40" value="12"><span id="tolV" style="width:28px;text-align:right">12</span></label>
+ <section class="panel"><h2><span class="n">5</span>Extract<span class="tt" tabindex="0" data-tip="Rejection tolerance: maximum CIE Lab distance between a pixel and its closest legend colour (about 2 is barely visible, 10 is clearly different). It does not change the value read: the value is always that of the nearest legend colour; the tolerance only decides which pixels (text, isolines, background) are rejected. “Saturated” rings nodes whose colour is that of an end of the bar: the true value may lie beyond it. Window: half-size in pixels of the square around each node whose matching pixels are median-filtered; it removes isolines and labels. Min. matching: share of window pixels that must match the legend, otherwise the node stays empty. “Unmatched pixels” tints in red every pixel of the map whose colour is not in the legend at the current tolerance.">?</span><i class="chev"></i></h2>
+  <div class="body"><label class="inl">Rejection tolerance <input type="range" id="tol" min="2" max="40" value="12"><span id="tolV" style="width:28px;text-align:right">12</span></label>
   <div class="row"><label class="inl">Window ± <input type="number" id="win" min="0" max="15" value="2" style="width:52px">px</label>
    <label class="inl">Min. matching <input type="number" id="minf" min="1" max="100" value="30" style="width:56px">%</label></div>
   <div class="row"><button class="pri" id="bExtract">Extract grid</button></div>
-  <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label><label class="inl"><input type="checkbox" id="showU">Unmatched pixels</label></div>
+  <div class="row"><label class="inl"><input type="checkbox" id="showR" checked>Raster</label><label class="inl"><input type="checkbox" id="showN">Nodes</label><label class="inl"><input type="checkbox" id="showU">Unmatched pixels</label><label class="inl"><input type="checkbox" id="showS" checked>Saturated</label></div>
   <div class="msg" id="exMsg"></div></div>
  </section>
 </aside>
@@ -152,6 +155,37 @@ label.inl{display:flex;gap:6px;align-items:center;font-size:.82rem}
  <div class="dpanel"><div class="tw"><table><thead><tr><th>#</th><th id="thX">X</th><th id="thY">Y</th><th id="thV">Value</th></tr></thead><tbody id="tb"></tbody></table></div></div>
 </main>
 </div>
+<script id="md-continuous-core">
+/* Continuous map digitizer core: colour matching, saturation flags, reading uncertainty, ZMAP+ writer. No DOM access; exposed as window.MDC. */
+(function(W){
+function lab(r,g,b){const f=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)};
+  const R=f(r),G=f(g),B=f(b);
+  let X=(R*.4124564+G*.3575761+B*.1804375)/.95047,Y=(R*.2126729+G*.7151522+B*.072175),Z=(R*.0193339+G*.119192+B*.9503041)/1.08883;
+  const h=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;X=h(X);Y=h(Y);Z=h(Z);return[116*Y-16,500*(X-Y),200*(Y-Z)]}
+// index of the closest legend colour (Lab distance); labs = Float32Array(3N)
+function nearest(l,labs,N){let best=1e18,bi=-1;for(let k=0;k<N;k++){const a=l[0]-labs[3*k],b=l[1]-labs[3*k+1],c=l[2]-labs[3*k+2],d=a*a+b*b+c*c;if(d<best){best=d;bi=k}}return[bi,best]}
+// A colour matching the first or last ~0.6 % of the bar is the colour of the bar's extreme: the true value may lie beyond the bar (the map clips it)
+const satMargin=N=>Math.max(2,Math.round(.006*N));
+const isSat=(id,N)=>id>=0&&(id<=satMargin(N)||id>=N-1-satMargin(N));
+function satFlags(idx,N){const flags=new Uint8Array(idx.length);let count=0;for(let k=0;k<idx.length;k++)if(isSat(idx[k],N)){flags[k]=1;count++}return{flags,count}}
+// order of magnitude of the reading error, measured on synthetic maps: ~0.2 % of the range (PNG), up to ~1 % (strong JPEG); quant = half a step of the 512-sample bar
+const uncertainty=(range,N)=>({png:.002*range,jpeg:.01*range,quant:range/(N-1)/2});
+const fnum=v=>String(+(+v).toPrecision(12));
+const NULL_ZMAP='1.0000000E+30';
+// ZMAP+ (same writer as the Grid attributes page): g={nx,ny,dx,dy,x0,y1,z} with z row 0 = top (ymax); o={label,sign,audit:[text],npl,width}
+function writeZmap(g,o){o=o||{};const npl=o.npl||5,width=o.width||20,nr=g.ny,nc=g.nx,sg=o.sign===-1?-1:1;
+  let mn=Infinity,mx=-Infinity;for(const v of g.z)if(v===v){const w=v*sg;if(w<mn)mn=w;if(w>mx)mx=w}
+  const sc=Math.max(Math.abs(mn),Math.abs(mx))||1,dec=o.dec!=null?o.dec:Math.max(0,Math.min(15,Math.ceil(10-Math.log10(sc))));
+  const label=String(o.label||'GRID').replace(/[,@\r\n]/g,'_').slice(0,40)||'GRID';
+  const xmax=g.x0+(nc-1)*g.dx,ymin=g.y1-(nr-1)*g.dy;
+  const out=['!','! '+label+' - written by Continuous map digitizer','!'];
+  (o.audit||[]).forEach(t=>out.push('! '+String(t).replace(/[\r\n]+/g,' ')));
+  out.push('!',`@${label}, GRID, ${npl}`,`${width}, ${NULL_ZMAP}, , ${dec}, 1`,`${nr}, ${nc}, ${fnum(g.x0)}, ${fnum(xmax)}, ${fnum(ymin)}, ${fnum(g.y1)}`,'0.0, 0.0, 0.0','@');
+  for(let c=0;c<nc;c++){let s='',k=0;for(let r=0;r<nr;r++){const v=g.z[r*nc+c]*sg;s+=(v===v?v.toFixed(dec):NULL_ZMAP).padStart(width);if(++k===npl||r===nr-1){out.push(s);s='';k=0}}}
+  return out.join('\r\n')+'\r\n'}
+W.MDC={lab,nearest,satMargin,isSat,satFlags,uncertainty,writeZmap};
+})(window);
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lg=loupe.getContext('2d');
@@ -168,10 +202,7 @@ function fmt(v){if(!isFinite(v))return'—';const a=Math.abs(v);return(a!==0&&(a
 const num=t=>parseFloat(String(t).replace(',','.'));
 
 // ---------- colour ----------
-function rgb2lab(r,g,b){const f=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)};
-  const R=f(r),G=f(g),B=f(b);
-  let X=(R*.4124564+G*.3575761+B*.1804375)/.95047,Y=(R*.2126729+G*.7151522+B*.072175),Z=(R*.0193339+G*.119192+B*.9503041)/1.08883;
-  const h=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;X=h(X);Y=h(Y);Z=h(Z);return[116*Y-16,500*(X-Y),200*(Y-Z)]}
+const rgb2lab=MDC.lab;   // CIE Lab, see md-continuous-core
 
 // ---------- map calibration: control points -> affine ----------
 function solve3(A,b){ // Gauss elimination on a 3x3 system
@@ -227,7 +258,7 @@ function afterLoad(doc){
   if(doc===LD())resetTicks();
   fit();recal();buildLUT();renderTable();$('exMsg').textContent=''}
 function loadFile(f,target){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f),i=new Image();
-  i.onload=()=>{const doc=target==='leg'&&S.sep?S.leg:S.map;setImage(doc,i);URL.revokeObjectURL(u);afterLoad(doc)};i.src=u}
+  i.onload=()=>{const doc=target==='leg'&&S.sep?S.leg:S.map;setImage(doc,i);doc.name=f.name||'pasted image';URL.revokeObjectURL(u);afterLoad(doc)};i.src=u}
 const curTarget=()=>(S.view==='leg'&&S.sep)?'leg':'map';
 $('bOpen').onclick=()=>{$('file').dataset.t='map';$('file').click()};
 $('file').onchange=e=>{loadFile(e.target.files[0],'map');e.target.value=''};
@@ -267,7 +298,7 @@ function makeExample(){
   for(let k=0;k<=4;k++){const z=zmin+k*400,yy=py0+ph-1-k/4*(ph-1);g.beginPath();g.moveTo(bx+bw,yy+.5);g.lineTo(bx+bw+5,yy+.5);g.stroke();g.fillText(z,bx+bw+8,yy+4)}
   return{canvas:c,geo:{px0,py0,pw,ph,bx,bw,zmin,zmax}}}
 $('bExample').onclick=()=>{const e=makeExample();const i=new Image();i.onload=()=>{S.sep=false;$('legSrc').value='same';$('bOpenLeg').hidden=true;['vsep','vMap','vLeg'].forEach(k=>$(k).hidden=true);setView('map');
-  setImage(S.map,i);window.EXGEO=e.geo;afterLoad(S.map)};i.src=e.canvas.toDataURL('image/png')};
+  setImage(S.map,i);S.map.name='example (synthetic, drawn by the page)';window.EXGEO=e.geo;afterLoad(S.map)};i.src=e.canvas.toDataURL('image/png')};
 // ---------- view ----------
 function size(){const r=$('stage').getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);return{w:r.width,h:r.height,dpr}}
 function fit(){const {w,h}=size(),D=CUR();if(!D.img){draw();return}D.s=Math.min(w/D.w,h/D.h)*.96;D.tx=(w-D.w*D.s)/2;D.ty=(h-D.h*D.s)/2;draw()}
@@ -327,8 +358,7 @@ function buildLUT(){
   for(let k=0;k<lc.width;k++){const i=Math.round(k/(lc.width-1)*(N-1));lx.fillStyle=`rgb(${rgb[3*i]},${rgb[3*i+1]},${rgb[3*i+2]})`;lx.fillRect(k,0,1,lc.height)}
   m.textContent=`Colour scale read: ${fmt(val[0])} → ${fmt(val[N-1])}`;draw();updU()}
 function match(r,g,b,tol2){const key=(r<<16)|(g<<8)|b;let c=lutCache.get(key);
-  if(c===undefined){const l=rgb2lab(r,g,b),L=LUT.lab;let best=1e18,bi=-1;for(let k=0;k<LUT.N;k++){const a=l[0]-L[3*k],bb=l[1]-L[3*k+1],cc=l[2]-L[3*k+2],dd=a*a+bb*bb+cc*cc;if(dd<best){best=dd;bi=k}}
-    c=[bi,best];lutCache.set(key,c)}
+  if(c===undefined){c=MDC.nearest(rgb2lab(r,g,b),LUT.lab,LUT.N);lutCache.set(key,c)}
   return c[1]<=tol2?c[0]:-1}
 
 // ---------- unmatched-pixel overlay ----------
@@ -367,6 +397,8 @@ function draw(){
     for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const k=j*R.nx+i,p=G.inv(R.x0+i*R.dx,R.y0+j*R.dy),[x,y]=toScr(p[0],p[1]);if(x<-5||y<-5||x>W+5||y>H+5)continue;
       const id=R.idx[k];ctx.beginPath();ctx.arc(x,y,rad,0,7);
       if(id<0){ctx.strokeStyle='#d63b32';ctx.stroke()}else{ctx.fillStyle=`rgb(${R.lut.rgb[3*id]},${R.lut.rgb[3*id+1]},${R.lut.rgb[3*id+2]})`;ctx.fill();ctx.strokeStyle='#232220';ctx.stroke()}}}
+  if(isMap&&S.R&&S.R.nSat&&$('showS').checked){const R=S.R,G=GEO();ctx.lineWidth=2;ctx.strokeStyle='#e08a00';
+    for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const k=j*R.nx+i;if(!R.sat[k])continue;const p=G.inv(R.x0+i*R.dx,R.y0+j*R.dy),[x,y]=toScr(p[0],p[1]);if(x<-8||y<-8||x>W+8||y>H+8)continue;ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.stroke()}}
   if(isMap)S.cal.pts.forEach((q,i)=>{if(q.p){const [x,y]=toScr(q.p[0],q.p[1]);marker(ctx,x,y,'#1f5fbf','P'+(i+1),9)}});
   if(D===LD()){const mn=S.T.min.p,mx=S.T.max.p;
     if(mn&&mx){const a=toScr(...mn),b=toScr(...mx);ctx.strokeStyle='rgba(168,98,58,.9)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([])}
@@ -465,22 +497,26 @@ $('bExtract').onclick=()=>{
   const rc=document.createElement('canvas');rc.width=g.nx;rc.height=g.ny;const rx=rc.getContext('2d'),im=rx.createImageData(g.nx,g.ny);
   for(let k=0;k<idx.length;k++){const id=idx[k];if(id>=0){im.data[4*k]=LUT.rgb[3*id];im.data[4*k+1]=LUT.rgb[3*id+1];im.data[4*k+2]=LUT.rgb[3*id+2];im.data[4*k+3]=255}}
   rx.putImageData(im,0,0);
-  S.R={...g,idx,lut:LUT,canvas:rc,ok,vmin,vmax,px:!!G.px};
-  m.textContent=ok?`${ok} / ${idx.length} nodes valid · min ${fmt(vmin)} · max ${fmt(vmax)} · mean ${fmt(sum/ok)}`:'No node matched the legend: increase the tolerance or check the ticks.';
+  const sf=MDC.satFlags(idx,LUT.N),log=$('vs').value==='log',rng=LUT.vmax-LUT.vmin,un=MDC.uncertainty(rng,LUT.N);
+  S.R={...g,idx,lut:LUT,canvas:rc,ok,vmin,vmax,px:!!G.px,sat:sf.flags,nSat:sf.count,log,
+    params:{tolerance:+$('tol').value,windowHalfPx:w,minMatchingPct:+$('minf').value||30},mapFile:S.map.name||'',legendFile:S.sep?(S.leg.name||''):'(same image)',unc:un,when:new Date().toISOString()};
+  const uncTxt=log?'reading uncertainty about 0.2 % (PNG) to 1 % (strong JPEG) of the bar range in log10 units':`reading uncertainty about ±${fmt(un.png)} (PNG) to ±${fmt(un.jpeg)} (strong JPEG) = 0.2 % to 1 % of the bar range`;
+  m.textContent=ok?`${ok} / ${idx.length} nodes valid · min ${fmt(vmin)} · max ${fmt(vmax)} · mean ${fmt(sum/ok)}${sf.count?` · ${sf.count} possibly saturated`:''} · ${uncTxt} (order of magnitude measured on synthetic maps)`:'No node matched the legend: increase the tolerance or check the ticks.';
   const share=ok/idx.length;
   if(!ok){m.className='msg err';banner('No node matched the colour legend. Raise the colour tolerance, or check that the min/max ends were clicked on the colour bar.',true)}
   else if(share<.5){m.className='msg err';banner(`Only ${Math.round(share*100)} % of the nodes matched the legend. Raise the colour tolerance, tick “Unmatched pixels” to see what is rejected, or keep the grid inside the coloured area.`,true)}
+  else if(sf.count){m.className='msg err';banner(`${sf.count} of ${ok} nodes are at the colour of an end of the bar (${fmt(LUT.vmin)} or ${fmt(LUT.vmax)}) and are flagged possibly saturated: the true value may lie beyond the bar (the map clips it). Orange rings on the map; exported as flag = saturated.`,true)}
   else banner(`${ok} of ${idx.length} nodes extracted (${fmt(vmin)} → ${fmt(vmax)}). Check the Raster / Nodes overlays, then export from the top bar.`);
   renderTable();draw()};
 function zOf(k){const R=S.R,id=R.idx[k];return id<0?NaN:R.lut.val[id]}
 function renderTable(){const R=S.R;$('thX').textContent=R&&R.px?'X (px)':'X';$('thY').textContent=R&&R.px?'Y (px)':'Y';
   if(!R){$('tb').innerHTML='';return}
-  let h='',n=0;for(let j=0;j<R.ny&&n<400;j++)for(let i=0;i<R.nx&&n<400;i++,n++){const k=j*R.nx+i;const z=zOf(k);h+=`<tr><td>${k+1}</td><td>${fmt(R.x0+i*R.dx)}</td><td>${fmt(R.y0+j*R.dy)}</td><td>${fmt(z)}</td></tr>`}
+  let h='',n=0;for(let j=0;j<R.ny&&n<400;j++)for(let i=0;i<R.nx&&n<400;i++,n++){const k=j*R.nx+i;const z=zOf(k);h+=`<tr><td>${k+1}</td><td>${fmt(R.x0+i*R.dx)}</td><td>${fmt(R.y0+j*R.dy)}</td><td>${fmt(z)}${R.sat[k]?' ⚠':''}</td></tr>`}
   if(R.nx*R.ny>n)h+=`<tr><td colspan="4">… ${R.nx*R.ny-n} more nodes (all are exported)</td></tr>`;$('tb').innerHTML=h}
 
 // ---------- export ----------
-function xyz(sep){const R=S.R,skip=$('skipNaN').checked,L=[['x','y','value'].join(sep)];
-  for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);if(skip&&!isFinite(z))continue;L.push([+(R.x0+i*R.dx).toPrecision(10),+(R.y0+j*R.dy).toPrecision(10),isFinite(z)?+z.toPrecision(8):''].join(sep))}
+function xyz(sep){const R=S.R,skip=$('skipNaN').checked,L=[['x','y','value','flag'].join(sep)];
+  for(let j=0;j<R.ny;j++)for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);if(skip&&!isFinite(z))continue;L.push([+(R.x0+i*R.dx).toPrecision(10),+(R.y0+j*R.dy).toPrecision(10),isFinite(z)?+z.toPrecision(8):'',R.sat[j*R.nx+i]?'saturated':''].join(sep))}
   return L.join('\n')}
 function matrix(){const R=S.R,L=['y\\x,'+Array.from({length:R.nx},(_,i)=>+(R.x0+i*R.dx).toPrecision(10)).join(',')];
   for(let j=R.ny-1;j>=0;j--){const r=[+(R.y0+j*R.dy).toPrecision(10)];for(let i=0;i<R.nx;i++){const z=zOf(j*R.nx+i);r.push(isFinite(z)?+z.toPrecision(8):'')}L.push(r.join(','))}return L.join('\n')}
@@ -492,7 +528,22 @@ $('bCopy').onclick=async()=>{if(!need())return;const t=xyz('\t');try{await navig
 $('bCsv').onclick=()=>{if(need())dl(xyz(','),'map_xyz.csv','text/csv')};
 $('bMat').onclick=()=>{if(need())dl(matrix(),'map_matrix.csv','text/csv')};
 $('bGrd').onclick=()=>{if(need())dl(grd(),'map_grid.grd','text/plain')};
-$('showR').onchange=$('showN').onchange=draw;$('showU').onchange=computeU;
+function auditObj(){const R=S.R,P=S.cal.pts.map((q,i)=>({id:'P'+(i+1),pixel:q.p?[+q.p[0].toFixed(2),+q.p[1].toFixed(2)]:null,X:q.X,Y:q.Y})),tk=t=>({pixel:t.p?[+t.p[0].toFixed(2),+t.p[1].toFixed(2)]:null,value:t.v});
+  return{tool:'Continuous map digitizer',written:R.when,mapFile:R.mapFile,legendFile:R.legendFile,
+    calibration:CAL&&!CAL.err?{controlPoints:P,rmsPx:+CAL.rms.toFixed(3)}:{controlPoints:P,note:'none: grid in image pixels (y downward)'},
+    legend:{scale:R.log?'log':'linear',min:tk(S.T.min),max:tk(S.T.max),intermediate:S.T.mid.map(tk),valueRange:[R.lut.vmin,R.lut.vmax]},
+    parameters:{...R.params,matching:'nearest legend colour (CIE Lab); the tolerance only rejects pixels farther than it'},
+    grid:{x0:R.x0,y0:R.y0,dx:R.dx,dy:R.dy,nx:R.nx,ny:R.ny},
+    result:{validNodes:R.ok,totalNodes:R.nx*R.ny,possiblySaturatedNodes:R.nSat,min:R.vmin,max:R.vmax,saturationRule:'node colour matches the first or last 0.6 % of the colour bar',
+      readingUncertaintyOrderOfMagnitude:{png:R.unc.png,strongJpeg:R.unc.jpeg,unit:'value units (0.2 % and 1 % of the bar range), measured on synthetic maps'}}}}
+$('bAudit').onclick=()=>{if(need())dl(JSON.stringify(auditObj(),null,2),'map_audit.json','application/json')};
+$('bZmapGrid').onclick=()=>{if(!need())return;const R=S.R,sg=$('zsign').value==='neg'?-1:1,z=new Float64Array(R.nx*R.ny);
+  for(let r=0;r<R.ny;r++)for(let c=0;c<R.nx;c++)z[r*R.nx+c]=zOf((R.ny-1-r)*R.nx+c);   // ZMAP rows start at the top (ymax)
+  const a=auditObj(),au=['source map: '+a.mapFile,'legend: '+a.legendFile+' ('+a.legend.scale+', '+a.legend.valueRange.join(' to ')+')','colour tolerance '+R.params.tolerance+', window +-'+R.params.windowHalfPx+' px, min matching '+R.params.minMatchingPct+' %',
+    'calibration: '+(a.calibration.rmsPx!=null?a.calibration.controlPoints.length+' control points, rms '+a.calibration.rmsPx+' px':'none (image pixels)'),
+    R.nSat+' nodes possibly saturated (colour at an end of the bar); the ZMAP+ format has no flag: see the XYZ export',sg<0?'values multiplied by -1 (depth sign option)':'values as read from the colour bar'];
+  dl(MDC.writeZmap({nx:R.nx,ny:R.ny,dx:R.dx,dy:R.dy,x0:R.x0,y1:R.y0+(R.ny-1)*R.dy,z},{label:(R.mapFile||'MAP').replace(/\.[^.]*$/,'').toUpperCase().replace(/[^A-Z0-9_]/g,'_')||'MAP',sign:sg,audit:au}),'map_grid.zmap','text/plain')};
+$('showR').onchange=$('showN').onchange=$('showS').onchange=draw;$('showU').onchange=computeU;
 window.DG={S,buildCal,recal,renderCal,load:i=>{setImage(S.map,i);afterLoad(S.map)},get LUT(){return LUT},get CAL(){return CAL},imgToScreen:(x,y)=>{const D=CUR(),r=cv.getBoundingClientRect();return[r.left+x*D.s+D.tx,r.top+y*D.s+D.ty]}};
 recal();size();draw();
 </script><script id="rgm-js">
@@ -573,6 +624,6 @@ recal();size();draw();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. Read a continuous property such as depth, thickness or porosity from a colour-filled map image with a colour bar legend, on a regular grid in map coordinates. For facies or other class maps, use the <a href=\"../discretemap/\">Discrete map digitizer</a>.","date":"26 November 2026","method":["Legend: click the minimum and maximum ends of the colour bar and type their values; the colours in between are read from the bar pixels along the line joining the two ends, with linear or log interpolation. Intermediate ticks only if the bar is not linear.","Each grid node is matched to the legend by CIE Lab colour distance, then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes. Settings: colour tolerance (maximum CIE Lab distance; about 2 is barely visible, 10 clearly different), window half-size in pixels, and minimum share of matching pixels in the window.","Georeferencing: 2 control points are enough if the map is not rotated; 3 or more fit a full affine transform by least squares and handle rotation. Without control points the grid is defined in image pixels (y downward).","Grid: regular, nodes xmin, xmin + dx, … up to xmax (same for y)."],"sources":[["CIE 1976 L*a*b* (D65 white, sRGB primaries) and the colour distance used to match a pixel to the legend","CIE (2018), CIE 015:2018 Colorimetry, 4th edition, International Commission on Illumination, Vienna, doi:10.25039/TR.015.2018 (definition of CIELAB and of the CIE 1976 difference; document not re-read for this check)","published (metadata verified)"],["Colour bar to value: the bar pixels along the line joining the two clicked ends are sampled (512 samples), values interpolated linearly or logarithmically; each pixel takes the value of the nearest legend colour","Choice of the page's author; no publication","on the page (no publication)"],["Median of the matching pixels in a small window around each node","Huang, T., Yang, G. & Tang, G. (1979), A fast two-dimensional median filtering algorithm, IEEE Transactions on Acoustics, Speech, and Signal Processing 27(1), 13-18, doi:10.1109/TASSP.1979.1163188 (median filtering of images)","published (metadata verified)"],["Georeferencing: affine transform fitted to 3 or more control points by least squares (2 points when the map is not rotated)","Standard linear least squares; background in Hartley, R. & Zisserman, A. (2004), Multiple View Geometry in Computer Vision, 2nd ed., Cambridge University Press, doi:10.1017/CBO9780511811685 (chapter and section not checked)","published (metadata verified)"],["Reliability of colour-to-value inversion: depends on the colour bar being made of distinct colours of steadily changing lightness","Crameri, F., Shephard, G. E. & Heron, P. J. (2020), The misuse of colour in science communication, Nature Communications 11, 5444, doi:10.1038/s41467-020-19160-7. Read (open access, PMC7595127): rainbow-type maps have non-uniform lightness and weak contrast in parts of the range, which hides or exaggerates variations","published (read)"]],"validation":["No validation against an independent implementation is recorded for this page."],"limits":["The map must be a flat colour-filled map without perspective.","Colour-to-value reading is only as good as the colour bar: bars with non-uniform lightness (rainbow type) have ranges of weak contrast where neighbouring values cannot be told apart (Crameri et al. 2020)."]});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Read a continuous property such as depth, thickness or porosity from a colour-filled map image with a colour bar legend, on a regular grid in map coordinates. For facies or other class maps, use the <a href=\"../discretemap/\">Discrete map digitizer</a>.","date":"26 November 2026","method":["Legend: click the minimum and maximum ends of the colour bar and type their values; the colours in between are read from the bar pixels along the line joining the two ends, with linear or log interpolation. Intermediate ticks only if the bar is not linear.","Each grid node is matched to the legend by CIE Lab colour distance, then the median over a small pixel window is kept. Colours that do not match the legend (text, white background, contour lines) give empty nodes. Settings: rejection tolerance (maximum CIE Lab distance to the nearest legend colour; about 2 is barely visible, 10 clearly different), window half-size in pixels, and minimum share of matching pixels in the window. The value of a node is always that of the nearest legend colour: the tolerance only decides which pixels are rejected, so it has no measurable effect on the values of pixels that are accepted.","Possibly saturated nodes: a map often clips values beyond the colour bar, and the clipped colour is the colour of the bar end. A node whose colour matches the first or last 0.6 % of the bar (3 of the 512 samples) is flagged \"possibly saturated\", counted, ringed in orange on the map, marked in the table and exported as flag = saturated in the XYZ files (the true value may lie beyond the bar, e.g. a true 2733 m on a bar ending at 2600 is read 2600). A genuine value at the end of the bar is flagged too: the flag asks for a check, it does not prove clipping.","Reading uncertainty shown with every extraction: about 0.2 % of the bar range for a PNG and up to about 1 % for a strongly compressed JPEG (order of magnitude measured on synthetic maps; the half step of the 512-sample bar is 0.1 % of the range). Exports: XYZ CSV (with the flag column), matrix CSV, Surfer ASCII, ZMAP+ (20-character fields, null 1.0E+30, optional multiplication of the values by -1 for the depth sign, calibration, legend and parameters written as comment lines in the header; same writer as the Grid attributes page) and an audit JSON (source files, calibration points, legend ticks, tolerance, window, counts, reading uncertainty).","Georeferencing: 2 control points are enough if the map is not rotated; 3 or more fit a full affine transform by least squares and handle rotation. Without control points the grid is defined in image pixels (y downward).","Grid: regular, nodes xmin, xmin + dx, … up to xmax (same for y)."],"sources":[["CIE 1976 L*a*b* (D65 white, sRGB primaries) and the colour distance used to match a pixel to the legend","CIE (2018), CIE 015:2018 Colorimetry, 4th edition, International Commission on Illumination, Vienna, doi:10.25039/TR.015.2018 (definition of CIELAB and of the CIE 1976 difference; document not re-read for this check)","published (metadata verified)"],["Colour bar to value: the bar pixels along the line joining the two clicked ends are sampled (512 samples), values interpolated linearly or logarithmically; each pixel takes the value of the nearest legend colour","Choice of the page's author; no publication","on the page (no publication)"],["Median of the matching pixels in a small window around each node","Huang, T., Yang, G. & Tang, G. (1979), A fast two-dimensional median filtering algorithm, IEEE Transactions on Acoustics, Speech, and Signal Processing 27(1), 13-18, doi:10.1109/TASSP.1979.1163188 (median filtering of images)","published (metadata verified)"],["Georeferencing: affine transform fitted to 3 or more control points by least squares (2 points when the map is not rotated)","Standard linear least squares; background in Hartley, R. & Zisserman, A. (2004), Multiple View Geometry in Computer Vision, 2nd ed., Cambridge University Press, doi:10.1017/CBO9780511811685 (chapter and section not checked)","published (metadata verified)"],["Reliability of colour-to-value inversion: depends on the colour bar being made of distinct colours of steadily changing lightness","Crameri, F., Shephard, G. E. & Heron, P. J. (2020), The misuse of colour in science communication, Nature Communications 11, 5444, doi:10.1038/s41467-020-19160-7. Read (open access, PMC7595127): rainbow-type maps have non-uniform lightness and weak contrast in parts of the range, which hides or exaggerates variations","published (read)"]],"validation":["Self-check script scripts/mapdigitizer_continuous_test.mjs: a synthetic viridis-like colour bar (1000 to 2600 m, 512 samples) read back within one bar step inside its range; a value beyond the bar (true 2733 m, bar to 2600 m) is read 2600 and flagged possibly saturated, as is a value below the low end, while values inside the range are not; flag counting; uncertainty figures; ZMAP+ round trip read back by the independent reader of the ZMAP checker page with no finding.","The reading uncertainty (0.2 % to 1 % of the range) is the order of magnitude measured by an expert review on synthetic maps, not a guarantee for a real map. Before this version a value beyond the bar was exported as the bar limit without any mark (error 133 m in the review case); it is now flagged."],"limits":["The map must be a flat colour-filled map without perspective.","Saturation cannot be corrected, only flagged: the real value beyond the bar is unknown. The ZMAP+ and Surfer formats carry no flag; use the XYZ export or the audit JSON (count) for that.","Contour lines, labels and JPEG artefacts can move a node to a neighbouring colour; the window median reduces this but a value read next to a sharp colour boundary is less reliable.","Colour-to-value reading is only as good as the colour bar: bars with non-uniform lightness (rainbow type) have ranges of weak contrast where neighbouring values cannot be told apart (Crameri et al. 2020)."]});
 </script>
 </body></html>
