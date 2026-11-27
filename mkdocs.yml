@@ -99,7 +99,8 @@ nav:
           - Burial history (1D): burial/index.html
           - Log correlation (DTW): logcorr/index.html
       - Decision support:
-          - MCDA (AHP & PROMETHEE): mcda/index.html
+          - MCDA AHP: mcda-ahp/index.html
+          - MCDA PROMETHEE: mcda-promethee/index.html
           - Prospect risking (gCOS, eCOS): risking/index.html
           - Portfolio consolidation: portfolio/index.html
           - Field development screening: fdp/index.html

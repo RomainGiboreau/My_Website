@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCDA AHP</title>
+<link rel="canonical" href="https://RomainGiboreau.github.io/My_Website/mcda-ahp/">
+<meta name="description" content="Analytic Hierarchy Process: Saaty pairwise comparison matrix, eigenvector weights, consistency ratio and a weights file for the MCDA PROMETHEE page. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eeece6;--card:#f5f3ed;--alt:#e2ded3;--fg:#232220;--mut:#5c5a52;--line:#c9c4b6;--acc:#4a5a4e;--acc2:#a8623a}
+html{color-scheme:light only}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,sans-serif}
+h1,h2{font-family:"Space Grotesk",Inter,sans-serif;margin:0}
+.top{background:var(--acc);color:#f5f3ed;display:flex;gap:6px 24px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:12px 18px}
+.top h1{font-size:1.15rem;font-weight:700}
+.top a{color:#f5f3ed;opacity:.88;font-size:.85rem;text-decoration:none;border-bottom:1px solid rgba(245,243,237,.45)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:14px 16px 32px}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.hint{color:var(--mut);font-size:.78rem;margin:2px 0 8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+button,select,input[type=text],input[type=number]{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:.3rem .55rem}
+button{cursor:pointer;background:var(--card)}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#f5f3ed}
+button.on{background:var(--alt);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.msg{font-size:.8rem;color:var(--mut);min-height:1.2em}
+.msg.err{color:var(--acc2)}
+.dpanel{margin-top:12px}
+.tw{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:#d6d1c2;font-family:"Space Grotesk",Inter,sans-serif;font-weight:600}
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:260px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .tt:hover,.top .tt:focus{border-color:#fff;color:#fff}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+.tt{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--mut);font:600 .68rem Inter,sans-serif;cursor:help;flex:none}
+.tt:hover,.tt:focus{border-color:var(--acc);color:var(--acc);outline:none}
+.tt::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:-6px;width:280px;padding:8px 10px;background:var(--fg);color:#f5f3ed;border-radius:6px;font:400 .76rem/1.4 Inter,sans-serif;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:20;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tt:hover::after,.tt:focus::after{opacity:1;visibility:visible}
+/* tooltip near the left edge (two-column layout): open to the right instead */
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+.top .tt{background:transparent;border-color:rgba(245,243,237,.55);color:#f5f3ed}
+.top .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .bar button{padding:.2rem .5rem;font-size:.8rem}
+.top .bar button.pri{background:#f5f3ed;color:var(--acc);border-color:#f5f3ed}
+.top .bar label{display:flex;gap:4px;align-items:center;font-size:.8rem}
+.top .bar .msg{color:#f5f3ed;opacity:.9;min-height:0;font-size:.78rem}
+.top{align-items:center}
+.side{position:sticky;top:8px;align-self:start;max-height:calc(100vh - 16px);overflow-y:auto;padding-right:2px}
+textarea{width:100%;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:4px;padding:6px;resize:vertical;white-space:pre}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;position:relative;min-width:0}
+.card h3{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:2px 4px 2px;display:flex;align-items:center;gap:6px}
+.card h3 .sp{margin-left:auto}
+.card h3 button{padding:.05rem .4rem;font-size:.72rem}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600}
+.chip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}.chip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}.chip.masked{background:#e3dfd2;color:#5c5a52}.chip.excluded{background:#d8c9c2;color:#7a3a2a}
+.tw.tall{max-height:62vh}
+td.l,th.l{text-align:left}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+
+@media (min-width:901px){.tt.tt-r::after{right:auto;left:-6px}}
+</style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head><body>
+<style>
+.ahpblk{margin:0 0 14px}
+.ahpblk h4{font:600 .86rem "Space Grotesk",Inter,sans-serif;margin:8px 0 4px}
+table.mx td,table.mx th{padding:2px 4px;text-align:center}
+table.mx th:first-child,table.mx td:first-child{text-align:left}
+table.mx select{padding:.1rem .2rem;font-size:.78rem}
+table.mx td.rec{color:var(--mut);background:var(--alt)}
+.wbar{display:inline-block;height:9px;background:var(--acc);border-radius:2px;vertical-align:middle}
+main{min-width:0}
+main .card{margin-bottom:12px}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+</style>
+<div class="top"><h1>MCDA AHP</h1>
+ <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
+  <button class="pri" id="bW" title="Interchange file read by the MCDA PROMETHEE page: criteria weights, consistency and the judgments">Weights JSON</button>
+  <button id="bCsv" title="Criteria weights and consistency figures in a CSV file">CSV</button>
+  <button id="bLoad" title="Reload the criteria and judgments of a weights file saved here">Load JSON</button><input type="file" id="jfile" accept=".json,application/json" hidden>
+  <span class="msg" id="exportMsg"></span>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. List the criteria, compare them two by two on the Saaty scale (1 equal to 9 extreme), and read the weights (principal eigenvector), the consistency ratio and the judgment that departs most from the others. Export the weights as a JSON file that the MCDA PROMETHEE page can import. Criteria are not scored against alternatives here.">?</span></div>
+ <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
+<div class="layout">
+<aside class="side">
+ <section class="panel"><h2><span class="n">1</span>Criteria<i class="chev"></i></h2>
+  <div class="body"><textarea id="paste" rows="8" placeholder="One criterion per line&#10;Oil volume (MMbbl)&#10;GOR (scf/bbl)&#10;Drilling depth (m)" spellcheck="false"></textarea>
+  <div class="row"><button class="pri" id="bEx">Example</button><button id="bClr" title="Set every judgment back to 1 (equal importance)">Reset judgments</button><span class="tt tt-r" tabindex="0" style="align-self:center" data-tip="One criterion per line. To build a two-level hierarchy, add a group after a tab or a semicolon: ‘Oil volume;Economics’. Groups are compared first, then the criteria inside each group; the global weight is group weight × local weight. Names are what the PROMETHEE page uses to match the weights, so keep them identical to the column headers of the decision matrix.">?</span></div>
+  <div class="msg" id="dataMsg">No criteria yet.</div></div></section>
+ <section class="panel"><h2><span class="n">2</span>Reading the result<i class="chev"></i></h2>
+  <div class="body"><div class="hint">Each cell states how much more important the ROW criterion is than the COLUMN criterion: 1 equal, 3 moderate, 5 strong, 7 very strong, 9 extreme, 2, 4, 6, 8 in between, 1/3 means the column is moderately more important. The lower triangle is the reciprocal.</div>
+  <div class="hint">CR = CI / RI with CI = (λmax − n)/(n − 1). Below 0.10 is the usual acceptance limit. Above 10 criteria no verified random-index table is used: CR is shown as n/a.</div>
+  <div class="msg" id="runMsg"></div></div></section>
+</aside>
+<main>
+ <div class="card"><h3>Pairwise judgments</h3>
+  <div id="ahpBox" style="padding:4px 6px"></div></div>
+ <div class="card"><h3>Global weights<span class="sp"></span></h3><div class="tw" id="gwT"></div></div>
+</main></div>
+
+<script id="mcda-ahp-core">
+/* mcda-ahp-core: pure AHP engine (no DOM). Exposes window.MCDA_AHP. Tested by scripts/mcda_ahp_test.mjs */
+(function(W){
+const RI={1:0,2:0,3:.58,4:.90,5:1.12,6:1.24,7:1.32,8:1.41,9:1.45,10:1.49}; // Saaty random indices, n <= 10 (no verified table beyond)
+const SAATY=[9,8,7,6,5,4,3,2,1,1/2,1/3,1/4,1/5,1/6,1/7,1/8,1/9];
+const sL=v=>v>=1?String(v):'1/'+Math.round(1/v);
+const FORMAT='mcda-ahp-weights';
+const dot=(row,w)=>{let s=0;for(let k=0;k<w.length;k++)s+=row[k]*w[k];return s};
+// ---------------- AHP ----------------------------------------------------------------------------------------------------
+function ahpSolve(A){
+  const n=A.length;if(n===1)return{w:[1],lam:1,CI:0,CR:0,g:[1]};
+  let w=new Array(n).fill(1/n);
+  for(let it=0;it<10000;it++){const v=A.map(r=>dot(r,w)),s=v.reduce((p,q)=>p+q,0),nw=v.map(x=>x/s);let dm=0;for(let i=0;i<n;i++)dm=Math.max(dm,Math.abs(nw[i]-w[i]));w=nw;if(dm<1e-15)break}
+  const Aw=A.map(r=>dot(r,w));let lam=0;for(let i=0;i<n;i++)lam+=Aw[i]/w[i];lam/=n;
+  const CI=(lam-n)/(n-1),ri=RI[n],CR=ri===undefined?NaN:(ri===0?0:CI/ri);
+  const gm=A.map(r=>Math.pow(r.reduce((p,q)=>p*q,1),1/n)),gs=gm.reduce((p,q)=>p+q,0);
+  return{w,lam,CI,CR,g:gm.map(x=>x/gs)}}
+// criteria are {name, grp}; J holds the judgments of every block: J[key]['i,j'] = a_ij for i < j (key 'all', 'top' or 'g:<group>')
+function groupsInfo(crit){
+  const nm=crit.map(c=>(c.grp||'').trim()||'(none)'),gs=[...new Set(nm)];if(gs.length<2)return null;
+  return gs.map(g=>({g,idx:nm.map((x,k)=>x===g?k:-1).filter(k=>k>=0)}))}
+function ahpBlocks(crit){
+  const gi=groupsInfo(crit);
+  if(!gi)return[{key:'all',title:'Criteria',labels:crit.map(c=>c.name)}];
+  const b=[{key:'top',title:'Groups',labels:gi.map(x=>x.g)}];
+  gi.forEach(x=>{if(x.idx.length>1)b.push({key:'g:'+x.g,title:'Group: '+x.g,labels:x.idx.map(k=>crit[k].name),members:x.idx})});return b}
+function ahpMat(J,key,n){
+  const A=Array.from({length:n},()=>new Array(n).fill(1)),Jk=J[key]||{};
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const v=Jk[i+','+j]||1;A[i][j]=v;A[j][i]=1/v}return A}
+function ahpAll(crit,J){
+  const bl=ahpBlocks(crit),res=bl.map(b=>({b,r:ahpSolve(ahpMat(J,b.key,b.labels.length))})),m=crit.length;let gw;
+  if(bl.length===1||!groupsInfo(crit))gw=res[0].r.w.slice();
+  else{const gi=groupsInfo(crit),top=res[0].r.w;gw=new Array(m).fill(0);
+    gi.forEach((x,gi_)=>{const rb=res.find(q=>q.b.key==='g:'+x.g);x.idx.forEach((k,pos)=>{gw[k]=top[gi_]*(rb?rb.r.w[pos]:1)})})}
+  return{res,gw}}
+// ---------------- criteria list and weights file ------------------------------------------------------------------------------
+function parseCriteria(text){ // one criterion per line, optional group after a tab or a semicolon; duplicate names are numbered
+  const out=[],seen={};
+  String(text==null?'':text).replace(/\r/g,'').split('\n').forEach(l=>{l=l.trim();if(!l||/^(#|\/\/)/.test(l))return;
+    const p=l.split(/\t|;/).map(s=>s.trim()),nm=p[0];if(!nm)return;
+    seen[nm]=(seen[nm]||0)+1;out.push({name:seen[nm]>1?nm+' ('+seen[nm]+')':nm,grp:p[1]||''})});
+  return out}
+const nz=v=>isFinite(v)?v:null;
+function weightsFile(crit,J,computedBy){ // interchange file read by the MCDA PROMETHEE page; weights are global and add up to 1, NaN becomes null
+  const A=ahpAll(crit,J),blocks=A.res.filter(q=>q.b.labels.length>1).map(q=>({title:q.b.title,n:q.b.labels.length,lambdaMax:nz(q.r.lam),CI:nz(q.r.CI),CR:nz(q.r.CR)}));
+  const crs=blocks.map(b=>b.CR),one=!groupsInfo(crit)&&blocks.length===1?blocks[0]:null;
+  return{format:FORMAT,version:1,name:'AHP criteria weights',n:crit.length,
+    criteria:crit.map((c,k)=>({name:c.name,group:(c.grp||'').trim(),weight:A.gw[k]})),
+    lambdaMax:one?one.lambdaMax:null,CI:one?one.CI:null,CR:blocks.length&&crs.every(v=>v!=null)?Math.max(...crs):null,
+    blocks,method:'principal right eigenvector of the reciprocal judgment matrix, Saaty 1-9 scale; global weight = group weight x local weight',
+    judgments:J,computedBy:computedBy||''}}
+function readSession(o){ // criteria and judgments of a weights file saved by this page
+  if(!o||o.format!==FORMAT)throw new Error('not an MCDA AHP weights file');
+  if(!Array.isArray(o.criteria)||!o.criteria.length)throw new Error('the file holds no criteria');
+  const crit=o.criteria.map(c=>({name:String(c&&c.name!=null?c.name:''),grp:String(c&&c.group!=null?c.group:'')}));
+  if(crit.some(c=>!c.name))throw new Error('a criterion has no name');
+  const ahp={},J=o.judgments&&typeof o.judgments==='object'?o.judgments:{};
+  for(const k in J){if(!J[k]||typeof J[k]!=='object')continue;ahp[k]={};for(const q in J[k]){const v=J[k][q];if(/^\d+,\d+$/.test(q)&&typeof v==='number'&&v>0&&isFinite(v))ahp[k][q]=v}}
+  return{crit,ahp}}
+W.MCDA_AHP={RI,SAATY,sL,FORMAT,dot,ahpSolve,groupsInfo,ahpBlocks,ahpMat,ahpAll,parseCriteria,weightsFile,readSession};
+})(window);
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const {SAATY,sL,ahpBlocks,ahpMat,ahpAll,parseCriteria,weightsFile,readSession}=window.MCDA_AHP;
+const f4=v=>isFinite(v)?v.toFixed(4):'';
+const STAMP='MCDA AHP, 27 November 2026';
+let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
+  b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
+function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
+document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
+
+const S={crit:[],ahp:{}};let R=null;
+const EXAMPLE='Oil volume (MMbbl)\nGOR (scf/bbl)\nDrilling depth (m)\nOwnership (%)\nTax (USD/bbl)\n';
+const EXJ={all:{'0,1':2,'0,2':2,'0,3':3,'0,4':2,'1,3':2,'2,3':2,'3,4':.5}}; // five criteria of the PROMETHEE example, judgments close to weights .35/.15/.2/.1/.2
+function msg(t,err){const e=$('dataMsg');e.textContent=t;e.className='msg'+(err?' err':'')}
+function chip(cr){return!isFinite(cr)?'<span class="chip masked">CR n/a (n &gt; 10: no verified random-index table)</span>':`<span class="chip ${cr<.1?'ok':'warn'}">CR = ${cr.toFixed(3)} ${cr<.1?'(acceptable)':'(≥ 0.10: revisit the judgments)'}</span>`}
+
+function recalc(){R=S.crit.length?ahpAll(S.crit,S.ahp):null}
+function buildAhp(){
+  if(!S.crit.length){$('ahpBox').innerHTML='<div class="empty">List the criteria on the left, or load the example.</div>';return}
+  const bl=ahpBlocks(S.crit);let h='';
+  bl.forEach((b,bi)=>{const n=b.labels.length;
+    h+=`<div class="ahpblk"><h4>${esc(b.title)}</h4>`;
+    if(n<2)h+='<div class="hint">A single criterion — weight 1.</div>';
+    else{h+='<div class="tw"><table class="mx"><thead><tr><th></th>'+b.labels.map(l=>`<th>${esc(l)}</th>`).join('')+'</tr></thead><tbody>';
+      for(let i=0;i<n;i++){h+=`<tr><td>${esc(b.labels[i])}</td>`;
+        for(let j=0;j<n;j++){
+          if(i===j)h+='<td class="rec">1</td>';
+          else if(j>i){const cur=(S.ahp[b.key]||{})[i+','+j]||1,ix=SAATY.findIndex(v=>Math.abs(v-cur)<1e-9);
+            h+=`<td><select data-b="${b.key}" data-i="${i}" data-j="${j}">${SAATY.map((v,q)=>`<option value="${q}"${q===ix?' selected':''}>${sL(v)}</option>`).join('')}</select></td>`}
+          else h+=`<td class="rec" id="rc_${bi}_${i}_${j}"></td>`}
+        h+='</tr>'}
+      h+='</tbody></table></div>'}
+    h+=`<div id="ahpO${bi}"></div></div>`});
+  $('ahpBox').innerHTML=h}
+function onAhp(e){
+  const el=e.target;if(el.dataset.b==null)return;
+  const key=el.dataset.b,i=el.dataset.i,j=el.dataset.j;(S.ahp[key]=S.ahp[key]||{})[i+','+j]=SAATY[+el.value];refresh()}
+function updAhp(){
+  if(!R){$('gwT').innerHTML='<div class="empty">No criteria.</div>';return}
+  R.res.forEach((q,bi)=>{const{b,r}=q,n=b.labels.length,o=$('ahpO'+bi);if(!o)return;
+    // reciprocal cells (lower triangle): cell (row i, col j), j<i holds 1 / a[j][i]
+    for(let i=0;i<n;i++)for(let j=0;j<i;j++){const c=$(`rc_${bi}_${i}_${j}`);if(c)c.textContent=sL(1/((S.ahp[b.key]||{})[j+','+i]||1))}
+    if(n<2){o.innerHTML='';return}
+    let h=`<div class="msg" style="margin:6px 0">n = ${n} · λmax = ${r.lam.toFixed(4)} · CI = ${r.CI.toFixed(4)} · ${chip(r.CR)}</div>`;
+    const A=ahpMat(S.ahp,b.key,n);let wi=0,wj=1,wr=1;
+    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const imp=r.w[i]/r.w[j],q=Math.max(A[i][j]/imp,imp/A[i][j]);if(q>wr+1e-9){wr=q;wi=i;wj=j}}
+    h+='<div class="tw" style="max-height:none"><table><thead><tr><th class="l">'+esc(b.title)+'</th><th>Weight (eigenvector)</th><th>Weight (geometric mean)</th></tr></thead><tbody>'
+      +b.labels.map((l,i)=>`<tr><td class="l">${esc(l)}</td><td>${f4(r.w[i])}</td><td>${f4(r.g[i])}</td></tr>`).join('')+'</tbody></table></div>';
+    if(r.CR>=.1&&n>2)h+=`<div class="hint">Largest deviation: <b>${esc(b.labels[wi])}</b> vs <b>${esc(b.labels[wj])}</b> — judged ${sL(A[wi][wj])}, the other judgments imply ${(r.w[wi]/r.w[wj]).toFixed(2)}.</div>`;
+    o.innerHTML=h});
+  const mx=Math.max(...R.gw,1e-12);let h='<table><thead><tr><th class="l">Criterion</th><th class="l">Group</th><th>Global weight</th><th class="l"></th></tr></thead><tbody>';
+  S.crit.forEach((c,k)=>{h+=`<tr><td class="l">${esc(c.name)}</td><td class="l">${esc((c.grp||'').trim()||'–')}</td><td><b>${f4(R.gw[k])}</b></td><td class="l"><span class="wbar" style="width:${Math.round(120*R.gw[k]/mx)}px"></span></td></tr>`});
+  $('gwT').innerHTML=h+'</tbody></table>'}
+function refresh(){
+  try{recalc()}catch(e){R=null;$('runMsg').textContent='Error: '+e.message;$('runMsg').className='msg err';return}
+  const warn=[];
+  if(R)R.res.forEach(q=>{if(q.b.labels.length>2&&q.r.CR>=.1)warn.push('“'+q.b.title+'”: CR '+q.r.CR.toFixed(2)+' ≥ 0.10');if(q.b.labels.length>10)warn.push('“'+q.b.title+'”: CR n/a (n > 10)')});
+  const rm=$('runMsg');rm.textContent=warn.join(' · ');rm.className='msg'+(warn.length?' err':'');
+  updAhp()}
+function structure(){buildAhp();refresh()}
+function setCriteria(text,keepJ){
+  S.crit=parseCriteria(text);if(!keepJ)S.ahp={};
+  msg(S.crit.length?`${S.crit.length} criteri${S.crit.length>1?'a':'on'}.`+(S.crit.length<2?' Add at least one more to compare.':''):'No criteria yet.',false);structure()}
+
+// ---------------- export / load -------------------------------------------------------------------------------------------------
+function exportJson(){
+  if(!S.crit.length){banner('Nothing to export.',true);return}
+  download('mcda_ahp_weights.json',JSON.stringify(weightsFile(S.crit,S.ahp,STAMP),null,1),'application/json');$('exportMsg').textContent='Weights file saved.'}
+function exportCsv(){
+  if(!R){banner('Nothing to export.',true);return}
+  const f=weightsFile(S.crit,S.ahp,STAMP),row=a=>a.map(v=>csvCell(typeof v==='number'?+v.toPrecision(10):v,',')).join(',');
+  const rows=[row(['Criterion','Group','Global weight'])];
+  f.criteria.forEach(c=>rows.push(row([c.name,c.group,c.weight])));
+  rows.push('',row(['Block','n','lambda max','CI','CR (blank: not available)']));
+  f.blocks.forEach(b=>rows.push(row([b.title,b.n,b.lambdaMax,b.CI,b.CR])));
+  download('mcda_ahp_weights.csv',rows.join('\n')+'\n');$('exportMsg').textContent='CSV saved.'}
+function loadJson(txt){
+  try{const o=readSession(JSON.parse(txt));S.crit=o.crit;S.ahp=o.ahp;
+    $('paste').value=S.crit.map(c=>c.grp?c.name+'\t'+c.grp:c.name).join('\n');
+    msg(`Loaded ${S.crit.length} criteria and their judgments.`,false);structure()}
+  catch(e){banner('Cannot load: '+e.message+'.',true)}}
+
+function init(){
+  let pt;$('paste').addEventListener('input',()=>{clearTimeout(pt);pt=setTimeout(()=>setCriteria($('paste').value,true),300)});
+  $('bEx').onclick=()=>{$('paste').value=EXAMPLE;setCriteria(EXAMPLE,false);S.ahp=JSON.parse(JSON.stringify(EXJ));structure()};
+  $('bClr').onclick=()=>{S.ahp={};structure()};
+  $('ahpBox').addEventListener('change',onAhp);
+  $('bW').onclick=exportJson;$('bCsv').onclick=exportCsv;$('bLoad').onclick=()=>$('jfile').click();
+  $('jfile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>loadJson(r.result);r.readAsText(f);e.target.value=''};
+  document.addEventListener('dragover',e=>e.preventDefault());
+  document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{if(/\.json$/i.test(f.name))loadJson(r.result);else{$('paste').value=String(r.result).slice(0,1e5);setCriteria($('paste').value,false)}};r.readAsText(f)});
+  structure()}
+init();
+
+</script><script id="rgm-js">
+/* rgm: shared "Method & sources" panel for the tool pages. Data object D = {what, method:[html], sources:[[item,source,status]], validation:[html], limits:[html]} */
+(function(D){
+  const css=`
+.rgm-btn{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer;margin-left:8px}
+.rgm-btn:hover,.rgm-btn.on{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+#rgm{position:fixed;left:0;right:0;bottom:0;top:56px;overflow:auto;background:var(--bg,#eeece6);color:var(--fg,#232220);z-index:40;display:none;font:14px/1.5 Inter,system-ui,sans-serif}
+#rgm.on{display:block}
+#rgm .rgdoc{max-width:1000px;margin:0 auto;padding:18px 18px 70px}
+#rgm h2{font:600 1.15rem "Space Grotesk",Inter,sans-serif;margin:26px 0 8px}
+#rgm h2:first-child{margin-top:4px}
+#rgm p{max-width:82ch;margin:6px 0}
+#rgm ul{max-width:82ch;margin:6px 0 6px 20px;padding:0}
+#rgm li{margin:4px 0}
+#rgm table{width:100%;border-collapse:collapse;background:var(--card,#f5f3ed);border:1px solid var(--line,#c9c4b6);font-size:.84rem;margin:8px 0 14px}
+#rgm th,#rgm td{text-align:left;vertical-align:top;padding:6px 9px;white-space:normal;border-bottom:1px solid var(--line,#c9c4b6)}
+#rgm th{background:var(--alt,#e2ded3);position:static}
+#rgm td.rgst{white-space:normal;width:12em;min-width:9em}
+#rgm .rgchip{display:inline-block;padding:0 7px;border-radius:9px;font-size:.72rem;font-weight:600;background:#e3dfd2;color:#5c5a52}
+#rgm .rgchip.ok{background:rgba(74,90,78,.2);color:#3a4a3e}
+#rgm .rgchip.warn{background:rgba(168,98,58,.2);color:#8a4e2c}
+#rgm .rgleg{color:var(--mut,#5c5a52);font-size:.78rem;max-width:90ch}
+@media(max-width:700px){#rgm table{display:block;overflow-x:auto}}`;
+  const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+  const chip=s=>{const l=String(s).toLowerCase(),c=l.startsWith('published')?'ok':(/^(supplied|memory)|not retrieved|to add|to complete|to verify/.test(l)?'warn':'');return `<span class="rgchip ${c}">${s}</span>`};
+  let h='<div class="rgdoc">';
+  h+=`<h2>What it does</h2><p>${D.what}</p>`;
+  if(D.method&&D.method.length)h+='<h2>Method</h2><ul>'+D.method.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.sources&&D.sources.length){h+='<h2>Sources and status</h2><table><thead><tr><th>Item</th><th>Source</th><th>Status</th></tr></thead><tbody>'+D.sources.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="rgst">${chip(r[2])}</td></tr>`).join('')+'</tbody></table>';
+    h+='<p class="rgleg">Status tags: <b>published (read)</b> the content for the number or method concerned was read in the publication or standard; <b>published (metadata verified)</b> the reference exists and its citation (authors, year, title, journal, volume, pages) was checked in Crossref or another scholarly metadata service, but its content was not re-read; <b>to verify</b> a citation that could not be verified, with what is missing; <b>published (second hand)</b> as reported by a secondary page; <b>figure</b> values read off a published figure, not from a table; <b>supplied</b> numbers supplied by the site author, not checked against the paper; <b>derived</b> own derivation from a mass balance or first principles; <b>memory</b> written from memory, not checked; <b>existence confirmed</b> the reference exists (title, year), its content was not read; <b>classical</b> standard method, reference still to add; <b>on the page</b> the rule or default is shown and editable in the tool itself. A reference is listed only when its existence was confirmed; when only the record is known, the details are left out rather than guessed.</p>'}
+  if(D.validation&&D.validation.length)h+='<h2>Validation</h2><ul>'+D.validation.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  if(D.limits&&D.limits.length)h+='<h2>Limits and not implemented</h2><ul>'+D.limits.map(x=>`<li>${x}</li>`).join('')+'</ul>';
+  h+=`<p class="rgleg">Last updated ${D.date||'12 October 2026'}.</p></div>`;
+  const box=document.createElement('div');box.id='rgm';box.innerHTML=h;document.body.appendChild(box);
+  const top=document.querySelector('.top'),btn=document.createElement('button');btn.type='button';btn.className='rgm-btn';btn.textContent='Method & sources';
+  const bar=top&&top.querySelector('.bar'),back=top&&Array.from(top.children).find(e=>e.tagName==='A');
+  if(bar)bar.appendChild(btn);else if(top)top.insertBefore(btn,back||null);else{btn.style.cssText='position:fixed;right:10px;top:10px;z-index:50;background:#4a5a4e';document.body.appendChild(btn)}
+  function set(on){box.classList.toggle('on',on);btn.classList.toggle('on',on);btn.textContent=on?'← Back to the tool':'Method & sources';
+    if(on){const r=top?top.getBoundingClientRect():{bottom:0};box.style.top=Math.max(0,Math.round(r.bottom))+'px';box.scrollTop=0}}
+  btn.onclick=()=>set(!box.classList.contains('on'));
+  // ---- Tools menu: switch between the tool pages without going back to the site
+  (function(){
+    const CAT=[['Data preparation',[['LAS checker','las-checker'],['ZMAP checker','zmap-checker'],['Colour-blind check','cvd']]],['Digitization',[['Plot digitizer','digitizer'],['Continuous map digitizer','mapdigitizer'],['Discrete map digitizer','discretemap'],['Well-log digitizer','logdigitizer']]],
+      ['Mapping and spatial statistics',[['Map interpolation','gridding'],['Variogram','variogram'],['Convex & concave hulls','hull'],['Clustering','clustering'],['GDE map generator','gdemap'],['Grid attributes','gridattr']]],
+      ['Organic geochemistry',[['Rock-Eval QC','rockeval'],['Source rock potential','source'],['Thermal maturity','maturity'],['Biomarkers','biomarkers'],['Chromatogram','chromatogram'],['Ternary diagram','ternary']]],
+      ['Basin modelling and petrophysics',[['Compaction fit','compaction'],['BHT correction','bht'],['TR Cycles','tr-cycles'],['Petroleum system events','psec'],['Burial history (1D)','burial'],['Log correlation (DTW)','logcorr']]],
+      ['Decision support',[['MCDA AHP','mcda-ahp'],['MCDA PROMETHEE','mcda-promethee'],['Prospect risking (gCOS, eCOS)','risking'],['Portfolio consolidation','portfolio'],['Field development screening','fdp'],['Contact and well POS','wellpos'],['Distribution fitting','distfit']]]];
+    const top=document.querySelector('.top');if(!top)return;
+    const cur=(location.pathname.replace(/\/index\.html$/,'/').split('/').filter(Boolean).pop()||'');
+    const st=document.createElement('style');st.textContent=`
+.rgnav{position:relative;display:inline-block}
+.rgnav>button{font:inherit;font-size:.8rem;border:1px solid rgba(245,243,237,.55);background:transparent;color:#f5f3ed;border-radius:4px;padding:.2rem .6rem;cursor:pointer}
+.rgnav>button:hover,.rgnav>button[aria-expanded=true]{background:#f5f3ed;color:#4a5a4e;border-color:#f5f3ed}
+.rgnav .rgmenu{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:80;background:#f5f3ed;color:#232220;border:1px solid #c9c4b6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:12px 14px;width:max-content;max-width:min(92vw,760px);font:13px/1.4 Inter,system-ui,sans-serif;columns:2 230px;column-gap:22px}
+.rgnav.on .rgmenu{display:block}
+.rgnav .rgmenu h3{font:600 .72rem Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#5c5a52;margin:0 0 4px;break-after:avoid}
+.rgnav .rgmenu div{break-inside:avoid;margin-bottom:12px}
+.rgnav .rgmenu a{display:block;color:#232220;text-decoration:none;border:0;opacity:1;font-size:.84rem;padding:3px 6px;border-radius:4px}
+.rgnav .rgmenu a:hover{background:#e2ded3}
+.rgnav .rgmenu a.cur{background:rgba(74,90,78,.18);font-weight:600}
+.rgnav .rgmenu a.home{margin-bottom:10px;border-bottom:1px solid #c9c4b6;border-radius:0;column-span:all}
+@media(max-width:700px){.rgnav{position:static}.rgnav .rgmenu{position:fixed;left:8px;right:8px;top:56px;width:auto;max-width:none;columns:1;max-height:calc(100vh - 70px);overflow:auto}}`;
+    document.head.appendChild(st);
+    const w=document.createElement('span');w.className='rgnav';
+    const b=document.createElement('button');b.type='button';b.textContent='Tools ▾';b.setAttribute('aria-haspopup','true');b.setAttribute('aria-expanded','false');
+    const m=document.createElement('nav');m.className='rgmenu';m.setAttribute('aria-label','Tools');
+    m.innerHTML='<a class="home" href="../">← Back to the site</a>'+CAT.map(([c,l])=>'<div><h3>'+c+'</h3>'+l.map(([n,s])=>'<a href="../'+s+'/"'+(s===cur?' class="cur" aria-current="page"':'')+'>'+n+'</a>').join('')+'</div>').join('');
+    w.appendChild(b);w.appendChild(m);
+    const h1=top.querySelector('h1');if(h1&&h1.nextSibling)top.insertBefore(w,h1.nextSibling);else top.appendChild(w);
+    const set=on=>{w.classList.toggle('on',on);b.setAttribute('aria-expanded',on?'true':'false')};
+    b.onclick=e=>{e.stopPropagation();set(!w.classList.contains('on'))};
+    document.addEventListener('click',e=>{if(!w.contains(e.target))set(false)});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&w.classList.contains('on')){set(false);b.focus()}});
+  })();
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
+  window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
+})
+({"what":"Runs entirely in your browser: nothing you enter leaves your machine. Analytic Hierarchy Process for the weights of criteria: Saaty pairwise comparison matrix (1 to 9 scale), principal eigenvector weights, λmax, consistency index and ratio, two-level groups, and a JSON weights file for the MCDA PROMETHEE page. Alternatives are not ranked here.","method":["<b>Pairwise judgments.</b> Each cell states how much more important the row criterion is than the column criterion on the Saaty scale (1, 3, 5, 7, 9 and the values in between); the lower triangle is the reciprocal.","<b>AHP.</b> Weights are the principal right eigenvector of the reciprocal judgment matrix (power iteration); the geometric-mean approximation is shown for comparison. λmax, CI = (λmax − n)/(n − 1), CR = CI/RI with Saaty's random indices (n ≤ 10). With groups, global weight = group weight × local weight.","<b>Consistency hints.</b> When CR ≥ 0.10 the page names the pair whose judgment departs most from the ratio of the two weights implied by the others, and what that ratio is.","<b>Weights file.</b> Export writes a JSON file (format mcda-ahp-weights): criteria with their global weights (adding up to 1), λmax, CI, CR (null when not available), the judgments and the date. The MCDA PROMETHEE page imports it and matches criteria by name; Load JSON here restores the criteria and judgments. A CSV with the weights and the consistency figures is also offered."],"sources":[["AHP: reciprocal judgment matrix, 1–9 scale, principal right eigenvector","Saaty, T.L. (1977), A scaling method for priorities in hierarchical structures, Journal of Mathematical Psychology 15(3), 234–281, <a href=\"https://doi.org/10.1016/0022-2496(77)90033-5\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(77)90033-5</a>; Saaty, R.W. (1987), The analytic hierarchy process—what it is and how it is used, Mathematical Modelling 9(3–5), 161–176, <a href=\"https://doi.org/10.1016/0270-0255(87)90473-8\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0270-0255(87)90473-8</a>","published (metadata verified)"],["Consistency index CI = (λmax − n)/(n − 1), CR = CI/RI, acceptance limit 0.10","Saaty (1977) and Saaty, R.W. (1987), as above (the 0.10 limit is the usual attribution to Saaty; not re-read). Statistical review of the consistency criterion and of the random indices: Alonso, J.A. &amp; Lamata, M.T. (2006), Consistency in the analytic hierarchy process: a new approach, International Journal of Uncertainty, Fuzziness and Knowledge-Based Systems 14(4), 445–459, <a href=\"https://doi.org/10.1142/s0218488506004114\" target=\"_blank\" rel=\"noopener\">doi:10.1142/s0218488506004114</a>","published (metadata verified)"],["Random indices RI(3…10) = 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49","Table attributed to Saaty (Saaty, R.W. 1987 above); the table itself was not read in the publication. Order of magnitude checked by simulation. Alonso &amp; Lamata (2006) give a recomputed table; its values were not compared here","published (metadata verified); table values not read"],["Geometric-mean approximation of the AHP weights (shown for comparison)","Crawford, G. &amp; Williams, C. (1985), A note on the analysis of subjective judgment matrices, Journal of Mathematical Psychology 29(4), 387–405, <a href=\"https://doi.org/10.1016/0022-2496(85)90002-1\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0022-2496(85)90002-1</a>","published (metadata verified)"],["Rank reversal of AHP rankings of alternatives (background; this page ranks no alternatives)","Belton, V. &amp; Gear, T. (1983), On a short-coming of Saaty's method of analytic hierarchies, Omega 11(3), 228–230, <a href=\"https://doi.org/10.1016/0305-0483(83)90047-6\" target=\"_blank\" rel=\"noopener\">doi:10.1016/0305-0483(83)90047-6</a>; Saaty, T.L. (1987), Rank generation, preservation, and reversal in the analytic hierarchy decision process, Decision Sciences 18(2), 157–177, <a href=\"https://doi.org/10.1111/j.1540-5915.1987.tb01514.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.1540-5915.1987.tb01514.x</a>","published (metadata verified)"],["Numerical check of the weights","Independent recomputation with numpy (eigen-decomposition), on the Saaty 3×3 case; a software check, not a source of the method","on the page (no publication)"],["Weights file for the MCDA PROMETHEE page","Site construction: JSON file with format mcda-ahp-weights, written here and read by the MCDA PROMETHEE page","on the page (no publication)"]],"validation":["Regression test scripts/mcda_ahp_test.mjs: Saaty 3×3 [[1,3,5],[1/3,1,3],[1/5,1/3,1]] gives w 0.6370/0.2583/0.1047, λmax 3.0385, CR 0.0332; a consistent 4×4 gives CR 0; above 10 criteria CR is not a number (shown as n/a); the weights file holds the weights, the consistency figures and the judgments.","AHP weights, λmax and CR identical to numpy eigen-decomposition."],"limits":["The consistency ratio is not computed above 10 criteria (the random-index table stops at n = 10 and no extended table was verified): it is shown as n/a.","The pairwise matrix compares criteria only: judgments of alternatives under each criterion and the resulting AHP ranking of alternatives are not implemented. Fuzzy AHP is not implemented either.","Weights are those of a single set of judgments: there is no aggregation of several decision makers."],"date":"27 November 2026"});
+</script>
+</body></html>
