@@ -130,8 +130,9 @@ td.l,th.l{text-align:left}
  <div class="bar"><span style="opacity:.85;font-size:.8rem">Export</span>
   <button class="pri" id="bCsv" title="Experimental variogram: direction, lag, mean separation, number of pairs, semivariance">Experimental CSV</button>
   <button id="bCopy" title="Copy the fitted model parameters as text">Copy models</button>
+  <button id="bJson" title="Fitted models as machine-readable JSON (format variogram-model, version 1)">Models JSON</button>
   <button id="bPng">PNG</button><span class="msg" id="exportMsg"></span>
-  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. Experimental semivariogram of scattered data z(x, y): γ(h) = 1/(2N) Σ (z_i − z_j)² over the N pairs whose separation falls in each lag bin (Matheron estimator), or the robust Cressie–Hawkins estimator. Lags are bins of equal width from 0 to the cut-off; the plotted h is the mean separation of the pairs in the bin. Directions: azimuth in degrees clockwise from north, with an angular tolerance and an optional bandwidth (maximum perpendicular distance from the direction line). Models: spherical, exponential, Gaussian, cubic, pentaspherical, circular, linear-to-sill, stable and power, optionally nested, with nugget c0, partial sill c and range r (exact range or 95 % range depending on the model, see the tip of step 3). Fit: weighted least squares with weights N/γ_model² (Cressie 1985), Nelder–Mead search. Above 4000 points a random subsample is used. Projected coordinates (m) are expected: with longitude/latitude, distances are in degrees.">?</span></div>
+  <span class="tt" tabindex="0" data-tip="Everything runs locally in your browser. Experimental semivariogram of scattered data z(x, y): γ(h) = 1/(2N) Σ (z_i − z_j)² over the N pairs whose separation falls in each lag bin (Matheron estimator), or the robust Cressie–Hawkins estimator. Lags are bins of equal width from 0 to the cut-off; the plotted h is the mean separation of the pairs in the bin. Directions: azimuth in degrees clockwise from north, with an angular tolerance and an optional bandwidth (maximum perpendicular distance from the direction line). Models: spherical, exponential, Gaussian, cubic, pentaspherical, circular, linear-to-sill, stable and power, optionally nested, with nugget c0, partial sill c and range r (exact range or 95 % range depending on the model, see the tip of step 3). Fit: weighted least squares with weights N/γ_model² (Cressie 1985), Nelder–Mead search. Z values equal to a null value (default list -999, -9999, 1e30, …) are excluded. Above 4000 points a random subsample is used. Projected coordinates (m) are expected: with longitude/latitude, distances are in degrees.">?</span></div>
  <a href="https://romaingiboreau.github.io/My_Website/">← Back to site</a></div>
 <div class="layout">
 <aside class="side">
@@ -140,6 +141,8 @@ td.l,th.l{text-align:left}
   <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
   <div class="row"><button class="pri" id="bOpen">Open file…</button><button id="bExample">Example</button></div>
   <div class="pg"><span>X</span><select id="cx"></select><span>Y</span><select id="cy"></select><span>Z</span><select id="cz"></select></div>
+  <div class="pg"><span>Null value(s)</span><input id="nullv" value="-999, -999.25, -9999, 9999, 1e30, 1.70141e38" title="Z values equal to one of these are excluded; empty the field to keep them"></div>
+  <div class="hint">Z values equal to a null value are excluded and counted; empty the field to keep every value.</div>
   <div class="msg" id="dataMsg">No data yet.</div></div></section>
  <section class="panel"><h2><span class="n">2</span>Experimental variogram<i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Estimator</span><select id="est"><option value="m">Matheron</option><option value="c">Cressie–Hawkins</option></select>
@@ -150,6 +153,7 @@ td.l,th.l{text-align:left}
  <section class="panel"><h2><span class="n">3</span>Model<span class="tt" tabindex="0" data-tip="Bounded models: the range r is the distance at which the model reaches the sill (spherical, cubic, pentaspherical, circular, linear-to-sill) or 95 % of it (exponential, Gaussian, stable: γ = c(1 − exp(−3 (h/r)^α)), α fitted in 0.3–2). Power: γ = c·(h/h_max)^ω, ω fitted in 0.1–1.95, no sill. Circular is strictly valid in 2D only. 'Best of the bounded models' compares spherical, exponential, Gaussian, cubic, pentaspherical and circular by weighted residual sum of squares (WSSE); stable and power have an extra shape parameter and are only used when selected. A second structure adds a nested component (sum of two models with their own sill and range).">?</span><i class="chev"></i></h2>
   <div class="body"><div class="pg"><span>Model</span><select id="mod"><option value="best">best of the bounded models</option><option value="sph">spherical</option><option value="exp">exponential</option><option value="gau">Gaussian</option><option value="cub">cubic</option><option value="pen">pentaspherical</option><option value="cir">circular</option><option value="lin">linear to sill</option><option value="sta">stable (powered exponential)</option><option value="pow">power</option></select>
   <span>2nd structure</span><select id="mod2"><option value="">none</option><option value="sph">spherical</option><option value="exp">exponential</option><option value="gau">Gaussian</option><option value="cub">cubic</option><option value="pen">pentaspherical</option><option value="cir">circular</option><option value="lin">linear to sill</option></select></div>
+  <div class="pg"><span>Detrend</span><select id="det"><option value="0">none</option><option value="1">linear (x, y)</option><option value="2">quadratic (x, y)</option></select></div><div class="hint">Least-squares polynomial surface subtracted from z before the variogram (use when a trend warning appears).</div>
   <label class="inl"><input type="checkbox" id="nug" checked>Fit a nugget</label><label class="inl"><input type="checkbox" id="showm" checked>Show fitted models</label><div class="msg" id="runMsg"></div></div></section>
  <section class="panel"><h2><span class="n">4</span>Anisotropy<span class="tt" tabindex="0" data-tip="Geometric anisotropy: the same model in every direction, with the range varying along an ellipse: major range r along azimuth θ, minor range k·r perpendicular. All the listed azimuth directions are fitted jointly (common nugget, sill(s), θ and k; at least two azimuths are needed, otherwise 0, 45, 90 and 135° are used) by minimising the WSSE over all directional variograms. The model is evaluated at the nominal azimuth of each direction, so keep the angular tolerance small enough that the directions do not overlap. Zonal anisotropy (different sills by direction) is not modelled. The variogram map shows the semivariance for every separation vector (dx, dy) and is the usual way to find the major axis before choosing directions.">?</span><i class="chev"></i></h2>
   <div class="body"><label class="inl"><input type="checkbox" id="ani">Fit geometric anisotropy (joint over the azimuths)</label><label class="inl"><input type="checkbox" id="map" checked>Show variogram map</label><div class="pg"><span>Map cells</span><input id="nm" value="31"></div><div class="hint">Cells of the map: odd number, each 2·cut-off/cells wide.</div></div></section>
@@ -158,18 +162,151 @@ td.l,th.l{text-align:left}
  <div class="legend" id="legend"></div>
  <div class="cards"><div class="card wide"><h3>Semivariogram<span class="sp"></span><button data-png="cv">PNG</button></h3><canvas id="cv" style="position:static;height:440px"></canvas></div></div>
  <div class="cards" id="cardMap" style="margin-top:12px"><div class="card wide"><h3>Variogram map<span class="tt" tabindex="0" data-tip="Semivariance of every pair separation vector (dx east, dy north), symmetric about the centre; cells with fewer than 3 pairs are left blank. Elongated low-value zones point to the direction of greatest continuity (major axis). The ellipse, when the anisotropic model is fitted, is the range ellipse.">?</span><span class="sp"></span><button data-png="cm">PNG</button></h3><canvas id="cm" style="position:static;height:460px"></canvas></div></div>
- <div class="card" style="margin-top:12px"><h3>Fitted models<span class="tt" tabindex="0" data-tip="WSSE = Σ N_k (γ_k − γ_model(h_k))² / γ_model(h_k)², the quantity minimised. Sample variance (dashed line) is the usual reference for the total sill when the field is stationary. Anisotropy ratio = shortest / longest fitted range among the directions.">?</span></h3><div class="tw" id="resT"></div><div class="msg" id="anisMsg" style="margin:8px 4px 2px"></div></div>
+ <div class="card" style="margin-top:12px"><h3>Fitted models<span class="tt" tabindex="0" data-tip="WSSE = Σ N_k (γ_k − γ_model(h_k))² / γ_model(h_k)², the quantity minimised. Sample variance (dashed line) is the usual reference for the total sill when the field is stationary. Ratio (minor/major range, <= 1): from the joint anisotropic fit, or, for independent directions, shortest / longest range of ONE common model fitted to every azimuth direction (ranges of different model types are not compared). A warning appears when a fitted sill exceeds the sample variance by more than 20 % (probable trend: use the Detrend option).">?</span></h3><div class="tw" id="resT"></div><div class="msg" id="anisMsg" style="margin:8px 4px 2px"></div></div>
 </main></div>
 
+<script id="vg-core">
+const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
+// ---- numbers and tables (contract A): parseNumber, delimiter detection, row decoding with counted skips
+const isDecComma=s=>{s=String(s==null?'':s).trim();return /^[-+−]?\d*,(\d{1,2}|\d{4,})$/.test(s)||/^[-+−]?\d{1,3}(\.\d{3})+,\d+$/.test(s)};
+const isAmbiguous=s=>/^[-+−]?\d{1,3},\d{3}$/.test(String(s==null?'':s).trim());
+function parseNumber(text,opt){
+  if(typeof text==='number')return isFinite(text)?{value:text,kind:'ok'}:{value:null,kind:'missing'};
+  let s=String(text==null?'':text).trim().replace(/[−–]/g,'-');
+  if(s===''||/^(-+|n\.?d\.?|na|n\/a|nan|null)$/i.test(s))return{value:null,kind:'missing'};
+  if(s[0]==='<'){const q=parseNumber(s.slice(1),opt);return{value:null,kind:'below',limit:q.kind==='ok'?q.value:null}}
+  if(/^[-+]?\d{1,3}([   ]\d{3})+([.,]\d+)?$/.test(s))s=s.replace(/[   ]/g,'');
+  const dc=!!(opt&&opt.decimalComma);
+  if(/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s))return{value:+s,kind:'ok'};
+  if(/^[-+]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)){const one=/^[-+]?\d{1,3},\d{3}$/.test(s);return{value:+s.replace(/,/g,dc&&one?'.':''),kind:'ok'}}
+  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))return{value:+s.replace(/\./g,'').replace(',','.'),kind:'ok'};
+  if(/^[-+]?\d*,\d+([eE][-+]?\d+)?$/.test(s))return{value:+s.replace(',','.'),kind:'ok'};
+  return{value:null,kind:'text'}}
+const toN=s=>{const p=parseNumber(s);return p.kind==='ok'?p.value:NaN};
+function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+// delimiter: tab, then ';', then ',' (only when no whitespace-separated line carries a decimal comma), else runs of whitespace
+function detectDelimiter(lines,minCols){const mc=minCols||2,has=c=>lines.some(l=>l.includes(c));
+  if(has('\t'))return'\t';if(has(';'))return';';
+  const wsOk=lines.every(l=>l.trim().split(/\s+/).length>=mc),decC=lines.some(l=>/\d,\d{1,2}(?!\d)/.test(l));
+  if(lines.every(l=>l.split(',').length>=mc)&&!(wsOk&&decC))return',';return/\s+/}
+function parseTable(text,minCols){
+  const all=text.replace(/\r/g,'').split('\n').map((l,i)=>({l:l.replace(/\s+$/,''),n:i+1})).filter(o=>o.l.trim()&&!/^(#|\/\/)/.test(o.l.trim()));if(!all.length)return{err:'Empty input.'};
+  const lines=all.map(o=>o.l),sep=detectDelimiter(lines,minCols);
+  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
+  let rows=lines.map(split),ln=all.map(o=>o.n);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
+  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();ln.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift();ln.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  return{head,units,rows,ln,nc,sep:sep instanceof RegExp?' ':sep}}
+const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+// ---- null sentinels (contract C)
+const NULL_DEFAULT='-999, -999.25, -9999, 9999, 1e30, 1.70141e38';
+const parseNullList=s=>String(s==null?'':s).split(/;|,\s+|\s+/).map(q=>toN(q)).filter(isFinite);
+const matchNull=(v,nulls)=>{for(const n of nulls)if(Math.abs(v-n)<=1e-9*Math.max(1,Math.abs(n)))return n;return null};
+// values that look like an undeclared null (repeated extreme value with a 99..9 pattern or a huge magnitude)
+function nullCandidates(z,nulls){const c=new Map();for(const v of z)c.set(v,(c.get(v)||0)+1);let lo=Infinity,hi=-Infinity;for(const v of z){if(v<lo)lo=v;if(v>hi)hi=v}
+  const out=[];for(const [v,k] of c){if(k<Math.max(5,0.01*z.length)||(v!==lo&&v!==hi)||matchNull(v,nulls)!==null)continue;if(/^9{3,}(\.9+)?$/.test(String(Math.abs(v)))||Math.abs(v)>=1e5)out.push({v,k})}return out}
+// decode the selected columns [x, y, z] of a parsed table: points + counted, explained skips; the null list applies to z
+function decodeRows(rows,ln,cols,nulls,decimalComma){
+  const dc=decimalComma!==undefined?decimalComma:cols.some(c=>rows.some(r=>isDecComma(r[c])));
+  const pts=[],cnt={text:0,missing:0,below:0,sentinel:0},first={text:[],missing:[],below:[],sentinel:[]},nh={};let amb=0;
+  rows.forEach((r,i)=>{let why=null;const v=[];
+    for(let k=0;k<3;k++){const s=r[cols[k]],p=parseNumber(s,{decimalComma:dc});if(p.kind==='ok'&&isAmbiguous(s))amb++;if(p.kind!=='ok'){why=p.kind;break}v.push(p.value)}
+    if(!why){const m=matchNull(v[2],nulls);if(m!==null){why='sentinel';nh[m]=(nh[m]||0)+1}}
+    if(why){cnt[why]++;if(first[why].length<5)first[why].push(ln[i]);return}pts.push(v)});
+  const skipped=cnt.text+cnt.missing+cnt.below+cnt.sentinel;
+  return{pts,read:rows.length,skipped,cnt,first,nullHits:nh,ambiguous:amb,decimalComma:dc,cands:nullCandidates(pts.map(p=>p[2]),nulls)}}
+function loadMessage(d){const L=[`${d.read} rows read, ${d.skipped} skipped`],R=[],ln=a=>a.length?` (lines ${a.join(', ')}${a.length<5?'':'…'})`:'';
+  const nm={text:'non-numeric',missing:'missing',below:'below detection limit'};
+  for(const k of['text','missing','below'])if(d.cnt[k])R.push(`${d.cnt[k]} ${nm[k]}${ln(d.first[k])}`);
+  if(R.length)L[0]+=' ['+R.join('; ')+']';
+  for(const n of Object.keys(d.nullHits))L.push(`${d.nullHits[n]} value${d.nullHits[n]>1?'s':''} equal to the null value ${n} ${d.nullHits[n]>1?'were':'was'} excluded${ln(d.first.sentinel)}`);
+  for(const c of d.cands)L.push(`warning: ${c.v} appears ${c.k} times and is not in the null list (not excluded)`);
+  if(d.ambiguous)L.push(`${d.ambiguous} value${d.ambiguous>1?'s':''} like 1,234 read as ${d.decimalComma?'decimal comma':'thousands separator'}`);
+  return L.join(' · ')}
+// ---- trend: polynomial detrend by least squares (order 0 = none, 1 = linear, 2 = quadratic), residuals returned
+function detrend(P,order){if(!order)return{P,order:0};const n=P.length;let mx=0,my=0;for(const p of P){mx+=p[0];my+=p[1]}mx/=n;my/=n;let sx=0,sy=0;for(const p of P){sx+=(p[0]-mx)**2;sy+=(p[1]-my)**2}sx=Math.sqrt(sx/n)||1;sy=Math.sqrt(sy/n)||1;
+  const bas=p=>{const u=(p[0]-mx)/sx,v=(p[1]-my)/sy;return order===1?[1,u,v]:[1,u,v,u*u,u*v,v*v]},m=bas(P[0]).length,A=Array.from({length:m},()=>new Float64Array(m+1));
+  for(const p of P){const b=bas(p);for(let i=0;i<m;i++){for(let j=0;j<m;j++)A[i][j]+=b[i]*b[j];A[i][m]+=b[i]*p[2]}}
+  for(let i=0;i<m;i++){let q=i;for(let r=i+1;r<m;r++)if(Math.abs(A[r][i])>Math.abs(A[q][i]))q=r;[A[i],A[q]]=[A[q],A[i]];for(let r=0;r<m;r++){if(r===i)continue;const f=A[r][i]/A[i][i];for(let c=i;c<=m;c++)A[r][c]-=f*A[i][c]}}
+  const coef=Array.from({length:m},(_,i)=>A[i][m]/A[i][i]);return{P:P.map(p=>{const b=bas(p);let t=0;for(let i=0;i<m;i++)t+=coef[i]*b[i];return[p[0],p[1],p[2]-t]}),order,coef}}
+const sampleVar=z=>{const m=z.reduce((a,b)=>a+b,0)/z.length;return z.reduce((a,v)=>a+(v-m)**2,0)/(z.length-1)};
+const fitSill=f=>f.st.some(s=>KIND[s.kind].norange)?NaN:f.c0+f.st.reduce((a,s)=>a+s.c,0);
+// warning when a fitted sill exceeds the sample variance by more than 20 %
+function trendWarning(fits,varz,order){let mx=0;for(const f of fits)if(f){const s=fitSill(f);if(s>mx)mx=s}
+  return mx>1.2*varz?`probable trend / non-stationarity: fitted sill ${fmt(mx)} exceeds the sample variance ${fmt(varz)} by ${Math.round((mx/varz-1)*100)} %`+(order?' even after detrending':': detrend (Model panel)'):null}
+// anisotropy ratio from ONE model common to all azimuth directions (smallest total WSSE); perDir[d][c] = fit of direction d with candidate model c
+function commonModelRatio(perDir){if(perDir.length<2)return null;const nc=perDir[0].length;let best=null;
+  for(let c=0;c<nc;c++){let tot=0,ok=true;const rs=[];for(const row of perDir){const f=row[c];if(!f||f.st.some(s=>KIND[s.kind].norange)){ok=false;break}tot+=f.wsse;rs.push(f.st[f.st.length-1].r)}
+    if(ok&&(!best||tot<best.tot))best={c,tot,rs}}
+  return best&&{c:best.c,ratio:Math.min(...best.rs)/Math.max(...best.rs)}}
+// machine-readable model export
+function modelJSON(o){const st=s=>({type:s.kind,sill:s.c,range:KIND[s.kind].norange?null:s.r,rangeType:KIND[s.kind].norange?'none (power: gamma = c*(h/hmax)^omega)':(['exp','gau','sta'].includes(s.kind)?'practical (95 % of the sill)':'exact (reaches the sill)'),shape:s.p});
+  const fit=f=>f&&{nugget:f.c0,structures:f.st.map(st),totalSill:fitSill(f),wsse:f.wsse};
+  const r={format:'variogram-model',version:1,computedBy:'Variogram tool, '+(o.date||'26 November 2026'),estimator:o.estimator,azimuthConvention:'degrees clockwise from north, directions modulo 180',anisotropyRatioConvention:'minor/major range, <= 1',detrend:o.detrend||'none',sampleVariance:o.varz,cutoff:o.cut,
+    directions:o.ex.map((e,i)=>({name:e.dir.name,azimuth:e.dir.az,pairs:e.pts.reduce((a,p)=>a+p.N,0),model:fit(o.fits[i])}))};
+  if(o.joint)r.joint=Object.assign(fit(o.joint),{anisotropy:{majorAzimuth:o.joint.th,ratio:o.joint.k,convention:'minor/major range, <= 1; structure ranges are along the major axis'}});
+  if(o.common)r.commonModelRatio=o.common;return r}
+const gcol=(head,re,skip)=>head.findIndex((h,i)=>re.test(normName(h))&&!(skip||[]).includes(i));
+// Model shapes f(u, p) with u = h/r, scaled to 1 at the sill.  r = exact range (sph, cub, pen, cir, lin) or 95 % range (exp, gau, sta).
+const KIND={
+  sph:{n:'spherical',f:u=>u>=1?1:1.5*u-0.5*u**3},
+  exp:{n:'exponential',f:u=>1-Math.exp(-3*u)},
+  gau:{n:'Gaussian',f:u=>1-Math.exp(-3*u*u)},
+  cub:{n:'cubic',f:u=>u>=1?1:7*u**2-8.75*u**3+3.5*u**5-0.75*u**7},
+  pen:{n:'pentaspherical',f:u=>u>=1?1:1.875*u-1.25*u**3+0.375*u**5},
+  cir:{n:'circular',f:u=>u>=1?1:1-(2/Math.PI)*Math.acos(u)+(2*u/Math.PI)*Math.sqrt(1-u*u)},
+  lin:{n:'linear to sill',f:u=>u>=1?1:u},
+  sta:{n:'stable',f:(u,p)=>1-Math.exp(-3*Math.pow(u,p)),shape:{lo:0.3,hi:2,x0:1}},
+  pow:{n:'power',f:(u,p)=>Math.pow(u,p),shape:{lo:0.1,hi:1.95,x0:1},norange:true}};   // power: u = h / h_max, no range, no sill
+const BOUNDED=['sph','exp','gau','cub','pen','cir'];
+function nelder(f,x0,step,it){const n=x0.length;let S=[x0.slice()];for(let i=0;i<n;i++){const p=x0.slice();p[i]+=step[i];S.push(p)}let F=S.map(f);
+  for(let t=0;t<it;t++){const o=F.map((_,i)=>i).sort((a,b)=>F[a]-F[b]);S=o.map(i=>S[i]);F=o.map(i=>F[i]);if(Math.abs(F[n]-F[0])<1e-12*(Math.abs(F[0])+1e-12))break;
+    const c=Array(n).fill(0);for(let i=0;i<n;i++)for(let j=0;j<n;j++)c[j]+=S[i][j]/n;const mv=(a,b,t2)=>a.map((v,j)=>v+t2*(b[j]-v)),xr=mv(c,S[n],-1),fr=f(xr);
+    if(fr<F[0]){const xe=mv(c,S[n],-2),fe=f(xe);if(fe<fr){S[n]=xe;F[n]=fe}else{S[n]=xr;F[n]=fr}}else if(fr<F[n-1]){S[n]=xr;F[n]=fr}else{const xc=fr<F[n]?mv(c,S[n],-0.5):mv(c,S[n],0.5),fc=f(xc);
+      if(fc<Math.min(fr,F[n])){S[n]=xc;F[n]=fc}else{for(let i=1;i<=n;i++){S[i]=mv(S[0],S[i],0.5);F[i]=f(S[i])}}}}
+  let b=0;for(let i=1;i<=n;i++)if(F[i]<F[b])b=i;return{x:S[b],f:F[b]}}
+// geometric anisotropy: stretch factor of the distance along azimuth az for major axis theta (deg) and ratio k = minor/major range
+const afac=(az,th,k)=>{const d=(az-th)*Math.PI/180,c=Math.cos(d),s=Math.sin(d);return Math.sqrt(c*c+s*s/(k*k))};
+// structure value at distance h; st = {kind,c,r,p}
+const sval=(st,h)=>st.c*KIND[st.kind].f(h/st.r,st.p);
+const mval=(fit,h,fac)=>{let m=fit.c0;for(const st of fit.st)m+=sval(st,h*(fac||1));return m};
+// sets: [{h:[],g:[],N:[],az:null|deg}]; keys: structure kinds (1 or 2); nugget: bool; aniso: bool; hmax: largest lag
+function fitGen(sets,keys,nugget,aniso,hmax){
+  const all=sets.flatMap(s=>s.g.map((g,i)=>({g,N:s.N[i]})));const gm=Math.max(...all.map(q=>q.g)),sill0=(()=>{const t=sets.flatMap(s=>s.g.slice(-Math.max(2,Math.floor(s.g.length/3))));return t.reduce((a,b)=>a+b,0)/t.length})();
+  // initial anisotropy from the independent range of each direction is not available here: start from k = 0.5 and the azimuth of the direction with the largest mean gamma-lag slope (lowest gamma at mid lag)
+  let th0=0;if(aniso){let bg=Infinity;for(const s of sets){const q=s.g.reduce((a,b)=>a+b,0)/s.g.length;if(q<bg){bg=q;th0=s.az}}}
+  const lay=[];let n=0;if(nugget){lay.push(['c0']);n++}for(const k of keys){const K=KIND[k],o={k,ic:n++};if(!K.norange)o.ir=n++;if(K.shape)o.ip=n++;lay.push(o)}if(aniso){var ith=n++,ik=n++}
+  const unpack=x=>{let c0=nugget?x[0]:0;const st=lay.filter(o=>o.k).map(o=>({kind:o.k,c:x[o.ic],r:o.ir!==undefined?x[o.ir]:hmax,p:o.ip!==undefined?x[o.ip]:null}));return{c0,st,th:aniso?x[ith]:null,k:aniso?x[ik]:1}};
+  const obj=x=>{const f=unpack(x);if(f.c0<0||f.c0>gm*2)return 1e30+Math.abs(f.c0);let pen=0;for(const s of f.st){const K=KIND[s.kind];if(s.c<=0||s.c>gm*3)return 1e30+Math.abs(s.c);if(!K.norange&&(s.r<=hmax*0.02||s.r>hmax*20))return 1e30+Math.abs(s.r);if(K.shape&&(s.p<K.shape.lo||s.p>K.shape.hi))return 1e30+Math.abs(s.p)}
+    if(aniso&&(f.k<0.05||f.k>1))return 1e30+Math.abs(f.k);let tot=0;
+    for(const s of sets){const fac=aniso&&s.az!==null?afac(s.az,f.th,f.k):1;for(let i=0;i<s.h.length;i++){const m=mval(f,s.h[i],fac);if(m<=1e-12)return 1e30;tot+=s.N[i]*(s.g[i]-m)**2/(m*m)}}return tot};
+  let best=null;const nl=keys.length;
+  for(const r0 of [hmax/6,hmax/3,hmax/1.5])for(const n0 of nugget?[0.05,0.3]:[0])for(const k0 of aniso?[0.5,0.25]:[1])for(const dth of aniso?[0,30,-30]:[0]){
+    const c00=nugget?sill0*n0:0,tot=Math.max(sill0-c00,1e-9),x0=[],st=[];if(nugget){x0.push(c00);st.push(sill0*0.1+1e-9)}
+    lay.filter(o=>o.k).forEach((o,j)=>{const K=KIND[o.k],fr=nl===1?1:(j===0?0.4:0.6),rr=nl===1?r0:(j===0?r0/4:r0);x0[o.ic]=tot*fr;st[o.ic]=tot*0.2+1e-9;if(!K.norange){x0[o.ir]=rr;st[o.ir]=rr*0.3}if(K.shape){x0[o.ip]=K.shape.x0;st[o.ip]=0.15}});
+    if(aniso){x0[ith]=th0+dth;st[ith]=15;x0[ik]=k0;st[ik]=0.1}
+    const r1=nelder(obj,x0,st,800),r2=nelder(obj,r1.x,st.map(v=>v*0.2),800);if(!best||r2.f<best.f)best=r2}
+  const f=unpack(best.x);f.wsse=best.f;if(aniso){f.th=((f.th%180)+180)%180}return f}
+// experimental variogram. P: [[x,y,z]], dirs, nl lags, cut, tol deg, bw (0 = none), est 'm'|'c'
+function experimental(P,dirs,nl,cut,tol,bw,est){const n=P.length,w=cut/nl,R=dirs.map(()=>({N:new Float64Array(nl),H:new Float64Array(nl),S:new Float64Array(nl)}));const tr=tol*Math.PI/180;
+  for(let i=0;i<n;i++){const a=P[i];for(let j=i+1;j<n;j++){const b=P[j],dx=b[0]-a[0],dy=b[1]-a[1],h=Math.sqrt(dx*dx+dy*dy);if(h===0||h>=cut)continue;const k=Math.floor(h/w),dz=b[2]-a[2];
+      let ang=null;for(let d=0;d<dirs.length;d++){const az=dirs[d].az;if(az!==null){if(ang===null){ang=Math.atan2(dx,dy);if(ang<0)ang+=Math.PI;if(ang>=Math.PI)ang-=Math.PI}
+          let df=Math.abs(ang-az*Math.PI/180);df=Math.min(df,Math.PI-df);if(df>tr+1e-12)continue;if(bw>0&&h*Math.sin(df)>bw)continue}
+        const r=R[d];r.N[k]++;r.H[k]+=h;r.S[k]+=est==='c'?Math.sqrt(Math.abs(dz)):dz*dz}}}
+  return R.map((r,d)=>{const o=[];for(let k=0;k<nl;k++){if(r.N[k]<1)continue;const N=r.N[k],g=est==='c'?Math.pow(r.S[k]/N,4)/(2*(0.457+0.494/N)):r.S[k]/(2*N);o.push({h:r.H[k]/N,g,N})}return{dir:dirs[d],pts:o}})}
+// variogram map: semivariance (Matheron) for each separation vector (dx east, dy north) in a nb x nb grid covering [-cut, cut]^2
+function varmap(P,cut,nb){const cs=2*cut/nb,S=new Float64Array(nb*nb),N=new Float64Array(nb*nb),n=P.length;
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const dx=P[j][0]-P[i][0],dy=P[j][1]-P[i][1];if(Math.abs(dx)>=cut||Math.abs(dy)>=cut)continue;const dz=P[j][2]-P[i][2],q=dz*dz;
+    const ix=Math.floor((dx+cut)/cs),iy=Math.floor((dy+cut)/cs),jx=Math.floor((-dx+cut)/cs),jy=Math.floor((-dy+cut)/cs);S[iy*nb+ix]+=q;N[iy*nb+ix]++;S[jy*nb+jx]+=q;N[jy*nb+jx]++}
+  return{nb,cs,cut,g:Array.from(S,(s,i)=>N[i]>=3?s/(2*N[i]):NaN),N}}
+window.VG={parseNumber,toN,detectDelimiter,parseTable,decodeRows,loadMessage,parseNullList,matchNull,nullCandidates,detrend,sampleVar,fitSill,trendWarning,commonModelRatio,modelJSON,experimental,fitGen,varmap,KIND,BOUNDED,afac,mval,sval,rng,NULL_DEFAULT,fmt};
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
-  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
-  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
-const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
 const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
-function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
 let banT=null;function banner(m,err){let b=$('banner');if(!b){b=document.createElement('div');b.id='banner';document.body.appendChild(b);b.style.cssText='position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;pointer-events:none;border-radius:6px;padding:7px 14px;font-size:.84rem;box-shadow:0 4px 14px rgba(0,0,0,.25);color:#f5f3ed;max-width:80%'}
   b.textContent=m;b.style.background=err?'#a8623a':'#232220';b.style.display='block';clearTimeout(banT);banT=setTimeout(()=>{b.style.display='none'},err?9000:3500)}
 function download(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime||'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
@@ -178,18 +315,6 @@ function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t
 const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
 document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
 // ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
-function parseTable(text,minCols){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
-  const has=c=>lines.some(l=>l.includes(c));let sep;
-  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
-  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
-  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
-  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
-  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
-  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
-  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
-  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
-const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
 // ---- plotting engine ----------------------------------------------------------------
 const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
 function niceStep(r,n){const raw=r/n,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return(m<1.5?1:m<2.25?2:m<3.5?2.5:m<7.5?5:10)*p}
@@ -246,7 +371,6 @@ function wireData(loadText){
   const rd=f=>{const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>3e6?r.result.slice(0,3e6):r.result;loadText(r.result)};r.readAsText(f)};
   $('file').onchange=e=>{const f=e.target.files[0];if(f)rd(f);e.target.value=''};
   document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)rd(f)})}
-const gcol=(head,re,skip)=>head.findIndex((h,i)=>re.test(normName(h))&&!(skip||[]).includes(i));
 function fillSel(ids,head,guess,none){const o=head.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');ids.forEach((id,k)=>{$(id).innerHTML=(none&&none[k]?'<option value="-1">— (none)</option>':'')+o;$(id).value=guess[k]})}
 // two-sided 95 % Student t quantile: exact tabulated values for df 1-10, 12, 15, 20, 30; linear interpolation in 1/df between 30 and 120; 1.96 beyond
 const TT={1:12.706,2:4.303,3:3.182,4:2.776,5:2.571,6:2.447,7:2.365,8:2.306,9:2.262,10:2.228,12:2.179,15:2.131,20:2.086,30:2.042,120:1.980};
@@ -260,79 +384,31 @@ function tcrit(df){if(df<1)return NaN;if(df>120)return 1.96;if(TT[df])return TT[
 //  Fit: weighted least squares, weights N_k/g_model^2 (Cressie 1985), Nelder-Mead (c0 in [0, ~sill], c > 0, r > 0 enforced by a penalty).
 // =====================================================================================
 const D={table:null,pts:[],ex:[],fits:[],joint:null,map:null};
-// Model shapes f(u, p) with u = h/r, scaled to 1 at the sill.  r = exact range (sph, cub, pen, cir, lin) or 95 % range (exp, gau, sta).
-const KIND={
-  sph:{n:'spherical',f:u=>u>=1?1:1.5*u-0.5*u**3},
-  exp:{n:'exponential',f:u=>1-Math.exp(-3*u)},
-  gau:{n:'Gaussian',f:u=>1-Math.exp(-3*u*u)},
-  cub:{n:'cubic',f:u=>u>=1?1:7*u**2-8.75*u**3+3.5*u**5-0.75*u**7},
-  pen:{n:'pentaspherical',f:u=>u>=1?1:1.875*u-1.25*u**3+0.375*u**5},
-  cir:{n:'circular',f:u=>u>=1?1:1-(2/Math.PI)*Math.acos(u)+(2*u/Math.PI)*Math.sqrt(1-u*u)},
-  lin:{n:'linear to sill',f:u=>u>=1?1:u},
-  sta:{n:'stable',f:(u,p)=>1-Math.exp(-3*Math.pow(u,p)),shape:{lo:0.3,hi:2,x0:1}},
-  pow:{n:'power',f:(u,p)=>Math.pow(u,p),shape:{lo:0.1,hi:1.95,x0:1},norange:true}};   // power: u = h / h_max, no range, no sill
-const BOUNDED=['sph','exp','gau','cub','pen','cir'];
 function guess(h){const x=gcol(h,/^(x|lon|long|longitude|east|easting|xcoord)/),y=gcol(h,/^(y|lat|latitude|north|northing|ycoord)/,[x]),z=gcol(h,/^(z|value|val|v|depth|thick|thickness|porosity|phi|toc|temp)/,[x,y]);let k=0;const idx=[x,y,z];for(let i=0;i<3;i++)if(idx[i]<0){while(idx.includes(k))k++;idx[i]=k++}return idx}
-function loadText(text){const t=parseTable(text,3);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillSel(['cx','cy','cz'],t.head,guess(t.head));build();return true}
-function build(){const t=D.table;if(!t)return;const cx=+$('cx').value,cy=+$('cy').value,cz=+$('cz').value;let bad=0;D.pts=[];
-  for(const r of t.rows){const x=toN(r[cx]),y=toN(r[cy]),z=toN(r[cz]);if(!isFinite(x)||!isFinite(y)||!isFinite(z)){bad++;continue}D.pts.push([x,y,z])}
-  $('dataMsg').className='msg';$('dataMsg').textContent=`${D.pts.length} point(s)`+(bad?` · ${bad} row(s) skipped`:'');
-  if(D.pts.length<10){$('dataMsg').className='msg err';$('dataMsg').textContent='At least 10 valid points are needed.';return}run()}
+function clearResults(){D.pts=[];D.ex=[];D.fits=[];D.joint=null;D.map=null;D.cf=[];D.cmr=null;D.varz=NaN;$('resT').innerHTML='';$('anisMsg').textContent='';$('legend').innerHTML='';$('runMsg').textContent='';$('runMsg').className='msg';for(const id of['cv','cm']){const c=$(id);c.width=c.width}$('cardMap').style.display='none'}
+function loadText(text){const t=parseTable(text,3);if(t.err){clearResults();D.table=null;$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillSel(['cx','cy','cz'],t.head,guess(t.head));build();return true}
+function build(){const t=D.table;if(!t)return;const cx=+$('cx').value,cy=+$('cy').value,cz=+$('cz').value;
+  const d=decodeRows(t.rows,t.ln,[cx,cy,cz],parseNullList($('nullv').value)),msg=loadMessage(d);
+  if(d.pts.length<10){clearResults();$('dataMsg').className='msg err';$('dataMsg').textContent=msg+' · At least 10 valid points are needed.';return}
+  D.pts=d.pts;$('dataMsg').className='msg'+(d.cands.length?' err':'');$('dataMsg').textContent=msg;run()}
 function dirList(){const s=$('dirs').value.split(/[,;\s]+/).filter(Boolean),o=[];for(const q of s){if(/^omni/i.test(q))o.push({az:null,name:'omni'});else{const v=toN(q);if(isFinite(v))o.push({az:((v%180)+180)%180,name:v+'°'})}}return o.length?o.slice(0,6):[{az:null,name:'omni'}]}
-function nelder(f,x0,step,it){const n=x0.length;let S=[x0.slice()];for(let i=0;i<n;i++){const p=x0.slice();p[i]+=step[i];S.push(p)}let F=S.map(f);
-  for(let t=0;t<it;t++){const o=F.map((_,i)=>i).sort((a,b)=>F[a]-F[b]);S=o.map(i=>S[i]);F=o.map(i=>F[i]);if(Math.abs(F[n]-F[0])<1e-12*(Math.abs(F[0])+1e-12))break;
-    const c=Array(n).fill(0);for(let i=0;i<n;i++)for(let j=0;j<n;j++)c[j]+=S[i][j]/n;const mv=(a,b,t2)=>a.map((v,j)=>v+t2*(b[j]-v)),xr=mv(c,S[n],-1),fr=f(xr);
-    if(fr<F[0]){const xe=mv(c,S[n],-2),fe=f(xe);if(fe<fr){S[n]=xe;F[n]=fe}else{S[n]=xr;F[n]=fr}}else if(fr<F[n-1]){S[n]=xr;F[n]=fr}else{const xc=fr<F[n]?mv(c,S[n],-0.5):mv(c,S[n],0.5),fc=f(xc);
-      if(fc<Math.min(fr,F[n])){S[n]=xc;F[n]=fc}else{for(let i=1;i<=n;i++){S[i]=mv(S[0],S[i],0.5);F[i]=f(S[i])}}}}
-  let b=0;for(let i=1;i<=n;i++)if(F[i]<F[b])b=i;return{x:S[b],f:F[b]}}
-// geometric anisotropy: stretch factor of the distance along azimuth az for major axis theta (deg) and ratio k = minor/major range
-const afac=(az,th,k)=>{const d=(az-th)*Math.PI/180,c=Math.cos(d),s=Math.sin(d);return Math.sqrt(c*c+s*s/(k*k))};
-// structure value at distance h; st = {kind,c,r,p}
-const sval=(st,h)=>st.c*KIND[st.kind].f(h/st.r,st.p);
-const mval=(fit,h,fac)=>{let m=fit.c0;for(const st of fit.st)m+=sval(st,h*(fac||1));return m};
-// sets: [{h:[],g:[],N:[],az:null|deg}]; keys: structure kinds (1 or 2); nugget: bool; aniso: bool; hmax: largest lag
-function fitGen(sets,keys,nugget,aniso,hmax){
-  const all=sets.flatMap(s=>s.g.map((g,i)=>({g,N:s.N[i]})));const gm=Math.max(...all.map(q=>q.g)),sill0=(()=>{const t=sets.flatMap(s=>s.g.slice(-Math.max(2,Math.floor(s.g.length/3))));return t.reduce((a,b)=>a+b,0)/t.length})();
-  // initial anisotropy from the independent range of each direction is not available here: start from k = 0.5 and the azimuth of the direction with the largest mean gamma-lag slope (lowest gamma at mid lag)
-  let th0=0;if(aniso){let bg=Infinity;for(const s of sets){const q=s.g.reduce((a,b)=>a+b,0)/s.g.length;if(q<bg){bg=q;th0=s.az}}}
-  const lay=[];let n=0;if(nugget){lay.push(['c0']);n++}for(const k of keys){const K=KIND[k],o={k,ic:n++};if(!K.norange)o.ir=n++;if(K.shape)o.ip=n++;lay.push(o)}if(aniso){var ith=n++,ik=n++}
-  const unpack=x=>{let c0=nugget?x[0]:0;const st=lay.filter(o=>o.k).map(o=>({kind:o.k,c:x[o.ic],r:o.ir!==undefined?x[o.ir]:hmax,p:o.ip!==undefined?x[o.ip]:null}));return{c0,st,th:aniso?x[ith]:null,k:aniso?x[ik]:1}};
-  const obj=x=>{const f=unpack(x);if(f.c0<0||f.c0>gm*2)return 1e30+Math.abs(f.c0);let pen=0;for(const s of f.st){const K=KIND[s.kind];if(s.c<=0||s.c>gm*3)return 1e30+Math.abs(s.c);if(!K.norange&&(s.r<=hmax*0.02||s.r>hmax*20))return 1e30+Math.abs(s.r);if(K.shape&&(s.p<K.shape.lo||s.p>K.shape.hi))return 1e30+Math.abs(s.p)}
-    if(aniso&&(f.k<0.05||f.k>1))return 1e30+Math.abs(f.k);let tot=0;
-    for(const s of sets){const fac=aniso&&s.az!==null?afac(s.az,f.th,f.k):1;for(let i=0;i<s.h.length;i++){const m=mval(f,s.h[i],fac);if(m<=1e-12)return 1e30;tot+=s.N[i]*(s.g[i]-m)**2/(m*m)}}return tot};
-  let best=null;const nl=keys.length;
-  for(const r0 of [hmax/6,hmax/3,hmax/1.5])for(const n0 of nugget?[0.05,0.3]:[0])for(const k0 of aniso?[0.5,0.25]:[1])for(const dth of aniso?[0,30,-30]:[0]){
-    const c00=nugget?sill0*n0:0,tot=Math.max(sill0-c00,1e-9),x0=[],st=[];if(nugget){x0.push(c00);st.push(sill0*0.1+1e-9)}
-    lay.filter(o=>o.k).forEach((o,j)=>{const K=KIND[o.k],fr=nl===1?1:(j===0?0.4:0.6),rr=nl===1?r0:(j===0?r0/4:r0);x0[o.ic]=tot*fr;st[o.ic]=tot*0.2+1e-9;if(!K.norange){x0[o.ir]=rr;st[o.ir]=rr*0.3}if(K.shape){x0[o.ip]=K.shape.x0;st[o.ip]=0.15}});
-    if(aniso){x0[ith]=th0+dth;st[ith]=15;x0[ik]=k0;st[ik]=0.1}
-    const r1=nelder(obj,x0,st,800),r2=nelder(obj,r1.x,st.map(v=>v*0.2),800);if(!best||r2.f<best.f)best=r2}
-  const f=unpack(best.x);f.wsse=best.f;if(aniso){f.th=((f.th%180)+180)%180}return f}
-// experimental variogram. P: [[x,y,z]], dirs, nl lags, cut, tol deg, bw (0 = none), est 'm'|'c'
-function experimental(P,dirs,nl,cut,tol,bw,est){const n=P.length,w=cut/nl,R=dirs.map(()=>({N:new Float64Array(nl),H:new Float64Array(nl),S:new Float64Array(nl)}));const tr=tol*Math.PI/180;
-  for(let i=0;i<n;i++){const a=P[i];for(let j=i+1;j<n;j++){const b=P[j],dx=b[0]-a[0],dy=b[1]-a[1],h=Math.sqrt(dx*dx+dy*dy);if(h===0||h>=cut)continue;const k=Math.floor(h/w),dz=b[2]-a[2];
-      let ang=null;for(let d=0;d<dirs.length;d++){const az=dirs[d].az;if(az!==null){if(ang===null){ang=Math.atan2(dx,dy);if(ang<0)ang+=Math.PI;if(ang>=Math.PI)ang-=Math.PI}
-          let df=Math.abs(ang-az*Math.PI/180);df=Math.min(df,Math.PI-df);if(df>tr+1e-12)continue;if(bw>0&&h*Math.sin(df)>bw)continue}
-        const r=R[d];r.N[k]++;r.H[k]+=h;r.S[k]+=est==='c'?Math.sqrt(Math.abs(dz)):dz*dz}}}
-  return R.map((r,d)=>{const o=[];for(let k=0;k<nl;k++){if(r.N[k]<1)continue;const N=r.N[k],g=est==='c'?Math.pow(r.S[k]/N,4)/(2*(0.457+0.494/N)):r.S[k]/(2*N);o.push({h:r.H[k]/N,g,N})}return{dir:dirs[d],pts:o}})}
-// variogram map: semivariance (Matheron) for each separation vector (dx east, dy north) in a nb x nb grid covering [-cut, cut]^2
-function varmap(P,cut,nb){const cs=2*cut/nb,S=new Float64Array(nb*nb),N=new Float64Array(nb*nb),n=P.length;
-  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const dx=P[j][0]-P[i][0],dy=P[j][1]-P[i][1];if(Math.abs(dx)>=cut||Math.abs(dy)>=cut)continue;const dz=P[j][2]-P[i][2],q=dz*dz;
-    const ix=Math.floor((dx+cut)/cs),iy=Math.floor((dy+cut)/cs),jx=Math.floor((-dx+cut)/cs),jy=Math.floor((-dy+cut)/cs);S[iy*nb+ix]+=q;N[iy*nb+ix]++;S[jy*nb+jx]+=q;N[jy*nb+jx]++}
-  return{nb,cs,cut,g:Array.from(S,(s,i)=>N[i]>=3?s/(2*N[i]):NaN),N}}
 const pc=i=>PAL[i%PAL.length];
 const AZ4=[0,45,90,135];
 function modelKeys(){const m=$('mod').value,m2=$('mod2').value;return{list:m==='best'?BOUNDED.map(k=>[k].concat(m2?[m2]:[])):[[m].concat(m2&&!KIND[m].norange?[m2]:[])]}}
 function run(){let P=D.pts;const warn=[];if(P.length>4000){const r=rng(3),a=P.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}P=a.slice(0,4000);warn.push(`random subsample of 4000 points out of ${D.pts.length}`)}
+  const order=+$('det').value||0;D.order=order;P=detrend(P,order).P;
   const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]),zs=P.map(p=>p[2]),ext=Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys));
   const nl=Math.min(60,Math.max(3,Math.round(toN($('nl').value)||15))),cutIn=toN($('cut').value),cut=cutIn>0?cutIn:ext/3,tol=Math.min(90,Math.max(1,toN($('tol').value)||22.5)),bw=toN($('bw').value)>0?toN($('bw').value):0;
   const mz=zs.reduce((a,b)=>a+b,0)/zs.length;D.varz=zs.reduce((a,z)=>a+(z-mz)**2,0)/(zs.length-1);D.cut=cut;
   let dirs=dirList();const ani=$('ani').checked;if(ani){const az=dirs.filter(d=>d.az!==null);dirs=az.length>=2?az:AZ4.map(v=>({az:v,name:v+'°'}));if(az.length<2)warn.push('anisotropy: directions set to 0, 45, 90, 135°');if(tol>=45/1.0&&dirs.length>2)warn.push('tolerance ≥ 45°: directions overlap')}
-  D.ex=experimental(P,dirs,nl,cut,tol,bw,$('est').value);D.fits=[];D.joint=null;const nug=$('nug').checked,cand=modelKeys().list;
-  const best=(sets,aniso)=>{let b=null;for(const keys of cand){const hm=Math.max(...sets.flatMap(s=>s.h)),f=fitGen(sets,keys,nug,aniso,hm);if(!b||f.wsse<b.wsse)b=f}return b};
+  D.ex=experimental(P,dirs,nl,cut,tol,bw,$('est').value);D.fits=[];D.joint=null;D.cf=[];D.cmr=null;const nug=$('nug').checked,cand=modelKeys().list;
+  const best=(sets,aniso,slot)=>{const hm=Math.max(...sets.flatMap(s=>s.h)),a=cand.map(keys=>fitGen(sets,keys,nug,aniso,hm));if(slot!==undefined)D.cf[slot]=a;return a.reduce((b,f)=>!b||f.wsse<b.wsse?f:b,null)};
   for(const e of D.ex){if(e.pts.length<4){D.fits.push(null);warn.push(`direction ${e.dir.name}: fewer than 4 non-empty lags, no fit`);continue}
-    D.fits.push(best([{h:e.pts.map(p=>p.h),g:e.pts.map(p=>p.g),N:e.pts.map(p=>p.N),az:e.dir.az}],false));
+    D.fits.push(best([{h:e.pts.map(p=>p.h),g:e.pts.map(p=>p.g),N:e.pts.map(p=>p.N),az:e.dir.az}],false,D.fits.length));
     const sm=e.pts.filter(p=>p.N<30).length;if(sm)warn.push(`direction ${e.dir.name}: ${sm} lag(s) with < 30 pairs`)}
   if(ani){const sets=D.ex.filter(e=>e.pts.length>=4).map(e=>({h:e.pts.map(p=>p.h),g:e.pts.map(p=>p.g),N:e.pts.map(p=>p.N),az:e.dir.az}));if(sets.length>=2){D.joint=best(sets,true);D.joint.rmaj=Math.max(...D.joint.st.map(s=>s.r))}else warn.push('anisotropy: need at least 2 directions with ≥ 4 lags')}
+  if(!ani){const idx=D.ex.map((e,i)=>e.dir.az!==null&&D.cf[i]?i:-1).filter(i=>i>=0);D.cmr=idx.length>=2?commonModelRatio(idx.map(i=>D.cf[i])):null;if(D.cmr)D.cmr.name=cand[D.cmr.c].map(k=>KIND[k].n).join(' + ')}
+  const tw=trendWarning(D.fits.concat([D.joint]),D.varz,order);if(tw)warn.push(tw);
   const nb=Math.max(7,Math.min(81,Math.round(toN($('nm').value)||31)|1));D.map=$('map').checked?varmap(P,cut,nb):null;$('cardMap').style.display=D.map?'':'none';
   $('runMsg').className='msg'+(warn.length?' err':'');$('runMsg').textContent=warn.join(' · ');draw();drawMap();table()}
 function draw(){if(!D.ex.length)return;const pts=[],ln=[],J=D.joint;$('legend').innerHTML=D.ex.map((e,i)=>`<span><i style="background:${pc(i)}"></i>${e.dir.name}</span>`).join('')+`<span>— ${J?'joint anisotropic':'fitted'} model · - - sample variance</span>`;
@@ -358,16 +434,17 @@ function drawMap(){const M=D.map,cv=$('cm');if(!M)return;const dpr=window.device
 function desc(f){const nm=f.st.map(s=>KIND[s.kind].n).join(' + '),sh=f.st.filter(s=>s.p!==null).map(s=>(s.kind==='sta'?'α = ':'ω = ')+fmt(s.p)).join(', ');
   const pw=f.st.some(s=>KIND[s.kind].norange);return{nm,sills:f.st.map(s=>fmt(s.c)).join(' + '),sill:pw?'–':fmt(f.c0+f.st.reduce((a,s)=>a+s.c,0)),rng:f.st.map(s=>KIND[s.kind].norange?'–':fmt(s.r)).join(' + '),sh}}
 function table(){const f=v=>isFinite(v)?fmt(v):'–',rows=[];const J=D.joint;
-  if(J){const d=desc(J),rmin=J.rmaj*J.k,np=D.ex.reduce((a,e)=>a+e.pts.reduce((x,p)=>x+p.N,0),0);rows.push(`<tr style="background:#f3efdf"><td><b>joint anisotropic</b></td><td>${np}</td><td>${d.nm}${d.sh?' ('+d.sh+')':''}</td><td>${f(J.c0)}</td><td>${d.sills}</td><td>${d.sill}</td><td><b>major ${f(J.rmaj)} (az ${fmt(J.th)}°) / minor ${f(rmin)}</b> · ratio ${fmt(J.k)}</td><td>${f(J.wsse)}</td></tr>`)}
+  if(J){const d=desc(J),rmin=J.rmaj*J.k,np=D.ex.reduce((a,e)=>a+e.pts.reduce((x,p)=>x+p.N,0),0);rows.push(`<tr style="background:#f3efdf"><td><b>joint anisotropic</b></td><td>${np}</td><td>${d.nm}${d.sh?' ('+d.sh+')':''}</td><td>${f(J.c0)}</td><td>${d.sills}</td><td>${d.sill}</td><td><b>major ${f(J.rmaj)} (az ${fmt(J.th)}°) / minor ${f(rmin)}</b> · ratio (minor/major, <= 1) ${fmt(J.k)}</td><td>${f(J.wsse)}</td></tr>`)}
   D.ex.forEach((e,i)=>{const q=D.fits[i],np=e.pts.reduce((a,p)=>a+p.N,0);const d=q?desc(q):null;
     rows.push(`<tr><td><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${pc(i)};margin-right:5px"></i>${e.dir.name}${J?' (independent fit)':''}</td><td>${np}</td>`+(q?`<td>${d.nm}${d.sh?' ('+d.sh+')':''}</td><td>${f(q.c0)}</td><td>${d.sills}</td><td>${d.sill}</td><td><b>${d.rng}</b></td><td>${f(q.wsse)}</td>`:'<td colspan=5>no fit</td>')+'</tr>')});
   $('resT').innerHTML=`<table><thead><tr><th>Direction</th><th>pairs</th><th>model</th><th>nugget c0</th><th>partial sill(s)</th><th>sill</th><th>range</th><th>WSSE</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
-  const rs=D.fits.map((q,i)=>q&&!J&&D.ex[i].dir.az!==null&&!KIND[q.st[0].kind].norange?q.st[q.st.length-1].r:null).filter(v=>v);$('anisMsg').textContent=`Sample variance ${f(D.varz)}`+(J?` · geometric anisotropy: major axis azimuth ${fmt(J.th)}°, range ratio minor/major = ${fmt(J.k)}`:rs.length>1?` · ratio of the independent directional ranges (shortest / longest) = ${fmt(Math.min(...rs)/Math.max(...rs))}`:'')}
+  $('anisMsg').textContent=`Sample variance ${f(D.varz)}`+(D.order?` (after ${D.order===1?'linear':'quadratic'} detrend)`:'')+(J?` · geometric anisotropy: major axis azimuth ${fmt(J.th)}°, Ratio (minor/major range, <= 1) = ${fmt(J.k)}`:D.cmr?` · Ratio (minor/major range, <= 1) = ${fmt(D.cmr.ratio)} from the common model (${D.cmr.name}) fitted to every azimuth direction`:'')}
 $('bCsv').onclick=()=>{if(!D.ex.length)return;const L=['direction,lag,h_mean,n_pairs,gamma'];D.ex.forEach(e=>e.pts.forEach((p,k)=>L.push([e.dir.name.replace(',',''),k+1,+p.h.toPrecision(8),p.N,+p.g.toPrecision(8)].join(','))));download('variogram_experimental.csv',L.join('\n')+'\n','text/csv;charset=utf-8')};
 $('bCopy').onclick=()=>{if(!D.fits.length)return;const one=(lab,q)=>{if(!q)return lab+': no fit';const d=desc(q);return `${lab}: ${d.nm}${d.sh?' ('+d.sh+')':''}, nugget ${fmt(q.c0)}, partial sill ${d.sills}, range ${d.rng}`};
-  const L=D.ex.map((e,i)=>one(e.dir.name,D.fits[i]));if(D.joint)L.unshift(one('joint anisotropic',D.joint)+`, major azimuth ${fmt(D.joint.th)} deg, minor/major ratio ${fmt(D.joint.k)}`);copyText(L.join('\n'),'Models copied')};
+  const L=D.ex.map((e,i)=>one(e.dir.name,D.fits[i]));if(D.joint)L.unshift(one('joint anisotropic',D.joint)+`, major azimuth ${fmt(D.joint.th)} deg, Ratio (minor/major range, <= 1) ${fmt(D.joint.k)}`);copyText(L.join('\n'),'Models copied')};
+$('bJson').onclick=()=>{if(!D.ex.length)return;download('variogram_model.json',JSON.stringify(modelJSON({ex:D.ex,fits:D.fits,joint:D.joint,estimator:$('est').value==='c'?'Cressie-Hawkins':'Matheron',varz:D.varz,cut:D.cut,detrend:['none','linear','quadratic'][D.order||0],common:D.cmr?{model:D.cmr.name,ratio:D.cmr.ratio}:null}),null,2)+'\n','application/json')};
 $('bPng').onclick=()=>pngOf($('cv'),'variogram.png');document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b)pngOf($(b.dataset.png),b.dataset.png==='cm'?'variogram_map.png':'variogram.png')});
-wireData(loadText);['cx','cy','cz'].forEach(i=>$(i).addEventListener('change',build));['est','mod','mod2','nug','showm','ani','map'].forEach(i=>$(i).addEventListener('change',()=>{if(D.pts.length>=10)run()}));['nl','cut','dirs','tol','bw','nm'].forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(D.kt);D.kt=setTimeout(()=>{if(D.pts.length>=10)run()},350)}));
+wireData(loadText);['cx','cy','cz','nullv'].forEach(i=>$(i).addEventListener('change',build));['est','mod','mod2','nug','showm','ani','map','det'].forEach(i=>$(i).addEventListener('change',()=>{if(D.pts.length>=10)run()}));['nl','cut','dirs','tol','bw','nm'].forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(D.kt);D.kt=setTimeout(()=>{if(D.pts.length>=10)run()},350)}));
 window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(()=>{if(D.ex.length){draw();drawMap()}},150)});
 // ---- example (synthetic): geometrically anisotropic Gaussian field (spectral method, random cosines), long axis N45E (range ~ 5000 m), short axis 2500 m, plus a small noise
 function example(){const r=rng(17),g=()=>{let s=0;for(let i=0;i<12;i++)s+=r();return s-6},K=400,W=[];const th=Math.PI/4,ax=[2.2/5000,2.2/2500];   // spectral frequencies ~ N(0, 2/ell^2)
@@ -455,6 +532,6 @@ window.DG={experimental,fitGen,varmap,KIND,afac,mval};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. Directional experimental variogram of scattered data, variogram map, and model fits (nested structures, geometric anisotropy).","method":["Estimators: Matheron and Cressie–Hawkins. Lag classes of width cut/nl; directional pairs selected by azimuth, angular tolerance and bandwidth.","Models: spherical, exponential, Gaussian, cubic, pentaspherical, circular, linear, stable (α) and power (ω); a second nested structure is optional.","Fit: weighted sum of squared errors with weights N/γ² (Cressie 1985), Nelder–Mead with several starts. Joint anisotropic fit of the angle θ and the ratio k, with afac(az, θ, k) = √(cos²δ + sin²δ/k²).","Variogram map on a regular lag grid."],"sources":[["Matheron estimator of the experimental semivariogram, γ(h) = 1/(2N)·Σ(z_i − z_j)²","Matheron, G. (1963), Principles of geostatistics, Economic Geology 58(8), 1246–1266, <a href=\"https://doi.org/10.2113/gsecongeo.58.8.1246\" target=\"_blank\" rel=\"noopener\">doi:10.2113/gsecongeo.58.8.1246</a>; Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>","published (metadata verified)"],["Cressie–Hawkins robust estimator","Cressie, N. & Hawkins, D. M. (1980), Robust estimation of the variogram: I, Mathematical Geology 12(2), 115–125, <a href=\"https://doi.org/10.1007/BF01035243\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01035243</a>","published (metadata verified)"],["Weights N/γ² in the weighted least-squares fit","Cressie, N. (1985), Fitting variogram models by weighted least squares, Mathematical Geology 17(5), 563–586, <a href=\"https://doi.org/10.1007/BF01032109\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01032109</a>","published (metadata verified)"],["Nelder–Mead minimisation with several starts","Nelder, J. A. & Mead, R. (1965), A simplex method for function minimization, The Computer Journal 7(4), 308–313, <a href=\"https://doi.org/10.1093/comjnl/7.4.308\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/7.4.308</a>","published (metadata verified)"],["Spherical, exponential, Gaussian, cubic, pentaspherical, circular and linear-to-sill models; nesting of two structures","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Webster, R. & Oliver, M. A. (2007), Geostatistics for Environmental Scientists, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9780470517277\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470517277</a>","published (metadata verified)"],["Stable (powered exponential) and power models","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Webster, R. & Oliver, M. A. (2007), Geostatistics for Environmental Scientists, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9780470517277\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470517277</a>. The bounds of the fitted exponents (α in 0.3–2, ω in 0.1–1.95) are limits chosen on the page","published (metadata verified); the bounds are on the page"],["Geometric anisotropy: range ellipse, afac(az, θ, k) = √(cos²δ + sin²δ/k²); directional pairs with azimuth, tolerance and bandwidth","Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>; Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Isaaks, E. H. & Srivastava, R. M. (1989), An Introduction to Applied Geostatistics, Oxford University Press (existence confirmed by a review in Geographical Analysis 26(3), 282–283, <a href=\"https://doi.org/10.1111/j.1538-4632.1994.tb00325.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.1538-4632.1994.tb00325.x</a>; the book was not re-read)","published (metadata verified)"],["Variogram map on a regular lag grid (every pair separation vector)","Isaaks & Srivastava (1989), above; Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>","published (metadata verified)"],["Comparison with numpy and scipy in the validation","Harris, C. R. et al. (2020), Array programming with NumPy, Nature 585, 357–362, <a href=\"https://doi.org/10.1038/s41586-020-2649-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41586-020-2649-2</a>; Virtanen, P. et al. (2020), SciPy 1.0: fundamental algorithms for scientific computing in Python, Nature Methods 17, 261–272, <a href=\"https://doi.org/10.1038/s41592-019-0686-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41592-019-0686-2</a>","published (metadata verified)"],["Random subsample above 4000 points; bound of 20·hmax on the ranges; ‘best bounded model’ ranked by WSSE","Choices of the page, not from a publication","on the page (no publication)"]],"validation":["Experimental variogram and variogram map identical to numpy (10<sup>−11</sup>).","Fits and the joint anisotropic fit identical to scipy."],"limits":["On smooth data the exponential and power models drift towards an infinite range. Ranges are bounded to 20·hmax, and ‘best bounded model’ then retains the Gaussian."],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Directional experimental variogram of scattered data, variogram map, and model fits (nested structures, geometric anisotropy).","method":["Estimators: Matheron and Cressie–Hawkins. Lag classes of width cut/nl; directional pairs selected by azimuth, angular tolerance and bandwidth.","Models: spherical, exponential, Gaussian, cubic, pentaspherical, circular, linear, stable (α) and power (ω); a second nested structure is optional.","Fit: weighted sum of squared errors with weights N/γ² (Cressie 1985), Nelder–Mead with several starts. Joint anisotropic fit of the angle θ and the ratio k, with afac(az, θ, k) = √(cos²δ + sin²δ/k²).","Variogram map on a regular lag grid.","Data reading: decimal comma and thousands separators are decoded, missing and below-detection values are skipped; every load reports how many rows were read and skipped and why, with the first line numbers. Z values equal to a null value (default list -999, -999.25, -9999, 9999, 1e30, 1.70141e38, editable) are excluded and counted; a repeated extreme value that looks like an undeclared null is only reported.","Trend: when a fitted sill exceeds the sample variance by more than 20 %, a warning flags a probable trend or non-stationarity; an optional linear or quadratic least-squares surface in (x, y) can be subtracted from z before computing the variogram (the sample variance and the sill are then those of the residuals).","Anisotropy ratio, reported as Ratio (minor/major range, <= 1): from the joint fit, or, with independent directions, shortest/longest range of the single model (smallest total WSSE) fitted to every azimuth direction. Ranges of different model types are never compared. The fitted models can be exported as JSON (format variogram-model, version 1: conventions, nugget, structures with their range type, joint anisotropy)."],"sources":[["Matheron estimator of the experimental semivariogram, γ(h) = 1/(2N)·Σ(z_i − z_j)²","Matheron, G. (1963), Principles of geostatistics, Economic Geology 58(8), 1246–1266, <a href=\"https://doi.org/10.2113/gsecongeo.58.8.1246\" target=\"_blank\" rel=\"noopener\">doi:10.2113/gsecongeo.58.8.1246</a>; Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>","published (metadata verified)"],["Cressie–Hawkins robust estimator","Cressie, N. & Hawkins, D. M. (1980), Robust estimation of the variogram: I, Mathematical Geology 12(2), 115–125, <a href=\"https://doi.org/10.1007/BF01035243\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01035243</a>","published (metadata verified)"],["Weights N/γ² in the weighted least-squares fit","Cressie, N. (1985), Fitting variogram models by weighted least squares, Mathematical Geology 17(5), 563–586, <a href=\"https://doi.org/10.1007/BF01032109\" target=\"_blank\" rel=\"noopener\">doi:10.1007/BF01032109</a>","published (metadata verified)"],["Nelder–Mead minimisation with several starts","Nelder, J. A. & Mead, R. (1965), A simplex method for function minimization, The Computer Journal 7(4), 308–313, <a href=\"https://doi.org/10.1093/comjnl/7.4.308\" target=\"_blank\" rel=\"noopener\">doi:10.1093/comjnl/7.4.308</a>","published (metadata verified)"],["Spherical, exponential, Gaussian, cubic, pentaspherical, circular and linear-to-sill models; nesting of two structures","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Webster, R. & Oliver, M. A. (2007), Geostatistics for Environmental Scientists, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9780470517277\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470517277</a>","published (metadata verified)"],["Stable (powered exponential) and power models","Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Webster, R. & Oliver, M. A. (2007), Geostatistics for Environmental Scientists, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9780470517277\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9780470517277</a>. The bounds of the fitted exponents (α in 0.3–2, ω in 0.1–1.95) are limits chosen on the page","published (metadata verified); the bounds are on the page"],["Geometric anisotropy: range ellipse, afac(az, θ, k) = √(cos²δ + sin²δ/k²); directional pairs with azimuth, tolerance and bandwidth","Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>; Chilès, J.-P. & Delfiner, P. (2012), Geostatistics: Modeling Spatial Uncertainty, 2nd ed., Wiley, <a href=\"https://doi.org/10.1002/9781118136188\" target=\"_blank\" rel=\"noopener\">doi:10.1002/9781118136188</a>; Isaaks, E. H. & Srivastava, R. M. (1989), An Introduction to Applied Geostatistics, Oxford University Press (existence confirmed by a review in Geographical Analysis 26(3), 282–283, <a href=\"https://doi.org/10.1111/j.1538-4632.1994.tb00325.x\" target=\"_blank\" rel=\"noopener\">doi:10.1111/j.1538-4632.1994.tb00325.x</a>; the book was not re-read)","published (metadata verified)"],["Variogram map on a regular lag grid (every pair separation vector)","Isaaks & Srivastava (1989), above; Goovaerts, P. (1997), Geostatistics for Natural Resources Evaluation, Oxford University Press, <a href=\"https://doi.org/10.1093/oso/9780195115383.001.0001\" target=\"_blank\" rel=\"noopener\">doi:10.1093/oso/9780195115383.001.0001</a>","published (metadata verified)"],["Comparison with numpy and scipy in the validation","Harris, C. R. et al. (2020), Array programming with NumPy, Nature 585, 357–362, <a href=\"https://doi.org/10.1038/s41586-020-2649-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41586-020-2649-2</a>; Virtanen, P. et al. (2020), SciPy 1.0: fundamental algorithms for scientific computing in Python, Nature Methods 17, 261–272, <a href=\"https://doi.org/10.1038/s41592-019-0686-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41592-019-0686-2</a>","published (metadata verified)"],["Random subsample above 4000 points; bound of 20·hmax on the ranges; ‘best bounded model’ ranked by WSSE","Choices of the page, not from a publication","on the page (no publication)"]],"validation":["Experimental variogram and variogram map identical to numpy (10<sup>−11</sup>).","Fits and the joint anisotropic fit identical to scipy.","Re-checked on 26 November 2026 without Python by scripts/variogram_test.mjs: experimental variogram identical to a brute-force double loop, and recovery of a known spherical model; regression tests for -999 nulls, trend warning and detrend, common-model anisotropy ratio and the JSON export. Numbers that change compared with earlier versions: data containing null values (-999 …) now give a different variance and sill because those points are excluded, and the independent-direction anisotropy ratio now uses a common model, so it can differ from the former shortest/longest range of unlike models."],"limits":["Detrending uses a global polynomial surface fitted by ordinary least squares; it is a simple remedy, not a substitute for universal kriging, and it slightly biases the residual variogram at long lags. The null-value list applies to Z only (not to coordinates). On smooth data the exponential and power models drift towards an infinite range. Ranges are bounded to 20·hmax, and ‘best bounded model’ then retains the Gaussian."],"date":"26 November 2026"});
 </script>
 </body></html>
