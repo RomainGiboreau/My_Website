@@ -123,4 +123,68 @@ test('selection CSV lists only the drilled prospects with totals', () => {
   assert.equal(c.length, 4); assert.ok(c[1].startsWith('"A,1",P,0.5')); assert.ok(c[2].startsWith('C,') && c[3].startsWith('total,'));
   const f = P.figures(M.prospects[0], .5); near(+c[3].split(',')[7], 2 * f.emv, 1e-9);
 });
+
+// ---- review fixes (26 Nov 2026): contract D reader, plays, sanitising, FDP v2
+const mkRisk = (name, o = {}) => { const d = R.defaults(); d.name = name; Object.assign(d.vol, o.vol || {}); if (o.elements) d.elements = o.elements; return d };
+const withSummary = d => { const res = R.run(d); assert.ok(!res.err, 'risking run'); d.summary = R.summary(res); return { d, res } };
+test('REGRESSION importing several risking files: each prospect gets its own play, never averaged, displayed gCOS = the file gCOS', () => {
+  const a = withSummary(mkRisk('Alpha', { elements: [{ level: 'play', p: .51 }, { level: 'prospect', p: .42 }] })), b = withSummary(mkRisk('Beta', { elements: [{ level: 'play', p: .18 }, { level: 'prospect', p: .42 }] }));
+  const pa = P.fromRisking(a.d), pb = P.fromRisking(b.d);
+  assert.equal(pa.play, 'Alpha'); assert.equal(pb.play, 'Beta');
+  const M = port([pa, pb]), pcs = P.playChances(M);
+  near(P.figures(pa, pcs[pa.play]).gcos, a.res.gcos, 1e-9, 'gCOS A'); near(P.figures(pb, pcs[pb.play]).gcos, b.res.gcos, 1e-9, 'gCOS B');
+});
+test('REGRESSION same play name for prospects whose play chances differ: warning with both values, mean rule labelled; a typed value wins', () => {
+  const M = port([one({ play: 'X', pPlay: .51 }), one({ play: 'X', pPlay: .18, name: 'B' })]), I = P.playInfo(M).X;
+  assert.ok(I.differ); assert.deepEqual(I.values, [.51, .18]); near(I.chance, .345, 1e-12); assert.equal(I.typed, false);
+  M.plays = { X: .4 }; const J = P.playInfo(M).X; assert.ok(J.typed); near(J.chance, .4, 1e-12);
+  assert.ok(!P.playInfo(port([one({ play: 'X', pPlay: .3 }), one({ play: 'X', pPlay: .3 })])).X.differ);
+});
+test('REGRESSION summary v2 quantiles: lognormal prospect rebuilt (mean, EMV, tails) as the risking tool', () => {
+  const { d, res } = withSummary(mkRisk('LN')), p = P.fromRisking(d);
+  assert.ok(Array.isArray(p.q) && p.q.length === 21 && !p.approx);
+  const f = P.figures(p, p.pPlay), L = P.distOf(p);
+  near(L.mean / res.dist.mean, 1, .03, 'mean (upper tail truncated at P0.1%)'); near(f.emv, res.emv, Math.abs(res.emv) * .02 + .05, 'EMV'); near(L.sf(150), res.dist.sf(150), .004, 'P(V>150)');
+  for (const e of [.9, .5, .1, .02]) near(L.pct(e) / res.dist.pct(e), 1, .003, 'pct ' + e);
+});
+test('REGRESSION triangular Monte Carlo prospect: quantiles reproduce the risking EMV, the old lognormal refit did not', () => {
+  const m = mkRisk('MC'); m.vol.mode = 'vol'; const { d, res } = withSummary(m), p = P.fromRisking(d), f = P.figures(p, p.pPlay);
+  near(f.emv, res.emv, .1, 'EMV from quantiles'); const old = P.figures(Object.assign({}, p, { q: undefined }), p.pPlay);
+  assert.ok(Math.abs(old.emv - res.emv) > Math.abs(f.emv - res.emv), 'quantiles are closer than the lognormal refit');
+  const s = P.simulate(port([p], { plays: { [p.play]: p.pPlay }, rho: 0 })); near(s.mean, f.emv, 4 * s.sd / Math.sqrt(s.n), 'Monte Carlo uses the same distribution');
+});
+test('quantile reader: v1 summary or no quantiles -> approximate marker; unusable quantiles fall back; user edit of P90/P50/P10 is not overridden', () => {
+  const d = R.defaults(); d.summary = { p90: 10, p50: 30, p10: 100 }; const a = P.fromRisking(d);
+  assert.ok(a.approx && !a.q); assert.ok(P.rowNotes(a).some(x => x.t.includes('approximate volumes (lognormal from P90/P50/P10)')));
+  d.summary.quantiles = [[.9, 10], [.5, 30], [.1, 20]]; const b = P.fromRisking(d); assert.ok(b.approx && !b.q, 'non monotone');
+  d.summary.quantiles = [[.9, 10], [.5, 30]]; assert.ok(P.fromRisking(d).approx, 'too few');
+  const { d: e } = withSummary(R.defaults()); const c = P.fromRisking(e); assert.ok(!c.approx && c.q);
+  P.setVolume(c, 'p50', 99); assert.ok(!c.q && !c.approx); near(P.distOf(c).pct(.5), 99, 1e-9);
+});
+test('upper tail is truncated at the last quantile, not extrapolated', () => {
+  const p = one({ q: [[.99, 1], [.5, 10], [.1, 30], [.001, 100]] }), L = P.distOf(p);
+  assert.equal(L.sf(100), 0); assert.equal(L.sf(1e6), 0); assert.equal(L.draw(8), 100); near(L.sf(10), .5, 1e-6); near(L.pct(.1), 30, 1e-6);
+  assert.ok(L.mean < 20 && L.mean > 10); near(L.call(0), L.mean, 1e-12);
+});
+test('REGRESSION files without summary: per-row warning; gas volumetric uses Bg (P50 about 10, not 43)', () => {
+  const m = R.defaults(); m.vol.mode = 'vol'; m.vol.fluid = 'gas'; const res = R.run(m), p = P.fromRisking(m);
+  assert.ok(p.noSummary && p.approx); assert.ok(P.rowNotes(p).some(x => /no summary: gas, correlation, likelihood ratios, conditional chances and ESL are ignored/.test(x.t)));
+  near(p.p50 / res.p50, 1, .03, 'gas P50 ' + p.p50 + ' vs ' + res.p50); assert.ok(p.p50 < 20);
+});
+test('REGRESSION portfolio file sanitised: non numeric rho, play names trimmed, decimal comma, no NaN', () => {
+  const o = { format: 'portfolio-risk', rho: 'abc', rhoPlay: 'x', learn: 'q', plays: { 'Play A ': '0,5' }, prospects: [{ name: 'A', play: 'Play A ', pPlay: '0,5', pPros: '0,4', p90: 20, p50: 60, p10: 180, u: 9, F: 220, D: 45 }, { name: 'B', play: ' Play A', pPros: .3, p90: 20, p50: 60, p10: 180, u: 9, F: 220, D: 45 }] };
+  const { model: m, notes } = P.fromPortfolio(o);
+  assert.equal(m.rho, .3); assert.equal(m.rhoPlay, 0); assert.equal(m.learn, 1); assert.equal(m.prospects[0].pPros, .4); assert.deepEqual(Object.keys(P.playChances(m)), ['Play A']);
+  const s = P.simulate(m, { n: 2000 }); assert.ok(isFinite(s.mean)); assert.ok(notes.length >= 3); assert.throws(() => P.fromPortfolio({ format: 'x' }));
+});
+test('risking file with decimal commas and out-of-range chances is read with notes, not NaN', () => {
+  const d = R.defaults(); d.elements = [{ level: 'play', p: '0,6' }, { level: 'prospect', p: 1.5 }]; const p = P.fromRisking(d);
+  near(p.pPlay, .6, 1e-12); assert.equal(p.pPros, 1); assert.ok(p.notes.some(s => /outside 0..1|0 to 1/.test(s)));
+});
+test('REGRESSION fdp-link v2 fields are kept, v1 files still accepted; the slope can be offered as u', () => {
+  const p = one({ u: 8, F: 300 }), link = { format: 'fdp-link', version: 1, linkVersion: 2, name: 'Dev', mefv: 25, marginalValue: 14.6, npvCurve: [[10, -5], [20, 1]], fiscal: 'Tax 40 %', computedBy: 'FDP, 26 November 2026', breakeven: 55, utc: 12, capex: 400, npv: 90, reserves: 40, price: 70 };
+  P.applyFdp(p, link); assert.equal(p.fdp.marginalValue, 14.6); assert.equal(p.fdp.fiscal, 'Tax 40 %'); assert.equal(p.fdp.npvCurve.length, 2); assert.equal(p.fdp.computedBy, 'FDP, 26 November 2026');
+  P.useSlope(p); assert.equal(p.u, 14.6); near(p.F, 25 * 14.6, 1e-9); near(P.figures(p, .5).mef, 25, 1e-9);
+  const q = one(); P.applyFdp(q, { format: 'fdp-link', version: 1, mefv: 30 }); assert.equal(q.fdp.marginalValue, null); assert.throws(() => P.useSlope(q));
+});
 console.log(`${n}/${n} passed`);
