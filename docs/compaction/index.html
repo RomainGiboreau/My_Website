@@ -153,12 +153,12 @@ td.l,th.l{text-align:left}
   <div class="body"><div id="mods"></div>
   <div class="pg"><span>Fit</span><select id="grpmode"><option value="each">one fit per group</option><option value="all">all data together</option></select>
   <span>Residuals in</span><select id="restype"><option value="phi">porosity</option><option value="ln">ln porosity (relative errors)</option></select>
-  <span>Grain density ρs</span><input type="number" id="rhos" value="2650" step="10"><span>Water density ρw</span><input type="number" id="rhow" value="1000" step="10"></div></div></section>
+  <span>Grain density ρs</span><input type="number" id="rhos" value="2650" step="10"><span>Water density ρw</span><input type="number" id="rhow" value="1000" step="10"><span title="Thickness eroded since maximum burial, in the data depth unit. The fit then uses burial depth = present depth + this value. 0 = none or unknown.">Exhumation removed</span><input type="text" id="up" value="0" title="Thickness eroded since maximum burial, in the data depth unit. The fit then uses burial depth = present depth + this value. 0 = none or unknown."></div></div></section>
 </aside>
 <main>
  <div class="legend" id="legend"></div>
  <div class="cards"><div class="card wide"><h3>Porosity vs depth<span class="sp"></span><button data-png="cv">PNG</button></h3><canvas id="cv" style="position:static;height:460px"></canvas></div></div>
- <div class="card" style="margin-top:12px"><h3>Fit results<span class="tt" tabindex="0" data-tip="Standard errors come from the Jacobian at the optimum (s²·(JᵀJ)⁻¹, s² = RSS/(n − k)); they assume independent, homoscedastic residuals, which depth series rarely satisfy, so read them as lower bounds. AICc = n·ln(RSS/n) + 2k + 2k(k+1)/(n − k − 1), ranked within each group (Δ = 0 is the best); it is not defined when n ≤ k + 1. AICc is computed on the residuals in the chosen space (porosity or ln porosity).">?</span></h3><div class="tw tall" style="max-height:340px"><table id="resT"></table></div></div>
+ <div class="card" style="margin-top:12px"><h3>Fit results<span class="tt" tabindex="0" data-tip="Standard errors come from the Jacobian at the optimum (s²·(JᵀJ)⁻¹, s² = RSS/(n − k)); they assume independent, homoscedastic residuals, which depth series rarely satisfy, so read them as lower bounds. AICc = n·ln(RSS/n) + 2k + 2k(k+1)/(n − k − 1), ranked within each group (Δ = 0 is the best); it is not defined when n ≤ k + 1. AICc is computed on the residuals in the chosen space (porosity or ln porosity).">?</span></h3><div class="tw tall" style="max-height:340px"><table id="resT"></table></div><div class="msg" id="resNote" style="margin-top:6px"></div></div>
  </main>
 <aside class="side side2">
  <section class="panel"><h2><span class="n">3</span>Display<i class="chev"></i></h2>
@@ -170,12 +170,140 @@ td.l,th.l{text-align:left}
 
 </aside></div>
 
-<script>
+<script id="compaction-core">
+// ---- number decoding (contract A)
+function parseNumber(text,opt){
+  opt=opt||{};const orig=String(text==null?'':text).trim().replace(/[\u2212\u2012\u2013]/g,'-');
+  if(/^(-+|n\.?\s?d\.?|na|n\/a|nan|null|none)$/i.test(orig)||orig==='')return{value:null,kind:'missing'};
+  if(orig[0]==='<'){const r=parseNumber(orig.slice(1),opt);return{value:null,kind:'below',limit:r.kind==='ok'?r.value:null}}
+  let s=orig;if(/[\s\u00a0\u202f]/.test(s)){if(!/^[-+]?\d{1,3}([\s\u00a0\u202f]\d{3})+([.,]\d+)?$/.test(s))return{value:null,kind:'text'};s=s.replace(/[\s\u00a0\u202f]/g,'')}
+  const ok=v=>isFinite(v)?{value:v,kind:'ok'}:{value:null,kind:'text'};
+  if(/^[-+]?(\d+[.,]?\d*|[.,]\d+)[eE][-+]?\d+$/.test(s))return ok(+s.replace(',','.'));
+  const hasD=s.includes('.'),hasC=s.includes(',');
+  if(hasD&&hasC){const dec=s.lastIndexOf('.')>s.lastIndexOf(',')?'.':',',th=dec==='.'?',':'.',k=s.lastIndexOf(dec),ip=s.slice(0,k),fp=s.slice(k+1);
+    if(!new RegExp('^[-+]?\\d{1,3}(\\'+th+'\\d{3})+$').test(ip)||!/^\d+$/.test(fp))return{value:null,kind:'text'};
+    return ok(+(ip.split(th).join('')+'.'+fp))}
+  if(hasC){
+    if(/^[-+]?[1-9]\d{0,2}(,\d{3})+$/.test(s)){const single=(s.match(/,/g)||[]).length===1;
+      if(single&&opt.decimalComma)return{value:+s.replace(',','.'),kind:'ok',ambiguous:true};
+      return{value:+s.replace(/,/g,''),kind:'ok',ambiguous:single}}
+    if(/^[-+]?\d*,\d+$/.test(s))return ok(+s.replace(',','.'));
+    return{value:null,kind:'text'}}
+  if(hasD){if(/^[-+]?[1-9]\d{0,2}(\.\d{3}){2,}$/.test(s))return ok(+s.replace(/\./g,''));
+    return/^[-+]?(\d+\.?\d*|\.\d+)$/.test(s)?ok(+s):{value:null,kind:'text'}}
+  return/^[-+]?\d+$/.test(s)?ok(+s):{value:null,kind:'text'}}
+const toN=s=>{if(typeof s==='number')return s;const r=parseNumber(s);return r.kind==='ok'?r.value:NaN};
+function detectDelimiter(lines,minCols){
+  minCols=minCols||2;
+  if(lines.some(l=>l.includes('\t')))return'\t';
+  if(lines.some(l=>l.includes(';')))return';';
+  const wsOk=lines.every(l=>l.trim().split(/\s+/).length>=minCols),cOk=lines.every(l=>l.split(',').length>=minCols),dec=lines.some(l=>/\d,\d{1,2}(?![\d,])/.test(l));
+  if(wsOk&&dec)return' ';
+  return cOk?',':' '}
+// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
+function parseTable(text,minCols){
+  minCols=minCols||2;
+  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
+  const sep=detectDelimiter(lines,minCols);
+  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}
+    if(sep===' ')return l.trim().split(/\s+/);return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
+  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<minCols)return{err:`At least ${minCols} columns are needed.`};
+  const kind=s=>parseNumber(s).kind;
+  const numFrac=r=>r.filter(s=>s!==''&&kind(s)==='ok').length/Math.max(1,r.filter(s=>s!=='').length);
+  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length>1&&numFrac(rows[0])<0.34&&rows[0].every(s=>s===''||kind(s)==='text')){units=rows.shift()}}
+  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
+  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
+  return{head,units,rows,nc,sep}}
+const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+function guess(head){const f=re=>head.findIndex(h=>re.test(normName(h)));let z=f(/^(depth|prof|md|tvd|z)/),p=f(/^(por|phi|n$|nphi|phit|poro)/),g=f(/^(lith|group|form|facies|well|unit|name|type)/);
+  if(z<0)z=0;if(p<0||p===z)p=head.findIndex((_,i)=>i!==z);return[z,p,g]}
+// ---- reading of the depth/porosity pairs: every dropped row is counted with its reason (contract A)
+// opt: {zk: km per depth unit, pu: 'auto'|1|100, uplift: km removed by erosion (burial depth = present depth + uplift)}
+function readPoints(t,cz,cp,cg,opt){
+  opt=opt||{};const zk=opt.zk||1,up=opt.uplift||0;
+  let dc=t.sep===';';
+  if(!dc)outer:for(const r of t.rows)for(const c of[cz,cp]){const s=String(r[c]==null?'':r[c]).trim();if(/^[-+]?\d*,\d+$/.test(s)&&!/^[-+]?[1-9]\d{0,2},\d{3}$/.test(s)){dc=true;break outer}}
+  const why={},note=(label,row)=>{const w=why[label]||(why[label]={n:0,first:[]});w.n++;if(w.first.length<5)w.first.push(row)};
+  let ambiguous=0,pts=[];
+  t.rows.forEach((r,i)=>{const row=i+1,a=parseNumber(r[cz],{decimalComma:dc}),b=parseNumber(r[cp],{decimalComma:dc});
+    if(a.ambiguous&&!dc)ambiguous++;if(b.ambiguous&&!dc)ambiguous++;
+    if(a.kind!=='ok'||b.kind!=='ok'){const k=a.kind!=='ok'?a.kind:b.kind,col=a.kind!=='ok'?'depth':'porosity';
+      note(k==='text'?`${col} is not a number`:k==='below'?`${col} below detection (<)`:`${col} missing`,row);return}
+    if(a.value<0){note('negative depth',row);return}
+    pts.push({z:a.value,p:b.value,row,g:cg>=0?String(r[cg]==null?'':r[cg]).trim()||'(blank)':'all'})});
+  let pu=opt.pu==null?'auto':opt.pu,puAuto=false,puWhy='';
+  if(pu==='auto'){puAuto=true;const hd=String((t.head||[])[cp]||'');let mx=-Infinity;for(const q of pts)if(q.p>mx)mx=q.p;
+    if(/%|percent|pct/i.test(hd)){pu=100;puWhy='the column name says percent'}else{pu=mx>1.5?100:1;puWhy=pu===100?'maximum > 1.5':'maximum ≤ 1.5'}}
+  else pu=+pu;
+  let ge1=0;for(const q of pts){q.zk=q.z*zk+up;q.phi=q.p/pu;if(q.p>=1)ge1++}
+  const keep=[];for(const q of pts){if(q.phi>0&&q.phi<1)keep.push(q);else note('porosity outside (0, 1) after the unit',q.row)}
+  const skipped=t.rows.length-keep.length;
+  return{pts:keep,groups:[...new Set(keep.map(q=>q.g))],nRead:t.rows.length,skipped,reasons:Object.keys(why).map(k=>({label:k,n:why[k].n,first:why[k].first})),
+    pu,puAuto,puWhy,ambiguous,decimalComma:dc,suggestPercent:pu===1&&ge1>0&&ge1>=pts.length*0.2}}
+// =====================================================================================
+//  Compaction curve fit. Internal units: depth z in km, porosity phi as a fraction.
+//  Models phi(z); nonlinear least squares (Levenberg–Marquardt, numerical Jacobian, bounds by clamping).
+// =====================================================================================
+const PHI_FLOOR=0.001;
+const MODELS=[
+ {id:'athy',name:'Athy (exponential)',par:['φ0','c (km⁻¹)'],lo:[0.02,1e-4],hi:[0.99,30],dash:[],f:(p,z)=>p[0]*Math.exp(-p[1]*z)},
+ {id:'athyr',name:'Exponential + residual porosity',par:['φ0','φr','c (km⁻¹)'],lo:[0.02,0,1e-4],hi:[0.99,0.6,30],dash:[7,3],f:(p,z)=>{const r=Math.min(p[1],p[0]);return r+(p[0]-r)*Math.exp(-p[2]*z)}},
+ {id:'hyper',name:'Hyperbolic',par:['φ0','c (km⁻¹)'],lo:[0.02,1e-4],hi:[0.99,200],dash:[2,3],f:(p,z)=>p[0]/(1+p[1]*z)},
+ {id:'lin',name:'Linear',par:['φ0','k (km⁻¹)'],lo:[0.02,0],hi:[0.99,2],dash:[9,3,2,3],f:(p,z)=>Math.max(p[0]-p[1]*z,PHI_FLOOR)},
+ {id:'mech',name:'Void ratio – ln effective stress',par:['e1 (at 1 MPa)','λ'],lo:[0.05,0.005],hi:[3,1],dash:[1,3],mech:true}];
+// mechanical model: integrates sigma'(z) (Pa) with RK4, depth step 5 m; returns phi at the requested depths (km); env = {rhos,rhow}
+function mechPhi(p,zs,env){const rs=(env&&env.rhos)||2650,rw=(env&&env.rhow)||1000,dr=(rs-rw)*9.81,e1=p[0],lam=p[1],h=5;let zm=0;for(const z of zs)if(z>zm)zm=z;const zmax=zm*1000;
+  const ph=s=>{const e=Math.max(e1-lam*Math.log(s/1e6),0.02);return e/(1+e)},dz=s=>dr*(1-ph(s));
+  const n=Math.ceil(zmax/h)+1,sg=new Float64Array(n+1);sg[0]=1e4;
+  for(let i=0;i<n;i++){const s=sg[i],k1=dz(s),k2=dz(s+h*k1/2),k3=dz(s+h*k2/2),k4=dz(s+h*k3);sg[i+1]=s+h*(k1+2*k2+2*k3+k4)/6}
+  return zs.map(z=>{const x=z*1000/h,i=Math.min(n-1,Math.floor(x)),t=x-i;return ph(sg[i]*(1-t)+sg[i+1]*t)})}
+function modelPhi(M,p,zs,env){return M.mech?mechPhi(p,zs,env):zs.map(z=>M.f(p,z))}
+function solveN(A,b,n){for(let i=0;i<n;i++){let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r*n+i])>Math.abs(A[m*n+i]))m=r;if(Math.abs(A[m*n+i])<1e-300)return null;
+  if(m!==i){for(let c=0;c<n;c++){const t=A[i*n+c];A[i*n+c]=A[m*n+c];A[m*n+c]=t}const t=b[i];b[i]=b[m];b[m]=t}
+  for(let r=i+1;r<n;r++){const f=A[r*n+i]/A[i*n+i];for(let c=i;c<n;c++)A[r*n+c]-=f*A[i*n+c];b[r]-=f*b[i]}}
+  for(let i=n-1;i>=0;i--){let s=b[i];for(let c=i+1;c<n;c++)s-=A[i*n+c]*b[c];b[i]=s/A[i*n+i]}return b}
+function invert(A,n){const out=new Float64Array(n*n);for(let j=0;j<n;j++){const e=new Float64Array(n);e[j]=1;const a=A.slice(),x=solveN(a,e,n);if(!x)return null;for(let i=0;i<n;i++)out[i*n+j]=x[i]}return out}
+function fitModel(M,z,y,ln,env){
+  const k=M.par.length,n=z.length,tr=ln?Math.log:v=>v,yt=y.map(tr),clamp=p=>p.map((v,i)=>Math.min(M.hi[i],Math.max(M.lo[i],v)));
+  const res=p=>{const m=modelPhi(M,p,z,env);return m.map((v,i)=>tr(Math.max(v,1e-6))-yt[i])},cost=r=>r.reduce((a,b)=>a+b*b,0);
+  // starting points: log-linear regression of phi on z
+  let sx=0,sy=0,sxx=0,sxy=0,c=0,zmx=0;for(let i=0;i<n;i++){if(z[i]>zmx)zmx=z[i];if(y[i]>0){const L=Math.log(y[i]);sx+=z[i];sy+=L;sxx+=z[i]*z[i];sxy+=z[i]*L;c++}}
+  const den=c*sxx-sx*sx,slope=den?(c*sxy-sx*sy)/den:-0.5,icpt=(sy-slope*sx)/c,c0=Math.max(0.05,-slope),f0=Math.min(0.95,Math.exp(icpt));
+  const starts=M.id==='athy'?[[f0,c0],[0.6,0.5],[0.5,1.5]]:M.id==='athyr'?[[f0,0.05,c0],[0.6,0.1,1],[0.5,0.2,2]]:M.id==='hyper'?[[f0,c0],[0.6,1],[0.5,5]]:M.id==='lin'?[[f0,Math.max(0.05,f0/Math.max(zmx,1e-9))],[0.5,0.2]]:[[1.0,0.15],[0.7,0.1],[1.5,0.3]];
+  let best=null;
+  for(const s0 of starts){let p=clamp(s0.slice()),r=res(p),cst=cost(r),lam=1e-3;
+    for(let it=0;it<150;it++){
+      const J=[];for(let j=0;j<k;j++){const h=1e-6*Math.max(Math.abs(p[j]),1e-3),q=p.slice();q[j]+=h;const rj=res(q);J.push(rj.map((v,i)=>(v-r[i])/h))}
+      const A=new Float64Array(k*k),g=new Float64Array(k);for(let a=0;a<k;a++){for(let b=0;b<k;b++){let s=0;for(let i=0;i<n;i++)s+=J[a][i]*J[b][i];A[a*k+b]=s}let s=0;for(let i=0;i<n;i++)s+=J[a][i]*r[i];g[a]=-s}
+      let ok=false;for(let tries=0;tries<12;tries++){const B=A.slice();for(let a=0;a<k;a++)B[a*k+a]+=lam*(A[a*k+a]||1);const d=solveN(B,g.slice(),k);if(!d){lam*=10;continue}
+        const q=clamp(p.map((v,i)=>v+d[i])),rq=res(q),cq=cost(rq);if(cq<cst){const imp=cst-cq;p=q;r=rq;cst=cq;lam=Math.max(lam/3,1e-12);ok=true;if(imp<1e-14*(cst+1e-30))it=1e9;break}lam*=4}
+      if(!ok)break}
+    if(!best||cst<best.cst)best={p,cst,r}}
+  const p=best.p,r=best.r,rss=best.cst;
+  // standard errors from the Jacobian at the optimum
+  let se=null;if(n>k){const J=[];for(let j=0;j<k;j++){const h=1e-6*Math.max(Math.abs(p[j]),1e-3),q=p.slice();q[j]+=h;const rj=res(q);J.push(rj.map((v,i)=>(v-r[i])/h))}
+    const A=new Float64Array(k*k);for(let a=0;a<k;a++)for(let b=0;b<k;b++){let s=0;for(let i=0;i<n;i++)s+=J[a][i]*J[b][i];A[a*k+b]=s}
+    const inv=invert(A,k);if(inv){const s2=rss/(n-k);se=p.map((_,i)=>Math.sqrt(Math.max(0,s2*inv[i*k+i])))}}
+  const m=modelPhi(M,p,z,env),rp=y.map((v,i)=>m[i]-v),sse=rp.reduce((a,b)=>a+b*b,0),mean=y.reduce((a,b)=>a+b,0)/n,sst=y.reduce((a,b)=>a+(b-mean)**2,0);
+  const aic=n>0?n*Math.log(Math.max(rss,1e-300)/n)+2*k:NaN,aicc=n>k+1?aic+2*k*(k+1)/(n-k-1):NaN;
+  const atBound=p.some((v,i)=>v<=M.lo[i]*1.0001+1e-12||v>=M.hi[i]*0.9999);
+  // linear model: depth (km) at which the 0.001 floor is reached; beyond it the curve is flat at 0.001, not a fit of the data
+  const floorKm=M.id==='lin'&&p[1]>0?(p[0]-PHI_FLOOR)/p[1]:Infinity,floorHit=M.id==='lin'&&floorKm<=zmx*1.0001;
+  return{p,se,rmse:Math.sqrt(sse/n),r2:sst>0?1-sse/sst:NaN,aicc,n,k,atBound,floorKm,floorHit}}
+// ---- decompaction: the solid thickness S(z) = integral of (1 - phi) dz is conserved (trapezoid, ~2 m step)
+function solidFn(f,zmaxKm,env){const n=Math.max(400,Math.ceil(zmaxKm*1000/2)),z=Array.from({length:n+1},(_,i)=>zmaxKm*i/n),ph=modelPhi(f.M,f.r.p,z,env).map(v=>Math.min(0.99,Math.max(0,v))),S=new Float64Array(n+1);
+  for(let i=0;i<n;i++)S[i+1]=S[i]+(z[i+1]-z[i])*((1-ph[i])+(1-ph[i+1]))/2;
+  const at=zz=>{const x=zz/zmaxKm*n,i=Math.max(0,Math.min(n-1,Math.floor(x))),t=x-i;return S[i]*(1-t)+S[i+1]*t},phiAt=zz=>{const x=zz/zmaxKm*n,i=Math.max(0,Math.min(n-1,Math.floor(x))),t=x-i;return ph[i]*(1-t)+ph[i+1]*t};return{S:at,phi:phiAt,tot:S[n]}}
+// z1, z2, z0 in km (burial depths); returns {sol, z2n, F} (km) or {err}
+function decompact(f,z1,z2,z0,env){
+  if(![z1,z2,z0].every(isFinite)||z1<0||z2<=z1||z0<0)return{err:'Enter present top < present base (≥ 0) and a new top ≥ 0.'};
+  const zm=Math.max(z2,z1)*4+z0+10,F=solidFn(f,zm,env),sol=F.S(z2)-F.S(z1);let lo=z0,hi=z0+(z2-z1)*8+1;while(F.S(hi)-F.S(z0)<sol&&hi<zm)hi*=1.5;
+  if(F.S(hi)-F.S(z0)<sol)return{err:'Cannot find a base for this layer: increase the range.'};
+  for(let i=0;i<80;i++){const mid=(lo+hi)/2;if(F.S(mid)-F.S(z0)<sol)lo=mid;else hi=mid}
+  return{sol,z2n:(lo+hi)/2,F}}
+</script><script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const toN=s=>{if(typeof s==='number')return s;s=String(s==null?'':s).trim().replace(/\s/g,'');if(s===''||/^(nan|na|n\/a|nd|null|-+)$/i.test(s))return NaN;
-  if(/^[-+]?\d{1,3}(\.\d{3})+,\d+$/.test(s))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
-  return /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)?+s:NaN};
 const fmt=v=>!isFinite(v)?'–':(Math.abs(v)>=1e5||(Math.abs(v)<1e-3&&v!==0))?v.toExponential(2):String(+v.toPrecision(5));
 const f3=v=>isFinite(v)?String(+v.toFixed(3)):'';
 function rng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
@@ -186,19 +314,6 @@ function copyText(t,ok){if(navigator.clipboard&&navigator.clipboard.writeText)na
 function fallbackCopy(t,ok){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');banner(ok||'Copied.')}catch(e){banner('Copy failed.',true)}a.remove()}
 const csvCell=(v,sep)=>{v=v==null?'':String(v);return(v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v};
 document.querySelectorAll('.panel>h2').forEach(h=>h.addEventListener('click',e=>{if(e.target.closest('.tt'))return;h.parentElement.classList.toggle('collapsed')}));
-// ---- table parsing (tab, ;, , or whitespace separated; optional header and units row)
-function parseTable(text,minCols){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!/^(#|\/\/)/.test(l.trim()));if(!lines.length)return{err:'Empty input.'};
-  const has=c=>lines.some(l=>l.includes(c));let sep;
-  if(has('\t'))sep='\t';else if(has(';'))sep=';';else if(lines.every(l=>l.split(',').length>=(minCols||2)))sep=',';else sep=/\s+/;
-  const split=l=>{if(sep===','||sep===';'){const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o.map(s=>s.trim())}return l.split(sep).map(s=>s.trim().replace(/^"|"$/g,''))};
-  let rows=lines.map(split);const nc=Math.max(...rows.map(r=>r.length));if(nc<(minCols||2))return{err:`At least ${minCols||2} columns are needed.`};
-  const numFrac=r=>r.filter(s=>s!==''&&isFinite(toN(s))).length/Math.max(1,r.filter(s=>s!=='').length);
-  let head=null,units=null;if(numFrac(rows[0])<0.5){head=rows.shift();if(rows.length&&numFrac(rows[0])<0.34&&rows.length>1&&rows[0].every(s=>s===''||isNaN(toN(s)))){units=rows.shift()}}
-  if(!head)head=Array.from({length:nc},(_,i)=>'col '+(i+1));while(head.length<nc)head.push('col '+(head.length+1));
-  rows=rows.map(r=>{while(r.length<nc)r.push('');return r});
-  return{head,units,rows,nc,sep:sep===/\s+/?' ':sep}}
-const normName=s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
 // ---- plotting engine ----------------------------------------------------------------
 const PAL=['#4a5a4e','#a8623a','#3b6ea5','#c9a227','#7b4f9d','#2a9d8f','#d1495b','#8d6b3f','#6b7f2a','#444444'];
 function niceStep(r,n){const raw=r/n,p=Math.pow(10,Math.floor(Math.log10(raw))),m=raw/p;return(m<1.5?1:m<2.25?2:m<3.5?2.5:m<7.5?5:10)*p}
@@ -252,71 +367,29 @@ function pngOf(cv,name){cv.toBlob(b=>{const a=document.createElement('a');a.href
 //  Compaction curve fit. Internal units: depth z in km, porosity phi as a fraction.
 //  Models phi(z); nonlinear least squares (Levenberg–Marquardt, numerical Jacobian, bounds by clamping).
 // =====================================================================================
-const MODELS=[
- {id:'athy',name:'Athy (exponential)',par:['φ0','c (km⁻¹)'],lo:[0.02,1e-4],hi:[0.99,30],dash:[],f:(p,z)=>p[0]*Math.exp(-p[1]*z)},
- {id:'athyr',name:'Exponential + residual porosity',par:['φ0','φr','c (km⁻¹)'],lo:[0.02,0,1e-4],hi:[0.99,0.6,30],dash:[7,3],f:(p,z)=>{const r=Math.min(p[1],p[0]);return r+(p[0]-r)*Math.exp(-p[2]*z)}},
- {id:'hyper',name:'Hyperbolic',par:['φ0','c (km⁻¹)'],lo:[0.02,1e-4],hi:[0.99,200],dash:[2,3],f:(p,z)=>p[0]/(1+p[1]*z)},
- {id:'lin',name:'Linear',par:['φ0','k (km⁻¹)'],lo:[0.02,0],hi:[0.99,2],dash:[9,3,2,3],f:(p,z)=>Math.max(p[0]-p[1]*z,0.001)},
- {id:'mech',name:'Void ratio – ln effective stress',par:['e1 (at 1 MPa)','λ'],lo:[0.05,0.005],hi:[3,1],dash:[1,3],mech:true}];
 const D={table:null,pts:[],groups:[],fits:[]};
 const ZU=()=>+$('zu').value/1000;     // km per data unit
-// ---- mechanical model: integrates sigma'(z) (Pa) with RK4, depth step 5 m; returns phi at the requested depths (km, ascending order not required)
-function mechPhi(p,zs){const rs=+$('rhos').value||2650,rw=+$('rhow').value||1000,dr=(rs-rw)*9.81,e1=p[0],lam=p[1],h=5,zmax=Math.max(...zs)*1000;
-  const ph=s=>{const e=Math.max(e1-lam*Math.log(s/1e6),0.02);return e/(1+e)},dz=s=>dr*(1-ph(s));
-  const n=Math.ceil(zmax/h)+1,sg=new Float64Array(n+1);sg[0]=1e4;
-  for(let i=0;i<n;i++){const s=sg[i],k1=dz(s),k2=dz(s+h*k1/2),k3=dz(s+h*k2/2),k4=dz(s+h*k3);sg[i+1]=s+h*(k1+2*k2+2*k3+k4)/6}
-  return zs.map(z=>{const x=z*1000/h,i=Math.min(n-1,Math.floor(x)),t=x-i;return ph(sg[i]*(1-t)+sg[i+1]*t)})}
-function modelPhi(M,p,zs){return M.mech?mechPhi(p,zs):zs.map(z=>M.f(p,z))}
-// ---- fit
-function solveN(A,b,n){for(let i=0;i<n;i++){let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r*n+i])>Math.abs(A[m*n+i]))m=r;if(Math.abs(A[m*n+i])<1e-300)return null;
-  if(m!==i){for(let c=0;c<n;c++){const t=A[i*n+c];A[i*n+c]=A[m*n+c];A[m*n+c]=t}const t=b[i];b[i]=b[m];b[m]=t}
-  for(let r=i+1;r<n;r++){const f=A[r*n+i]/A[i*n+i];for(let c=i;c<n;c++)A[r*n+c]-=f*A[i*n+c];b[r]-=f*b[i]}}
-  for(let i=n-1;i>=0;i--){let s=b[i];for(let c=i+1;c<n;c++)s-=A[i*n+c]*b[c];b[i]=s/A[i*n+i]}return b}
-function invert(A,n){const out=new Float64Array(n*n);for(let j=0;j<n;j++){const e=new Float64Array(n);e[j]=1;const a=A.slice(),x=solveN(a,e,n);if(!x)return null;for(let i=0;i<n;i++)out[i*n+j]=x[i]}return out}
-function fitModel(M,z,y,ln){
-  const k=M.par.length,n=z.length,tr=ln?Math.log:v=>v,yt=y.map(tr),clamp=p=>p.map((v,i)=>Math.min(M.hi[i],Math.max(M.lo[i],v)));
-  const res=p=>{const m=modelPhi(M,p,z);return m.map((v,i)=>tr(Math.max(v,1e-6))-yt[i])},cost=r=>r.reduce((a,b)=>a+b*b,0);
-  // starting points: log-linear regression of phi on z
-  let sx=0,sy=0,sxx=0,sxy=0,c=0;for(let i=0;i<n;i++){if(y[i]>0){const L=Math.log(y[i]);sx+=z[i];sy+=L;sxx+=z[i]*z[i];sxy+=z[i]*L;c++}}
-  const den=c*sxx-sx*sx,slope=den?(c*sxy-sx*sy)/den:-0.5,icpt=(sy-slope*sx)/c,c0=Math.max(0.05,-slope),f0=Math.min(0.95,Math.exp(icpt));
-  const starts=M.id==='athy'?[[f0,c0],[0.6,0.5],[0.5,1.5]]:M.id==='athyr'?[[f0,0.05,c0],[0.6,0.1,1],[0.5,0.2,2]]:M.id==='hyper'?[[f0,c0],[0.6,1],[0.5,5]]:M.id==='lin'?[[f0,Math.max(0.05,f0/Math.max(...z))],[0.5,0.2]]:[[1.0,0.15],[0.7,0.1],[1.5,0.3]];
-  let best=null;
-  for(const s0 of starts){let p=clamp(s0.slice()),r=res(p),cst=cost(r),lam=1e-3;
-    for(let it=0;it<150;it++){
-      const J=[];for(let j=0;j<k;j++){const h=1e-6*Math.max(Math.abs(p[j]),1e-3),q=p.slice();q[j]+=h;const rj=res(q);J.push(rj.map((v,i)=>(v-r[i])/h))}
-      const A=new Float64Array(k*k),g=new Float64Array(k);for(let a=0;a<k;a++){for(let b=0;b<k;b++){let s=0;for(let i=0;i<n;i++)s+=J[a][i]*J[b][i];A[a*k+b]=s}let s=0;for(let i=0;i<n;i++)s+=J[a][i]*r[i];g[a]=-s}
-      let ok=false;for(let tries=0;tries<12;tries++){const B=A.slice();for(let a=0;a<k;a++)B[a*k+a]+=lam*(A[a*k+a]||1);const d=solveN(B,g.slice(),k);if(!d){lam*=10;continue}
-        const q=clamp(p.map((v,i)=>v+d[i])),rq=res(q),cq=cost(rq);if(cq<cst){const imp=cst-cq;p=q;r=rq;cst=cq;lam=Math.max(lam/3,1e-12);ok=true;if(imp<1e-14*(cst+1e-30))it=1e9;break}lam*=4}
-      if(!ok)break}
-    if(!best||cst<best.cst)best={p,cst,r}}
-  const p=best.p,r=best.r,rss=best.cst;
-  // standard errors from the Jacobian at the optimum
-  let se=null;if(n>k){const J=[];for(let j=0;j<k;j++){const h=1e-6*Math.max(Math.abs(p[j]),1e-3),q=p.slice();q[j]+=h;const rj=res(q);J.push(rj.map((v,i)=>(v-r[i])/h))}
-    const A=new Float64Array(k*k);for(let a=0;a<k;a++)for(let b=0;b<k;b++){let s=0;for(let i=0;i<n;i++)s+=J[a][i]*J[b][i];A[a*k+b]=s}
-    const inv=invert(A,k);if(inv){const s2=rss/(n-k);se=p.map((_,i)=>Math.sqrt(Math.max(0,s2*inv[i*k+i])))}}
-  const m=modelPhi(M,p,z),rp=y.map((v,i)=>m[i]-v),sse=rp.reduce((a,b)=>a+b*b,0),mean=y.reduce((a,b)=>a+b,0)/n,sst=y.reduce((a,b)=>a+(b-mean)**2,0);
-  const aic=n>0?n*Math.log(Math.max(rss,1e-300)/n)+2*k:NaN,aicc=n>k+1?aic+2*k*(k+1)/(n-k-1):NaN;
-  const atBound=p.some((v,i)=>v<=M.lo[i]*1.0001+1e-12||v>=M.hi[i]*0.9999);
-  return{p,se,rmse:Math.sqrt(sse/n),r2:sst>0?1-sse/sst:NaN,aicc,n,k,atBound}}
 // ---- data
-function guess(head){const f=re=>head.findIndex(h=>re.test(normName(h)));let z=f(/^(depth|prof|md|tvd|z)/),p=f(/^(por|phi|n$|nphi|phit|poro)/),g=f(/^(lith|group|form|facies|well|unit|name|type)/);
-  if(z<0)z=0;if(p<0||p===z)p=head.findIndex((_,i)=>i!==z);return[z,p,g]}
 function fillCols(){const t=D.table,[z,p,g]=guess(t.head);for(const [id,v,none] of [['cz',z],['cp',p],['cg',g,true]])$(id).innerHTML=(none?'<option value="-1">— (single group)</option>':'')+t.head.map((h,i)=>`<option value="${i}"${i===v?' selected':''}>${esc(h)}</option>`).join('')}
-function loadText(text){const t=parseTable(text,2);if(t.err){$('dataMsg').textContent=t.err;$('dataMsg').className='msg err';return false}D.table=t;fillCols();build();return true}
-function build(){const t=D.table;if(!t)return;const cz=+$('cz').value,cp=+$('cp').value,cg=+$('cg').value;let pts=[];
-  for(const r of t.rows){const z=toN(r[cz]),p=toN(r[cp]);if(isFinite(z)&&isFinite(p)&&z>=0)pts.push({z,p,g:cg>=0?(r[cg]||'').trim()||'(blank)':'all'})}
-  let pu=$('pu').value;if(pu==='auto'){const mx=Math.max(...pts.map(q=>q.p));pu=mx>1.5?100:1}else pu=+pu;
-  const zk=ZU();for(const q of pts){q.zk=q.z*zk;q.phi=q.p/pu}
-  const bad=pts.filter(q=>q.phi<=0||q.phi>=1).length;pts=pts.filter(q=>q.phi>0&&q.phi<1);
-  D.pts=pts;D.groups=[...new Set(pts.map(q=>q.g))];
-  const m=$('dataMsg');m.className='msg';if(pts.length<3){m.textContent=`Only ${pts.length} valid point(s) (depth ≥ 0, 0 < porosity < 1): at least 3 are needed.`;m.className='msg err';D.fits=[];draw();return}
-  m.textContent=`${pts.length} points · ${D.groups.length} group(s) · depth ${fmt(Math.min(...pts.map(q=>q.z)))} → ${fmt(Math.max(...pts.map(q=>q.z)))} · porosity read as ${pu===100?'percent':'fraction'}${bad?` · ${bad} point(s) with porosity outside (0,1) ignored`:''}`;
+function clearAll(){D.pts=[];D.groups=[];D.fits=[];D.R=null;results();decSelect();$('decOut').textContent='';draw()}
+function loadText(text){const t=parseTable(text,2);if(t.err){D.table=null;clearAll();$('dataMsg').textContent=t.err+' The previous data were cleared.';$('dataMsg').className='msg err';return false}D.table=t;fillCols();build();return true}
+const ENV=()=>({rhos:+$('rhos').value||2650,rhow:+$('rhow').value||1000});
+const UPN=()=>{const s=String($('up').value).trim();if(s==='')return 0;const v=toN(s);return v>=0?v:NaN};
+const UP=()=>(UPN()||0)*ZU();      // exhumation in km
+function build(){const t=D.table;if(!t)return;const cz=+$('cz').value,cp=+$('cp').value,cg=+$('cg').value,m=$('dataMsg');
+  if(!isFinite(UPN())){m.textContent='Exhumation must be a number ≥ 0 (data unit); data cleared.';m.className='msg err';clearAll();return}
+  const R=readPoints(t,cz,cp,cg,{zk:ZU(),pu:$('pu').value==='auto'?'auto':+$('pu').value,uplift:UP()});
+  D.pts=R.pts;D.groups=R.groups;D.R=R;const pts=R.pts;m.className='msg';
+  const rd=`${R.nRead} rows read, ${R.skipped} skipped`+(R.skipped?' ('+R.reasons.map(r=>`${r.n} ${r.label}, row${r.first.length>1?'s':''} ${r.first.join(', ')}${r.n>r.first.length?'…':''}`).join('; ')+')':'');
+  const hint=(R.suggestPercent?' · values ≥ 1 are rejected as fractions: if porosity is in percent, set Porosity unit to percent':'')+(R.ambiguous?` · ${R.ambiguous} value(s) like 1,234 read as thousands separators (ambiguous: use a point for decimals or a ; delimited file)`:'');
+  if(pts.length<3){m.textContent=`Only ${pts.length} valid point(s) (depth ≥ 0, 0 < porosity < 1): at least 3 are needed. ${rd}${hint}`;m.className='msg err';D.fits=[];results();decSelect();$('decOut').textContent='';draw();return}
+  m.textContent=`${rd} · ${pts.length} points · ${R.groups.length} group(s) · depth ${fmt(Math.min(...pts.map(q=>q.z)))} → ${fmt(Math.max(...pts.map(q=>q.z)))} · porosity read as ${R.pu===100?'percent':'fraction'}${R.puAuto?` (auto: ${R.puWhy})`:''}${R.decimalComma?' · decimal comma':''}${hint}`;
   fit()}
-$('paste').addEventListener('input',()=>{clearTimeout(D.pt);D.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value)},350)});
+$('paste').addEventListener('input',()=>{clearTimeout(D.pt);D.pt=setTimeout(()=>{if($('paste').value.trim())loadText($('paste').value);else{D.table=null;clearAll();$('dataMsg').textContent='No data yet.';$('dataMsg').className='msg'}},350)});
 $('bOpen').onclick=()=>$('file').click();
 $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result.length>3e6?r.result.slice(0,3e6):r.result;loadText(r.result)};r.readAsText(f);e.target.value=''};
 document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('paste').value=r.result;loadText(r.result)};r.readAsText(f)});
-['cz','cp','cg','zu','pu'].forEach(i=>$(i).addEventListener('change',()=>{if(D.table)build()}));
+['cz','cp','cg','zu','pu','up'].forEach(i=>$(i).addEventListener('change',()=>{if(D.table)build()}));
 $('mods').innerHTML=MODELS.map((m,i)=>`<label class="inl"><input type="checkbox" data-m="${m.id}" ${i<2?'checked':''}>${esc(m.name)}</label>`).join('');
 const selMods=()=>MODELS.filter(m=>document.querySelector(`[data-m="${m.id}"]`).checked);
 document.querySelectorAll('[data-m]').forEach(e=>e.addEventListener('change',fit));
@@ -326,24 +399,26 @@ function fit(){D.fits=[];if(D.pts.length<3){draw();return}
   const ms=selMods(),sets=$('grpmode').value==='all'?[['all data',D.pts]]:D.groups.map(g=>[g,D.pts.filter(q=>q.g===g)]);
   const ln=$('restype').value==='ln';
   for(const [g,pts] of sets){const z=pts.map(q=>q.zk),y=pts.map(q=>q.phi);
-    for(const M of ms){let r=null,err=null;if(pts.length<M.par.length+1)err=`needs at least ${M.par.length+1} points`;else{try{r=fitModel(M,z,y,ln)}catch(e){err=e.message}}D.fits.push({g,M,r,err,n:pts.length})}
+    for(const M of ms){let r=null,err=null;if(pts.length<M.par.length+1)err=`needs at least ${M.par.length+1} points`;else{try{r=fitModel(M,z,y,ln,ENV())}catch(e){err=e.message}}D.fits.push({g,M,r,err,n:pts.length})}
     const ok=D.fits.filter(f=>f.g===g&&f.r&&isFinite(f.r.aicc));if(ok.length){const mn=Math.min(...ok.map(f=>f.r.aicc));ok.forEach(f=>f.r.d=f.r.aicc-mn)}}
   results();decSelect();draw()}
-function results(){const rows=D.fits.map(f=>{if(!f.r)return`<tr><td class="l">${esc(f.g)}</td><td class="l">${esc(f.M.name)}</td><td colspan="5" class="l err">${esc(f.err||'failed')}</td></tr>`;
+function results(){if(!D.fits.length){$('resT').innerHTML='';$('resNote').textContent='';return}
+  const rows=D.fits.map(f=>{if(!f.r)return`<tr><td class="l">${esc(f.g)}</td><td class="l">${esc(f.M.name)}</td><td colspan="5" class="l err">${esc(f.err||'failed')}</td></tr>`;
   const r=f.r,ps=f.M.par.map((nm,i)=>`${esc(nm)} = ${fmt(r.p[i])}${r.se?` ± ${fmt(r.se[i])}`:''}`).join('<br>');
-  return`<tr${r.d===0?' class="best"':''}><td class="l">${esc(f.g)}</td><td class="l">${esc(f.M.name)}</td><td class="l">${ps}${r.atBound?'<br><span class="err">parameter at a bound</span>':''}</td><td>${f.n}</td><td>${fmt(r.rmse)}</td><td>${fmt(r.r2)}</td><td>${isFinite(r.d)?fmt(r.d):'–'}</td></tr>`}).join('');
+  return`<tr${r.d===0?' class="best"':''}><td class="l">${esc(f.g)}</td><td class="l">${esc(f.M.name)}</td><td class="l">${ps}${r.atBound?'<br><span class="err">parameter at a bound</span>':''}${r.floorHit?`<br><span class="err">φ reaches the 0.001 floor at ${fmt((r.floorKm-UP())/ZU())} (data unit): below this depth the curve is flat, not fitted</span>`:''}</td><td>${f.n}</td><td>${fmt(r.rmse)}</td><td>${fmt(r.r2)}</td><td>${isFinite(r.d)?fmt(r.d):'–'}</td></tr>`}).join('');
   $('resT').innerHTML=`<thead><tr><th class="l">Group</th><th class="l">Model</th><th class="l">Parameters ± SE</th><th>n</th><th>RMSE (φ)</th><th>R²</th><th>ΔAICc</th></tr></thead><tbody>${rows}</tbody>`;
-  const style=document.createElement('style');if(!$('stbest')){style.id='stbest';style.textContent='#resT tr.best td{background:rgba(74,90,78,.16)}#resT .err{color:#a8623a}';document.head.appendChild(style)}}
+  const style=document.createElement('style');if(!$('stbest')){style.id='stbest';style.textContent='#resT tr.best td{background:rgba(74,90,78,.16)}#resT .err{color:#a8623a}';document.head.appendChild(style)}
+  $('resNote').innerHTML='<b>Standard errors are lower bounds</b> (residuals are treated as independent, which depth series rarely satisfy). <b>Normal compaction assumed</b>: an exhumed (over-compacted) or overpressured interval gives a misleading curve; enter the exhumation removed in section 2 if known.'+(UP()>0?` The fit uses burial depth = present depth + ${fmt(UPN())}.`:'')}
 // ---- plot
-function curveZ(){const zm=toN($('zmax').value),zk=ZU(),mx=Math.max(...D.pts.map(q=>q.zk)),top=isFinite(zm)&&zm>0?zm*zk:mx*1.1,n=120,z=[];for(let i=0;i<=n;i++)z.push(top*i/n);return z}
+function curveZ(){const zm=toN($('zmax').value),zk=ZU(),mx=Math.max(...D.pts.map(q=>q.zk))-UP(),top=isFinite(zm)&&zm>0?zm*zk:mx*1.1,n=120,z=[];for(let i=0;i<=n;i++)z.push(top*i/n);return z}
 function gColor(g){return PAL[Math.max(0,D.groups.indexOf(g))%PAL.length]}
 function draw(){const cv=$('cv');
   if(D.pts.length<3){const x=cv.getContext('2d');cv.width=cv.clientWidth;cv.height=cv.clientHeight;x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);x.fillStyle='#5c5a52';x.font='13px Inter,sans-serif';x.fillText('Load depth–porosity data (section 1) or click Example.',20,30);$('legend').innerHTML='';return}
   const zk=ZU(),u=$('zu').selectedOptions[0].textContent,zs=curveZ(),pan=[{xlab:'Porosity (fraction)',xlog:$('logP').checked,pts:[],lines:[]}],res=[{xlab:'Residual (fit − data)',pts:[],lines:[{x:[0,0],y:[0,1e9],c:'#8a8678',w:1}]}];
   for(const q of D.pts)pan[0].pts.push({x:q.phi,y:q.z,c:gColor(q.g),info:`<b>${esc(q.g)}</b><br>depth ${fmt(q.z)} ${u}<br>porosity ${fmt(q.phi)}`});
-  for(const f of D.fits){if(!f.r)continue;const g=f.g==='all data'?null:f.g,col=g?gColor(g):'#232220',ph=modelPhi(f.M,f.r.p,zs);
+  for(const f of D.fits){if(!f.r)continue;const g=f.g==='all data'?null:f.g,col=g?gColor(g):'#232220',ph=modelPhi(f.M,f.r.p,zs.map(z=>z+UP()),ENV());
     pan[0].lines.push({x:ph,y:zs.map(z=>z/zk),c:col,w:2,dash:f.M.dash});
-    const pts=D.pts.filter(q=>!g||q.g===g),m=modelPhi(f.M,f.r.p,pts.map(q=>q.zk));pts.forEach((q,i)=>res[0].pts.push({x:m[i]-q.phi,y:q.z,c:col,r:3,info:`<b>${esc(q.g)}</b> · ${esc(f.M.name)}<br>depth ${fmt(q.z)} ${u}<br>residual ${fmt(m[i]-q.phi)}`}))}
+    const pts=D.pts.filter(q=>!g||q.g===g),m=modelPhi(f.M,f.r.p,pts.map(q=>q.zk),ENV());pts.forEach((q,i)=>res[0].pts.push({x:m[i]-q.phi,y:q.z,c:col,r:3,info:`<b>${esc(q.g)}</b> · ${esc(f.M.name)}<br>depth ${fmt(q.z)} ${u}<br>residual ${fmt(m[i]-q.phi)}`}))}
   const panels=[pan[0]];if($('showRes').checked){res[0].lines=[{x:[0,0],y:[-1e9,1e9],c:'#8a8678',w:1}];panels.push(res[0])}
   drawChart(cv,{ylab:`Depth (${u})`,yrev:true,ylim:[0,Math.max(...zs)/zk],panels});
   $('legend').innerHTML=(D.groups.length>1?D.groups.map(g=>`<span><i style="background:${gColor(g)}"></i>${esc(g)}</span>`).join(''):'')+selMods().map(m=>`<span><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#232220" stroke-width="2" stroke-dasharray="${m.dash.join(' ')}"/></svg> ${esc(m.name)}</span>`).join('')}
@@ -351,19 +426,14 @@ window.addEventListener('resize',()=>{clearTimeout(D.rt);D.rt=setTimeout(draw,15
 document.addEventListener('click',e=>{const b=e.target.closest('[data-png]');if(b)pngOf($(b.dataset.png),'compaction.png')});$('bPng').onclick=()=>pngOf($('cv'),'compaction.png');
 // ---- decompaction
 function decSelect(){const cur=$('dcm').value;$('dcm').innerHTML=D.fits.map((f,i)=>f.r?`<option value="${i}">${esc(f.g)} — ${esc(f.M.name)}</option>`:'').join('');if(cur&&$('dcm').querySelector(`option[value="${cur}"]`))$('dcm').value=cur}
-function solidFn(f,zmaxKm){const n=Math.max(400,Math.ceil(zmaxKm*1000/2)),z=Array.from({length:n+1},(_,i)=>zmaxKm*i/n),ph=modelPhi(f.M,f.r.p,z).map(v=>Math.min(0.99,Math.max(0,v))),S=new Float64Array(n+1);
-  for(let i=0;i<n;i++)S[i+1]=S[i]+(z[i+1]-z[i])*((1-ph[i])+(1-ph[i+1]))/2;       // S(z) = ∫ (1 − φ) dz, trapezoid
-  const at=zz=>{const x=zz/zmaxKm*n,i=Math.max(0,Math.min(n-1,Math.floor(x))),t=x-i;return S[i]*(1-t)+S[i+1]*t},phiAt=zz=>{const x=zz/zmaxKm*n,i=Math.max(0,Math.min(n-1,Math.floor(x))),t=x-i;return ph[i]*(1-t)+ph[i+1]*t};return{S:at,phi:phiAt,tot:S[n]}}
 $('bDec').onclick=()=>{const f=D.fits[+$('dcm').value],o=$('decOut');if(!f||!f.r){o.textContent='Fit a model first.';return}
-  const zk=ZU(),u=$('zu').selectedOptions[0].textContent,z1=toN($('dz1').value)*zk,z2=toN($('dz2').value)*zk,z0=toN($('dz0').value)*zk;
-  if(![z1,z2,z0].every(isFinite)||z1<0||z2<=z1||z0<0){o.textContent='Enter present top < present base (≥ 0) and a new top ≥ 0.';return}
-  const zm=Math.max(z2,z1)*4+z0+10,F=solidFn(f,zm),sol=F.S(z2)-F.S(z1);let lo=z0,hi=z0+(z2-z1)*8+1;while(F.S(hi)-F.S(z0)<sol&&hi<zm)hi*=1.5;
-  if(F.S(hi)-F.S(z0)<sol){o.textContent='Cannot find a base for this layer: increase the range.';return}
-  for(let i=0;i<80;i++){const mid=(lo+hi)/2;if(F.S(mid)-F.S(z0)<sol)lo=mid;else hi=mid}const z2n=(lo+hi)/2,th=(z2-z1)/zk,thn=(z2n-z0)/zk;
-  o.innerHTML=`Solid thickness ${fmt(sol/zk)} ${u}<br>Present: ${fmt(th)} ${u} (porosity ${fmt(F.phi(z1))} at top, ${fmt(F.phi(z2))} at base)<br>Decompacted with top at ${fmt(z0/zk)} ${u}: base at ${fmt(z2n/zk)} ${u}, thickness <b>${fmt(thn)} ${u}</b> (×${fmt(thn/th)}), porosity ${fmt(F.phi(z0))} at top, ${fmt(F.phi(z2n))} at base`+(z2n>Math.max(...D.pts.map(q=>q.zk))*1.2?'<br><span style="color:var(--acc2)">The layer is moved outside the depth range of the data: extrapolated curve.</span>':'')};
+  const zk=ZU(),up=UP(),u=$('zu').selectedOptions[0].textContent,z1=toN($('dz1').value)*zk+up,z2=toN($('dz2').value)*zk+up,z0=toN($('dz0').value)*zk;
+  const R=decompact(f,z1,z2,z0,ENV());if(R.err){o.textContent=R.err;return}
+  const F=R.F,sol=R.sol,z2n=R.z2n,th=(z2-z1)/zk,thn=(z2n-z0)/zk;
+  o.innerHTML=`Solid thickness ${fmt(sol/zk)} ${u}<br>Present: ${fmt(th)} ${u} (porosity ${fmt(F.phi(z1))} at top, ${fmt(F.phi(z2))} at base)<br>Decompacted with top at ${fmt(z0/zk)} ${u}: base at ${fmt(z2n/zk)} ${u}, thickness <b>${fmt(thn)} ${u}</b> (×${fmt(thn/th)}), porosity ${fmt(F.phi(z0))} at top, ${fmt(F.phi(z2n))} at base`+(up>0?`<br>Present depths include the exhumation (+${fmt(up/zk)} ${u}); the new top is a burial depth.`:'')+(z2n>Math.max(...D.pts.map(q=>q.zk))*1.2?'<br><span style="color:var(--acc2)">The layer is moved outside the depth range of the data: extrapolated curve.</span>':'')+(f.M.id==='lin'&&f.r.floorKm<z2n?'<br><span style="color:var(--acc2)">The linear model reaches its 0.001 porosity floor inside this layer: the result depends on the floor, not on the data.</span>':'')};
 // ---- export
 $('bPar').onclick=()=>{if(!D.fits.length)return banner('Nothing to export.',true);const L=['group,model,n,rmse_phi,r2,delta_AICc,parameters'];for(const f of D.fits){if(!f.r)continue;L.push([csvCell(f.g,','),csvCell(f.M.name,','),f.n,f.r.rmse,f.r.r2,f.r.d,csvCell(f.M.par.map((nm,i)=>`${nm}=${f.r.p[i]}${f.r.se?`±${f.r.se[i]}`:''}`).join('; '),',')].join(','))}download('compaction_fits.csv',L.join('\n')+'\n')};
-$('bCurve').onclick=()=>{if(!D.fits.length)return banner('Nothing to export.',true);const zk=ZU(),zs=curveZ(),u=$('zu').selectedOptions[0].textContent,L=[`depth_${u},`+D.fits.filter(f=>f.r).map(f=>csvCell(f.g+' | '+f.M.name,',')).join(',')],cols=D.fits.filter(f=>f.r).map(f=>modelPhi(f.M,f.r.p,zs));
+$('bCurve').onclick=()=>{if(!D.fits.length)return banner('Nothing to export.',true);const zk=ZU(),zs=curveZ(),u=$('zu').selectedOptions[0].textContent,L=[`depth_${u},`+D.fits.filter(f=>f.r).map(f=>csvCell(f.g+' | '+f.M.name,',')).join(',')],cols=D.fits.filter(f=>f.r).map(f=>modelPhi(f.M,f.r.p,zs.map(z=>z+UP()),ENV()));
   zs.forEach((z,i)=>L.push([+(z/zk).toPrecision(8)].concat(cols.map(c=>+c[i].toPrecision(6))).join(',')));download('compaction_curves.csv',L.join('\n')+'\n')};
 // ---- example (synthetic): two lithologies drawn from exponential laws with multiplicative noise
 function example(){const r=rng(5),L=['Depth (m)\tPorosity (%)\tLithology'],g=()=>{let s=0;for(let i=0;i<6;i++)s+=r();return(s-3)/Math.sqrt(0.5)};
@@ -450,6 +520,6 @@ $('bExample').onclick=example;
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('on'))set(false)});
   window.addEventListener('resize',()=>{if(box.classList.contains('on'))set(true)});
 })
-({"what":"Runs entirely in your browser: nothing you load leaves your machine. Porosity–depth fits (Athy and others) with parameter standard errors, goodness of fit and AICc ranking, and decompaction of a layer along the fitted curve.","method":["Athy: φ = φ0·exp(−c·z). With a residual porosity: φ = φr + (φ0 − φr)·exp(−c·z). Hyperbolic: φ = φ0/(1 + c·z). Linear: φ = φ0 − k·z. Fitting: nonlinear least squares by Levenberg–Marquardt with a numerical Jacobian and bounds by clamping.","Mechanical: void ratio e = e1 − λ·ln(σ'/1 MPa), with the effective stress σ' integrated from the weight of the solid skeleton under hydrostatic pore pressure (no overpressure): dσ'/dz = (ρs − ρw)·g·(1 − φ). This is a soil-mechanics compression line, not the exact law of any particular basin simulator.","Sclater &amp; Christie curves are the Athy model with parameters per lithology.","Standard errors from the Jacobian at the optimum, s²·(JᵀJ)⁻¹ with s² = RSS/(n − k). They assume independent, homoscedastic residuals, which depth series rarely satisfy: read them as lower bounds.","AICc = n·ln(RSS/n) + 2k + 2k(k + 1)/(n − k − 1), ranked within each group (Δ = 0 is the best), not defined when n ≤ k + 1, computed on the residuals in the chosen space (porosity or ln porosity).","Decompaction: the solid thickness ∫(1 − φ)dz of the layer is conserved. It is computed between the present top and base with the fitted curve, the layer is moved so that its top is at the new depth, and the new base is found by root finding."],"sources":[["Athy law φ = φ0·exp(−c·z)","Athy, L. F. (1930), Density, porosity, and compaction of sedimentary rocks, AAPG Bulletin 14(1), 1–24, doi 10.1306/3D93289E-16B1-11D7-8645000102C1865D (citation checked in Crossref; paper not re-read)","published (metadata verified)"],["Exponential approximations to porosity–depth profiles (general reference)","Bahr, D. B., Hutton, E. W. H., Syvitski, J. P. M. and Pratson, L. F. (2001), Exponential approximations to compacted sediment porosity profiles, Computers &amp; Geosciences 27(6), 691–700, doi 10.1016/S0098-3004(00)00140-0 (citation checked in Crossref; content not read)","published (metadata verified)"],["Sclater &amp; Christie lithology curves (Athy form with parameters per lithology)","Sclater, J. G. and Christie, P. A. F. (1980), Continental stretching: an explanation of the post-mid-Cretaceous subsidence of the central North Sea basin, Journal of Geophysical Research 85(B7), 3711–3739, doi 10.1029/JB085iB07p03711 (citation checked in Crossref). The table of φ0 and c per lithology was not read: the page does not ship their numbers","published (metadata verified)"],["Residual-porosity form, hyperbolic and linear porosity–depth laws","Simple forms written on this page and not attributed to a publication","on the page (no publication)"],["Mechanical compression line e = e1 − λ·ln(σ'/1 MPa)","Log-linear void-ratio–effective-stress compression, as in Burland, J. B. (1990), On the compressibility and shear strength of natural clays, Géotechnique 40(3), 329–378, doi 10.1680/geot.1990.40.3.329 (citation checked in Crossref; the paper uses its own void-index form, the page's form is generic)","published (metadata verified)"],["Effective stress from the buoyant weight of the solid skeleton, hydrostatic pore pressure","Terzaghi's effective-stress principle (Terzaghi, K. (1943), Theoretical Soil Mechanics, Wiley, doi 10.1002/9780470172766, citation checked in Crossref); the integral dσ'/dz = (ρs − ρw)·g·(1 − φ) is written on this page","derived"],["Nonlinear least squares: Levenberg–Marquardt","Levenberg, K. (1944), A method for the solution of certain non-linear problems in least squares, Quarterly of Applied Mathematics 2(2), 164–168, doi 10.1090/qam/10666; Marquardt, D. W. (1963), An algorithm for least-squares estimation of nonlinear parameters, Journal of the Society for Industrial and Applied Mathematics 11(2), 431–441, doi 10.1137/0111030 (both checked in Crossref; not re-read)","published (metadata verified)"],["Standard errors from the Jacobian, s²·(JᵀJ)⁻¹","Seber, G. A. F. and Wild, C. J. (1989), Nonlinear Regression, Wiley, doi 10.1002/0471725315 (citation checked in Crossref; chapters not re-read)","published (metadata verified)"],["AICc","Hurvich, C. M. and Tsai, C.-L. (1989), Regression and time series model selection in small samples, Biometrika 76(2), 297–307, doi 10.1093/biomet/76.2.297 (citation checked in Crossref; paper not re-read)","published (metadata verified)"],["Decompaction with conservation of solid thickness","Sclater &amp; Christie (1980), above; Steckler, M. S. and Watts, A. B. (1978), Subsidence of the Atlantic-type continental margin off New York, Earth and Planetary Science Letters 41(1), 1–13, doi 10.1016/0012-821X(78)90036-5 (citation checked in Crossref; not re-read). The root finding on the new base is written on this page","published (metadata verified)"],["Example data","Synthetic: two lithologies drawn from exponential laws with multiplicative noise; they represent no real well","on the page (no publication)"]],"validation":["No validation against an independent implementation is recorded for this page."],"limits":["Decompaction is valid only if one curve describes the whole layer (same lithology, no overpressure, no cementation).","The compaction law of Schneider et al. (1996; Schneider, F., Potdevin, J. L., Wolf, S. and Faille, I., Mechanical and chemical compaction model for sedimentary basin simulators, Tectonophysics 263(1–4), 307–317, doi 10.1016/S0040-1951(96)00027-3, citation checked in Crossref) is not implemented."],"date":"26 November 2026"});
+({"what":"Runs entirely in your browser: nothing you load leaves your machine. Porosity–depth fits (Athy and others) with parameter standard errors, goodness of fit and AICc ranking, and decompaction of a layer along the fitted curve.","method":["Athy: φ = φ0·exp(−c·z). With a residual porosity: φ = φr + (φ0 − φr)·exp(−c·z). Hyperbolic: φ = φ0/(1 + c·z). Linear: φ = φ0 − k·z. Fitting: nonlinear least squares by Levenberg–Marquardt with a numerical Jacobian and bounds by clamping.","Mechanical: void ratio e = e1 − λ·ln(σ'/1 MPa), with the effective stress σ' integrated from the weight of the solid skeleton under hydrostatic pore pressure (no overpressure): dσ'/dz = (ρs − ρw)·g·(1 − φ). This is a soil-mechanics compression line, not the exact law of any particular basin simulator.","Sclater &amp; Christie curves are the Athy model with parameters per lithology.","Standard errors from the Jacobian at the optimum, s²·(JᵀJ)⁻¹ with s² = RSS/(n − k). They assume independent, homoscedastic residuals, which depth series rarely satisfy: read them as lower bounds (the note is shown under the results table).","Exhumation: the optional field &lsquo;Exhumation removed&rsquo; (data unit) makes the fit use the burial depth = present depth + exhumation; curves are drawn against present depth, and in the decompaction the present top and base are shifted the same way while the new top is a burial depth. The fit assumes normal compaction under hydrostatic pressure: an exhumed (over-compacted) or overpressured interval gives a misleading curve.","Reading of the table: tab, ;, whitespace or comma delimiter (a comma is never a delimiter when a decimal comma is in use, so 100 0,55 is depth 100 and porosity 0.55); decimal comma, thousands separators (1,234.5; 1.234,5), exponents; a single 1,234 is read as a thousands separator and flagged as ambiguous unless the table uses a decimal comma elsewhere. After every load the message gives the rows read, the rows skipped with the reason (not a number, missing, below detection, negative depth, porosity outside 0–1) and the first row numbers. A failed load clears the previous data and results. Porosity is read as percent when the column name says percent or the maximum exceeds 1.5; if values of 1 or more are rejected as fractions the message suggests percent.","AICc = n·ln(RSS/n) + 2k + 2k(k + 1)/(n − k − 1), ranked within each group (Δ = 0 is the best), not defined when n ≤ k + 1, computed on the residuals in the chosen space (porosity or ln porosity).","Decompaction: the solid thickness ∫(1 − φ)dz of the layer is conserved. It is computed between the present top and base with the fitted curve, the layer is moved so that its top is at the new depth, and the new base is found by root finding."],"sources":[["Athy law φ = φ0·exp(−c·z)","Athy, L. F. (1930), Density, porosity, and compaction of sedimentary rocks, AAPG Bulletin 14(1), 1–24, doi 10.1306/3D93289E-16B1-11D7-8645000102C1865D (citation checked in Crossref; paper not re-read)","published (metadata verified)"],["Exponential approximations to porosity–depth profiles (general reference)","Bahr, D. B., Hutton, E. W. H., Syvitski, J. P. M. and Pratson, L. F. (2001), Exponential approximations to compacted sediment porosity profiles, Computers &amp; Geosciences 27(6), 691–700, doi 10.1016/S0098-3004(00)00140-0 (citation checked in Crossref; content not read)","published (metadata verified)"],["Sclater &amp; Christie lithology curves (Athy form with parameters per lithology)","Sclater, J. G. and Christie, P. A. F. (1980), Continental stretching: an explanation of the post-mid-Cretaceous subsidence of the central North Sea basin, Journal of Geophysical Research 85(B7), 3711–3739, doi 10.1029/JB085iB07p03711 (citation checked in Crossref). The table of φ0 and c per lithology was not read: the page does not ship their numbers","published (metadata verified)"],["Residual-porosity form, hyperbolic and linear porosity–depth laws","Simple forms written on this page and not attributed to a publication","on the page (no publication)"],["Mechanical compression line e = e1 − λ·ln(σ'/1 MPa)","Log-linear void-ratio–effective-stress compression, as in Burland, J. B. (1990), On the compressibility and shear strength of natural clays, Géotechnique 40(3), 329–378, doi 10.1680/geot.1990.40.3.329 (citation checked in Crossref; the paper uses its own void-index form, the page's form is generic)","published (metadata verified)"],["Effective stress from the buoyant weight of the solid skeleton, hydrostatic pore pressure","Terzaghi's effective-stress principle (Terzaghi, K. (1943), Theoretical Soil Mechanics, Wiley, doi 10.1002/9780470172766, citation checked in Crossref); the integral dσ'/dz = (ρs − ρw)·g·(1 − φ) is written on this page","derived"],["Nonlinear least squares: Levenberg–Marquardt","Levenberg, K. (1944), A method for the solution of certain non-linear problems in least squares, Quarterly of Applied Mathematics 2(2), 164–168, doi 10.1090/qam/10666; Marquardt, D. W. (1963), An algorithm for least-squares estimation of nonlinear parameters, Journal of the Society for Industrial and Applied Mathematics 11(2), 431–441, doi 10.1137/0111030 (both checked in Crossref; not re-read)","published (metadata verified)"],["Standard errors from the Jacobian, s²·(JᵀJ)⁻¹","Seber, G. A. F. and Wild, C. J. (1989), Nonlinear Regression, Wiley, doi 10.1002/0471725315 (citation checked in Crossref; chapters not re-read)","published (metadata verified)"],["AICc","Hurvich, C. M. and Tsai, C.-L. (1989), Regression and time series model selection in small samples, Biometrika 76(2), 297–307, doi 10.1093/biomet/76.2.297 (citation checked in Crossref; paper not re-read)","published (metadata verified)"],["Decompaction with conservation of solid thickness","Sclater &amp; Christie (1980), above; Steckler, M. S. and Watts, A. B. (1978), Subsidence of the Atlantic-type continental margin off New York, Earth and Planetary Science Letters 41(1), 1–13, doi 10.1016/0012-821X(78)90036-5 (citation checked in Crossref; not re-read). The root finding on the new base is written on this page","published (metadata verified)"],["Example data","Synthetic: two lithologies drawn from exponential laws with multiplicative noise; they represent no real well","on the page (no publication)"]],"validation":["scripts/compaction_test.mjs (12 tests): exact recovery of an Athy curve (φ0 = 0.6, c = 0.5) on exact data; decompaction of 1000–1500 m with φ0 = 0.6457, c = 0.5023 gives a solid thickness of 327.23 m and a base at 715.18 m, equal to the closed form of the integral of (1 − φ) for an exponential law; table decoding (decimal comma, space delimiter, percent header, counted skipped rows).","No validation against an independent implementation of the other models (hyperbolic, linear, residual porosity, mechanical) is recorded."],"limits":["The linear model is floored at φ = 0.001: below the depth where the line reaches it the curve is flat and no longer fits the data; the results table and the decompaction warn when this happens.","Standard errors are lower bounds and the exhumation is a single value for the whole well; no lithology-dependent or time-dependent unloading is modelled.","Null values (-999 and the like) are not a special case: a negative depth is dropped and counted, a value like -999 as porosity is dropped as outside 0–1.","Decompaction is valid only if one curve describes the whole layer (same lithology, no overpressure, no cementation).","The compaction law of Schneider et al. (1996; Schneider, F., Potdevin, J. L., Wolf, S. and Faille, I., Mechanical and chemical compaction model for sedimentary basin simulators, Tectonophysics 263(1–4), 307–317, doi 10.1016/S0040-1951(96)00027-3, citation checked in Crossref) is not implemented."],"date":"26 November 2026"});
 </script>
 </body></html>
