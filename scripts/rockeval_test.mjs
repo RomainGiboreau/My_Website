@@ -83,6 +83,63 @@ test('Source page classes: boundaries and names', () => {
   for (const k of Object.keys(DEF)) assert.equal(NAMES[k].length, DEF[k].length + 1, k + ': one more class than limits');
 });
 
+// ---- review fixes (26 Nov 2026): number decoding, sentinels, ticks, standards limits, clear on failure
+const R = load('rockeval', 're-core', 'parseNumber,parseNulls,NULLS_DEFAULT,hasDecimalComma,detectDelimiter,decodeColumn,lin,stdLimits,degenerate').out;
+const pn = (s, o) => R.parseNumber(s, o);
+test('parseNumber: thousands, European, decimal comma, exponent, unicode minus, plus', () => {
+  assert.equal(pn('1234.5').value, 1234.5); assert.equal(pn('1,234.5').value, 1234.5); assert.equal(pn('1 234.5').value, 1234.5);
+  assert.equal(pn('1.234,5').value, 1234.5); assert.equal(pn('1 234,5').value, 1234.5); assert.equal(pn('0,55').value, 0.55); assert.equal(pn('1,5').value, 1.5);
+  assert.equal(pn('1e-3').value, 0.001); assert.equal(pn('1E+30').value, 1e30); assert.equal(pn('\u22125.5').value, -5.5); assert.equal(pn('+3').value, 3);
+});
+test('parseNumber: 1,234 is a thousands separator unless the file uses a decimal comma; flagged ambiguous', () => {
+  const a = pn('1,234'), b = pn('1,234', { decimalComma: true });
+  assert.equal(a.value, 1234); assert.ok(a.amb); assert.equal(b.value, 1.234); assert.ok(b.amb);
+  assert.equal(R.hasDecimalComma(['1,234', '0,55']), true); assert.equal(R.hasDecimalComma(['1,234', '2,500']), false);
+});
+test('parseNumber: kinds missing / below / text', () => {
+  for (const s of ['', '-', 'n.d.', 'nd', 'NA', 'NaN', 'null']) assert.equal(pn(s).kind, 'missing', s);
+  assert.equal(pn('<0.1').kind, 'below'); assert.equal(pn('<0.1').value, null); assert.equal(pn('<0,1').limit, 0.1);
+  assert.equal(pn('abc').kind, 'text'); assert.equal(pn('12abc').kind, 'text');
+});
+test('detectDelimiter: never splits "100 0,55" on the comma; ; and tab win; comma csv works', () => {
+  assert.equal(R.detectDelimiter(['A 100 0,55 2,1', 'B 120 0,60 3,2', 'C 130 0,65 1,9']), 'ws');
+  assert.equal(R.detectDelimiter(['A;100;0,55', 'B;120;0,60']), ';'); assert.equal(R.detectDelimiter(['A\t1\t2', 'B\t3\t4']), '\t');
+  assert.equal(R.detectDelimiter(['A,1,2', 'B,3,4', 'C,5,6']), ','); assert.equal(R.detectDelimiter(['A, 1.5, 2', 'B, 3, 4']), ',');
+});
+test('decodeColumn: text, below, missing, null values counted with row indices; candidate null value warned, not excluded', () => {
+  const d = R.decodeColumn(['1.5', 'abc', '<0.1', 'n.d.', '', '-999', '-999.25', '2', '-99999', '-99999', '-99999'], { nulls: R.NULLS_DEFAULT });
+  assert.equal(d.counts.text, 1); assert.equal(d.counts.below, 1); assert.equal(d.counts.missing, 1); assert.equal(d.counts.blank, 1); assert.equal(d.counts.sentinel, 2);
+  eq(d.first.text, [1]); eq(d.first.below, [2]); assert.ok(Number.isNaN(d.values[5]) && Number.isNaN(d.values[1]));
+  eq(d.candidates, [{ value: -99999, count: 3 }]); assert.equal(d.values[8], -99999); // kept as data
+});
+test('null value list: default and parsing; emptied list disables exclusion', () => {
+  eq(R.parseNulls('-999, -999.25, -9999, 9999, 1e30, 1.70141e38'), R.NULLS_DEFAULT); eq(R.parseNulls(''), []);
+  assert.equal(R.decodeColumn(['-999'], { nulls: [] }).values[0], -999);
+  assert.match(re.html, /id="nulls" value="-999, -999\.25, -9999, 9999, 1e30, 1\.70141e38"/);
+});
+test('standards chart regression: constant parameter (mean 0.7999999999999999 vs 0.8) no longer crashes lin()', () => {
+  const m = [0.8, 0.8, 0.8, 0.8, 0.8, 0.8].reduce((a, b) => a + b) / 6, pd = (0.8 - m) * 0.04;
+  let t; assert.doesNotThrow(() => { t = R.lin(m - pd, 0.8 + pd, 4); }); assert.ok(t.length >= 1 && t.length < 500);
+  assert.doesNotThrow(() => R.lin(5, 5, 4)); assert.ok(R.degenerate(0.7999999999999999, 0.8)); assert.ok(!R.degenerate(0.8, 0.9));
+  assert.ok(R.lin(0, 1, 5).length >= 5); eq(R.lin(0, 10, 5), [0, 2, 4, 6, 8, 10]);
+});
+test('standards limits: 5 runs with one at +10 C are flagged with robust limits (classical 2 SD cannot flag n <= 5)', () => {
+  const v = [418, 419, 418.5, 419.2, 428.8], L = R.stdLimits(v, null);
+  eq(L.flags, [false, false, false, false, true]); assert.match(L.mode, /robust/); assert.match(L.note, /cannot flag anything with 5 runs/);
+  const z = Math.max(...v.map(x => Math.abs(x - L.mean) / L.sd)); assert.ok(z < 2, 'classical z is below 2: ' + z);
+});
+test('standards limits: reference value and SD typed by the user; constant data gives no flag; 6 identical + 1 outlier flagged', () => {
+  const L = R.stdLimits([418, 419, 420], { value: 430, sd: 2 }); eq(L.flags, [true, true, true]); assert.equal(L.mode, 'reference'); assert.equal(L.hi, 434);
+  const c = R.stdLimits([0.8, 0.8, 0.8, 0.8, 0.8, 0.8], null); assert.equal(c.mode, 'constant'); assert.ok(c.flags.every(f => !f));
+  const o = R.stdLimits([0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.4], null); eq(o.flags, [false, false, false, false, false, false, true]);
+  assert.match(R.stdLimits([1, 2, 3], null).note, /too few/);
+});
+test('page: failed or emptied load clears data, tables and charts (contract B); duplicates and TOC-fraction hint', () => {
+  const h = re.html;
+  assert.match(h, /function clearAll\(/); assert.match(h, /else clearAll\('No data yet\.'\)/); assert.match(h, /if\(t\.err\|\|!t\.rows\.length\)\{clearAll\(/);
+  assert.match(h, /TOC in fraction\? expected wt %/); assert.match(h, /same depth and group as another sample/);
+  assert.match(h, /try\{drawChart\(\$\(c\.id\),c\.spec\)\}catch/);
+});
 let fail = 0;
 for (const [n, f] of tests) { try { f(); console.log('ok   ' + n); } catch (e) { fail++; console.log('FAIL ' + n + '\n     ' + e.message); } }
 console.log(fail ? `${fail} failure(s)` : `all ${tests.length} tests passed`);
