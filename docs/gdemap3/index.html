@@ -78,6 +78,17 @@ td.l,th.l{text-align:left}
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.side{order:2}}
 </style><script data-goatcounter="https://romaingiboreau.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head><body>
+<!-- Temporary access gate (client side, NOT real security): remove this block to open the page to everyone. -->
+<script>(function(){var H='f7036a832a143403522fac04eeeb54df7e3ea9ef0b0b1ecb3bff8d05dd1e23a8';
+try{if(sessionStorage.getItem('gde3ok')===H)return}catch(e){}
+var st=document.createElement('style');st.textContent='body>*:not(#gate){display:none!important}#gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f6f7f9;font:16px system-ui,sans-serif;z-index:99999}#gate form{background:#fff;padding:28px;border:1px solid #cfd6dd;border-radius:10px;max-width:340px}#gate input{width:100%;padding:8px;margin:10px 0;box-sizing:border-box}#gate p{margin:0;color:#b00020;min-height:1.2em}';
+document.head.appendChild(st);
+function hex(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('')}
+document.addEventListener('DOMContentLoaded',function(){var g=document.createElement('div');g.id='gate';
+g.innerHTML='<form><b>GDE map generator (new)</b><br>Beta, restricted access.<input type="password" placeholder="Password" autofocus><button>Open</button><p></p></form>';
+document.body.appendChild(g);g.querySelector('form').onsubmit=function(e){e.preventDefault();
+crypto.subtle.digest('SHA-256',new TextEncoder().encode(g.querySelector('input').value)).then(function(b){
+if(hex(b)===H){try{sessionStorage.setItem('gde3ok',H)}catch(x){}g.remove();st.remove()}else g.querySelector('p').textContent='Wrong password.'})}})})();</script>
 <div class="top"><h1>GDE map generator (new)</h1>
  <div class="bar"><span class="xm" id="xm"><button class="pri" id="bExp" aria-haspopup="true" aria-expanded="false" title="Export the map, polygons, grid, lines, wells check or the audit">Export ▾</button>
   <div class="xmenu" id="xmenu" role="menu" hidden>
