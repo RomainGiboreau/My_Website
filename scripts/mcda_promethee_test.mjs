@@ -1,26 +1,16 @@
-// Self-check for the MCDA core (docs/mcda/index.html, <script id="mcda-core">).
-// Run: node scripts/mcda_test.mjs
+// Self-check for the MCDA PROMETHEE core (docs/mcda-promethee/index.html, <script id="mcda-promethee-core">), including the weights file written by the MCDA AHP page.
+// Run: node scripts/mcda_promethee_test.mjs
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-const html = readFileSync(new URL('../docs/mcda/index.html', import.meta.url), 'utf8');
-const m = html.match(/<script id="mcda-core">([\s\S]*?)<\/script>/); assert.ok(m, 'mcda-core block not found');
-const w = {}; new Function('window', m[1])(w); const M = w.MCDA;
+const load = (page, id, name) => {
+  const html = readFileSync(new URL('../docs/' + page + '/index.html', import.meta.url), 'utf8');
+  const m = html.match(new RegExp('<script id="' + id + '">([\\s\\S]*?)</script>')); assert.ok(m, id + ' block not found');
+  const w = {}; new Function('window', m[1])(w); return w[name];
+};
+const M = load('mcda-promethee', 'mcda-promethee-core', 'MCDA_PRO'), AHP = load('mcda-ahp', 'mcda-ahp-core', 'MCDA_AHP');
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg || ''} ${a} vs ${b} (tol ${tol})`);
 let n = 0; const test = (name, fn) => { fn(); n++; console.log('ok   ' + name); };
 const P = (s, o) => M.parseNumber(s, o);
-
-// ---- AHP -------------------------------------------------------------------------------------------------------
-test('AHP Saaty 3x3: w 0.6370/0.2583/0.1047, lambda 3.0385, CR 0.0332', () => {
-  const r = M.ahpSolve([[1, 3, 5], [1 / 3, 1, 3], [1 / 5, 1 / 3, 1]]);
-  near(r.w[0], 0.6370, 5e-5); near(r.w[1], 0.2583, 5e-5); near(r.w[2], 0.1047, 5e-5); near(r.lam, 3.0385, 5e-5); near(r.CR, 0.0332, 5e-5);
-});
-test('AHP consistent 4x4 (a_ij = w_i/w_j): CR 0 and exact weights', () => {
-  const v = [8, 4, 2, 1], A = v.map(a => v.map(b => a / b)), r = M.ahpSolve(A);
-  near(r.CR, 0, 1e-9); near(r.lam, 4, 1e-9); r.w.forEach((x, i) => near(x, v[i] / 15, 1e-9));
-});
-test('AHP above 10 criteria: CR is NaN (no verified RI), not a wrong number', () => {
-  const r = M.ahpSolve(Array.from({ length: 11 }, () => new Array(11).fill(1))); assert.ok(Number.isNaN(r.CR));
-});
 
 // ---- PROMETHEE ---------------------------------------------------------------------------------------------------
 const vshape = (k) => Array.from({ length: k }, () => ({ rule: 'max', pf: 3, q: 0, p: 2, s: 0 }));
@@ -80,5 +70,38 @@ test('null sentinels: default list parses, matching tolerant', () => {
 });
 test('constant criterion gives identical scores (no discrimination), no NaN', () => {
   const st = M.colStats([4, 4, 4]); [ 'minmax', 'vector', 'z' ].forEach(nm => { const s = M.cScore(4, { rule: 'max' }, st, nm); assert.ok(Number.isFinite(s)) });
+});
+
+// ---- weights file: AHP page -> PROMETHEE page ------------------------------------------------------------------------------------
+const CR5 = ['Oil volume (MMbbl)', 'GOR (scf/bbl)', 'Drilling depth (m)', 'Ownership (%)', 'Tax (USD/bbl)'].map(name => ({ name, grp: '' }));
+const J5 = { all: { '0,1': 2, '0,2': 2, '0,3': 3, '0,4': 2, '1,3': 2, '2,3': 2, '3,4': 0.5 } };
+test('round trip AHP -> file -> PROMETHEE: same weights, matched by name even if the order and the case differ', () => {
+  const file = JSON.parse(JSON.stringify(AHP.weightsFile(CR5, J5, 'test'))), A = AHP.ahpAll(CR5, J5);
+  const f = M.ahpWeightsRead(file); near(f.criteria.reduce((a, c) => a + c.weight, 0), 1, 1e-12);
+  const names = ['tax (usd/bbl)', 'Oil volume (MMbbl)', 'Ownership (%)', 'GOR (scf/bbl)', 'Drilling depth (m)'], order = [4, 0, 3, 1, 2];
+  const q = M.matchWeights(f, names); assert.deepEqual(q.missing, []); assert.deepEqual(q.unused, []);
+  order.forEach((k, i) => near(q.w[i], A.gw[k], 1e-12, names[i]));
+  near(f.CR, A.res[0].r.CR, 1e-12);
+});
+test('weights file: unmatched names are reported, not guessed; the matched weights are renormalized', () => {
+  const f = M.ahpWeightsRead(AHP.weightsFile(CR5, J5, 'test'));
+  const q = M.matchWeights(f, ['Oil volume (MMbbl)', 'GOR (scf/bbl)', 'Depth', 'Ownership (%)', 'Tax (USD/bbl)']);
+  assert.deepEqual(q.missing, ['Depth']); assert.deepEqual(q.unused, ['Drilling depth (m)']); near(q.w.reduce((a, b) => a + b, 0), 1, 1e-12);
+  near(q.w[1], f.criteria[1].weight / (1 - f.criteria[2].weight), 1e-12);
+});
+test('weights file: a unit written differently still matches on the name before the bracket', () => {
+  const f = M.ahpWeightsRead(AHP.weightsFile(CR5, J5, 'test')), q = M.matchWeights(f, ['Oil volume (bbl)', 'GOR', 'Drilling depth (ft)', 'Ownership', 'Tax']);
+  assert.deepEqual(q.missing, []); f.criteria.forEach((c, k) => near(q.w[k], c.weight, 1e-12));
+});
+test('weights file with groups: the file carries the global weights and the PROMETHEE reader keeps them', () => {
+  const crit = [{ name: 'a', grp: 'G1' }, { name: 'b', grp: 'G1' }, { name: 'c', grp: 'G2' }], J = { top: { '0,1': 3 }, 'g:G1': { '0,1': 2 } };
+  const f = M.ahpWeightsRead(JSON.parse(JSON.stringify(AHP.weightsFile(crit, J, 'test'))));
+  near(f.criteria[2].weight, 0.25, 1e-9); near(f.criteria[0].weight, 0.75 * 2 / 3, 1e-9); near(f.criteria.reduce((a, c) => a + c.weight, 0), 1, 1e-12);
+});
+test('weights file: other formats and bad weights are refused with a reason', () => {
+  assert.throws(() => M.ahpWeightsRead({ format: 'fdp-link' }), /not an MCDA AHP weights file/);
+  assert.throws(() => M.ahpWeightsRead({ format: 'mcda-ahp-weights', criteria: [] }), /no criteria/);
+  assert.throws(() => M.ahpWeightsRead({ format: 'mcda-ahp-weights', criteria: [{ name: 'a', weight: null }] }), /valid weight/);
+  assert.throws(() => M.ahpWeightsRead({ format: 'mcda-ahp-weights', criteria: [{ name: 'a', weight: 0 }, { name: 'b', weight: 0 }] }), /zero/);
 });
 console.log(`\n${n} tests passed`);

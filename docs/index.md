@@ -274,11 +274,17 @@ Ranking options against several criteria, and risking prospects. [Background not
 
 <div class="grid cards tool-cards" markdown>
 
--   [![MCDA — AHP & PROMETHEE](assets/tools/mcda.webp){ loading=lazy }](mcda/index.html)
+-   [![MCDA AHP](assets/tools/mcda-ahp.webp){ loading=lazy }](mcda-ahp/index.html)
 
-    [**MCDA — AHP & PROMETHEE**](mcda/index.html)
+    [**MCDA AHP**](mcda-ahp/index.html)
 
-    AHP weights with consistency ratio, PROMETHEE I and II, weight sensitivity.
+    Pairwise comparison of criteria on the Saaty scale: eigenvector weights, consistency ratio, weights file.
+
+-   [![MCDA PROMETHEE](assets/tools/mcda-promethee.webp){ loading=lazy }](mcda-promethee/index.html)
+
+    [**MCDA PROMETHEE**](mcda-promethee/index.html)
+
+    PROMETHEE I and II ranking with six preference functions, weight sensitivity and rank reversal; imports the AHP weights.
 
 -   [![Prospect risking](assets/tools/risking.webp){ loading=lazy }](risking/index.html)
 
